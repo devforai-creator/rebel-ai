@@ -11,9 +11,9 @@ const BASE_ARGS = {
 }
 
 describe('buildStreamPayloadPlan', () => {
-  it('builds anthropic split-system payload with cache on the static prompt', () => {
+  it('builds anthropic split-system payload with request-level automatic cache settings', () => {
     const providerOptions: SharedV2ProviderOptions = {
-      anthropic: { version: '2025-01-01' },
+      anthropic: { cacheControl: { type: 'ephemeral' } },
     }
 
     const result = buildStreamPayloadPlan({
@@ -22,7 +22,6 @@ describe('buildStreamPayloadPlan', () => {
       finalSystemPrompt: 'FINAL',
       staticSystemPrompt: 'STATIC',
       dynamicContext: 'SUMMARIES_FACTS',
-      anthropicCache: { enabled: true, ttl: '5m', minTokens: 2048 },
       anthropicConversationMessages: [
         { role: 'user', content: 'hello' },
         { role: 'assistant', content: 'hi' },
@@ -42,7 +41,7 @@ describe('buildStreamPayloadPlan', () => {
       role: 'system',
       content: 'STATIC',
     })
-    expect(result.streamRequest.messages[0]).toHaveProperty('providerOptions')
+    expect(result.streamRequest.messages[0]).not.toHaveProperty('providerOptions')
 
     // System 2: summaries+facts (NOT cached)
     expect(result.streamRequest.messages[1]).toMatchObject({
@@ -55,8 +54,8 @@ describe('buildStreamPayloadPlan', () => {
       provider: 'anthropic',
       strategy: 'anthropic-split-system',
       systemMessages: [
-        { role: 'system', content: 'STATIC', cached: true },
-        { role: 'system', content: 'SUMMARIES_FACTS', cached: false },
+        { role: 'system', content: 'STATIC' },
+        { role: 'system', content: 'SUMMARIES_FACTS' },
       ],
       conversationMessages: [
         { role: 'user', content: 'hello' },
@@ -66,41 +65,46 @@ describe('buildStreamPayloadPlan', () => {
   })
 
   it('omits the dynamic system message when there is no dynamic context', () => {
+    const providerOptions: SharedV2ProviderOptions = {
+      anthropic: { cacheControl: { type: 'ephemeral', ttl: '1h' } },
+    }
+
     const result = buildStreamPayloadPlan({
       ...BASE_ARGS,
       provider: 'anthropic',
       finalSystemPrompt: 'FINAL',
       staticSystemPrompt: 'STATIC',
       dynamicContext: null,
-      anthropicCache: { enabled: true, ttl: '5m', minTokens: 1024 },
       anthropicConversationMessages: [{ role: 'user', content: 'hello' }],
+      providerOptions,
     })
 
-    // 1 system message (static cached) + 1 conversation = 2
+    // 1 system message + 1 conversation = 2
     expect(result.streamRequest.messages).toHaveLength(2)
-    expect(result.streamRequest.messages[0]).toHaveProperty('providerOptions')
+    expect(result.streamRequest.providerOptions).toEqual(providerOptions)
+    expect(result.streamRequest.messages[0]).not.toHaveProperty('providerOptions')
     expect(result.streamRequest.messages[0]).toMatchObject({
       role: 'system',
       content: 'STATIC',
     })
     expect(result.actualPayload.systemMessages).toEqual([
-      { role: 'system', content: 'STATIC', cached: true },
+      { role: 'system', content: 'STATIC' },
     ])
   })
 
-  it('no cache applied when anthropicCache is null', () => {
+  it('omits request-level cache settings when anthropic providerOptions are absent', () => {
     const result = buildStreamPayloadPlan({
       ...BASE_ARGS,
       provider: 'anthropic',
       finalSystemPrompt: 'FINAL',
       staticSystemPrompt: 'STATIC',
       dynamicContext: null,
-      anthropicCache: null,
       anthropicConversationMessages: [{ role: 'user', content: 'hello' }],
     })
 
-    // 1 system message (static, no cache) + 1 conversation = 2
+    // 1 system message + 1 conversation = 2
     expect(result.streamRequest.messages).toHaveLength(2)
+    expect(result.streamRequest.providerOptions).toBeUndefined()
     expect(result.streamRequest.messages[0]).not.toHaveProperty('providerOptions')
   })
 
@@ -115,7 +119,6 @@ describe('buildStreamPayloadPlan', () => {
       finalSystemPrompt: 'FINAL',
       staticSystemPrompt: 'STATIC',
       dynamicContext: null,
-      anthropicCache: null,
       anthropicConversationMessages: [],
       googleCacheResult: {
         success: true,
@@ -151,7 +154,6 @@ describe('buildStreamPayloadPlan', () => {
       finalSystemPrompt: 'FINAL',
       staticSystemPrompt: 'STATIC',
       dynamicContext: null,
-      anthropicCache: null,
       anthropicConversationMessages: [],
       recentMessages: [{ role: 'user', content: 'recent user' }],
       googleCacheResult: { success: false, error: 'cache failed' },

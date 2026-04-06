@@ -942,7 +942,7 @@ describe('processChatJobs', () => {
     })
   })
 
-  it('uses split-system strategy for Anthropic prompt caching', async () => {
+  it('uses split-system payload with request-level Anthropic automatic caching', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       rpc: { get_decrypted_secret: () => decryptSecretMock() },
     })
@@ -990,14 +990,21 @@ describe('processChatJobs', () => {
     await processChatJobs(1)
 
     const call = streamTextMock.mock.calls[0]?.[0] as {
-      messages?: Array<{ content: string; role: string }>
+      messages?: Array<{ content: string; role: string; providerOptions?: unknown }>
+      providerOptions?: { anthropic?: { cacheControl?: { type: string; ttl?: string } } }
     }
     // First message should be system (static prompt)
     expect(call.messages?.[0]).toMatchObject({ role: 'system' })
+    expect(call.messages?.[0]?.providerOptions).toBeUndefined()
     // Last message should be the user message from sanitizedMessages
     expect(call.messages?.[call.messages.length - 1]).toMatchObject({
       role: 'user',
       content: 'Hello',
+    })
+    expect(call.providerOptions).toMatchObject({
+      anthropic: {
+        cacheControl: { type: 'ephemeral' },
+      },
     })
   })
 

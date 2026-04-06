@@ -107,6 +107,36 @@ describe('getProviderOptions', () => {
       },
     })
   })
+
+  it('returns undefined for anthropic when automatic caching is not enabled', () => {
+    const options = getProviderOptions('anthropic')
+    expect(options).toBeUndefined()
+  })
+
+  it('returns anthropic automatic cache control at the request level', () => {
+    const options = getProviderOptions('anthropic', {
+      anthropicCacheEnabled: true,
+    })
+
+    expect(options).toEqual({
+      anthropic: {
+        cacheControl: { type: 'ephemeral' },
+      },
+    })
+  })
+
+  it('uses explicit 1h ttl for anthropic automatic caching', () => {
+    const options = getProviderOptions('anthropic', {
+      anthropicCacheEnabled: true,
+      anthropicCacheTTL: '1h',
+    })
+
+    expect(options).toEqual({
+      anthropic: {
+        cacheControl: { type: 'ephemeral', ttl: '1h' },
+      },
+    })
+  })
 })
 
 describe('buildAnthropicCacheControl', () => {

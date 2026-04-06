@@ -36,6 +36,8 @@ type BuildChatDebugInfoArgs = {
   promptCache: PromptCacheDecision | null
   totalInputTokens: number
   anthropicCache: AnthropicCacheDecision | null
+  anthropicCacheCreationInputTokens: number | null
+  anthropicCacheReadInputTokens: number | null
   staticPromptTokens: number
   dynamicContext: string | null
   dynamicContextTokens: number
@@ -75,6 +77,8 @@ export function buildChatDebugInfo(args: BuildChatDebugInfoArgs): Record<string,
     promptCache,
     totalInputTokens,
     anthropicCache,
+    anthropicCacheCreationInputTokens,
+    anthropicCacheReadInputTokens,
     staticPromptTokens,
     dynamicContext,
     dynamicContextTokens,
@@ -113,9 +117,13 @@ export function buildChatDebugInfo(args: BuildChatDebugInfoArgs): Record<string,
       ? {
           enabled: anthropicCache.enabled,
           ttl: anthropicCache.ttl,
+          minTokens: anthropicCache.minTokens,
           staticPromptTokens,
+          estimatedMeetsMinTokens: staticPromptTokens >= anthropicCache.minTokens,
           cachedSystemTokens: staticPromptTokens,
           dynamicContextTokens: dynamicContext ? dynamicContextTokens : 0,
+          cacheCreationInputTokens: anthropicCacheCreationInputTokens,
+          cacheReadInputTokens: anthropicCacheReadInputTokens,
         }
       : null,
     googleCache: {

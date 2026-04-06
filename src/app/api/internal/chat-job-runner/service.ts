@@ -356,7 +356,6 @@ async function executeJob({
     provider === 'anthropic'
       ? resolveAnthropicCacheDecision({
           modelName,
-          systemPromptTokens: staticPromptTokens,
         })
       : null
 
@@ -574,18 +573,25 @@ async function executeJob({
   const providerMetadata = await stream.providerMetadata
   timings['8_llm_generation'] = performance.now() - stepStart
 
+  const anthropicProviderMetadata =
+    provider === 'anthropic' &&
+    providerMetadata?.anthropic &&
+    typeof providerMetadata.anthropic === 'object'
+      ? (providerMetadata.anthropic as Record<string, unknown>)
+      : null
+  const anthropicRawUsage = anthropicProviderMetadata?.usage as Record<string, number> | undefined
+  const anthropicCacheCreationInputTokens =
+    typeof anthropicProviderMetadata?.cacheCreationInputTokens === 'number'
+      ? anthropicProviderMetadata.cacheCreationInputTokens
+      : anthropicRawUsage?.cache_creation_input_tokens ?? null
+
   // Log Anthropic cache metrics
-  if (provider === 'anthropic' && providerMetadata?.anthropic) {
-    const usage = (providerMetadata.anthropic as Record<string, unknown>).usage as
-      | Record<string, number>
-      | undefined
-    if (usage) {
-      logChatJobRunnerDebug('[Chat Job Runner] Anthropic cache metrics', {
-        cacheRead: usage.cache_read_input_tokens ?? 0,
-        cacheCreation: usage.cache_creation_input_tokens ?? 0,
-        uncached: usage.input_tokens ?? 0,
-      })
-    }
+  if (anthropicRawUsage) {
+    logChatJobRunnerDebug('[Chat Job Runner] Anthropic cache metrics', {
+      cacheRead: anthropicRawUsage.cache_read_input_tokens ?? 0,
+      cacheCreation: anthropicCacheCreationInputTokens ?? 0,
+      uncached: anthropicRawUsage.input_tokens ?? 0,
+    })
   }
 
   const contentFilterInfo = evaluateContentFilter({
@@ -645,6 +651,8 @@ async function executeJob({
     promptCache,
     totalInputTokens,
     anthropicCache,
+    anthropicCacheCreationInputTokens,
+    anthropicCacheReadInputTokens: cachedInputTokens,
     staticPromptTokens,
     dynamicContext,
     dynamicContextTokens: dynamicContext ? estimateTokens(dynamicContext) : 0,

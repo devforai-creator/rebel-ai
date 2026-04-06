@@ -111,8 +111,12 @@ export interface DebugInfo {
   anthropicCache?: {
     enabled?: boolean
     ttl?: string
+    minTokens?: number
     staticPromptTokens?: number
+    estimatedMeetsMinTokens?: boolean
     dynamicContextTokens?: number
+    cacheCreationInputTokens?: number | null
+    cacheReadInputTokens?: number | null
   }
   googleCache?: {
     featureEnabled?: boolean

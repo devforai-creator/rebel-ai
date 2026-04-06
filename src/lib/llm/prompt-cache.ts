@@ -117,31 +117,27 @@ function resolveAnthropicCacheTTL(): AnthropicCacheTTL {
 }
 
 /**
- * Determine if Anthropic caching should be applied.
+ * Resolve Anthropic cache settings.
  *
  * Unlike OpenAI's key-based caching, Anthropic caching:
  * - Applies cache_control inline on message parts
  * - Has different token thresholds per model family
  * - Uses ephemeral caching with 5-minute or 1-hour TTL
  *
- * @returns Cache decision with model-specific minimum tokens
+ * We no longer pre-block requests locally based on estimated token length.
+ * Anthropic will ignore cache_control on prefixes that do not meet the
+ * provider's actual minimum cacheable length.
  */
 export function resolveAnthropicCacheDecision({
   modelName,
-  systemPromptTokens,
 }: {
   modelName: string
-  systemPromptTokens: number
 }): AnthropicCacheDecision | null {
   if (!isAnthropicCacheEnabled()) {
     return null
   }
 
   const minTokens = getAnthropicMinCacheTokens(modelName)
-
-  if (systemPromptTokens < minTokens) {
-    return null
-  }
 
   return {
     enabled: true,

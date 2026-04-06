@@ -15,7 +15,6 @@ const baseArgs: ResolveArgs = {
 
 const baseAnthropicArgs: AnthropicResolveArgs = {
   modelName: 'claude-3-7-sonnet',
-  systemPromptTokens: 2_048,
 }
 
 async function loadModule() {
@@ -156,15 +155,18 @@ describe('Anthropic prompt cache decision', () => {
     expect(decision).toBeNull()
   })
 
-  it('returns null when prompt tokens are below model threshold', async () => {
+  it('still returns cache settings below the estimated model threshold', async () => {
     const { resolveAnthropicCacheDecision } = await loadModule()
 
     const decision = resolveAnthropicCacheDecision({
       modelName: 'claude-3-7-sonnet',
-      systemPromptTokens: 1_023,
     })
 
-    expect(decision).toBeNull()
+    expect(decision).toEqual({
+      enabled: true,
+      ttl: '5m',
+      minTokens: 1_024,
+    })
   })
 
   it('uses default 5m ttl when env is missing', async () => {
@@ -175,7 +177,7 @@ describe('Anthropic prompt cache decision', () => {
     expect(decision).toEqual({
       enabled: true,
       ttl: '5m',
-      minTokens: 2_048,
+      minTokens: 1_024,
     })
   })
 
@@ -188,7 +190,7 @@ describe('Anthropic prompt cache decision', () => {
     expect(decision).toEqual({
       enabled: true,
       ttl: '1h',
-      minTokens: 2_048,
+      minTokens: 1_024,
     })
   })
 
@@ -201,24 +203,32 @@ describe('Anthropic prompt cache decision', () => {
     expect(decision).toEqual({
       enabled: true,
       ttl: '5m',
+      minTokens: 1_024,
+    })
+  })
+
+  it('keeps legacy haiku minimum tokens in metadata', async () => {
+    const { resolveAnthropicCacheDecision } = await loadModule()
+
+    const decision = resolveAnthropicCacheDecision({
+      modelName: 'claude-3-5-haiku',
+    })
+
+    expect(decision).toEqual({
+      enabled: true,
+      ttl: '5m',
       minTokens: 2_048,
     })
   })
 
-  it('uses model-specific minimum tokens for haiku models', async () => {
+  it('keeps higher minimum tokens for haiku 4.5 models in metadata', async () => {
     const { resolveAnthropicCacheDecision } = await loadModule()
 
-    const belowThreshold = resolveAnthropicCacheDecision({
-      modelName: 'claude-3-5-haiku',
-      systemPromptTokens: 4_095,
-    })
-    const atThreshold = resolveAnthropicCacheDecision({
-      modelName: 'claude-3-5-haiku',
-      systemPromptTokens: 4_096,
+    const decision = resolveAnthropicCacheDecision({
+      modelName: 'claude-haiku-4-5',
     })
 
-    expect(belowThreshold).toBeNull()
-    expect(atThreshold).toEqual({
+    expect(decision).toEqual({
       enabled: true,
       ttl: '5m',
       minTokens: 4_096,

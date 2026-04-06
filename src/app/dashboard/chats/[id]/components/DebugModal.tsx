@@ -408,12 +408,29 @@ export const DebugModal = memo(function DebugModal({
                           </div>
                           <div>TTL: {debugInfo.anthropicCache.ttl || 'N/A'}</div>
                           <div>
-                            Static Prompt Tokens:{' '}
+                            Estimated Static Prompt Tokens:{' '}
                             {debugInfo.anthropicCache.staticPromptTokens?.toLocaleString() || 'N/A'}
+                          </div>
+                          <div>
+                            Model Min Tokens:{' '}
+                            {debugInfo.anthropicCache.minTokens?.toLocaleString() || 'N/A'}
+                          </div>
+                          <div>
+                            Estimated Meets Min:{' '}
+                            {debugInfo.anthropicCache.estimatedMeetsMinTokens ? '✅ Yes' : '❌ No'}
                           </div>
                           <div>
                             Dynamic Context Tokens:{' '}
                             {debugInfo.anthropicCache.dynamicContextTokens?.toLocaleString() || '0'}
+                          </div>
+                          <div>
+                            Cache Write Tokens:{' '}
+                            {debugInfo.anthropicCache.cacheCreationInputTokens?.toLocaleString() ||
+                              '0'}
+                          </div>
+                          <div>
+                            Cache Read Tokens:{' '}
+                            {debugInfo.anthropicCache.cacheReadInputTokens?.toLocaleString() || '0'}
                           </div>
                         </div>
                       </div>

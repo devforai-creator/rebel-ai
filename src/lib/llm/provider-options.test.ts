@@ -127,16 +127,28 @@ describe('buildAnthropicCacheControl', () => {
 })
 
 describe('getAnthropicMinCacheTokens', () => {
-  it('returns haiku minimum tokens and is case-insensitive', () => {
-    expect(getAnthropicMinCacheTokens('Claude-3.5-HAIKU')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.haiku)
+  it('returns haiku 4.5 minimum tokens and is case-insensitive', () => {
+    expect(getAnthropicMinCacheTokens('Claude-HAIKU-4-5')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.haiku)
+  })
+
+  it('returns legacy haiku minimum tokens for 3.x models', () => {
+    expect(getAnthropicMinCacheTokens('Claude-3.5-HAIKU')).toBe(
+      ANTHROPIC_CACHE_MIN_TOKENS.haikuLegacy,
+    )
   })
 
   it('returns sonnet minimum tokens', () => {
     expect(getAnthropicMinCacheTokens('claude-3-7-sonnet')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.sonnet)
   })
 
-  it('returns opus minimum tokens', () => {
-    expect(getAnthropicMinCacheTokens('claude-opus-4-1')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.opus)
+  it('returns opus 4.5+ minimum tokens', () => {
+    expect(getAnthropicMinCacheTokens('claude-opus-4-6')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.opus)
+  })
+
+  it('returns legacy opus minimum tokens', () => {
+    expect(getAnthropicMinCacheTokens('claude-opus-4-1')).toBe(
+      ANTHROPIC_CACHE_MIN_TOKENS.opusLegacy,
+    )
   })
 
   it('falls back to most restrictive minimum for unknown models', () => {

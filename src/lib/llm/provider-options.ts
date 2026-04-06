@@ -81,12 +81,18 @@ export function buildAnthropicCacheControl(
 }
 
 /**
- * Minimum cacheable tokens per Anthropic model family.
+ * Minimum cacheable tokens per Anthropic model family/version.
+ *
+ * Anthropic's prompt-caching thresholds vary by model generation, so we keep
+ * the common current and legacy breakpoints explicit instead of using a single
+ * family-wide value.
  */
 export const ANTHROPIC_CACHE_MIN_TOKENS: Record<string, number> = {
-  opus: 4096, // Opus 4.5/4.6 requires 4096 tokens
-  sonnet: 2048, // Sonnet 4.6 requires 2048 tokens
-  haiku: 4096, // Haiku 4.5 requires 4096 tokens
+  opus: 4096, // Opus 4.5/4.6
+  opusLegacy: 1024, // Opus 4/4.1/3
+  sonnet: 1024, // Sonnet 4/4.5/3.7/3.5
+  haiku: 4096, // Haiku 4.5
+  haikuLegacy: 2048, // Haiku 3/3.5
 }
 
 /**
@@ -94,14 +100,20 @@ export const ANTHROPIC_CACHE_MIN_TOKENS: Record<string, number> = {
  */
 export function getAnthropicMinCacheTokens(modelName: string): number {
   const normalized = modelName.toLowerCase()
-  if (normalized.includes('haiku')) {
+  if (normalized.includes('haiku-4-5')) {
     return ANTHROPIC_CACHE_MIN_TOKENS.haiku
+  }
+  if (normalized.includes('haiku')) {
+    return ANTHROPIC_CACHE_MIN_TOKENS.haikuLegacy
   }
   if (normalized.includes('sonnet')) {
     return ANTHROPIC_CACHE_MIN_TOKENS.sonnet
   }
-  if (normalized.includes('opus')) {
+  if (normalized.includes('opus-4-5') || normalized.includes('opus-4-6')) {
     return ANTHROPIC_CACHE_MIN_TOKENS.opus
+  }
+  if (normalized.includes('opus')) {
+    return ANTHROPIC_CACHE_MIN_TOKENS.opusLegacy
   }
   // Default to most restrictive
   return ANTHROPIC_CACHE_MIN_TOKENS.haiku

@@ -48,26 +48,26 @@ export function getProviderOptions(
     }
   }
 
-  if (provider === 'anthropic' && overrides?.anthropicCacheEnabled) {
-    options.anthropic = buildAnthropicCacheControl(overrides.anthropicCacheTTL)
-  }
-
   return Object.keys(options).length > 0 ? options : undefined
 }
 
 /**
- * Build Anthropic cache control object for either request-level automatic
- * caching or explicit block-level breakpoints.
+ * Build Anthropic cache control object for message parts.
  *
- * The AI SDK uses the same providerOptions shape in both cases:
- * - request-level: providerOptions.anthropic.cacheControl
- * - block-level: message.providerOptions.anthropic.cacheControl
+ * Anthropic caching is applied per-message-part using providerOptions.
  *
  * @example
  * ```typescript
- * const providerOptions = {
- *   anthropic: buildAnthropicCacheControl('5m')
- * }
+ * const system = [
+ *   { type: 'text', text: 'Short instructions' },
+ *   {
+ *     type: 'text',
+ *     text: longContext,
+ *     providerOptions: {
+ *       anthropic: buildAnthropicCacheControl('5m')
+ *     }
+ *   }
+ * ]
  * ```
  */
 export function buildAnthropicCacheControl(

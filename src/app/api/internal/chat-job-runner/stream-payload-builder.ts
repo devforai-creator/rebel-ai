@@ -1,6 +1,8 @@
 import type { CoreMessage } from 'ai'
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
+import { buildAnthropicCacheControl } from '@/lib/llm/provider-options'
+import type { AnthropicCacheDecision } from '@/lib/llm/prompt-cache'
 import type { CreateGoogleCacheResult } from '@/lib/llm/google-cache'
 import type { ChatRunnerActualPayload } from './usage-debug'
 
@@ -17,6 +19,7 @@ type BuildStreamPayloadPlanArgs = {
   finalSystemPrompt: string
   staticSystemPrompt: string
   dynamicContext: string | null
+  anthropicCache: AnthropicCacheDecision | null
   anthropicConversationMessages: ConversationMessage[]
   recentMessages: SanitizedMessage[]
   googleCacheResult: CreateGoogleCacheResult | null
@@ -36,6 +39,7 @@ export function buildStreamPayloadPlan({
   finalSystemPrompt,
   staticSystemPrompt,
   dynamicContext,
+  anthropicCache,
   anthropicConversationMessages,
   recentMessages,
   googleCacheResult,
@@ -46,15 +50,23 @@ export function buildStreamPayloadPlan({
   if (provider === 'anthropic') {
     const messagesForAnthropic: CoreMessage[] = []
 
-    // System 1: static prompt (base + character + persona).
-    // Anthropic automatic caching is applied at the request level.
-    messagesForAnthropic.push({
-      role: 'system',
-      content: staticSystemPrompt,
-    })
+    // System 1: static prompt (base + character + persona) — cacheable.
+    messagesForAnthropic.push(
+      anthropicCache?.enabled
+        ? {
+            role: 'system',
+            content: staticSystemPrompt,
+            providerOptions: {
+              anthropic: buildAnthropicCacheControl(anthropicCache.ttl),
+            },
+          }
+        : {
+            role: 'system',
+            content: staticSystemPrompt,
+          },
+    )
 
-    // System 2: summaries + facts.
-    // We keep it separate from the static prompt for observability/debugging.
+    // System 2: summaries + facts — not cached because it changes with history.
     if (dynamicContext) {
       messagesForAnthropic.push({
         role: 'system',
@@ -73,10 +85,11 @@ export function buildStreamPayloadPlan({
       {
         role: 'system',
         content: staticSystemPrompt,
+        cached: anthropicCache?.enabled ?? false,
       },
     ]
     if (dynamicContext) {
-      systemMessages.push({ role: 'system', content: dynamicContext })
+      systemMessages.push({ role: 'system', content: dynamicContext, cached: false })
     }
 
     return {

@@ -120,7 +120,7 @@ function resolveAnthropicCacheTTL(): AnthropicCacheTTL {
  * Resolve Anthropic cache settings.
  *
  * Unlike OpenAI's key-based caching, Anthropic caching:
- * - Applies cache_control via providerOptions
+ * - Applies cache_control inline on message parts
  * - Has different token thresholds per model family
  * - Uses ephemeral caching with 5-minute or 1-hour TTL
  *

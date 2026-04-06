@@ -429,8 +429,6 @@ async function executeJob({
     promptCacheKey: promptCache?.key,
     promptCacheRetention: promptCache?.retention,
     reasoningEffort: apiKeyData.reasoning_effort,
-    anthropicCacheEnabled: anthropicCache?.enabled,
-    anthropicCacheTTL: anthropicCache?.ttl,
   })
 
   stepStart = performance.now()
@@ -445,6 +443,7 @@ async function executeJob({
       finalSystemPrompt,
       staticSystemPrompt,
       dynamicContext,
+      anthropicCache,
       anthropicConversationMessages,
       recentMessages,
       googleCacheResult,
@@ -462,7 +461,7 @@ async function executeJob({
 
       if (anthropicCache?.enabled) {
         logChatJobRunnerDebug(
-          '[Chat Job Runner] Anthropic automatic prompt caching enabled',
+          '[Chat Job Runner] Anthropic prompt caching enabled (split-system strategy)',
           {
             ttl: anthropicCache.ttl,
             staticPromptTokens,

@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+coverage/
+.vercel/
+.pnp/
+.pnp.js
+.tmp/
+
+# Generated / large
+src/types/database.types.ts
+*.risum
+
+# Locks
+package-lock.json
+pnpm-lock.yaml
+yarn.lock

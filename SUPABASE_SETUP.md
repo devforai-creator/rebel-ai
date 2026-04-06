@@ -1,0 +1,230 @@
+# Supabase Setup Guide
+
+This guide covers the current RebelAI setup path for a fresh Supabase project.
+
+Use this document when you want to:
+
+- create a new Supabase project for RebelAI
+- apply the current schema
+- configure auth redirects correctly
+- connect local development or a deployed app to that project
+
+If you only want the shortest possible local boot flow, start with [docs/GETTING_STARTED.md](./docs/GETTING_STARTED.md).
+
+## 1. Create a Supabase Project
+
+1. Go to [supabase.com](https://supabase.com) and create a project.
+2. Choose any project name and region that make sense for your users.
+3. Save the database password somewhere safe.
+
+## 2. Apply the Schema
+
+RebelAI ships both:
+
+- `supabase/schema.sql` for a one-shot hosted setup
+- `supabase/migrations/` for transparent migration history and local CLI workflows
+
+### Option A: Hosted Supabase project via SQL Editor
+
+This is the simplest path for a fresh cloud project.
+
+1. Open Supabase Dashboard.
+2. Go to `SQL Editor`.
+3. Create a new query.
+4. Copy the full contents of [`supabase/schema.sql`](./supabase/schema.sql).
+5. Run it once.
+6. Verify that core tables such as `profiles`, `api_keys`, `characters`, `chats`, `messages`, and `chat_generation_jobs` exist.
+
+### Option B: Local Supabase CLI workflow
+
+Use this if you are developing locally with the Supabase CLI.
+
+```bash
+supabase start
+supabase db push
+```
+
+If you also want to regenerate local TypeScript DB types:
+
+```bash
+npm run db:types
+```
+
+## 3. Collect Supabase Credentials
+
+In Supabase Dashboard, open `Settings -> API` and copy:
+
+- `Project URL`
+- `anon public` key
+- `service_role` key
+
+You will use these in `.env.local` or your deployment environment.
+
+## 4. Configure Authentication URLs
+
+Open `Authentication -> URL Configuration` and set:
+
+- `Site URL`: your canonical app URL
+- `Redirect URLs`: at minimum your local dev URL and deployed app URL patterns
+
+Example:
+
+```text
+Site URL
+https://app.example.com
+
+Redirect URLs
+http://localhost:3000/**
+https://app.example.com/**
+```
+
+If this is wrong, signup and email verification flows will point users at the wrong domain.
+
+### Email Auth
+
+Open `Authentication -> Providers -> Email` and verify:
+
+- Email auth is enabled
+- Confirm email is enabled if you want verification before use
+
+## 5. Create Local Environment Variables
+
+Copy the example file:
+
+```bash
+cp .env.example .env.local
+```
+
+Generate strong secrets:
+
+```bash
+openssl rand -base64 32
+```
+
+Run that command once per secret value you need.
+
+### Minimum local `.env.local`
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+CHAT_ADMIN_SECRET=generated_secret_1
+SUMMARY_GENERATION_SECRET=generated_secret_2
+CRON_SECRET=generated_secret_3
+```
+
+### Production-only additions
+
+Set these in your deployed environment:
+
+```bash
+INTERNAL_API_ORIGIN=https://your-app.example.com
+```
+
+`INTERNAL_API_ORIGIN` is required outside local development because Edge and Node internal calls must target a trusted canonical origin.
+
+### Optional variables
+
+- `DEVELOPER_EMAILS`: comma-separated allowlist for developer-only chat UI affordances
+- `CHAT_JOB_RUNNER_BATCH_LIMIT`: chat jobs processed per trigger
+- `CHARACTER_IMPORT_RUNNER_BATCH_LIMIT`: character import jobs processed per trigger
+- `NEXT_PUBLIC_IMPORT_MAX_UPLOAD_MB`: self-hosted import upload cap override
+- `VERCEL_AUTOMATION_BYPASS_SECRET`: only if Vercel Automation Protection is enabled and internal requests need the bypass header
+- `BACKFILL_API_PROVIDER`, `BACKFILL_API_KEY`, `BACKFILL_MODEL_NAME`: only for backfill scripts
+
+## 6. Local Verification
+
+Install dependencies and start the app:
+
+```bash
+npm install
+npm run dev
+```
+
+Then verify the happy path:
+
+1. Open `http://localhost:3000`
+2. Sign up
+3. Add an API key in `/dashboard/api-keys`
+4. Import an `.rbx` package in the character import UI
+5. Start a chat and confirm responses stream
+
+## 7. Optional Admin Access
+
+The first signed-up user is not automatically an admin.
+
+If you need admin-only features such as announcement management, run this in Supabase SQL Editor:
+
+```sql
+update profiles
+set is_admin = true
+where id = 'YOUR_USER_ID';
+```
+
+You can find the user ID in `Authentication -> Users`.
+
+## 8. Deployment Notes
+
+### Vercel
+
+If you deploy on Vercel:
+
+- set all required environment variables in the project settings
+- keep `CRON_SECRET` configured so Vercel Cron can call the trigger endpoints
+- set `INTERNAL_API_ORIGIN` to the production app URL
+- verify `vercel.json` cron jobs are active after deployment
+
+Current trigger endpoints accept only bearer-token auth. You should not rely on query-string secrets.
+
+### Non-Vercel Hosting
+
+If you self-host elsewhere:
+
+- set `INTERNAL_API_ORIGIN` explicitly
+- provide a scheduler that calls the internal trigger routes with `Authorization: Bearer <CRON_SECRET>`
+- or run `npm run chat:jobs` / `npm run character:jobs` from your own worker process
+
+## Troubleshooting
+
+### `relation does not exist`
+
+Your schema was not applied completely. Re-run `supabase/schema.sql` or `supabase db push`.
+
+### `Server misconfigured`
+
+One or more required env vars are missing. Check:
+
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `CHAT_ADMIN_SECRET`
+- `SUMMARY_GENERATION_SECRET`
+- `CRON_SECRET`
+- `INTERNAL_API_ORIGIN` in deployed environments
+
+### Auth emails point to localhost
+
+Your Supabase auth URL configuration is wrong. Re-check `Site URL` and `Redirect URLs`.
+
+### Jobs enqueue but do not run
+
+Check:
+
+- `CRON_SECRET` is set
+- `CHAT_ADMIN_SECRET` is set
+- Vercel Cron is enabled or your external scheduler is running
+- internal trigger routes return `202`/`200` in logs
+
+### Import or chat works locally but fails in production
+
+Most often this is one of:
+
+- missing `INTERNAL_API_ORIGIN`
+- wrong deployed app URL in Supabase Auth settings
+- missing internal service secrets
+
+## Related Docs
+
+- [README.md](./README.md)
+- [docs/GETTING_STARTED.md](./docs/GETTING_STARTED.md)
+- [SECURITY.md](./SECURITY.md)
+- [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)

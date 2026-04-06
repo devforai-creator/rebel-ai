@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/internal/chat-job-runner/trigger",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/internal/character-import-runner/trigger",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/internal/job-janitor",
+      "schedule": "*/2 * * * *"
+    }
+  ]
+}

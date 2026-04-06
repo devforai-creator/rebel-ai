@@ -1,0 +1,2 @@
+export const CHAT_MESSAGE_PAGE_SIZE = 80
+export const CHARACTER_CHAT_PAGE_SIZE = 15

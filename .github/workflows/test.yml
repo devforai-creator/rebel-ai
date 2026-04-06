@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check for dependency vulnerabilities (production only)
+        run: npm audit --audit-level=high --omit=dev
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Run unit and integration tests with coverage
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test -- --coverage 2>&1 | tee coverage-output.txt
+
+      - name: Add coverage to summary
+        if: always()
+        run: |
+          echo "## 📊 Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          # Extract coverage summary (All files line with headers)
+          grep -E "(^File|^All files|^-+\|)" coverage-output.txt | head -4 >> $GITHUB_STEP_SUMMARY || echo "Coverage data not available" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Build for production
+        run: npm run build
+
+      - name: Scan for leaked secrets in build output
+        run: |
+          echo "🔍 Scanning build artifacts for leaked secrets..."
+
+          # Check for service role key patterns in static files
+          if grep -r "SUPABASE_SERVICE_ROLE" .next/static/ 2>/dev/null; then
+            echo "❌ SECURITY ERROR: Service role key found in static bundle!"
+            echo "This indicates the /api/chat route may be using Edge runtime."
+            exit 1
+          fi
+
+          # Check for other sensitive patterns
+          if grep -rE "(eyJ[a-zA-Z0-9_-]{20,}\.eyJ[a-zA-Z0-9_-]{20,})" .next/static/ 2>/dev/null | grep -v "node_modules"; then
+            echo "⚠️  WARNING: JWT-like pattern found in static bundle"
+            echo "Please verify this is not a real secret"
+          fi
+
+          echo "✅ No secrets found in bundle"
+
+  # Validate Supabase migrations and RLS policies
+  migrations:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.72.7
+
+      - name: Start Supabase local instance
+        run: supabase start
+
+      - name: Apply all migrations
+        run: |
+          echo "🔄 Applying migrations to local Supabase..."
+          supabase db push --local
+          echo "✅ All migrations applied successfully"
+
+      - name: Verify migrations can be reapplied from scratch
+        run: |
+          echo "🔄 Testing full reset (drop + reapply all migrations)..."
+          supabase db reset --local --no-seed
+          echo "✅ All migrations reapplied successfully"
+
+      - name: Run RLS policy tests
+        run: |
+          echo "🔒 Running RLS policy tests..."
+          # Get Supabase local credentials
+          SUPABASE_STATUS=$(supabase status --output json)
+          SUPABASE_URL=$(echo "$SUPABASE_STATUS" | jq -r '.API_URL')
+          SERVICE_ROLE_KEY=$(echo "$SUPABASE_STATUS" | jq -r '.SERVICE_ROLE_KEY')
+          ANON_KEY=$(echo "$SUPABASE_STATUS" | jq -r '.ANON_KEY')
+
+          # Run RLS tests with anon key for accurate user simulation
+          SUPABASE_URL="$SUPABASE_URL" \
+          SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+          SUPABASE_ANON_KEY="$ANON_KEY" \
+          RLS_TESTS_ENABLED=true \
+          npm run test -- src/lib/rls/
+
+          echo "✅ RLS policy tests passed"
+
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop

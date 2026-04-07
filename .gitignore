@@ -41,6 +41,7 @@ yarn-error.log*
 # temp extraction artifacts
 *_extracted/
 charx_temp/
+supabase/.temp/
 
 # Claude Code / Codex
 .claude/

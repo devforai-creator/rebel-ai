@@ -22,6 +22,7 @@ You need:
 - a service-role key
 
 Then apply the schema from [`supabase/schema.sql`](../supabase/schema.sql) in Supabase SQL Editor.
+If your hosted project does not already have them enabled, turn on the `vault` and `pgsodium` extensions first.
 
 If you want the longer hosted setup flow, use [SUPABASE_SETUP.md](../SUPABASE_SETUP.md).
 

@@ -1,5 +1,4 @@
 import {
-  normalizeAssetKey,
   resolveAssetTag,
   resolveAssetUrl,
   type CharacterAsset,
@@ -168,10 +167,9 @@ export function resolveEmotionRenderTarget(options: {
     return null
   }
 
-  const normalizedTag = normalizeAssetKey(rawTag)
-  const resolvedFromCommand =
-    options.imageCommandUrlMap?.[rawTag] ||
-    (normalizedTag ? options.imageCommandUrlMap?.[normalizedTag] : undefined)
+  const resolvedFromCommand = options.imageCommandUrlMap
+    ? resolveAssetUrl(rawTag, options.imageCommandUrlMap)
+    : undefined
 
   if (resolvedFromCommand) {
     const asset =

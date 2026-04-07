@@ -101,6 +101,29 @@ describe('computeClientRenderDiagnostics', () => {
       },
     ])
   })
+
+  it('treats dot-style asset tags as resolved via underscore image command keys', () => {
+    const result = computeClientRenderDiagnostics(
+      '![Ako](asset:Ako.surprised)',
+      undefined,
+      {},
+      400,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { ako_surprised: 'https://example.com/ako-surprised.png' },
+    )
+
+    expect(result.unresolvedImageTags).toEqual([])
+    expect(result.unresolvedImageTagsRaw).toEqual([
+      {
+        original: '![Ako](asset:Ako.surprised)',
+        extractedName: 'Ako.surprised',
+      },
+    ])
+  })
 })
 
 describe('normalizeFullwidthChars', () => {

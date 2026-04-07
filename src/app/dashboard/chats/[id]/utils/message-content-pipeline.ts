@@ -1,7 +1,6 @@
 import {
   resolveAssetTag,
   resolveAssetUrl,
-  normalizeAssetKey,
   type CharacterAsset,
 } from '@/lib/asset-resolver'
 import { normalizeLegacyAssetImageTokens } from '@/lib/asset-token'
@@ -251,11 +250,8 @@ function resolveImageTagForDiagnostics(
 ): boolean {
   if (!name) return false
 
-  if (imageCommandUrlMap) {
-    const normalized = normalizeAssetKey(name)
-    if (imageCommandUrlMap[name] || (normalized ? imageCommandUrlMap[normalized] : undefined)) {
-      return true
-    }
+  if (imageCommandUrlMap && resolveAssetUrl(name, imageCommandUrlMap)) {
+    return true
   }
 
   if (characterAssets && characterAssets.length > 0) {

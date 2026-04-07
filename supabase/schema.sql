@@ -1,3 +1,12 @@
+-- RebelAI hosted bootstrap schema
+-- Generated from supabase/migrations by scripts/build-hosted-schema.sh.
+-- Source of truth: supabase/migrations
+-- For hosted Supabase SQL Editor setup, enable Vault / pgsodium first if your
+-- project does not already have them available.
+
+
+-- >>> 00_initial_schema.sql
+
 -- ============================================
 -- CharacterChat Platform - Initial Schema
 -- Phase 0 MVP Database Schema
@@ -291,6 +300,11 @@ create trigger on_auth_user_created
 -- ============================================
 -- Schema Setup Complete!
 -- ============================================
+
+
+
+-- >>> 01_vault_helpers.sql
+
 -- ============================================
 -- Supabase Vault Helper Functions
 -- API 키 암호화 저장을 위한 Vault RPC 함수
@@ -382,6 +396,11 @@ revoke execute on function public.get_decrypted_secret from anon, public;
 grant execute on function public.create_secret to authenticated;
 grant execute on function public.delete_secret to authenticated;
 grant execute on function public.get_decrypted_secret to authenticated;
+
+
+
+-- >>> 02_update_vault_delete_secret.sql
+
 -- ============================================
 -- Vault delete_secret ownership check refinement
 -- Allows cleanup after api_keys row deletion while
@@ -421,6 +440,11 @@ begin
   where name = secret_name;
 end;
 $$;
+
+
+
+-- >>> 03_chat_summaries.sql
+
 -- ============================================
 -- Chat Summaries Table for Hierarchical Memory
 -- ============================================
@@ -477,6 +501,11 @@ create policy "Users can delete summaries for their chats"
 
 create index idx_chat_summaries_chat_level
   on public.chat_summaries(chat_id, level, start_seq);
+
+
+
+-- >>> 04_secure_get_decrypted_secret.sql
+
 -- ============================================
 -- Harden get_decrypted_secret RPC so only trusted
 -- service contexts can decrypt API keys.
@@ -531,6 +560,11 @@ $$;
 -- Ensure only service role can execute; block anon/authenticated contexts.
 revoke all on function public.get_decrypted_secret(text, uuid) from public, anon, authenticated;
 grant execute on function public.get_decrypted_secret(text, uuid) to service_role;
+
+
+
+-- >>> 05_allow_starter_characters.sql
+
 -- ============================================
 -- Allow Starter Characters (user_id = NULL)
 -- Phase 0: Enable global shared starter characters
@@ -601,6 +635,11 @@ USING (
 -- - 일반 유저: 본인 소유(user_id = auth.uid()) 캐릭터만 생성/수정/삭제
 -- - 스타터 캐릭터(user_id=NULL): 모든 유저가 읽기만 가능, 수정/삭제 불가
 -- ============================================
+
+
+
+-- >>> 06_rate_limit_and_vault_audit.sql
+
 -- ============================================
 -- Rate limiting, usage telemetry, and Vault audit hardening
 -- ============================================
@@ -874,6 +913,11 @@ revoke execute on function public.delete_secret(text) from anon, public;
 
 grant execute on function public.create_secret(text, text) to authenticated;
 grant execute on function public.delete_secret(text) to authenticated;
+
+
+
+-- >>> 07_persistent_anon_rate_limit.sql
+
 -- ============================================
 -- Persistent anonymous rate limiting
 -- ============================================
@@ -959,6 +1003,11 @@ revoke all on function public.check_anon_rate_limit(text, integer, integer)
   from public, anon, authenticated;
 grant execute on function public.check_anon_rate_limit(text, integer, integer)
   to service_role;
+
+
+
+-- >>> 08_character_assets_storage.sql
+
 -- ============================================
 -- Character Assets Storage Setup
 -- Stores imported character card assets (avatars, backgrounds, etc.)
@@ -1011,6 +1060,11 @@ create policy "Public read access"
 -- ============================================
 -- Setup Complete!
 -- ============================================
+
+
+
+-- >>> 09_risuai_preset_module_system.sql
+
 -- ============================================================================
 -- RisuAI Preset/Module System
 -- ============================================================================
@@ -1353,6 +1407,11 @@ COMMENT ON COLUMN modules.regex IS 'Input/output post-processing scripts';
 COMMENT ON COLUMN modules.triggers IS 'Event-triggered scripts (start, manual, aftergen)';
 COMMENT ON COLUMN character_modules.priority IS 'Higher priority modules applied first (for conflict resolution)';
 COMMENT ON COLUMN global_variables.value IS 'JSONB value supporting string, number, boolean types';
+
+
+
+-- >>> 10_preset_toggle_definitions.sql
+
 /**
  * Add toggle_definitions to presets table
  *
@@ -1368,6 +1427,11 @@ ADD COLUMN IF NOT EXISTS toggle_definitions jsonb DEFAULT '{}'::jsonb;
 -- Comment
 COMMENT ON COLUMN presets.toggle_definitions IS
   'Toggle definitions from customPromptTemplateToggle. Format: {key: {label, type, value, options?}}';
+
+
+
+-- >>> 11_message_debug_info.sql
+
 /**
  * Add debug_info to messages table for LLM I/O logging
  *
@@ -1385,6 +1449,11 @@ ADD COLUMN IF NOT EXISTS debug_info jsonb DEFAULT NULL;
 -- Comment
 COMMENT ON COLUMN messages.debug_info IS
   'Debug information: {prompt, rawResponse, processedResponse, modelConfig, timestamp}';
+
+
+
+-- >>> 12_simulation_characters_support.sql
+
 -- ============================================================================
 -- Simulation Characters Support
 -- ============================================================================
@@ -1603,6 +1672,11 @@ COMMENT ON FUNCTION get_character_assets IS 'Get all assets for a character with
 -- ============================================================================
 -- Migration Complete!
 -- ============================================================================
+
+
+
+-- >>> 13_lorebook_overrides.sql
+
 -- ============================================================================
 -- Lorebook Overrides
 -- Allows users to enable/disable specific lorebook entries per chat
@@ -1685,6 +1759,11 @@ COMMENT ON TABLE lorebook_overrides IS 'Per-chat overrides for lorebook entry ac
 COMMENT ON COLUMN lorebook_overrides.entry_key IS 'Lorebook entry key (keywords)';
 COMMENT ON COLUMN lorebook_overrides.entry_insertorder IS 'Lorebook entry insertorder for uniqueness';
 COMMENT ON COLUMN lorebook_overrides.enabled IS 'User preference: true = force enable, false = force disable';
+
+
+
+-- >>> 14_personas.sql
+
 -- ============================================================================
 -- Personas Feature
 -- User can create multiple personas (character profiles for themselves)
@@ -1756,6 +1835,11 @@ COMMENT ON TABLE public.personas IS 'User-created persona profiles for roleplay'
 COMMENT ON COLUMN public.personas.name IS 'Short name for the persona (e.g., "Student Mode", "Office Worker")';
 COMMENT ON COLUMN public.personas.description IS 'Free-text description of the persona (name, age, appearance, personality, etc.)';
 COMMENT ON COLUMN public.chats.persona_id IS 'Optional persona used in this chat';
+
+
+
+-- >>> 15_chat_summaries_update_policy.sql
+
 -- ============================================
 -- Add UPDATE policy for chat_summaries
 -- ============================================
@@ -1774,6 +1858,11 @@ create policy "Users can update summaries for their chats"
         and chats.user_id = auth.uid()
     )
   );
+
+
+
+-- >>> 16_custom_summary_prompts.sql
+
 -- ============================================
 -- Custom Summary Prompts for Users
 -- ============================================
@@ -1789,6 +1878,11 @@ ALTER TABLE public.profiles
 -- Add helpful comments
 COMMENT ON COLUMN public.profiles.chunk_summary_prompt IS 'Custom system prompt for chunk-level summaries (10 messages). If NULL, uses default prompt.';
 COMMENT ON COLUMN public.profiles.meta_summary_prompt IS 'Custom system prompt for meta-level summaries (100 messages). If NULL, uses default prompt.';
+
+
+
+-- >>> 17_enable_realtime.sql
+
 -- ============================================
 -- Enable Realtime for chat_summaries and messages
 -- ============================================
@@ -1828,6 +1922,11 @@ END $$;
 -- FROM pg_publication_tables
 -- WHERE pubname = 'supabase_realtime'
 -- ORDER BY tablename;
+
+
+
+-- >>> 18_realtime_replica_identity.sql
+
 -- ============================================
 -- Ensure Realtime can evaluate RLS policies
 -- ============================================
@@ -1866,6 +1965,11 @@ BEGIN
     ALTER TABLE public.messages REPLICA IDENTITY FULL;
   END IF;
 END $$;
+
+
+
+-- >>> 19_refresh_realtime_subscription.sql
+
 -- ============================================
 -- Refresh Realtime subscription after adding tables
 -- ============================================
@@ -1884,6 +1988,11 @@ BEGIN
     ALTER SUBSCRIPTION supabase_realtime REFRESH PUBLICATION;
   END IF;
 END $$;
+
+
+
+-- >>> 20_charx_upload_bucket.sql
+
 -- =====================================================
 -- CharX Upload Staging Bucket
 -- Stores raw user uploads before they are processed
@@ -1940,6 +2049,11 @@ create policy "Users can read their CharX archives"
     bucket_id = 'charx-uploads'
     and auth.uid()::text = (storage.foldername(name))[1]
   );
+
+
+
+-- >>> 21_charx_import_jobs.sql
+
 -- =====================================================
 -- CharX Import Job Queue
 -- Tracks background CharX processing tasks
@@ -2002,28 +2116,11 @@ drop trigger if exists set_charx_import_job_updated_at on public.charx_import_jo
 create trigger set_charx_import_job_updated_at
 before update on public.charx_import_jobs
 for each row execute function public.set_charx_import_job_updated_at();
--- =====================================================
--- CharX Import Job Rights Metadata
--- Tracks provenance + redistribution claims for CharX uploads
--- =====================================================
 
-alter table if exists public.charx_import_jobs
-  add column if not exists rights_status text not null default 'self_owned'
-    check (rights_status in ('self_owned', 'third_party_with_license')),
-  add column if not exists rights_attested boolean not null default false,
-  add column if not exists license_type text,
-  add column if not exists license_url text,
-  add column if not exists license_notes text,
-  add column if not exists source_url text,
-  add column if not exists source_label text;
 
-comment on column public.charx_import_jobs.rights_status is 'self_owned = uploaded by owner, third_party_with_license = imported under an allowed, documented license';
-comment on column public.charx_import_jobs.rights_attested is 'Whether the uploader explicitly confirmed their rights to redistribute the CharX file';
-comment on column public.charx_import_jobs.license_type is 'Declared license for the CharX payload (e.g., CC BY 4.0)';
-comment on column public.charx_import_jobs.license_url is 'Link to the license text or proof';
-comment on column public.charx_import_jobs.license_notes is 'Free-form notes about the license or attribution requirements';
-comment on column public.charx_import_jobs.source_url is 'Original source URL (e.g., RisuRealm share link)';
-comment on column public.charx_import_jobs.source_label is 'Human friendly label for the source (uploader name/site)';
+
+-- >>> 22_chat_token_totals_rpc.sql
+
 -- Chat token totals RPC for stats route
 
 create or replace function public.get_chat_token_totals(
@@ -2065,6 +2162,11 @@ $$;
 revoke all on function public.get_chat_token_totals(uuid, uuid) from public;
 grant execute on function public.get_chat_token_totals(uuid, uuid) to authenticated;
 grant execute on function public.get_chat_token_totals(uuid, uuid) to service_role;
+
+
+
+-- >>> 23_fix_chat_token_totals_rpc.sql
+
 -- Qualify columns in get_chat_token_totals to avoid ambiguity errors (42702)
 
 create or replace function public.get_chat_token_totals(
@@ -2106,6 +2208,11 @@ $$;
 revoke all on function public.get_chat_token_totals(uuid, uuid) from public;
 grant execute on function public.get_chat_token_totals(uuid, uuid) to authenticated;
 grant execute on function public.get_chat_token_totals(uuid, uuid) to service_role;
+
+
+
+-- >>> 24_chat_generation_jobs.sql
+
 -- Chat generation jobs queue for async LLM execution
 
 create table public.chat_generation_jobs (
@@ -2137,6 +2244,11 @@ create policy "Users can insert chat jobs"
 create trigger update_chat_generation_jobs_updated_at
   before update on public.chat_generation_jobs
   for each row execute function update_updated_at_column();
+
+
+
+-- >>> 25_allow_message_updates.sql
+
 -- ============================================================================
 -- 25_allow_message_updates.sql
 -- Allow chat owners to edit their own user/assistant messages
@@ -2164,6 +2276,11 @@ begin
   end if;
 end
 $$;
+
+
+
+-- >>> 26_fix_realtime_rls.sql
+
 -- ============================================
 -- Fix Realtime RLS: Add user_id to messages and chat_summaries
 -- ============================================
@@ -2297,6 +2414,11 @@ CREATE INDEX IF NOT EXISTS idx_chat_summaries_user_id ON public.chat_summaries(u
 -- 10. Verify the changes
 COMMENT ON COLUMN public.messages.user_id IS 'Denormalized user_id for Realtime RLS compatibility';
 COMMENT ON COLUMN public.chat_summaries.user_id IS 'Denormalized user_id for Realtime RLS compatibility';
+
+
+
+-- >>> 27_chat_facts_table.sql
+
 -- ============================================================================
 -- Chat Facts (Episodic Memory) Table
 -- Stores concrete, specific facts extracted from conversations
@@ -2343,6 +2465,11 @@ COMMENT ON TABLE public.chat_facts IS 'Episodic memory: Stores specific facts ex
 COMMENT ON COLUMN public.chat_facts.facts IS 'Plain text bullet points of concrete facts, extracted by LLM from messages in the sequence range.';
 COMMENT ON COLUMN public.chat_facts.start_seq IS 'Starting message sequence number (inclusive).';
 COMMENT ON COLUMN public.chat_facts.end_seq IS 'Ending message sequence number (inclusive).';
+
+
+
+-- >>> 28_fact_extraction_prompt.sql
+
 -- ============================================
 -- Fact Extraction Prompt for Episodic Memory
 -- ============================================
@@ -2356,6 +2483,11 @@ ALTER TABLE public.profiles
 
 -- Add helpful comment
 COMMENT ON COLUMN public.profiles.fact_extraction_prompt IS 'Custom system prompt for extracting concrete facts from conversation chunks (episodic memory). If NULL, uses default prompt.';
+
+
+
+-- >>> 29_enable_realtime_chat_facts.sql
+
 -- ============================================
 -- Enable Realtime for chat_facts
 -- ============================================
@@ -2386,6 +2518,11 @@ ALTER TABLE public.chat_facts REPLICA IDENTITY FULL;
 -- FROM pg_publication_tables
 -- WHERE pubname = 'supabase_realtime'
 -- AND tablename = 'chat_facts';
+
+
+
+-- >>> 30_add_chat_fact_embeddings.sql
+
 -- ============================================================================
 -- Migration 30: Add pgvector embeddings to chat_facts
 -- ============================================================================
@@ -2402,6 +2539,11 @@ create index chat_facts_embedding_idx
 
 create index chat_facts_user_id_idx
   on public.chat_facts (user_id);
+
+
+
+-- >>> 31_profiles_voyage_embedding_key.sql
+
 -- ============================================================================
 -- Migration 31: Profiles opt-in + Voyage embedding API key wiring
 -- ============================================================================
@@ -2411,11 +2553,16 @@ alter table public.api_keys
 
 alter table public.api_keys
   add constraint api_keys_provider_check
-  check (provider in ('google', 'openai', 'anthropic', 'deepseek', 'openrouter', 'voyage_embeddings'));
+  check (provider in ('google', 'openai', 'anthropic', 'voyage_embeddings'));
 
 alter table public.profiles
   add column if not exists voyage_embedding_api_key_id uuid references public.api_keys(id),
   add column if not exists enable_episodic_rag boolean not null default false;
+
+
+
+-- >>> 32_match_chat_facts_rpc.sql
+
 -- ============================================================================
 -- Migration 32: Secure semantic search RPC for chat facts
 -- ============================================================================
@@ -2484,6 +2631,11 @@ $$;
 
 revoke all on function public.match_chat_facts(uuid, uuid, vector(1024), float, int) from public, anon;
 grant execute on function public.match_chat_facts(uuid, uuid, vector(1024), float, int) to authenticated, service_role;
+
+
+
+-- >>> 33_update_vault_helpers.sql
+
 -- ============================================================================
 -- Migration 33: Allow service contexts to create/delete secrets on behalf of users
 -- ============================================================================
@@ -2548,6 +2700,11 @@ $$;
 
 revoke all on function public.delete_secret(text, uuid) from public, anon;
 grant execute on function public.delete_secret(text, uuid) to authenticated, service_role;
+
+
+
+-- >>> 34_fix_match_chat_facts_rpc.sql
+
 -- ============================================================================
 -- Migration 34: Fix ambiguous column reference in match_chat_facts
 -- ============================================================================
@@ -2613,6 +2770,11 @@ begin
   limit match_count;
 end;
 $$;
+
+
+
+-- >>> 35_add_chat_facts_update_policy.sql
+
 -- ============================================================================
 -- Add UPDATE policy for chat_facts table
 -- Bug fix: Users were unable to update embeddings for their own chat facts
@@ -2626,6 +2788,11 @@ CREATE POLICY "Users can update their own chat facts"
 
 COMMENT ON POLICY "Users can update their own chat facts" ON public.chat_facts
   IS 'Allows users to update (re-embed) their own chat facts';
+
+
+
+-- >>> 36_chat_system_prompt_override.sql
+
 -- ============================================================================
 -- Add per-chat custom system prompt override
 -- Allows users to replace the global system prompt via the dashboard UI
@@ -2636,6 +2803,11 @@ ALTER TABLE public.chats
 
 COMMENT ON COLUMN public.chats.custom_system_prompt
   IS 'Optional override prepended ahead of character/preset prompts. When NULL, the global system prompt is used.';
+
+
+
+-- >>> 37_announcements.sql
+
 -- Broadcast announcements for urgent notices
 
 create table public.announcements (
@@ -2665,10 +2837,20 @@ create policy "Authenticated users can read announcements"
 create trigger update_announcements_updated_at
   before update on public.announcements
   for each row execute function update_updated_at_column();
+
+
+
+-- >>> 38_profiles_admin_flag.sql
+
 -- Add admin flag to profiles for operator-only features
 
 alter table public.profiles
 add column if not exists is_admin boolean not null default false;
+
+
+
+-- >>> 39_user_feedback.sql
+
 -- Lightweight user feedback submissions for retention insights
 
 create table public.user_feedback (
@@ -2705,6 +2887,11 @@ create policy "admins can review all feedback"
         and coalesce(p.is_admin, false) = true
     )
   );
+
+
+
+-- >>> 40_api_key_service_tier.sql
+
 -- Track OpenAI service tier preference per BYOK entry
 
 alter table public.api_keys
@@ -2713,6 +2900,11 @@ alter table public.api_keys
 
 comment on column public.api_keys.service_tier is
   'Optional OpenAI service tier preference (standard | flex | priority | batch)';
+
+
+
+-- >>> 41_chat_usage_event_costs.sql
+
 -- Track cached tokens and USD costs per usage event, plus helper to aggregate totals per chat
 
 alter table public.chat_usage_events
@@ -2778,10 +2970,20 @@ $$;
 revoke all on function public.get_chat_usage_costs(uuid, uuid) from public;
 grant execute on function public.get_chat_usage_costs(uuid, uuid) to authenticated;
 grant execute on function public.get_chat_usage_costs(uuid, uuid) to service_role;
+
+
+
+-- >>> 42_profiles_summary_api_key.sql
+
 alter table public.profiles
   add column summary_api_key_id uuid references public.api_keys (id) on delete set null;
 
 comment on column public.profiles.summary_api_key_id is 'Optional API key used for summary generation. Defaults to the chat API key when null.';
+
+
+
+-- >>> 43_character_assets_canonical_name.sql
+
 -- ============================================
 -- Add canonical_name column to character_assets
 -- Stores the human-readable asset name for {{assetlist}} template
@@ -2827,3 +3029,1615 @@ WHERE canonical_name IS NULL;
 -- Comment for documentation
 COMMENT ON COLUMN character_assets.canonical_name IS
 'Human-readable asset name for {{assetlist}} template. Extracted from display_name at import time, without path prefixes or extensions.';
+
+
+
+-- >>> 44_charx_uploads_jpeg_support.sql
+
+-- =====================================================
+-- Add JPEG MIME types to charx-uploads bucket
+-- Supports RisuAI JPEG character cards
+-- =====================================================
+
+update storage.buckets
+set allowed_mime_types = array[
+  'application/octet-stream',
+  'application/zip',
+  'application/x-zip-compressed',
+  'application/json',
+  'image/png',
+  'image/jpeg'
+]
+where id = 'charx-uploads';
+
+
+
+-- >>> 45_profiles_reprocess_settings.sql
+
+-- Add reprocess settings to profiles table
+-- Allows users to configure a custom prompt and API key for message reprocessing
+
+ALTER TABLE profiles
+ADD COLUMN reprocess_prompt text,
+ADD COLUMN reprocess_api_key_id uuid REFERENCES api_keys(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN profiles.reprocess_prompt IS 'Custom system prompt for message reprocessing (translation, style correction, etc.)';
+COMMENT ON COLUMN profiles.reprocess_api_key_id IS 'API key to use for message reprocessing';
+
+
+
+-- >>> 46_add_deepseek_provider.sql
+
+-- Add DeepSeek as a supported LLM provider
+
+-- Drop existing constraint
+alter table public.api_keys
+  drop constraint if exists api_keys_provider_check;
+
+-- Add updated constraint with deepseek
+alter table public.api_keys
+  add constraint api_keys_provider_check
+  check (provider in ('google', 'openai', 'anthropic', 'deepseek', 'voyage_embeddings'));
+
+
+
+-- >>> 47_bilingual_memory.sql
+
+-- Add bilingual memory support
+-- Stores English translations of messages for token-efficient LLM context
+-- while preserving original Korean for user-facing UI
+
+-- 1. Add translation API key setting to profiles
+ALTER TABLE profiles
+ADD COLUMN translation_api_key_id uuid REFERENCES api_keys(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN profiles.translation_api_key_id IS 'API key to use for background message translation (Korean <-> English)';
+
+-- 2. Add English content column to messages
+ALTER TABLE messages
+ADD COLUMN content_en text;
+
+COMMENT ON COLUMN messages.content_en IS 'English translation of message content for token-efficient LLM context';
+
+
+
+-- >>> 48_lorebook_overrides_v2.sql
+
+-- ============================================================================
+-- Lorebook Overrides v2
+-- Fixes ambiguity when multiple modules contain entries with the same
+-- (entry_key, entry_insertorder) by adding module_id + entry_fingerprint.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS lorebook_overrides_v2 (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  -- References
+  chat_id uuid REFERENCES chats(id) ON DELETE CASCADE NOT NULL,
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  module_id uuid REFERENCES modules(id) ON DELETE CASCADE NOT NULL,
+
+  -- Lorebook entry identification
+  entry_key text NOT NULL,
+  entry_insertorder integer NOT NULL,
+  entry_fingerprint text NOT NULL,
+
+  -- User preference
+  enabled boolean NOT NULL,
+
+  -- Metadata
+  created_at timestamptz DEFAULT now() NOT NULL,
+  updated_at timestamptz DEFAULT now() NOT NULL,
+
+  -- Ensure one override per entry per chat
+  UNIQUE(chat_id, module_id, entry_fingerprint)
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_lorebook_overrides_v2_chat_id
+  ON lorebook_overrides_v2(chat_id);
+CREATE INDEX IF NOT EXISTS idx_lorebook_overrides_v2_user_id
+  ON lorebook_overrides_v2(user_id);
+
+-- RLS Policies
+ALTER TABLE lorebook_overrides_v2 ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own lorebook overrides v2"
+  ON lorebook_overrides_v2
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own lorebook overrides v2"
+  ON lorebook_overrides_v2
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own lorebook overrides v2"
+  ON lorebook_overrides_v2
+  FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own lorebook overrides v2"
+  ON lorebook_overrides_v2
+  FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- Updated at trigger
+CREATE OR REPLACE FUNCTION update_lorebook_overrides_v2_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER lorebook_overrides_v2_updated_at
+  BEFORE UPDATE ON lorebook_overrides_v2
+  FOR EACH ROW
+  EXECUTE FUNCTION update_lorebook_overrides_v2_updated_at();
+
+-- Comments
+COMMENT ON TABLE lorebook_overrides_v2 IS 'Per-chat overrides for lorebook entry activation (v2: includes module_id + fingerprint)';
+COMMENT ON COLUMN lorebook_overrides_v2.module_id IS 'Source module for the entry';
+COMMENT ON COLUMN lorebook_overrides_v2.entry_fingerprint IS 'Stable fingerprint for disambiguating duplicate (key, insertorder) entries';
+
+
+
+
+-- >>> 49_risum_import_jobs.sql
+
+-- =====================================================
+-- RisuAI Module Import Job Queue (.risum)
+-- Tracks background risum processing tasks
+-- =====================================================
+
+create table if not exists public.risum_import_jobs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  character_id uuid not null references public.characters(id) on delete cascade,
+  storage_path text not null,
+  original_filename text not null,
+  file_type text,
+  rights_status text not null default 'self_owned'
+    check (rights_status in ('self_owned', 'third_party_with_license')),
+  rights_attested boolean not null default false,
+  license_type text,
+  license_url text,
+  license_notes text,
+  source_url text,
+  source_label text,
+  status text not null default 'pending' check (status in ('pending', 'processing', 'success', 'error')),
+  error_message text,
+  result jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  started_at timestamptz,
+  completed_at timestamptz
+);
+
+create index if not exists risum_import_jobs_user_status_idx
+  on public.risum_import_jobs (user_id, status, created_at desc);
+
+create index if not exists risum_import_jobs_character_idx
+  on public.risum_import_jobs (character_id, created_at desc);
+
+alter table public.risum_import_jobs enable row level security;
+
+create policy "Users can access their risum jobs"
+  on public.risum_import_jobs
+  for select
+  using (auth.uid() = user_id);
+
+create policy "Users can enqueue risum jobs"
+  on public.risum_import_jobs
+  for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update their risum jobs"
+  on public.risum_import_jobs
+  for update
+  using (auth.uid() = user_id);
+
+create policy "Users can delete their risum jobs"
+  on public.risum_import_jobs
+  for delete
+  using (auth.uid() = user_id);
+
+comment on column public.risum_import_jobs.rights_status is 'self_owned = uploaded by owner, third_party_with_license = imported under an allowed, documented license';
+comment on column public.risum_import_jobs.rights_attested is 'Whether the uploader explicitly confirmed their rights to redistribute the risum file';
+comment on column public.risum_import_jobs.license_type is 'Declared license for the risum payload (e.g., CC BY 4.0)';
+comment on column public.risum_import_jobs.license_url is 'Link to the license text or proof';
+comment on column public.risum_import_jobs.license_notes is 'Free-form notes about the license or attribution requirements';
+comment on column public.risum_import_jobs.source_url is 'Original source URL (e.g., RisuRealm share link)';
+comment on column public.risum_import_jobs.source_label is 'Human friendly label for the source (uploader name/site)';
+
+create or replace function public.set_risum_import_job_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists set_risum_import_job_updated_at on public.risum_import_jobs;
+
+create trigger set_risum_import_job_updated_at
+before update on public.risum_import_jobs
+for each row execute function public.set_risum_import_job_updated_at();
+
+
+
+-- >>> 50_charx_uploads_risum_limit.sql
+
+-- Raise CharX/RisuAI upload staging limit to support large .risum modules.
+update storage.buckets
+set file_size_limit = 838860800 -- 800 MiB
+where id = 'charx-uploads';
+
+
+
+-- >>> 51_module_assets.sql
+
+-- ============================================================================
+-- Module Assets Storage
+-- ============================================================================
+-- Stores module-level assets once and reuses across characters.
+
+-- Create storage bucket for module assets
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'module-assets',
+  'module-assets',
+  true,  -- Public access for reading
+  20971520,  -- 20MB limit per file
+  array['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif']
+)
+on conflict (id) do nothing;
+
+-- ============================================
+-- Storage RLS Policies (module-assets bucket)
+-- ============================================
+
+-- Allow users to upload to their own folders
+create policy "Module assets: users can upload to own folder"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'module-assets'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- Allow users to update their own files
+create policy "Module assets: users can update own files"
+  on storage.objects for update
+  using (
+    bucket_id = 'module-assets'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- Allow users to delete their own files
+create policy "Module assets: users can delete own files"
+  on storage.objects for delete
+  using (
+    bucket_id = 'module-assets'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- Allow everyone to read (module assets are public)
+create policy "Module assets: public read access"
+  on storage.objects for select
+  using (bucket_id = 'module-assets');
+
+-- ============================================
+-- Module Assets Table
+-- ============================================
+
+create table if not exists module_assets (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  module_id uuid references modules(id) on delete cascade not null,
+
+  -- Asset identification
+  file_name text not null,   -- Original filename from .risum
+
+  -- Storage
+  storage_path text not null unique,  -- Path in module-assets bucket
+  content_type text,
+  file_size integer,
+
+  -- Display & Organization
+  display_name text,
+  display_order integer default 0,
+
+  -- Metadata (aliases, generation info, etc)
+  metadata jsonb default '{}'::jsonb,
+
+  -- Timestamps
+  created_at timestamptz default now() not null,
+  updated_at timestamptz default now() not null,
+
+  unique (module_id, file_name)
+);
+
+-- Indexes
+create index idx_module_assets_user_id on module_assets(user_id);
+create index idx_module_assets_module_id on module_assets(module_id);
+create index idx_module_assets_display_name on module_assets(module_id, display_name);
+create index idx_module_assets_storage_path on module_assets(storage_path);
+
+-- ============================================
+-- RLS Policies
+-- ============================================
+
+alter table module_assets enable row level security;
+
+create policy "Users can view own module assets"
+  on module_assets for select
+  using (
+    auth.uid() = user_id
+    and exists (
+      select 1 from modules
+      where modules.id = module_assets.module_id
+      and modules.user_id = auth.uid()
+    )
+  );
+
+create policy "Users can insert own module assets"
+  on module_assets for insert
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from modules
+      where modules.id = module_assets.module_id
+      and modules.user_id = auth.uid()
+    )
+  );
+
+create policy "Users can update own module assets"
+  on module_assets for update
+  using (
+    auth.uid() = user_id
+    and exists (
+      select 1 from modules
+      where modules.id = module_assets.module_id
+      and modules.user_id = auth.uid()
+    )
+  )
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from modules
+      where modules.id = module_assets.module_id
+      and modules.user_id = auth.uid()
+    )
+  );
+
+create policy "Users can delete own module assets"
+  on module_assets for delete
+  using (
+    auth.uid() = user_id
+    and exists (
+      select 1 from modules
+      where modules.id = module_assets.module_id
+      and modules.user_id = auth.uid()
+    )
+  );
+
+-- ============================================
+-- Triggers
+-- ============================================
+
+create trigger update_module_assets_updated_at
+  before update on module_assets
+  for each row
+  execute function update_updated_at();
+
+-- ============================================
+-- Comments
+-- ============================================
+
+comment on table module_assets is 'Module-level assets (shared across characters)';
+comment on column module_assets.storage_path is 'Path in module-assets Supabase Storage bucket';
+comment on column module_assets.metadata is 'Asset metadata (aliases, generation info, etc)';
+comment on column module_assets.display_name is 'Display name for module assets';
+
+
+
+-- >>> 52_character_assets_user_id.sql
+
+-- ============================================================================
+-- Character Assets User ID Denormalization
+-- ============================================================================
+-- Performance fix: Add user_id directly to character_assets table
+-- to avoid slow RLS policy with EXISTS subquery to characters table.
+--
+-- Problem: RLS policy "Users can view own character assets" does:
+--   EXISTS (SELECT 1 FROM characters WHERE characters.id = character_assets.character_id AND characters.user_id = auth.uid())
+-- This causes 1 subquery per row, which times out with many assets (733+ rows).
+--
+-- Solution: Denormalize user_id into character_assets for O(1) RLS check.
+-- ============================================================================
+
+-- 1. Add user_id column (nullable initially for migration)
+ALTER TABLE character_assets
+ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
+
+-- 2. Populate user_id from characters table
+UPDATE character_assets
+SET user_id = characters.user_id
+FROM characters
+WHERE character_assets.character_id = characters.id
+AND character_assets.user_id IS NULL;
+
+-- 3. Make user_id NOT NULL after population
+ALTER TABLE character_assets
+ALTER COLUMN user_id SET NOT NULL;
+
+-- 4. Add index for RLS performance
+CREATE INDEX IF NOT EXISTS idx_character_assets_user_id
+ON character_assets(user_id);
+
+-- 5. Drop old RLS policies
+DROP POLICY IF EXISTS "Users can view own character assets" ON character_assets;
+DROP POLICY IF EXISTS "Users can insert own character assets" ON character_assets;
+DROP POLICY IF EXISTS "Users can update own character assets" ON character_assets;
+DROP POLICY IF EXISTS "Users can delete own character assets" ON character_assets;
+
+-- 6. Create new optimized RLS policies (direct user_id check, no subquery)
+CREATE POLICY "Users can view own character assets"
+  ON character_assets FOR SELECT
+  USING (user_id = auth.uid());
+
+CREATE POLICY "Users can insert own character assets"
+  ON character_assets FOR INSERT
+  WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Users can update own character assets"
+  ON character_assets FOR UPDATE
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Users can delete own character assets"
+  ON character_assets FOR DELETE
+  USING (user_id = auth.uid());
+
+-- 7. Add comment documenting the denormalization
+COMMENT ON COLUMN character_assets.user_id IS 'Denormalized from characters.user_id for RLS performance. Must match characters.user_id.';
+
+
+
+-- >>> 53_security_immutable_job_fields.sql
+
+-- =====================================================
+-- Security Patch: Immutable Fields & Character Access
+-- Prevents cross-tenant file access and unauthorized character access
+-- =====================================================
+
+-- =====================================================
+-- 1. CharX Import Jobs: Restrict UPDATE to mutable fields only
+-- Prevents: User changing storage_path after job creation to access other users' files
+-- =====================================================
+
+-- Drop existing permissive UPDATE policy
+drop policy if exists "Users can update their CharX jobs" on public.charx_import_jobs;
+
+-- New policy: Only allow updating status-related fields, not path/identity fields
+-- Immutable after creation: storage_path, original_filename, file_type, preset_id, module_ids,
+--                           rights_status, rights_attested, license_type, license_url, license_notes,
+--                           source_url, source_label
+-- User-mutable: None (status changes should go through runner only)
+-- This effectively makes the table read-only for users after INSERT
+create policy "Users can view but not update CharX jobs"
+  on public.charx_import_jobs
+  for update
+  using (false);  -- Deny all user UPDATEs; only service role can update
+
+-- =====================================================
+-- 2. Risum Import Jobs: Restrict UPDATE to mutable fields only
+-- Prevents: User changing storage_path or character_id after job creation
+-- =====================================================
+
+-- Drop existing permissive UPDATE policy
+drop policy if exists "Users can update their risum jobs" on public.risum_import_jobs;
+
+-- New policy: Deny user UPDATEs (same reasoning as CharX)
+create policy "Users can view but not update risum jobs"
+  on public.risum_import_jobs
+  for update
+  using (false);  -- Deny all user UPDATEs; only service role can update
+
+-- =====================================================
+-- 3. Chats: Enforce character ownership/visibility on INSERT
+-- Prevents: User creating chat with another user's private character
+-- =====================================================
+
+-- Drop existing INSERT policy
+drop policy if exists "Users can create their own chats" on public.chats;
+
+-- New policy: Only allow creating chats with owned or public characters
+create policy "Users can create chats with owned or public characters"
+  on public.chats
+  for insert
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from public.characters
+      where characters.id = character_id
+      and (
+        characters.user_id = auth.uid()
+        or characters.visibility = 'public'
+      )
+    )
+  );
+
+-- =====================================================
+-- Comments for documentation
+-- =====================================================
+comment on policy "Users can view but not update CharX jobs" on public.charx_import_jobs is
+  'Security: Prevents users from modifying job fields (especially storage_path) after creation. All status updates go through service role.';
+
+comment on policy "Users can view but not update risum jobs" on public.risum_import_jobs is
+  'Security: Prevents users from modifying job fields (especially storage_path, character_id) after creation. All status updates go through service role.';
+
+comment on policy "Users can create chats with owned or public characters" on public.chats is
+  'Security: Ensures users can only create chats with characters they own or that are publicly visible.';
+
+
+
+-- >>> 54_fix_function_search_path.sql
+
+-- ============================================
+-- Fix function search_path for all public functions
+-- Sets search_path = '' to prevent search path hijacking
+-- See: https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable
+-- ============================================
+
+-- 1. update_updated_at_column (from 00_initial_schema.sql)
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+-- 2. handle_new_user (from 00_initial_schema.sql)
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, username, display_name)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    coalesce(NEW.raw_user_meta_data->>'display_name', split_part(NEW.email, '@', 1))
+  );
+  RETURN NEW;
+END;
+$$;
+
+-- 3. get_decrypted_secret (from 04_secure_get_decrypted_secret.sql)
+CREATE OR REPLACE FUNCTION public.get_decrypted_secret(
+  secret_name text,
+  requester uuid DEFAULT NULL
+)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  effective_requester uuid;
+  secret_value text;
+BEGIN
+  effective_requester := coalesce(requester, auth.uid());
+
+  IF effective_requester IS NULL THEN
+    RAISE EXCEPTION 'Not authorized'
+      USING errcode = '42501';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.api_keys
+    WHERE vault_secret_name = secret_name
+      AND user_id = effective_requester
+  ) THEN
+    RAISE EXCEPTION 'Not authorized'
+      USING errcode = '42501';
+  END IF;
+
+  SELECT decrypted_secret
+    INTO secret_value
+  FROM vault.decrypted_secrets
+  WHERE name = secret_name;
+
+  IF secret_value IS NULL THEN
+    RAISE EXCEPTION 'Secret not found'
+      USING errcode = 'P0002';
+  END IF;
+
+  RETURN secret_value;
+END;
+$$;
+
+-- 4. update_updated_at (from 09_risuai_preset_module_system.sql)
+CREATE OR REPLACE FUNCTION public.update_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+-- 5. get_character_asset_url (from 12_simulation_characters_support.sql)
+CREATE OR REPLACE FUNCTION public.get_character_asset_url(asset_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SET search_path = ''
+AS $$
+DECLARE
+  storage_path_val text;
+  bucket_name text := 'character-assets';
+BEGIN
+  SELECT storage_path INTO storage_path_val
+  FROM public.character_assets
+  WHERE id = asset_id;
+
+  IF storage_path_val IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  RETURN current_setting('app.settings.supabase_url', true)
+    || '/storage/v1/object/public/'
+    || bucket_name
+    || '/'
+    || storage_path_val;
+END;
+$$;
+
+-- 6. get_character_assets (from 12_simulation_characters_support.sql)
+CREATE OR REPLACE FUNCTION public.get_character_assets(p_character_id uuid)
+RETURNS TABLE (
+  id uuid,
+  asset_type text,
+  file_name text,
+  display_name text,
+  public_url text,
+  content_type text,
+  file_size integer,
+  metadata jsonb,
+  display_order integer
+)
+LANGUAGE plpgsql
+STABLE
+SET search_path = ''
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    ca.id,
+    ca.asset_type,
+    ca.file_name,
+    ca.display_name,
+    public.get_character_asset_url(ca.id) AS public_url,
+    ca.content_type,
+    ca.file_size,
+    ca.metadata,
+    ca.display_order
+  FROM public.character_assets ca
+  WHERE ca.character_id = p_character_id
+  ORDER BY ca.asset_type, ca.display_order, ca.file_name;
+END;
+$$;
+
+-- 7. update_lorebook_overrides_updated_at (from 13_lorebook_overrides.sql)
+CREATE OR REPLACE FUNCTION public.update_lorebook_overrides_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+-- 8. update_personas_updated_at (from 14_personas.sql)
+CREATE OR REPLACE FUNCTION public.update_personas_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+-- 9. set_charx_import_job_updated_at (from 21_charx_import_jobs.sql)
+CREATE OR REPLACE FUNCTION public.set_charx_import_job_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+-- 10. set_message_user_id (from 26_fix_realtime_rls.sql)
+CREATE OR REPLACE FUNCTION public.set_message_user_id()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.user_id IS NULL THEN
+    SELECT user_id INTO NEW.user_id
+    FROM public.chats
+    WHERE id = NEW.chat_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- 11. set_chat_summary_user_id (from 26_fix_realtime_rls.sql)
+CREATE OR REPLACE FUNCTION public.set_chat_summary_user_id()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.user_id IS NULL THEN
+    SELECT user_id INTO NEW.user_id
+    FROM public.chats
+    WHERE id = NEW.chat_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- 12. update_lorebook_overrides_v2_updated_at (from 48_lorebook_overrides_v2.sql)
+CREATE OR REPLACE FUNCTION public.update_lorebook_overrides_v2_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+-- 13. set_risum_import_job_updated_at (from 49_risum_import_jobs.sql)
+CREATE OR REPLACE FUNCTION public.set_risum_import_job_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+
+
+-- >>> 55_fix_rls_initplan_performance.sql
+
+-- ============================================
+-- Fix RLS policies to use (SELECT auth.uid()) for better performance
+-- Prevents re-evaluation of auth.uid() for each row
+-- See: https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan
+--
+-- IMPORTANT: This migration preserves the exact same access logic as before,
+-- only wrapping auth.uid() in (SELECT ...) for performance optimization.
+-- ============================================
+
+-- ============================================
+-- 1. profiles
+-- ============================================
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
+
+CREATE POLICY "Users can view their own profile" ON public.profiles
+  FOR SELECT USING (id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can update their own profile" ON public.profiles
+  FOR UPDATE USING (id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can insert their own profile" ON public.profiles
+  FOR INSERT WITH CHECK (id = (SELECT auth.uid()));
+
+-- ============================================
+-- 2. api_keys
+-- ============================================
+DROP POLICY IF EXISTS "Users can view their own API keys" ON public.api_keys;
+DROP POLICY IF EXISTS "Users can insert their own API keys" ON public.api_keys;
+DROP POLICY IF EXISTS "Users can update their own API keys" ON public.api_keys;
+DROP POLICY IF EXISTS "Users can delete their own API keys" ON public.api_keys;
+
+CREATE POLICY "Users can view their own API keys" ON public.api_keys
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can insert their own API keys" ON public.api_keys
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can update their own API keys" ON public.api_keys
+  FOR UPDATE USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete their own API keys" ON public.api_keys
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+-- ============================================
+-- 3. characters (preserving visibility/archived_at logic from 05_allow_starter_characters.sql)
+-- ============================================
+DROP POLICY IF EXISTS "View own or starter characters" ON public.characters;
+DROP POLICY IF EXISTS "Users can create own characters" ON public.characters;
+DROP POLICY IF EXISTS "Users can update own characters" ON public.characters;
+DROP POLICY IF EXISTS "Users can delete own characters" ON public.characters;
+
+CREATE POLICY "View own or starter characters" ON public.characters
+  FOR SELECT USING (
+    (
+      user_id IS NULL
+      AND visibility = 'public'
+      AND archived_at IS NULL
+    )
+    OR user_id = (SELECT auth.uid())
+    OR (visibility = 'public' AND archived_at IS NULL)
+  );
+
+CREATE POLICY "Users can create own characters" ON public.characters
+  FOR INSERT WITH CHECK (
+    (SELECT auth.uid()) IS NOT NULL
+    AND user_id = (SELECT auth.uid())
+    AND user_id IS NOT NULL
+  );
+
+CREATE POLICY "Users can update own characters" ON public.characters
+  FOR UPDATE
+  USING (user_id = (SELECT auth.uid()) AND user_id IS NOT NULL)
+  WITH CHECK (user_id = (SELECT auth.uid()) AND user_id IS NOT NULL);
+
+CREATE POLICY "Users can delete own characters" ON public.characters
+  FOR DELETE USING (user_id = (SELECT auth.uid()) AND user_id IS NOT NULL);
+
+-- ============================================
+-- 4. chats (preserving public character access from 53_security_immutable_job_fields.sql)
+-- ============================================
+DROP POLICY IF EXISTS "Users can view their own chats" ON public.chats;
+DROP POLICY IF EXISTS "Users can update their own chats" ON public.chats;
+DROP POLICY IF EXISTS "Users can delete their own chats" ON public.chats;
+DROP POLICY IF EXISTS "Users can create chats with owned or public characters" ON public.chats;
+
+CREATE POLICY "Users can view their own chats" ON public.chats
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can update their own chats" ON public.chats
+  FOR UPDATE USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete their own chats" ON public.chats
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can create chats with owned or public characters" ON public.chats
+  FOR INSERT WITH CHECK (
+    (SELECT auth.uid()) = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.characters
+      WHERE characters.id = character_id
+      AND (
+        characters.user_id = (SELECT auth.uid())
+        OR characters.visibility = 'public'
+      )
+    )
+  );
+
+-- ============================================
+-- 5. messages
+-- ============================================
+DROP POLICY IF EXISTS "Users can view their messages" ON public.messages;
+DROP POLICY IF EXISTS "Users can insert their messages" ON public.messages;
+DROP POLICY IF EXISTS "Users can delete their messages" ON public.messages;
+DROP POLICY IF EXISTS "Users can update their messages" ON public.messages;
+
+CREATE POLICY "Users can view their messages" ON public.messages
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can insert their messages" ON public.messages
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete their messages" ON public.messages
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can update their messages" ON public.messages
+  FOR UPDATE
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+-- ============================================
+-- 6. chat_summaries
+-- ============================================
+DROP POLICY IF EXISTS "Users can view their summaries" ON public.chat_summaries;
+DROP POLICY IF EXISTS "Users can insert their summaries" ON public.chat_summaries;
+DROP POLICY IF EXISTS "Users can delete their summaries" ON public.chat_summaries;
+DROP POLICY IF EXISTS "Users can update their summaries" ON public.chat_summaries;
+
+CREATE POLICY "Users can view their summaries" ON public.chat_summaries
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can insert their summaries" ON public.chat_summaries
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete their summaries" ON public.chat_summaries
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can update their summaries" ON public.chat_summaries
+  FOR UPDATE
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+-- ============================================
+-- 7. chat_usage_events
+-- ============================================
+DROP POLICY IF EXISTS "Users can view their usage events" ON public.chat_usage_events;
+DROP POLICY IF EXISTS "Users can insert their usage events" ON public.chat_usage_events;
+
+CREATE POLICY "Users can view their usage events" ON public.chat_usage_events
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can insert their usage events" ON public.chat_usage_events
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+-- ============================================
+-- 8. presets
+-- ============================================
+DROP POLICY IF EXISTS "Users can view own presets" ON public.presets;
+DROP POLICY IF EXISTS "Users can insert own presets" ON public.presets;
+DROP POLICY IF EXISTS "Users can update own presets" ON public.presets;
+DROP POLICY IF EXISTS "Users can delete own presets" ON public.presets;
+
+CREATE POLICY "Users can view own presets" ON public.presets
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can insert own presets" ON public.presets
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can update own presets" ON public.presets
+  FOR UPDATE
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete own presets" ON public.presets
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+-- ============================================
+-- 9. modules
+-- ============================================
+DROP POLICY IF EXISTS "Users can view own modules" ON public.modules;
+DROP POLICY IF EXISTS "Users can insert own modules" ON public.modules;
+DROP POLICY IF EXISTS "Users can update own modules" ON public.modules;
+DROP POLICY IF EXISTS "Users can delete own modules" ON public.modules;
+
+CREATE POLICY "Users can view own modules" ON public.modules
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can insert own modules" ON public.modules
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can update own modules" ON public.modules
+  FOR UPDATE
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete own modules" ON public.modules
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+-- ============================================
+-- 10. global_variables
+-- ============================================
+DROP POLICY IF EXISTS "Users can view own global variables" ON public.global_variables;
+DROP POLICY IF EXISTS "Users can insert own global variables" ON public.global_variables;
+DROP POLICY IF EXISTS "Users can update own global variables" ON public.global_variables;
+DROP POLICY IF EXISTS "Users can delete own global variables" ON public.global_variables;
+
+CREATE POLICY "Users can view own global variables" ON public.global_variables
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can insert own global variables" ON public.global_variables
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can update own global variables" ON public.global_variables
+  FOR UPDATE
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete own global variables" ON public.global_variables
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+-- ============================================
+-- 11. character_presets
+-- ============================================
+DROP POLICY IF EXISTS "Users can view own character presets" ON public.character_presets;
+DROP POLICY IF EXISTS "Users can manage own character presets" ON public.character_presets;
+
+CREATE POLICY "Users can view own character presets" ON public.character_presets
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.characters
+      WHERE characters.id = character_presets.character_id
+        AND characters.user_id = (SELECT auth.uid())
+    )
+  );
+
+CREATE POLICY "Users can manage own character presets" ON public.character_presets
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.characters
+      WHERE characters.id = character_presets.character_id
+        AND characters.user_id = (SELECT auth.uid())
+    )
+  );
+
+-- ============================================
+-- 12. character_modules
+-- ============================================
+DROP POLICY IF EXISTS "Users can view own character modules" ON public.character_modules;
+DROP POLICY IF EXISTS "Users can manage own character modules" ON public.character_modules;
+
+CREATE POLICY "Users can view own character modules" ON public.character_modules
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.characters
+      WHERE characters.id = character_modules.character_id
+        AND characters.user_id = (SELECT auth.uid())
+    )
+  );
+
+CREATE POLICY "Users can manage own character modules" ON public.character_modules
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.characters
+      WHERE characters.id = character_modules.character_id
+        AND characters.user_id = (SELECT auth.uid())
+    )
+  );
+
+-- ============================================
+-- 13. lorebook_overrides
+-- ============================================
+DROP POLICY IF EXISTS "Users can view their own lorebook overrides" ON public.lorebook_overrides;
+DROP POLICY IF EXISTS "Users can insert their own lorebook overrides" ON public.lorebook_overrides;
+DROP POLICY IF EXISTS "Users can update their own lorebook overrides" ON public.lorebook_overrides;
+DROP POLICY IF EXISTS "Users can delete their own lorebook overrides" ON public.lorebook_overrides;
+
+CREATE POLICY "Users can view their own lorebook overrides" ON public.lorebook_overrides
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can insert their own lorebook overrides" ON public.lorebook_overrides
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can update their own lorebook overrides" ON public.lorebook_overrides
+  FOR UPDATE
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete their own lorebook overrides" ON public.lorebook_overrides
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+-- ============================================
+-- 14. lorebook_overrides_v2
+-- ============================================
+DROP POLICY IF EXISTS "Users can view their own lorebook overrides v2" ON public.lorebook_overrides_v2;
+DROP POLICY IF EXISTS "Users can insert their own lorebook overrides v2" ON public.lorebook_overrides_v2;
+DROP POLICY IF EXISTS "Users can update their own lorebook overrides v2" ON public.lorebook_overrides_v2;
+DROP POLICY IF EXISTS "Users can delete their own lorebook overrides v2" ON public.lorebook_overrides_v2;
+
+CREATE POLICY "Users can view their own lorebook overrides v2" ON public.lorebook_overrides_v2
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can insert their own lorebook overrides v2" ON public.lorebook_overrides_v2
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can update their own lorebook overrides v2" ON public.lorebook_overrides_v2
+  FOR UPDATE
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete their own lorebook overrides v2" ON public.lorebook_overrides_v2
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+-- ============================================
+-- 15. personas
+-- ============================================
+DROP POLICY IF EXISTS "Users can view their own personas" ON public.personas;
+DROP POLICY IF EXISTS "Users can create their own personas" ON public.personas;
+DROP POLICY IF EXISTS "Users can update their own personas" ON public.personas;
+DROP POLICY IF EXISTS "Users can delete their own personas" ON public.personas;
+
+CREATE POLICY "Users can view their own personas" ON public.personas
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can create their own personas" ON public.personas
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can update their own personas" ON public.personas
+  FOR UPDATE
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete their own personas" ON public.personas
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+-- ============================================
+-- 16. charx_import_jobs (NO UPDATE policy - intentionally blocked)
+-- ============================================
+DROP POLICY IF EXISTS "Users can access their CharX jobs" ON public.charx_import_jobs;
+DROP POLICY IF EXISTS "Users can enqueue CharX jobs" ON public.charx_import_jobs;
+DROP POLICY IF EXISTS "Users can delete their CharX jobs" ON public.charx_import_jobs;
+
+CREATE POLICY "Users can access their CharX jobs" ON public.charx_import_jobs
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can enqueue CharX jobs" ON public.charx_import_jobs
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete their CharX jobs" ON public.charx_import_jobs
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+-- Note: UPDATE policy intentionally not created here.
+-- "Users can view but not update CharX jobs" with USING(false) from 53_security_immutable_job_fields.sql
+-- is preserved for security.
+
+-- ============================================
+-- 17. risum_import_jobs (NO UPDATE policy - intentionally blocked)
+-- ============================================
+DROP POLICY IF EXISTS "Users can access their risum jobs" ON public.risum_import_jobs;
+DROP POLICY IF EXISTS "Users can enqueue risum jobs" ON public.risum_import_jobs;
+DROP POLICY IF EXISTS "Users can delete their risum jobs" ON public.risum_import_jobs;
+
+CREATE POLICY "Users can access their risum jobs" ON public.risum_import_jobs
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can enqueue risum jobs" ON public.risum_import_jobs
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete their risum jobs" ON public.risum_import_jobs
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+-- Note: UPDATE policy intentionally not created here.
+-- "Users can view but not update risum jobs" with USING(false) from 53_security_immutable_job_fields.sql
+-- is preserved for security.
+
+-- ============================================
+-- 18. chat_generation_jobs (simple user_id check, no character_id)
+-- ============================================
+DROP POLICY IF EXISTS "Users can view their chat jobs" ON public.chat_generation_jobs;
+DROP POLICY IF EXISTS "Users can insert chat jobs" ON public.chat_generation_jobs;
+
+CREATE POLICY "Users can view their chat jobs" ON public.chat_generation_jobs
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can insert chat jobs" ON public.chat_generation_jobs
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+-- ============================================
+-- 19. chat_facts
+-- ============================================
+DROP POLICY IF EXISTS "Users can view their own chat facts" ON public.chat_facts;
+DROP POLICY IF EXISTS "Users can insert their own chat facts" ON public.chat_facts;
+DROP POLICY IF EXISTS "Users can delete their own chat facts" ON public.chat_facts;
+DROP POLICY IF EXISTS "Users can update their own chat facts" ON public.chat_facts;
+
+CREATE POLICY "Users can view their own chat facts" ON public.chat_facts
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can insert their own chat facts" ON public.chat_facts
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete their own chat facts" ON public.chat_facts
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can update their own chat facts" ON public.chat_facts
+  FOR UPDATE
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+-- ============================================
+-- 20. announcements
+-- ============================================
+DROP POLICY IF EXISTS "Authenticated users can read announcements" ON public.announcements;
+
+CREATE POLICY "Authenticated users can read announcements" ON public.announcements
+  FOR SELECT USING ((SELECT auth.uid()) IS NOT NULL);
+
+-- ============================================
+-- 21. user_feedback
+-- ============================================
+DROP POLICY IF EXISTS "users can insert their own feedback" ON public.user_feedback;
+DROP POLICY IF EXISTS "users can read their own feedback" ON public.user_feedback;
+DROP POLICY IF EXISTS "admins can review all feedback" ON public.user_feedback;
+
+CREATE POLICY "users can insert their own feedback" ON public.user_feedback
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "users can read their own feedback" ON public.user_feedback
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "admins can review all feedback" ON public.user_feedback
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles p
+      WHERE p.id = (SELECT auth.uid())
+        AND p.is_admin = true
+    )
+  );
+
+-- ============================================
+-- 22. module_assets (preserving AND logic from 51_module_assets.sql)
+-- ============================================
+DROP POLICY IF EXISTS "Users can view own module assets" ON public.module_assets;
+DROP POLICY IF EXISTS "Users can insert own module assets" ON public.module_assets;
+DROP POLICY IF EXISTS "Users can update own module assets" ON public.module_assets;
+DROP POLICY IF EXISTS "Users can delete own module assets" ON public.module_assets;
+
+CREATE POLICY "Users can view own module assets" ON public.module_assets
+  FOR SELECT USING (
+    (SELECT auth.uid()) = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.modules
+      WHERE modules.id = module_assets.module_id
+        AND modules.user_id = (SELECT auth.uid())
+    )
+  );
+
+CREATE POLICY "Users can insert own module assets" ON public.module_assets
+  FOR INSERT WITH CHECK (
+    (SELECT auth.uid()) = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.modules
+      WHERE modules.id = module_assets.module_id
+        AND modules.user_id = (SELECT auth.uid())
+    )
+  );
+
+CREATE POLICY "Users can update own module assets" ON public.module_assets
+  FOR UPDATE
+  USING (
+    (SELECT auth.uid()) = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.modules
+      WHERE modules.id = module_assets.module_id
+        AND modules.user_id = (SELECT auth.uid())
+    )
+  )
+  WITH CHECK (
+    (SELECT auth.uid()) = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.modules
+      WHERE modules.id = module_assets.module_id
+        AND modules.user_id = (SELECT auth.uid())
+    )
+  );
+
+CREATE POLICY "Users can delete own module assets" ON public.module_assets
+  FOR DELETE USING (
+    (SELECT auth.uid()) = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.modules
+      WHERE modules.id = module_assets.module_id
+        AND modules.user_id = (SELECT auth.uid())
+    )
+  );
+
+-- ============================================
+-- 23. character_assets
+-- ============================================
+DROP POLICY IF EXISTS "Users can view own character assets" ON public.character_assets;
+DROP POLICY IF EXISTS "Users can insert own character assets" ON public.character_assets;
+DROP POLICY IF EXISTS "Users can update own character assets" ON public.character_assets;
+DROP POLICY IF EXISTS "Users can delete own character assets" ON public.character_assets;
+
+CREATE POLICY "Users can view own character assets" ON public.character_assets
+  FOR SELECT USING (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can insert own character assets" ON public.character_assets
+  FOR INSERT WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can update own character assets" ON public.character_assets
+  FOR UPDATE
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+CREATE POLICY "Users can delete own character assets" ON public.character_assets
+  FOR DELETE USING (user_id = (SELECT auth.uid()));
+
+-- ============================================
+-- 24. Storage: character-assets bucket (exact names from 08_character_assets_storage.sql)
+-- ============================================
+DROP POLICY IF EXISTS "Users can upload to their own folder" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update their own files" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their own files" ON storage.objects;
+
+CREATE POLICY "Users can upload to their own folder" ON storage.objects
+  FOR INSERT
+  WITH CHECK (
+    bucket_id = 'character-assets'
+    AND (SELECT auth.uid())::text = (storage.foldername(name))[1]
+  );
+
+CREATE POLICY "Users can update their own files" ON storage.objects
+  FOR UPDATE
+  USING (
+    bucket_id = 'character-assets'
+    AND (SELECT auth.uid())::text = (storage.foldername(name))[1]
+  );
+
+CREATE POLICY "Users can delete their own files" ON storage.objects
+  FOR DELETE
+  USING (
+    bucket_id = 'character-assets'
+    AND (SELECT auth.uid())::text = (storage.foldername(name))[1]
+  );
+
+-- ============================================
+-- 25. Storage: charx-uploads bucket (exact names from 20_charx_upload_bucket.sql)
+-- ============================================
+DROP POLICY IF EXISTS "Users can upload their CharX archives" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update their CharX archives" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their CharX archives" ON storage.objects;
+DROP POLICY IF EXISTS "Users can read their CharX archives" ON storage.objects;
+
+CREATE POLICY "Users can upload their CharX archives" ON storage.objects
+  FOR INSERT
+  WITH CHECK (
+    bucket_id = 'charx-uploads'
+    AND (SELECT auth.uid())::text = (storage.foldername(name))[1]
+  );
+
+CREATE POLICY "Users can update their CharX archives" ON storage.objects
+  FOR UPDATE
+  USING (
+    bucket_id = 'charx-uploads'
+    AND (SELECT auth.uid())::text = (storage.foldername(name))[1]
+  );
+
+CREATE POLICY "Users can delete their CharX archives" ON storage.objects
+  FOR DELETE
+  USING (
+    bucket_id = 'charx-uploads'
+    AND (SELECT auth.uid())::text = (storage.foldername(name))[1]
+  );
+
+CREATE POLICY "Users can read their CharX archives" ON storage.objects
+  FOR SELECT
+  USING (
+    bucket_id = 'charx-uploads'
+    AND (SELECT auth.uid())::text = (storage.foldername(name))[1]
+  );
+
+-- ============================================
+-- 26. Storage: module-assets bucket (exact names from 51_module_assets.sql)
+-- ============================================
+DROP POLICY IF EXISTS "Module assets: users can upload to own folder" ON storage.objects;
+DROP POLICY IF EXISTS "Module assets: users can update own files" ON storage.objects;
+DROP POLICY IF EXISTS "Module assets: users can delete own files" ON storage.objects;
+
+CREATE POLICY "Module assets: users can upload to own folder" ON storage.objects
+  FOR INSERT
+  WITH CHECK (
+    bucket_id = 'module-assets'
+    AND (SELECT auth.uid())::text = (storage.foldername(name))[1]
+  );
+
+CREATE POLICY "Module assets: users can update own files" ON storage.objects
+  FOR UPDATE
+  USING (
+    bucket_id = 'module-assets'
+    AND (SELECT auth.uid())::text = (storage.foldername(name))[1]
+  );
+
+CREATE POLICY "Module assets: users can delete own files" ON storage.objects
+  FOR DELETE
+  USING (
+    bucket_id = 'module-assets'
+    AND (SELECT auth.uid())::text = (storage.foldername(name))[1]
+  );
+
+
+
+-- >>> 56_fix_multiple_permissive_policies.sql
+
+-- ============================================
+-- Fix multiple permissive policies for better performance
+-- Removes redundant SELECT policies where FOR ALL already covers them
+-- See: https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies
+-- ============================================
+
+-- ============================================
+-- 1. character_modules: Remove redundant "view" policy
+-- "manage" (FOR ALL) already covers SELECT
+-- ============================================
+DROP POLICY IF EXISTS "Users can view own character modules" ON public.character_modules;
+
+-- ============================================
+-- 2. character_presets: Remove redundant "view" policy
+-- "manage" (FOR ALL) already covers SELECT
+-- ============================================
+DROP POLICY IF EXISTS "Users can view own character presets" ON public.character_presets;
+
+-- ============================================
+-- 3. user_feedback: Merge two SELECT policies into one
+-- Combines "users can read their own feedback" + "admins can review all feedback"
+-- ============================================
+DROP POLICY IF EXISTS "users can read their own feedback" ON public.user_feedback;
+DROP POLICY IF EXISTS "admins can review all feedback" ON public.user_feedback;
+
+CREATE POLICY "users can read feedback" ON public.user_feedback
+  FOR SELECT USING (
+    user_id = (SELECT auth.uid())
+    OR EXISTS (
+      SELECT 1 FROM public.profiles p
+      WHERE p.id = (SELECT auth.uid())
+        AND p.is_admin = true
+    )
+  );
+
+
+
+-- >>> 57_charx_import_rights_metadata.sql
+
+-- =====================================================
+-- CharX Import Job Rights Metadata
+-- Tracks provenance + redistribution claims for CharX uploads
+-- =====================================================
+
+alter table if exists public.charx_import_jobs
+  add column if not exists rights_status text not null default 'self_owned'
+    check (rights_status in ('self_owned', 'third_party_with_license')),
+  add column if not exists rights_attested boolean not null default false,
+  add column if not exists license_type text,
+  add column if not exists license_url text,
+  add column if not exists license_notes text,
+  add column if not exists source_url text,
+  add column if not exists source_label text;
+
+comment on column public.charx_import_jobs.rights_status is 'self_owned = uploaded by owner, third_party_with_license = imported under an allowed, documented license';
+comment on column public.charx_import_jobs.rights_attested is 'Whether the uploader explicitly confirmed their rights to redistribute the CharX file';
+comment on column public.charx_import_jobs.license_type is 'Declared license for the CharX payload (e.g., CC BY 4.0)';
+comment on column public.charx_import_jobs.license_url is 'Link to the license text or proof';
+comment on column public.charx_import_jobs.license_notes is 'Free-form notes about the license or attribution requirements';
+comment on column public.charx_import_jobs.source_url is 'Original source URL (e.g., RisuRealm share link)';
+comment on column public.charx_import_jobs.source_label is 'Human friendly label for the source (uploader name/site)';
+
+
+
+-- >>> 58_add_openrouter_provider.sql
+
+-- Add OpenRouter as a valid provider for api_keys
+alter table public.api_keys
+  drop constraint if exists api_keys_provider_check;
+
+alter table public.api_keys
+  add constraint api_keys_provider_check
+  check (provider in ('google', 'openai', 'anthropic', 'deepseek', 'openrouter', 'voyage_embeddings'));
+
+
+
+-- >>> 59_api_keys_reasoning_effort.sql
+
+-- Add reasoning_effort column to api_keys
+-- Allows users to control reasoning intensity for OpenAI models that support it
+-- Values: 'none' (default, no reasoning), 'low', 'medium', 'high'
+-- NULL means no preference set (treated as 'none' in application code)
+
+ALTER TABLE api_keys
+  ADD COLUMN reasoning_effort text
+  CHECK (reasoning_effort IN ('none', 'low', 'medium', 'high'));
+
+
+
+-- >>> 60_charx_uploads_lower_limit.sql
+
+-- Lower charx-uploads bucket limit to match the conservative app default.
+-- Previous value was 800 MiB (migration 50) to support large .risum modules.
+-- Application now enforces a tighter default (100 MB) with env-configurable
+-- override, so the bucket acts as a last-resort backstop at 200 MiB.
+-- Self-hosters who raise IMPORT_MAX_UPLOAD_MB above 200 should also raise
+-- this bucket limit manually in Supabase Dashboard → Storage → charx-uploads.
+update storage.buckets
+set file_size_limit = 209715200 -- 200 MiB
+where id = 'charx-uploads';
+
+
+
+-- >>> 61_queue_admission_controls.sql
+
+-- Queue admission controls for chat generation and RBX imports.
+-- Goals:
+-- 1. Only one active chat generation job per chat
+-- 2. Cap each user to 3 active chat generation jobs
+-- 3. Only one active RBX import job per user
+
+create unique index if not exists chat_generation_jobs_active_chat_idx
+  on public.chat_generation_jobs (chat_id)
+  where status in ('pending', 'processing');
+
+create index if not exists chat_generation_jobs_user_status_created_idx
+  on public.chat_generation_jobs (user_id, status, created_at desc);
+
+create or replace function public.enforce_chat_generation_job_user_cap()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  active_limit constant integer := 3;
+  active_count integer;
+begin
+  if new.status not in ('pending', 'processing') then
+    return new;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('chat_generation_jobs:' || new.user_id::text, 0));
+
+  select count(*)
+    into active_count
+  from public.chat_generation_jobs
+  where user_id = new.user_id
+    and status in ('pending', 'processing');
+
+  if active_count >= active_limit then
+    raise exception using
+      errcode = 'P0001',
+      message = format('User already has %s active chat generation jobs', active_limit),
+      detail = 'Wait for an existing response to finish before queueing another.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists enforce_chat_generation_job_user_cap on public.chat_generation_jobs;
+
+create trigger enforce_chat_generation_job_user_cap
+before insert on public.chat_generation_jobs
+for each row execute function public.enforce_chat_generation_job_user_cap();
+
+create unique index if not exists charx_import_jobs_active_user_idx
+  on public.charx_import_jobs (user_id)
+  where status in ('pending', 'processing');
+
+
+
+-- >>> 62_queue_janitor_indexes.sql
+
+-- Indexes for stuck-job janitor scans.
+-- These queries always filter processing jobs by updated_at cutoff, so use
+-- partial indexes that stay small and hot.
+
+create index if not exists chat_generation_jobs_processing_updated_at_idx
+  on public.chat_generation_jobs (updated_at)
+  where status = 'processing';
+
+create index if not exists charx_import_jobs_processing_updated_at_idx
+  on public.charx_import_jobs (updated_at)
+  where status = 'processing';
+

@@ -82,6 +82,16 @@ describe('renderMessageContent', () => {
       expect(html).toContain('alt="hero is happy"')
     })
 
+    it('resolves dot-style asset tags through underscore image command keys', () => {
+      const content = '![Ako](asset:Ako.surprised)'
+      const node = renderMessageContent(content, [], undefined, {
+        ako_surprised: 'https://example.com/ako-surprised.png',
+      })
+      const html = renderToStaticMarkup(<>{node}</>)
+      expect(html).toContain('alt="Ako"')
+      expect(html).toContain('ako-surprised.png')
+    })
+
     it('resolves <img src="name"> format (double quotes)', () => {
       const content = '<img src="happy">'
       const node = renderMessageContent(content, [], undefined, imageCommandUrlMap)

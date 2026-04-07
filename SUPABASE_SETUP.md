@@ -21,19 +21,22 @@ If you only want the shortest possible local boot flow, start with [docs/GETTING
 
 RebelAI ships both:
 
-- `supabase/schema.sql` for a one-shot hosted setup
-- `supabase/migrations/` for transparent migration history and local CLI workflows
+- `supabase/schema.sql` as a generated one-shot hosted bootstrap script
+- `supabase/migrations/` as the source of truth for schema changes and local CLI workflows
 
 ### Option A: Hosted Supabase project via SQL Editor
 
 This is the simplest path for a fresh cloud project.
 
+Before running the hosted bootstrap SQL, enable the `vault` and `pgsodium` extensions in Supabase Dashboard if they are not already available for the project.
+
 1. Open Supabase Dashboard.
-2. Go to `SQL Editor`.
-3. Create a new query.
-4. Copy the full contents of [`supabase/schema.sql`](./supabase/schema.sql).
-5. Run it once.
-6. Verify that core tables such as `profiles`, `api_keys`, `characters`, `chats`, `messages`, and `chat_generation_jobs` exist.
+2. Go to `Database -> Extensions` and enable `vault` and `pgsodium` if needed.
+3. Go to `SQL Editor`.
+4. Create a new query.
+5. Copy the full contents of [`supabase/schema.sql`](./supabase/schema.sql).
+6. Run it once.
+7. Verify that core tables such as `profiles`, `api_keys`, `characters`, `chats`, `messages`, `chat_generation_jobs`, `character_assets`, and `module_assets` exist.
 
 ### Option B: Local Supabase CLI workflow
 
@@ -48,6 +51,12 @@ If you also want to regenerate local TypeScript DB types:
 
 ```bash
 npm run db:types
+```
+
+If you change migrations and still support the hosted SQL Editor path, regenerate the bootstrap file with:
+
+```bash
+npm run db:schema
 ```
 
 ## 3. Collect Supabase Credentials

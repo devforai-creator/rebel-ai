@@ -21,6 +21,14 @@ Common stack:
 
 This is the lowest-cost supported profile for personal, hobby, or small-community deployments. The important constraint is that you should not rely on Vercel's built-in per-minute cron on Hobby. Instead, schedule the internal trigger routes yourself or run `npm run chat:jobs` and `npm run character:jobs` from another process.
 
+Validated reference deployment on April 7, 2026:
+
+- Vercel Hobby
+- Supabase Free
+- `cron-job.org` calling the internal trigger routes with bearer auth
+
+That setup completed character import and queued chat generation end-to-end successfully. `cron-job.org` is not a hard dependency; it is simply one confirmed working scheduler.
+
 Keep RBX packages within the limits of your storage provider. For hosted Supabase Free, the current global file-size limit is smaller than Pro, so small imports are the safer target. Treat this profile as low-traffic by default and validate it against your own workload.
 
 ## 3. Full Self-Hosted

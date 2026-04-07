@@ -121,6 +121,8 @@ You can either:
 - call the internal trigger routes with `Authorization: Bearer <CRON_SECRET>`
 - or run `npm run chat:jobs` and `npm run character:jobs` from your own worker process
 
+Verified reference setup on April 7, 2026: `Vercel Hobby + Supabase Free + cron-job.org`. That configuration successfully processed both character imports and chat jobs end-to-end.
+
 If you use hosted Supabase Free, keep imports within the provider's current storage limits and start with small `.rbx` packages.
 
 ## Troubleshooting

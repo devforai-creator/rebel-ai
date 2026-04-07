@@ -121,7 +121,7 @@ npm run dev
 ### Hosting Profiles
 
 - **Managed production** — Vercel Pro + Supabase Pro. Easiest path for built-in minutely cron, larger hosted quotas, and always-on production projects.
-- **Low-cost self-hosted** — Vercel Hobby or another Node host + Supabase Free + external scheduler. Good for personal or small deployments; keep imports within your storage provider's file-size limits.
+- **Low-cost self-hosted** — Vercel Hobby or another Node host + Supabase Free + external scheduler. Verified end-to-end on April 7, 2026 using `cron-job.org`: character import and chat generation both completed successfully. Good for personal or small deployments; keep imports within your storage provider's file-size limits.
 - **Full self-hosted** — Any Node host + your own scheduler/worker + your own Supabase/Postgres stack.
 
 See [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md) for the tradeoffs and required infrastructure for each mode.
@@ -164,13 +164,14 @@ The chat entry point (`/api/chat`) maintains a job queue in Node.js Runtime whil
 ### Operations
 
 - **Local/Manual execution**: `npm run chat:jobs` → `scripts/run-chat-jobs.js` calls the current deployment URL to process jobs immediately.
+- **Validated low-cost deployment**: On April 7, 2026, `Vercel Hobby + Supabase Free + cron-job.org` was verified end-to-end for queued chat generation. `cron-job.org` is just one working scheduler option; any scheduler that can call the trigger route with `Authorization: Bearer ${CRON_SECRET}` should work.
 - **Environment variables**
   - `INTERNAL_API_ORIGIN`: Fixed origin used by Edge callsites (`chat-admin` rate limiter, `/api/chat/jobs/[id]`, etc.) when calling internal admin routes (e.g., `https://app.rebelai.com`). Header-based detection risks token theft, so **must be set in production**. Preview/local environments auto-detect via `resolveInternalApiOrigin()` (falls back to current Vercel URL or `http://127.0.0.1:3000`).
   - `CRON_SECRET`: Bearer token used by Vercel Cron and any external scheduler that invokes internal trigger routes.
   - `CHAT_ADMIN_SECRET`: Default Bearer token (used for Edge ↔ internal admin bridge & trigger → runner authentication).
   - `CHAT_JOB_RUNNER_BATCH_LIMIT` (optional): Jobs to process per batch (default 2, recommended max 5).
   - `RISUAI_ALLOW_REGEX_SCRIPTS` _(optional, default false)_: When `true`, executes `regex.script` blocks in compatibility modules. Only use in trusted offline environments; never enable in production.
-- **Schedule adjustment**: `vercel.json` registers the default Vercel schedules (`*/1 * * * *`, etc.). On Vercel Pro you can keep using those jobs. On Vercel Hobby or other hosts, ignore `vercel.json` and schedule the same trigger endpoint yourself with `Authorization: Bearer ${CRON_SECRET}`.
+- **Schedule adjustment**: This repository does not ship active Vercel cron entries by default, because minute-level cron is not available on Vercel Hobby. On Vercel Pro, add the schedules for your deployment target yourself. On Vercel Hobby or other hosts, schedule the same trigger endpoint externally with `Authorization: Bearer ${CRON_SECRET}`.
 
 > **TIP:** To verify scheduled execution, check the logs for whichever scheduler you use. On Vercel Pro, look for `/api/internal/chat-job-runner/trigger` → `/api/internal/chat-job-runner`. For urgent cases, run `npm run chat:jobs` to drain jobs immediately.
 
@@ -216,12 +217,13 @@ Uses the same architecture as Chat Job Runner for processing native RBX packages
 ### Operations
 
 - **Local/Manual execution**: `npm run character:jobs` → `scripts/run-character-import-jobs.js` calls the current deployment URL to process jobs immediately. `npm run import:jobs` remains as a compatibility alias.
+- **Validated low-cost deployment**: On April 7, 2026, `Vercel Hobby + Supabase Free + cron-job.org` was verified end-to-end for background character import. The same scheduler setup can trigger both import and chat runners.
 - **Environment variables**
   - `CHAT_ADMIN_SECRET`: Used for trigger → runner authentication (same as chat job runner)
   - `CRON_SECRET`: Used by Vercel Cron for trigger route (same as chat job runner)
   - `CHARACTER_IMPORT_RUNNER_BATCH_LIMIT` (optional): Jobs per batch (default 1, recommended max 5). Legacy fallback: `CHARX_IMPORT_RUNNER_BATCH_LIMIT`
   - `ASSET_UPLOAD_CONCURRENCY` (optional): Concurrent asset uploads (default 8)
-- **Schedule adjustment**: `vercel.json` registers the default Vercel schedule (`*/2 * * * *`). On Vercel Pro you can keep it as-is. On Vercel Hobby or other hosts, run the same trigger endpoint from your own scheduler.
+- **Schedule adjustment**: This repository does not ship active Vercel cron entries by default, because minute-level cron is not available on Vercel Hobby. On Vercel Pro, add the schedules for your deployment target yourself. On Vercel Hobby or other hosts, run the same trigger endpoint from your own scheduler.
 
 > **TIP:** To verify scheduled execution, check your scheduler logs. On Vercel Pro, look for `/api/internal/character-import-runner/trigger` → `/api/internal/character-import-runner`. For urgent cases, run `npm run character:jobs` to drain jobs immediately.
 

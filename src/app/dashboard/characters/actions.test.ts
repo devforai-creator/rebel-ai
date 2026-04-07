@@ -234,7 +234,7 @@ function buildSupabase(options: CharactersSupabaseOptions = {}) {
   }
 }
 
-describe('character actions plain-text contract', () => {
+describe('character actions template syntax handling', () => {
   beforeEach(() => {
     vi.resetModules()
     createClientMock.mockReset()

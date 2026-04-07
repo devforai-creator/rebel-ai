@@ -583,7 +583,7 @@ async function executeJob({
   const anthropicCacheCreationInputTokens =
     typeof anthropicProviderMetadata?.cacheCreationInputTokens === 'number'
       ? anthropicProviderMetadata.cacheCreationInputTokens
-      : anthropicRawUsage?.cache_creation_input_tokens ?? null
+      : (anthropicRawUsage?.cache_creation_input_tokens ?? null)
 
   // Log Anthropic cache metrics
   if (anthropicRawUsage) {

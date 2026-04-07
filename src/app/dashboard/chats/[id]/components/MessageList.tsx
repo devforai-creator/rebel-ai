@@ -29,6 +29,7 @@ export const AssistantAvatar = memo(function AssistantAvatar({ character }: Assi
           alt={character.name}
           width={32}
           height={32}
+          unoptimized
           className="w-8 h-8 rounded-full object-cover border border-gray-200 dark:border-gray-600"
         />
       ) : (

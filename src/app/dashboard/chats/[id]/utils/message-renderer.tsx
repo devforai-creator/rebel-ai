@@ -489,6 +489,7 @@ function renderContentWithEmotionImages(
                 alt={altText}
                 width={400}
                 height={400}
+                unoptimized
                 className="rounded-lg my-2"
               />
             }
@@ -510,6 +511,7 @@ function renderContentWithEmotionImages(
             alt={altText}
             width={400}
             height={400}
+            unoptimized
             className="rounded-lg my-2"
           />,
         )

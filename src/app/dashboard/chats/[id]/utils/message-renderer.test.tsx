@@ -65,7 +65,8 @@ describe('renderMessageContent', () => {
     expect(html).not.toContain('class="asset-table"')
     expect(html).not.toContain('class="image-cell')
     expect(html).toContain('alt="Geum Ji-su"')
-    expect(html).toContain('example.com%2Fji-su.png')
+    expect(html).toContain('src="https://example.com/ji-su.png"')
+    expect(html).not.toContain('/_next/image')
   })
 
   describe('emotion tag formats', () => {

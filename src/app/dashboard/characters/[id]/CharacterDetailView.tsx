@@ -192,6 +192,7 @@ export default function CharacterDetailView({
                 alt={character.name}
                 width={128}
                 height={128}
+                unoptimized
                 className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 dark:border-gray-600"
               />
             ) : (

@@ -5,7 +5,7 @@ import { createChatJobRunnerSupabaseMock } from '@/tests/mocks/supabase'
 const claimPendingJobMock = vi.fn()
 const parseChatJobPayloadMock = vi.fn()
 const decryptSecretMock = vi.fn()
-const buildContextMock = vi.fn()
+const buildMemoryPlanMock = vi.fn()
 const streamTextMock = vi.fn()
 const triggerSummaryGenerationMock = vi.fn()
 const resolveGoogleCacheDecisionMock = vi.fn()
@@ -29,12 +29,29 @@ vi.mock('@/lib/chat/job-payload', () => ({
 vi.mock('@/lib/chat/global-system-prompt', () => ({
   getGlobalSystemPrompt: vi.fn(() => 'GLOBAL'),
 }))
-vi.mock('@/lib/chat-summaries', () => ({
-  buildContext: (...args: unknown[]) => buildContextMock(...args),
+vi.mock('@/lib/chat-memory', () => ({
+  buildMemoryPlan: (...args: unknown[]) => buildMemoryPlanMock(...args),
 }))
-buildContextMock.mockResolvedValue({
-  systemPrompt: 'CTX',
-  recentMessages: [{ role: 'user', content: 'Hello' }],
+buildMemoryPlanMock.mockResolvedValue({
+  mode: 'summary_window',
+  promptBlocks: [
+    {
+      role: 'system',
+      content: 'CTX',
+      cachePreference: 'prefer-cache',
+      stability: 'static',
+    },
+    {
+      role: 'user',
+      content: 'Hello',
+      cachePreference: 'avoid-cache',
+      stability: 'live',
+    },
+  ],
+  fallbackSystemPrompt: 'CTX',
+  fallbackMessages: [{ role: 'user', content: 'Hello' }],
+  staticSystemPrompt: 'CTX',
+  dynamicContext: null,
   ragInfo: null,
 })
 vi.mock('@/lib/chat/summary-trigger', () => ({
@@ -132,7 +149,7 @@ describe('processChatJobs', () => {
     claimPendingJobMock.mockReset()
     parseChatJobPayloadMock.mockReset()
     decryptSecretMock.mockReset()
-    buildContextMock.mockClear()
+    buildMemoryPlanMock.mockClear()
     triggerSummaryGenerationMock.mockClear()
     streamTextMock.mockClear()
     resolveGoogleCacheDecisionMock.mockReset()
@@ -421,12 +438,35 @@ describe('processChatJobs', () => {
         modelName: 'gemini-1.5-flash',
       }),
     )
-    buildContextMock.mockResolvedValueOnce({
-      systemPrompt: 'CTX',
-      recentMessages: [
+    buildMemoryPlanMock.mockResolvedValueOnce({
+      mode: 'summary_window',
+      promptBlocks: [
+        {
+          role: 'system',
+          content: 'CTX',
+          cachePreference: 'prefer-cache',
+          stability: 'static',
+        },
+        {
+          role: 'assistant',
+          content: 'previous turn',
+          cachePreference: 'avoid-cache',
+          stability: 'live',
+        },
+        {
+          role: 'user',
+          content: 'latest user message',
+          cachePreference: 'avoid-cache',
+          stability: 'live',
+        },
+      ],
+      fallbackSystemPrompt: 'CTX',
+      fallbackMessages: [
         { role: 'assistant', content: 'previous turn' },
         { role: 'user', content: 'latest user message' },
       ],
+      staticSystemPrompt: 'CTX',
+      dynamicContext: null,
       ragInfo: null,
     })
     resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
@@ -822,12 +862,12 @@ describe('processChatJobs', () => {
 
     await processChatJobs(1)
 
-    expect(buildContextMock).toHaveBeenCalledWith(
+    expect(buildMemoryPlanMock).toHaveBeenCalledWith(
       expect.objectContaining({
         baseSystemPrompt: expect.stringContaining('Your name is: Bob'),
       }),
     )
-    expect(buildContextMock).toHaveBeenCalledWith(
+    expect(buildMemoryPlanMock).toHaveBeenCalledWith(
       expect.objectContaining({
         baseSystemPrompt: expect.stringContaining('I like coffee.'),
       }),
@@ -1082,7 +1122,7 @@ describe('processChatJobs', () => {
     const { processChatJobs } = await import('./service')
     await processChatJobs(1)
 
-    expect(buildContextMock).toHaveBeenCalledWith(
+    expect(buildMemoryPlanMock).toHaveBeenCalledWith(
       expect.objectContaining({
         baseSystemPrompt: 'GLOBAL\n\n---\n\nCHAR PROMPT',
       }),

@@ -1,6 +1,7 @@
 'use client'
 
 import { memo } from 'react'
+import type { ChatMemoryMode } from '@/lib/chat/model-config'
 import {
   LatestMessageTokenStats,
   ApiKeyOption,
@@ -14,9 +15,11 @@ interface TokenStatsPanelProps {
   selectedApiKeyId: string
   secondaryApiKeyId: string
   alternateModelsEnabled: boolean
+  memoryMode: ChatMemoryMode
   onSelectApiKey: (id: string) => void
   onSelectSecondaryApiKey: (id: string) => void
   onToggleAlternateModels: () => void
+  onSelectMemoryMode: (mode: ChatMemoryMode) => void
   latestUsage: LatestMessageTokenStats | null
   statsExpanded: boolean
   onToggleStats: () => void
@@ -31,9 +34,11 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
   selectedApiKeyId,
   secondaryApiKeyId,
   alternateModelsEnabled,
+  memoryMode,
   onSelectApiKey,
   onSelectSecondaryApiKey,
   onToggleAlternateModels,
+  onSelectMemoryMode,
   latestUsage,
   statsExpanded,
   onToggleStats,
@@ -90,6 +95,14 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
             )}
           </div>
           <select
+            value={memoryMode}
+            onChange={(e) => onSelectMemoryMode(e.target.value as ChatMemoryMode)}
+            className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          >
+            <option value="summary_window">메모리: 기본</option>
+            <option value="prefix_live_blocks">메모리: Prefix</option>
+          </select>
+          <select
             value={secondaryApiKeyId}
             onChange={(e) => onSelectSecondaryApiKey(e.target.value)}
             className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -136,6 +149,14 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                   />
                   교대
                 </label>
+                <select
+                  value={memoryMode}
+                  onChange={(e) => onSelectMemoryMode(e.target.value as ChatMemoryMode)}
+                  className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white max-w-[180px]"
+                >
+                  <option value="summary_window">기본 메모리</option>
+                  <option value="prefix_live_blocks">Prefix 메모리</option>
+                </select>
                 <select
                   value={secondaryApiKeyId}
                   onChange={(e) => onSelectSecondaryApiKey(e.target.value)}

@@ -4,6 +4,13 @@ import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import { buildStreamPayloadPlan } from './stream-payload-builder'
 
 const BASE_ARGS = {
+  promptBlocks: [] as Array<{
+    role: 'system' | 'user' | 'assistant'
+    content: string
+    cachePreference: 'prefer-cache' | 'no-preference' | 'avoid-cache'
+    stability: 'static' | 'sealed' | 'live'
+  }>,
+  anthropicPlaceholderAdded: false,
   recentMessages: [] as Array<{ role: 'user' | 'assistant'; content: string }>,
   googleCacheResult: null,
   messagesToCacheForGoogle: [] as Array<{ role: 'user' | 'assistant'; content: string }>,
@@ -23,6 +30,32 @@ describe('buildStreamPayloadPlan', () => {
       staticSystemPrompt: 'STATIC',
       dynamicContext: 'SUMMARIES_FACTS',
       anthropicCache: { enabled: true, ttl: '5m', minTokens: 2048 },
+      promptBlocks: [
+        {
+          role: 'system',
+          content: 'STATIC',
+          cachePreference: 'prefer-cache',
+          stability: 'static',
+        },
+        {
+          role: 'system',
+          content: 'SUMMARIES_FACTS',
+          cachePreference: 'avoid-cache',
+          stability: 'sealed',
+        },
+        {
+          role: 'user',
+          content: 'hello',
+          cachePreference: 'avoid-cache',
+          stability: 'live',
+        },
+        {
+          role: 'assistant',
+          content: 'hi',
+          cachePreference: 'avoid-cache',
+          stability: 'live',
+        },
+      ],
       anthropicConversationMessages: [
         { role: 'user', content: 'hello' },
         { role: 'assistant', content: 'hi' },
@@ -73,6 +106,20 @@ describe('buildStreamPayloadPlan', () => {
       staticSystemPrompt: 'STATIC',
       dynamicContext: null,
       anthropicCache: { enabled: true, ttl: '5m', minTokens: 1024 },
+      promptBlocks: [
+        {
+          role: 'system',
+          content: 'STATIC',
+          cachePreference: 'prefer-cache',
+          stability: 'static',
+        },
+        {
+          role: 'user',
+          content: 'hello',
+          cachePreference: 'avoid-cache',
+          stability: 'live',
+        },
+      ],
       anthropicConversationMessages: [{ role: 'user', content: 'hello' }],
     })
 
@@ -96,6 +143,20 @@ describe('buildStreamPayloadPlan', () => {
       staticSystemPrompt: 'STATIC',
       dynamicContext: null,
       anthropicCache: null,
+      promptBlocks: [
+        {
+          role: 'system',
+          content: 'STATIC',
+          cachePreference: 'prefer-cache',
+          stability: 'static',
+        },
+        {
+          role: 'user',
+          content: 'hello',
+          cachePreference: 'avoid-cache',
+          stability: 'live',
+        },
+      ],
       anthropicConversationMessages: [{ role: 'user', content: 'hello' }],
     })
 
@@ -164,5 +225,65 @@ describe('buildStreamPayloadPlan', () => {
     expect(result.streamRequest.system).toBe('FINAL')
     expect(result.streamRequest.messages).toEqual([{ role: 'user', content: 'recent user' }])
     expect(result.streamRequest.providerOptions).toEqual(providerOptions)
+  })
+
+  it('places anthropic cache control on the last live block for prefix mode', () => {
+    const result = buildStreamPayloadPlan({
+      ...BASE_ARGS,
+      provider: 'anthropic',
+      finalSystemPrompt: 'STATIC\n\nSEALED',
+      staticSystemPrompt: 'STATIC',
+      dynamicContext: 'SEALED',
+      anthropicCache: { enabled: true, ttl: '5m', minTokens: 1024 },
+      promptBlocks: [
+        {
+          role: 'system',
+          content: 'STATIC',
+          cachePreference: 'prefer-cache',
+          stability: 'static',
+        },
+        {
+          role: 'system',
+          content: 'SEALED',
+          cachePreference: 'prefer-cache',
+          stability: 'sealed',
+        },
+        {
+          role: 'user',
+          content: 'older live',
+          cachePreference: 'prefer-cache',
+          stability: 'live',
+        },
+        {
+          role: 'assistant',
+          content: 'older reply',
+          cachePreference: 'prefer-cache',
+          stability: 'live',
+        },
+        {
+          role: 'user',
+          content: 'latest user',
+          cachePreference: 'prefer-cache',
+          stability: 'live',
+        },
+      ],
+      anthropicConversationMessages: [
+        { role: 'user', content: 'older live' },
+        { role: 'assistant', content: 'older reply' },
+        { role: 'user', content: 'latest user' },
+      ],
+    })
+
+    expect(result.streamRequest.messages).toHaveLength(5)
+    expect(result.streamRequest.messages[4]).toMatchObject({
+      role: 'user',
+      content: 'latest user',
+    })
+    expect(result.streamRequest.messages[4]).toHaveProperty('providerOptions')
+    expect(result.actualPayload.conversationMessages).toEqual([
+      { role: 'user', content: 'older live' },
+      { role: 'assistant', content: 'older reply' },
+      { role: 'user', content: 'latest user' },
+    ])
   })
 })

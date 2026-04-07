@@ -111,6 +111,7 @@ export interface CreateChunkSummaryOptions {
   startSeq: number
   endSeq: number
   systemPrompt: string
+  expectedMessageCount?: number | null
 }
 
 // Create chunk facts options
@@ -154,6 +155,7 @@ export interface RegenerationProcessOptions {
   metaPrompt: string
   factPrompt: string
   regenerate: RegenerateConfig
+  chunkSize?: number
 }
 
 // Summary generation with fallback

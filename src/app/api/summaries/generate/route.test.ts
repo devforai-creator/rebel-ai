@@ -27,7 +27,7 @@ const validBody = {
 }
 
 let currentSupabase: ReturnType<typeof createSupabaseMock> | null = null
-const updateSummariesMock = vi.fn()
+const updateMemoryStateMock = vi.fn()
 
 const googleModelFactoryMock = vi.fn((modelName: string) => ({ provider: 'google', modelName }))
 const openAIModelFactoryMock = vi.fn((modelName: string) => ({ provider: 'openai', modelName }))
@@ -47,8 +47,8 @@ const createOpenAIWithServiceTierMock = vi.fn()
 const createAnthropicMock = vi.fn()
 const createDeepSeekMock = vi.fn()
 
-vi.mock('@/lib/chat-summaries', () => ({
-  updateSummaries: (...args: unknown[]) => updateSummariesMock(...args),
+vi.mock('@/lib/chat-memory', () => ({
+  updateMemoryState: (...args: unknown[]) => updateMemoryStateMock(...args),
 }))
 
 vi.mock('@/lib/supabase/admin', () => ({
@@ -108,7 +108,7 @@ function createSupabaseMock({
                   }
 
                   return {
-                    data: { id: 'chat-1', user_id: chatOwnerId },
+                    data: { id: 'chat-1', user_id: chatOwnerId, model_config: null },
                     error: null,
                   }
                 },
@@ -179,8 +179,8 @@ describe('POST /api/summaries/generate', () => {
     vi.unstubAllEnvs()
     currentSupabase = null
 
-    updateSummariesMock.mockReset()
-    updateSummariesMock.mockResolvedValue(undefined)
+    updateMemoryStateMock.mockReset()
+    updateMemoryStateMock.mockResolvedValue(undefined)
 
     googleModelFactoryMock.mockReset()
     openAIModelFactoryMock.mockReset()
@@ -215,7 +215,7 @@ describe('POST /api/summaries/generate', () => {
 
     expect(response.status).toBe(500)
     expect(response.headers.get('cache-control')).toContain('no-store')
-    expect(updateSummariesMock).not.toHaveBeenCalled()
+    expect(updateMemoryStateMock).not.toHaveBeenCalled()
   })
 
   it('rejects unauthorized requests', async () => {
@@ -253,7 +253,7 @@ describe('POST /api/summaries/generate', () => {
     const response = await POST(buildRequest(validBody, 'Bearer summary-secret'))
 
     expect(response.status).toBe(404)
-    expect(updateSummariesMock).not.toHaveBeenCalled()
+    expect(updateMemoryStateMock).not.toHaveBeenCalled()
   })
 
   it('returns 404 when chat is missing', async () => {
@@ -263,7 +263,7 @@ describe('POST /api/summaries/generate', () => {
     const response = await POST(buildRequest(validBody, 'Bearer summary-secret'))
 
     expect(response.status).toBe(404)
-    expect(updateSummariesMock).not.toHaveBeenCalled()
+    expect(updateMemoryStateMock).not.toHaveBeenCalled()
   })
 
   it('rejects when chat is not owned by requester', async () => {
@@ -284,7 +284,7 @@ describe('POST /api/summaries/generate', () => {
     const response = await POST(buildRequest(validBody, 'Bearer summary-secret'))
 
     expect(response.status).toBe(404)
-    expect(updateSummariesMock).not.toHaveBeenCalled()
+    expect(updateMemoryStateMock).not.toHaveBeenCalled()
   })
 
   it('returns 404 when API key is missing', async () => {
@@ -294,7 +294,7 @@ describe('POST /api/summaries/generate', () => {
     const response = await POST(buildRequest(validBody, 'Bearer summary-secret'))
 
     expect(response.status).toBe(404)
-    expect(updateSummariesMock).not.toHaveBeenCalled()
+    expect(updateMemoryStateMock).not.toHaveBeenCalled()
   })
 
   it('returns 403 when API key belongs to a different user', async () => {
@@ -304,7 +304,7 @@ describe('POST /api/summaries/generate', () => {
     const response = await POST(buildRequest(validBody, 'Bearer summary-secret'))
 
     expect(response.status).toBe(403)
-    expect(updateSummariesMock).not.toHaveBeenCalled()
+    expect(updateMemoryStateMock).not.toHaveBeenCalled()
   })
 
   it('returns 403 when API key is inactive', async () => {
@@ -314,7 +314,7 @@ describe('POST /api/summaries/generate', () => {
     const response = await POST(buildRequest(validBody, 'Bearer summary-secret'))
 
     expect(response.status).toBe(403)
-    expect(updateSummariesMock).not.toHaveBeenCalled()
+    expect(updateMemoryStateMock).not.toHaveBeenCalled()
   })
 
   it('returns 500 when API key vault secret reference is missing', async () => {
@@ -335,7 +335,7 @@ describe('POST /api/summaries/generate', () => {
     const response = await POST(buildRequest(validBody, 'Bearer summary-secret'))
 
     expect(response.status).toBe(500)
-    expect(updateSummariesMock).not.toHaveBeenCalled()
+    expect(updateMemoryStateMock).not.toHaveBeenCalled()
   })
 
   it('returns 400 for unsupported provider', async () => {
@@ -349,7 +349,7 @@ describe('POST /api/summaries/generate', () => {
     expect(body.error).toBe('Unsupported provider: voyage')
   })
 
-  it('returns 200 and calls updateSummaries on openai success', async () => {
+  it('returns 200 and calls updateMemoryState on openai success', async () => {
     currentSupabase = createSupabaseMock({})
     const { POST } = await import('./route')
 
@@ -361,7 +361,7 @@ describe('POST /api/summaries/generate', () => {
       serviceTier: 'standard',
     })
     expect(openAIModelFactoryMock).toHaveBeenCalledWith('gpt-4o-mini')
-    expect(updateSummariesMock).toHaveBeenCalledWith(
+    expect(updateMemoryStateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         chatId: 'chat-1',
         userId: 'user-1',
@@ -462,7 +462,7 @@ describe('POST /api/summaries/generate', () => {
     expect(response.status).toBe(200)
     expect(createGoogleGenerativeAIMock).toHaveBeenCalledWith({ apiKey: 'sk-test' })
     expect(googleModelFactoryMock).toHaveBeenCalledWith('wrong-model')
-    expect(updateSummariesMock).toHaveBeenCalledWith(
+    expect(updateMemoryStateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: 'google',
         modelName: 'wrong-model',
@@ -470,7 +470,7 @@ describe('POST /api/summaries/generate', () => {
     )
   })
 
-  it('normalizes regenerate ranges before calling updateSummaries', async () => {
+  it('normalizes regenerate ranges before calling updateMemoryState', async () => {
     currentSupabase = createSupabaseMock({})
     const { POST } = await import('./route')
 
@@ -504,7 +504,7 @@ describe('POST /api/summaries/generate', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(updateSummariesMock).toHaveBeenCalledWith(
+    expect(updateMemoryStateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         regenerate: {
           chunkRanges: [
@@ -520,7 +520,7 @@ describe('POST /api/summaries/generate', () => {
 
   it('returns 500 with error details when summary generation throws Error', async () => {
     currentSupabase = createSupabaseMock({})
-    updateSummariesMock.mockRejectedValueOnce(new Error('summary pipeline failed'))
+    updateMemoryStateMock.mockRejectedValueOnce(new Error('summary pipeline failed'))
     const { POST } = await import('./route')
 
     const response = await POST(buildRequest(validBody, 'Bearer summary-secret'))
@@ -535,7 +535,7 @@ describe('POST /api/summaries/generate', () => {
 
   it('returns 500 with unknown details when summary generation throws non-Error', async () => {
     currentSupabase = createSupabaseMock({})
-    updateSummariesMock.mockRejectedValueOnce('boom')
+    updateMemoryStateMock.mockRejectedValueOnce('boom')
     const { POST } = await import('./route')
 
     const response = await POST(buildRequest(validBody, 'Bearer summary-secret'))

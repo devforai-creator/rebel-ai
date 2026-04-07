@@ -10,7 +10,7 @@ import type {
   Character,
 } from '@/types/database.types'
 import { ensureUserFirstForAnthropic } from '@/lib/chat/anthropic-user-first'
-import { buildContext } from '@/lib/chat-summaries'
+import { buildMemoryPlan } from '@/lib/chat-memory'
 import { getGlobalSystemPrompt } from '@/lib/chat/global-system-prompt'
 import { parseChatJobPayload, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { streamText, APICallError } from 'ai'
@@ -27,6 +27,7 @@ import { estimateUsageCost } from '@/lib/model-pricing'
 import { resolveInternalApiOrigin } from '@/lib/internal-api-origin'
 import { applyBilingualContext, isBilingualEnabled } from '@/lib/chat/bilingual-context'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
+import { normalizeChatModelConfig } from '@/lib/chat/model-config'
 import { buildLanguageModel } from './model-factory'
 import { evaluateContentFilter } from './content-filter'
 import { buildSystemPrompt } from './system-prompt-builder'
@@ -43,7 +44,7 @@ type ChatGenerationJobUpdate = Database['public']['Tables']['chat_generation_job
 type RunnerApiKeyRow = Pick<ApiKey, 'vault_secret_name' | 'service_tier' | 'reasoning_effort'>
 type RunnerChatRow = Pick<
   Chat,
-  'id' | 'user_id' | 'character_id' | 'persona_id' | 'custom_system_prompt'
+  'id' | 'user_id' | 'character_id' | 'persona_id' | 'custom_system_prompt' | 'model_config'
 >
 type RunnerPersonaRow = Pick<Persona, 'name' | 'description'>
 type RunnerCharacterRow = Pick<Character, 'id' | 'name' | 'system_prompt'> & {
@@ -193,8 +194,8 @@ async function executeJob({
   const chatQueryStart = performance.now()
   const chatQueryPromise = supabase
     .from('chats')
-    .select<'id, user_id, character_id, persona_id, custom_system_prompt'>(
-      'id, user_id, character_id, persona_id, custom_system_prompt',
+    .select<'id, user_id, character_id, persona_id, custom_system_prompt, model_config'>(
+      'id, user_id, character_id, persona_id, custom_system_prompt, model_config',
     )
     .eq('id', chatId)
     .eq('user_id', userId)
@@ -275,6 +276,7 @@ async function executeJob({
   }
 
   const defaultSystemPrompt = getGlobalSystemPrompt()
+  const normalizedModelConfig = normalizeChatModelConfig(chat.model_config)
 
   stepStart = performance.now()
   const systemPrompt = await buildSystemPrompt({
@@ -288,19 +290,19 @@ async function executeJob({
   stepStart = performance.now()
   const {
     dynamicContext,
-    recentMessages: rawRecentMessages,
+    fallbackMessages: rawRecentMessages,
+    fallbackSystemPrompt,
+    promptBlocks,
+    staticSystemPrompt,
     ragInfo,
-  } = await buildContext({
+  } = await buildMemoryPlan({
     supabase,
     chatId,
     sanitizedMessages: payload.sanitizedMessages,
     baseSystemPrompt: systemPrompt,
+    modelConfig: normalizedModelConfig,
   })
-
-  const staticSystemPrompt = systemPrompt.trim()
-  const finalSystemPromptParts = [staticSystemPrompt]
-  if (dynamicContext) finalSystemPromptParts.push(dynamicContext)
-  const finalSystemPrompt = finalSystemPromptParts.join('\n\n')
+  const finalSystemPrompt = fallbackSystemPrompt
   timings['7_build_context'] = performance.now() - stepStart
 
   // Apply bilingual memory: use English translations for older messages to reduce token usage
@@ -445,6 +447,8 @@ async function executeJob({
       dynamicContext,
       anthropicCache,
       anthropicConversationMessages,
+      anthropicPlaceholderAdded,
+      promptBlocks,
       recentMessages,
       googleCacheResult,
       messagesToCacheForGoogle,

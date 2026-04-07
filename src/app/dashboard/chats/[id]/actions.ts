@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { normalizeChatModelConfig } from '@/lib/chat/model-config'
+import { hasPersistableChatModelConfig, normalizeChatModelConfig } from '@/lib/chat/model-config'
 
 export async function updateChatPersona(chatId: string, personaId: string) {
   const supabase = await createClient()
@@ -76,11 +76,11 @@ export async function updateChatModelConfig(chatId: string, modelConfig: unknown
   }
 
   const normalized = normalizeChatModelConfig(modelConfig)
-  const hasAlternate = !!normalized.alternateModels
+  const hasConfig = hasPersistableChatModelConfig(normalized)
 
   const { error: updateError } = await supabase
     .from('chats')
-    .update({ model_config: hasAlternate ? normalized : null })
+    .update({ model_config: hasConfig ? normalized : null })
     .eq('id', chatId)
 
   if (updateError) {

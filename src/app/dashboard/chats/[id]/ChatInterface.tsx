@@ -24,7 +24,12 @@ import {
 import { useQueuedChat } from './hooks'
 import { updateChatModelConfig } from './actions'
 import { MessageList, TokenStatsPanel, DebugModal } from './components'
-import { normalizeChatModelConfig } from '@/lib/chat/model-config'
+import {
+  DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
+  DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
+  normalizeChatModelConfig,
+  type ChatMemoryMode,
+} from '@/lib/chat/model-config'
 
 // Default empty asset data
 const EMPTY_ASSET_DATA: ChatAssetData = {
@@ -145,6 +150,17 @@ export default function ChatInterface({
       initialPrimaryApiKeyId !== initialSecondaryApiKeyId
     return enabled && hasPair
   })
+  const [memoryMode, setMemoryMode] = useState<ChatMemoryMode>(
+    normalizedModelConfig.memory?.mode ?? 'summary_window',
+  )
+  const [memorySettings] = useState(() => ({
+    sealEveryMessages:
+      normalizedModelConfig.memory?.sealEveryMessages ??
+      DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
+    retainTailMessages:
+      normalizedModelConfig.memory?.retainTailMessages ??
+      DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
+  }))
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -197,13 +213,26 @@ export default function ChatInterface({
   }, [selectedApiKeyId])
 
   const persistModelConfig = useCallback(
-    async (nextEnabled: boolean, nextPrimary: string, nextSecondary: string) => {
+    async (
+      nextEnabled: boolean,
+      nextPrimary: string,
+      nextSecondary: string,
+      nextMemoryMode: ChatMemoryMode,
+    ) => {
       const config = {
         alternateModels: {
           enabled: nextEnabled,
           primaryApiKeyId: nextPrimary || null,
           secondaryApiKeyId: nextSecondary || null,
         },
+        memory:
+          nextMemoryMode === 'prefix_live_blocks'
+            ? {
+                mode: nextMemoryMode,
+                sealEveryMessages: memorySettings.sealEveryMessages,
+                retainTailMessages: memorySettings.retainTailMessages,
+              }
+            : null,
       }
 
       const result = await updateChatModelConfig(chatId, config)
@@ -211,7 +240,7 @@ export default function ChatInterface({
         toast.error(result.error)
       }
     },
-    [chatId],
+    [chatId, memorySettings.retainTailMessages, memorySettings.sealEveryMessages],
   )
 
   const handleToggleAlternateModels = useCallback(() => {
@@ -228,8 +257,8 @@ export default function ChatInterface({
     }
 
     setAlternateModelsEnabled(nextEnabled)
-    void persistModelConfig(nextEnabled, selectedApiKeyId, secondaryApiKeyId)
-  }, [alternateModelsEnabled, selectedApiKeyId, secondaryApiKeyId, persistModelConfig])
+    void persistModelConfig(nextEnabled, selectedApiKeyId, secondaryApiKeyId, memoryMode)
+  }, [alternateModelsEnabled, memoryMode, selectedApiKeyId, secondaryApiKeyId, persistModelConfig])
 
   const handleSelectPrimaryApiKey = useCallback(
     (nextId: string) => {
@@ -237,9 +266,9 @@ export default function ChatInterface({
       if (alternateModelsEnabled && nextId === secondaryApiKeyId) {
         toast.error('교대 모드는 서로 다른 API 키가 필요합니다.')
       }
-      void persistModelConfig(alternateModelsEnabled, nextId, secondaryApiKeyId)
+      void persistModelConfig(alternateModelsEnabled, nextId, secondaryApiKeyId, memoryMode)
     },
-    [alternateModelsEnabled, secondaryApiKeyId, persistModelConfig],
+    [alternateModelsEnabled, memoryMode, secondaryApiKeyId, persistModelConfig],
   )
 
   const handleSelectSecondaryApiKey = useCallback(
@@ -248,9 +277,17 @@ export default function ChatInterface({
       if (alternateModelsEnabled && nextId === selectedApiKeyId) {
         toast.error('교대 모드는 서로 다른 API 키가 필요합니다.')
       }
-      void persistModelConfig(alternateModelsEnabled, selectedApiKeyId, nextId)
+      void persistModelConfig(alternateModelsEnabled, selectedApiKeyId, nextId, memoryMode)
     },
-    [alternateModelsEnabled, selectedApiKeyId, persistModelConfig],
+    [alternateModelsEnabled, memoryMode, selectedApiKeyId, persistModelConfig],
+  )
+
+  const handleSelectMemoryMode = useCallback(
+    (nextMode: ChatMemoryMode) => {
+      setMemoryMode(nextMode)
+      void persistModelConfig(alternateModelsEnabled, selectedApiKeyId, secondaryApiKeyId, nextMode)
+    },
+    [alternateModelsEnabled, persistModelConfig, secondaryApiKeyId, selectedApiKeyId],
   )
 
   // Toggle developer mode
@@ -729,9 +766,11 @@ export default function ChatInterface({
         selectedApiKeyId={selectedApiKeyId}
         secondaryApiKeyId={secondaryApiKeyId}
         alternateModelsEnabled={alternateModelsEnabled}
+        memoryMode={memoryMode}
         onSelectApiKey={handleSelectPrimaryApiKey}
         onSelectSecondaryApiKey={handleSelectSecondaryApiKey}
         onToggleAlternateModels={handleToggleAlternateModels}
+        onSelectMemoryMode={handleSelectMemoryMode}
         latestUsage={latestUsage}
         statsExpanded={statsExpanded}
         onToggleStats={() => setStatsExpanded(!statsExpanded)}

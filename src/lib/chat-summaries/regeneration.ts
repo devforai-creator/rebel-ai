@@ -68,6 +68,7 @@ async function regenerateChunkRanges({
   chunkPrompt,
   factPrompt,
   ranges,
+  chunkSize,
 }: {
   supabase: ServerSupabaseClient
   chatId: string
@@ -78,15 +79,16 @@ async function regenerateChunkRanges({
   chunkPrompt: string
   factPrompt: string
   ranges: SummaryRange[]
+  chunkSize: number
 }): Promise<void> {
   for (const range of ranges) {
     const size = range.endSeq - range.startSeq + 1
-    if (size !== CHUNK_SIZE) {
+    if (size !== chunkSize) {
       console.warn('[summaries] Skipping chunk regeneration due to size mismatch', {
         chatId,
         userId,
         ...range,
-        expectedSize: CHUNK_SIZE,
+        expectedSize: chunkSize,
       })
       continue
     }
@@ -128,6 +130,7 @@ async function regenerateChunkRanges({
       startSeq: range.startSeq,
       endSeq: range.endSeq,
       systemPrompt: chunkPrompt,
+      expectedMessageCount: chunkSize,
     })
 
     await createChunkFacts({
@@ -477,6 +480,7 @@ export async function processRegenerationRequests({
   metaPrompt,
   factPrompt,
   regenerate,
+  chunkSize = CHUNK_SIZE,
 }: RegenerationProcessOptions): Promise<void> {
   logRegenerationDebug('[Regeneration] Processing regeneration requests', {
     chatId,
@@ -515,6 +519,7 @@ export async function processRegenerationRequests({
       chunkPrompt,
       factPrompt,
       ranges: chunkRanges,
+      chunkSize,
     })
   }
 

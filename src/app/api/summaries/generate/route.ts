@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { updateSummaries } from '@/lib/chat-summaries'
+import { updateMemoryState } from '@/lib/chat-memory'
+import { normalizeChatModelConfig } from '@/lib/chat/model-config'
 import type { ApiServiceTier, Database } from '@/types/database.types'
 import { buildLanguageModel } from '@/lib/llm/model-factory'
 
@@ -120,11 +121,12 @@ export async function POST(request: NextRequest) {
     type ChatOwnership = {
       id: string
       user_id: string
+      model_config: unknown
     }
 
     const { data: chat, error: chatError } = await supabase
       .from('chats')
-      .select('id, user_id')
+      .select('id, user_id, model_config')
       .eq('id', chatId)
       .single<ChatOwnership>()
 
@@ -231,7 +233,7 @@ export async function POST(request: NextRequest) {
     // Note: Not using after() - unstable on Vercel due to early container termination after HTTP response
     // Execute directly with await to ensure completion while maintaining HTTP connection
     try {
-      await updateSummaries({
+      await updateMemoryState({
         supabase,
         chatId,
         userId,
@@ -239,6 +241,7 @@ export async function POST(request: NextRequest) {
         provider: resolvedProvider,
         modelName: resolvedModelName,
         regenerate: normalizedRegenerate,
+        modelConfig: normalizeChatModelConfig(chat.model_config),
       })
     } catch (error) {
       console.error('[Summaries API] Summary generation failed:', error)

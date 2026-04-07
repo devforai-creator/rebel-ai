@@ -146,6 +146,7 @@ export async function createChunkSummary({
   startSeq,
   endSeq,
   systemPrompt,
+  expectedMessageCount = CHUNK_SIZE,
 }: CreateChunkSummaryOptions): Promise<void> {
   const fromIndex = startSeq - 1
   const toIndex = endSeq - 1
@@ -163,9 +164,9 @@ export async function createChunkSummary({
 
   const chunkMessages = (messages ?? []) as MessageTranscriptRow[]
 
-  if (chunkMessages.length !== CHUNK_SIZE) {
+  if (typeof expectedMessageCount === 'number' && chunkMessages.length !== expectedMessageCount) {
     throw new Error(
-      `Expected ${CHUNK_SIZE} messages for chunk but received ${chunkMessages.length}`,
+      `Expected ${expectedMessageCount} messages for chunk but received ${chunkMessages.length}`,
     )
   }
 

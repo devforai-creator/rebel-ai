@@ -116,12 +116,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
   const assetIdToUrl = new Map<string, string>()
 
   for (const asset of characterAssets || []) {
-    const name = (asset as { canonical_name?: string | null }).canonical_name
-    if (!name) continue
-
     const { data } = supabase.storage.from('character-assets').getPublicUrl(asset.storage_path)
     const assetUrl = data.publicUrl
     assetIdToUrl.set(asset.id, assetUrl)
+
+    const name = (asset as { canonical_name?: string | null }).canonical_name
+    if (!name) continue
 
     const lowerKey = name.toLowerCase().replace(/[\s_-]+/g, '_')
     const existing = canonicalNames.get(lowerKey)

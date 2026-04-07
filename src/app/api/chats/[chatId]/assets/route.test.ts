@@ -506,6 +506,52 @@ describe('GET /api/chats/[chatId]/assets', () => {
     )
   })
 
+  it('builds image command URLs even when referenced assets have no canonical_name', async () => {
+    buildSupabase({
+      user: { id: 'user-1' },
+      chatsRows: [
+        {
+          id: 'chat-1',
+          user_id: 'user-1',
+          character_id: 'char-1',
+          characters: {
+            id: 'char-1',
+            metadata: {
+              image_commands: {
+                'Ako.giggling': 'asset-1',
+              },
+            },
+          },
+        },
+      ],
+      characterModulesRows: [],
+      moduleAssetsRows: [],
+      globalVarsRows: [],
+      characterAssetsRows: [
+        {
+          id: 'asset-1',
+          character_id: 'char-1',
+          file_name: '2.ako-giggling.webp',
+          storage_path: 'char-1/2.ako-giggling.webp',
+          display_name: 'Ako Giggling',
+          canonical_name: null,
+          metadata: null,
+          display_order: 1,
+        },
+      ],
+    })
+    const { GET } = await loadRoute()
+
+    const response = await GET(buildRequest(), buildContext('chat-1'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.imageCommandUrlMap).toMatchObject({
+      'Ako.giggling': 'https://cdn.test/character-assets/char-1/2.ako-giggling.webp',
+      'ako.giggling': 'https://cdn.test/character-assets/char-1/2.ako-giggling.webp',
+    })
+  })
+
   it('logs global variable failures and falls back to legacy module asset URLs and default regex fields', async () => {
     buildSupabase({
       user: { id: 'user-1' },

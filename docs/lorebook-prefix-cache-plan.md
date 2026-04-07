@@ -135,4 +135,3 @@ For deterministic rendering, prefer:
 - Whether Phase 1 should apply to all memory modes or only `prefix_live_blocks` first.
 - Whether stable lorebook should be defined only by `alwaysActive`, or whether a chat-level pinning concept should also count.
 - Whether dynamic lorebook should eventually behave more like true retrieval than keyword activation.
-

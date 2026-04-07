@@ -28,6 +28,7 @@ import { resolveInternalApiOrigin } from '@/lib/internal-api-origin'
 import { applyBilingualContext, isBilingualEnabled } from '@/lib/chat/bilingual-context'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
+import { buildLorebookDynamicContext } from '@/lib/lorebook/runtime'
 import { buildLanguageModel } from './model-factory'
 import { evaluateContentFilter } from './content-filter'
 import { buildSystemPrompt } from './system-prompt-builder'
@@ -288,6 +289,15 @@ async function executeJob({
   timings['6_build_system_prompt'] = performance.now() - stepStart
 
   stepStart = performance.now()
+  const lorebookDynamicContext = await buildLorebookDynamicContext({
+    supabase,
+    chatId,
+    characterId: character.id,
+    chatHistory: payload.sanitizedMessages,
+  })
+  timings['6b_build_lorebook_context'] = performance.now() - stepStart
+
+  stepStart = performance.now()
   const {
     dynamicContext,
     fallbackMessages: rawRecentMessages,
@@ -300,6 +310,7 @@ async function executeJob({
     chatId,
     sanitizedMessages: payload.sanitizedMessages,
     baseSystemPrompt: systemPrompt,
+    extraDynamicContext: lorebookDynamicContext ? [lorebookDynamicContext] : undefined,
     modelConfig: normalizedModelConfig,
   })
   const finalSystemPrompt = fallbackSystemPrompt

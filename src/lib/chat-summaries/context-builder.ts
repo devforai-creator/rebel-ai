@@ -292,7 +292,7 @@ export async function buildContext({
   // Build dynamic context separately (summaries, facts, extra blocks)
   // This separation allows Anthropic to cache the static system prompt
   // while the dynamic context changes more frequently
-  const dynamicParts: string[] = [...extraDynamicParts]
+  const dynamicParts: string[] = []
 
   if (summarySegments.length > 0) {
     dynamicParts.push(`=== Previous Conversation Summary ===\n` + summarySegments.join('\n\n'))
@@ -304,6 +304,8 @@ export async function buildContext({
       : '=== Key Facts to Remember ==='
     dynamicParts.push(`${heading}\n` + formatFacts(factRows))
   }
+
+  dynamicParts.push(...extraDynamicParts)
 
   // For backwards compatibility, systemPrompt still contains everything combined
   // Callers that support separated context (Anthropic) can use dynamicContext separately

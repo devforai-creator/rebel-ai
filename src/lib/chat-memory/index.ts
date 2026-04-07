@@ -339,15 +339,6 @@ async function buildPrefixLiveBlocksPlan({
   const extraDynamicParts = (extraDynamicContext ?? []).filter(
     (part) => part && part.trim().length > 0,
   )
-  for (const part of extraDynamicParts) {
-    dynamicBlocks.push(part)
-    promptBlocks.push({
-      role: 'system',
-      content: part,
-      cachePreference: 'no-preference',
-      stability: 'sealed',
-    })
-  }
 
   if (lastChunkEnd > 0) {
     const { data: summaries, error: summaryError } = await supabase
@@ -401,6 +392,16 @@ async function buildPrefixLiveBlocksPlan({
         })
       }
     }
+  }
+
+  for (const part of extraDynamicParts) {
+    dynamicBlocks.push(part)
+    promptBlocks.push({
+      role: 'system',
+      content: part,
+      cachePreference: 'avoid-cache',
+      stability: 'sealed',
+    })
   }
 
   const { data: liveMessages, error: liveMessageError } = await supabase

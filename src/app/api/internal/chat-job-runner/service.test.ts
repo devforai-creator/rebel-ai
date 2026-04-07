@@ -874,6 +874,69 @@ describe('processChatJobs', () => {
     )
   })
 
+  it('passes active lorebook as extra dynamic context into memory planning', async () => {
+    const moduleData: unknown = {
+      id: 'module-1',
+      user_id: 'user-1',
+      name: 'Lorebook Module',
+      description: null,
+      lorebook: [
+        {
+          key: 'magic',
+          content: 'Magic lore block',
+          insertorder: 10,
+        },
+      ],
+      regex: [],
+      triggers: [],
+      assets: [],
+      hide_icon: false,
+      source_file: null,
+      created_at: '',
+      updated_at: '',
+    }
+    const supabase = createChatJobRunnerSupabaseMock({
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+      modules: [{ module_id: 'module-1', modules: moduleData }],
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    decryptSecretMock.mockResolvedValue('sk-test')
+    parseChatJobPayloadMock.mockReturnValue({
+      version: 1,
+      requestId: 'req-lorebook',
+      chatId: 'chat-1',
+      userId: 'user-1',
+      apiKeyId: 'key-1',
+      provider: 'openai',
+      modelName: 'gpt-4o-mini',
+      sanitizedMessages: [{ role: 'user', content: 'Tell me about magic' }],
+      isRegeneration: false,
+      regenerateAssistantMessageId: null,
+    })
+    streamTextMock.mockResolvedValue({
+      textStream: ['hello world'],
+      finishReason: Promise.resolve('stop'),
+      providerMetadata: Promise.resolve({}),
+      usage: Promise.resolve({ inputTokens: 10, outputTokens: 20, totalTokens: 30 }),
+    })
+    claimPendingJobMock.mockResolvedValueOnce({
+      id: 'job-lorebook',
+      payload: { ok: true },
+    })
+    claimPendingJobMock.mockResolvedValueOnce(null)
+
+    const { processChatJobs } = await import('./service')
+
+    await processChatJobs(1)
+
+    expect(buildMemoryPlanMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        extraDynamicContext: ['=== Active Lorebook Entries ===\nMagic lore block'],
+      }),
+    )
+  })
+
   it('handles Gemini content filter by returning error status without storing system message', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       rpc: { get_decrypted_secret: () => decryptSecretMock() },

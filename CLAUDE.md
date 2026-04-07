@@ -56,18 +56,18 @@ CI (GitHub Actions, Node 20): lint → format:check → test with coverage → b
 
 ### Key Modules
 
-| Module | Purpose |
-|---|---|
-| `src/lib/chat/` | Job queue, system prompt composition, rate limiting, model config, bilingual context, summaries trigger |
-| `src/lib/chat-summaries.ts` | 2-tier summary pipeline (chunk→meta), context window compression |
-| `src/lib/rbx-parser.ts` / `rbx-importer.ts` | RBX package parsing and import logic |
-| `src/lib/llm/` | Provider-specific options, prompt caching, model factory, Google cache |
-| `src/lib/providers/catalog.ts` | Model catalog with pricing and capability metadata |
-| `src/lib/lorebook/` | Lorebook engine: keyword/regex activation, recursion, token budgeting |
-| `src/lib/supabase/` | Client/Server/Admin Supabase client helpers |
-| `src/lib/security/` | XSS defense, input sanitization |
-| `src/lib/internal-api-origin.ts` | Trusted origin resolution for Edge→Node internal calls |
-| `src/lib/embeddings.ts` | Voyage AI embeddings for episodic memory RAG |
+| Module                                      | Purpose                                                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `src/lib/chat/`                             | Job queue, system prompt composition, rate limiting, model config, bilingual context, summaries trigger |
+| `src/lib/chat-summaries.ts`                 | 2-tier summary pipeline (chunk→meta), context window compression                                        |
+| `src/lib/rbx-parser.ts` / `rbx-importer.ts` | RBX package parsing and import logic                                                                    |
+| `src/lib/llm/`                              | Provider-specific options, prompt caching, model factory, Google cache                                  |
+| `src/lib/providers/catalog.ts`              | Model catalog with pricing and capability metadata                                                      |
+| `src/lib/lorebook/`                         | Lorebook engine: keyword/regex activation, recursion, token budgeting                                   |
+| `src/lib/supabase/`                         | Client/Server/Admin Supabase client helpers                                                             |
+| `src/lib/security/`                         | XSS defense, input sanitization                                                                         |
+| `src/lib/internal-api-origin.ts`            | Trusted origin resolution for Edge→Node internal calls                                                  |
+| `src/lib/embeddings.ts`                     | Voyage AI embeddings for episodic memory RAG                                                            |
 
 ### Runtime Split
 

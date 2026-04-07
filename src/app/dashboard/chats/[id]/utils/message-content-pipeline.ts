@@ -1,8 +1,4 @@
-import {
-  resolveAssetTag,
-  resolveAssetUrl,
-  type CharacterAsset,
-} from '@/lib/asset-resolver'
+import { resolveAssetTag, resolveAssetUrl, type CharacterAsset } from '@/lib/asset-resolver'
 import { normalizeLegacyAssetImageTokens } from '@/lib/asset-token'
 import type { ModuleRegexEntry } from './types'
 

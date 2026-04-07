@@ -1,8 +1,4 @@
-import {
-  resolveAssetTag,
-  resolveAssetUrl,
-  type CharacterAsset,
-} from '@/lib/asset-resolver'
+import { resolveAssetTag, resolveAssetUrl, type CharacterAsset } from '@/lib/asset-resolver'
 
 type EmotionResolutionSource = 'image_command' | 'asset_tag' | 'asset_url_map'
 

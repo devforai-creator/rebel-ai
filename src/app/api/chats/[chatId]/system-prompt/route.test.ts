@@ -161,7 +161,7 @@ describe('POST /api/chats/[chatId]/system-prompt', () => {
     expect(response.status).toBe(400)
   })
 
-  it('returns 400 when template syntax is provided', async () => {
+  it('allows template syntax in system prompt', async () => {
     const supabase = buildSupabase({
       user: { id: 'user-1' },
       chats: [{ id: 'chat-1', user_id: 'user-1', custom_system_prompt: 'Old' }],
@@ -178,12 +178,10 @@ describe('POST /api/chats/[chatId]/system-prompt', () => {
     )
     const body = await response.json()
 
-    expect(response.status).toBe(400)
-    expect(body).toEqual({
-      error: 'custom system prompt must be plain text. Template syntax {{...}} is not allowed.',
-    })
+    expect(response.status).toBe(200)
+    expect(body).toEqual({ success: true })
     expect(supabase.state.chats).toEqual([
-      { id: 'chat-1', user_id: 'user-1', custom_system_prompt: 'Old' },
+      { id: 'chat-1', user_id: 'user-1', custom_system_prompt: 'Hello {{user}}' },
     ])
   })
 })

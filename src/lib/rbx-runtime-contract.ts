@@ -1,13 +1,11 @@
 import type { RbxManifest } from '@/types/rbx.types'
-import { getPlainTextRuntimeViolation } from '@/lib/runtime-contract-text'
 
 /**
- * Temporary import-boundary guard for the post-CharX RBX + SUU contract.
+ * Import-boundary guard for the post-CharX RBX + SUU contract.
  *
- * The parser still accepts some legacy fields for v1.x compatibility. This helper
- * is the hard gate that prevents those fields from entering the database while
- * existing content is being migrated. Once the contract is fully adopted, this
- * logic can be folded into the schema/parser or removed entirely.
+ * Checks structural constraints only (unsupported legacy fields).
+ * Template syntax ({{...}}) in text fields is allowed — the runtime
+ * does not interpret it, so there is no security or correctness risk.
  */
 export function assertRbxRuntimeContract(manifest: RbxManifest): void {
   const violations = getRbxRuntimeContractViolations(manifest)
@@ -29,31 +27,6 @@ export function getRbxRuntimeContractViolations(manifest: RbxManifest): string[]
   if (hasNonEmptyString(metadata.background_html)) {
     violations.push('character.metadata.background_html is not supported. Use ui_card instead.')
   }
-
-  pushIfPresent(
-    violations,
-    getPlainTextRuntimeViolation('character.system_prompt', manifest.character.system_prompt),
-  )
-
-  pushIfPresent(
-    violations,
-    getPlainTextRuntimeViolation(
-      'character.metadata.post_history_instructions',
-      metadata.post_history_instructions,
-    ),
-  )
-
-  pushIfPresent(
-    violations,
-    getPlainTextRuntimeViolation('character.greeting_message', manifest.character.greeting_message),
-  )
-
-  metadata.alternate_greetings.forEach((greeting, index) => {
-    pushIfPresent(
-      violations,
-      getPlainTextRuntimeViolation(`character.metadata.alternate_greetings[${index}]`, greeting),
-    )
-  })
 
   manifest.modules.forEach((attachment, moduleIndex) => {
     const moduleRecord = attachment.module as Record<string, unknown>
@@ -79,16 +52,6 @@ export function getRbxRuntimeContractViolations(manifest: RbxManifest): string[]
         )
       }
     })
-
-    attachment.module.lorebook.forEach((entry, entryIndex) => {
-      pushIfPresent(
-        violations,
-        getPlainTextRuntimeViolation(
-          `modules[${moduleIndex}].module.lorebook[${entryIndex}].content`,
-          entry.content,
-        ),
-      )
-    })
   })
 
   return violations
@@ -108,10 +71,4 @@ function hasPopulatedLegacyField(value: unknown): boolean {
   }
 
   return false
-}
-
-function pushIfPresent(values: string[], candidate: string | null): void {
-  if (candidate) {
-    values.push(candidate)
-  }
 }

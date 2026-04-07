@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPlainTextRuntimeViolation } from '@/lib/runtime-contract-text'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
@@ -54,11 +53,6 @@ export async function POST(request: NextRequest, context: Context) {
       normalizedPrompt = null
     } else {
       return NextResponse.json({ error: 'Invalid systemPrompt' }, { status: 400 })
-    }
-
-    const violation = getPlainTextRuntimeViolation('custom system prompt', normalizedPrompt)
-    if (violation) {
-      return NextResponse.json({ error: violation }, { status: 400 })
     }
 
     const { error: updateError } = await supabase

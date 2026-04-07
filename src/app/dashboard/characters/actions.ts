@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { validateModuleOwnership } from '@/lib/modules/ownership'
-import { getPlainTextRuntimeViolations } from '@/lib/runtime-contract-text'
 import { createClient } from '@/lib/supabase/server'
 
 export async function createCharacter(formData: FormData) {
@@ -15,11 +14,6 @@ export async function createCharacter(formData: FormData) {
 
   if (!user) {
     return { error: 'Login required' }
-  }
-
-  const fieldViolations = getCharacterPlainTextViolations(formData)
-  if (fieldViolations.length > 0) {
-    return { error: fieldViolations[0] }
   }
 
   const requestedModuleIds = parseModuleIds(formData.get('module_ids') as string | null)
@@ -95,11 +89,6 @@ export async function updateCharacter(id: string, formData: FormData) {
 
   if (!user) {
     return { error: 'Login required' }
-  }
-
-  const fieldViolations = getCharacterPlainTextViolations(formData)
-  if (fieldViolations.length > 0) {
-    return { error: fieldViolations[0] }
   }
 
   const requestedModuleIds = parseModuleIds(formData.get('module_ids') as string | null)
@@ -202,19 +191,6 @@ function parseModuleIds(raw: string | null): string[] {
     .split(',')
     .map((value) => value.trim())
     .filter((value) => value.length > 0)
-}
-
-function getCharacterPlainTextViolations(formData: FormData): string[] {
-  return getPlainTextRuntimeViolations([
-    {
-      label: 'Character system_prompt',
-      value: normalizeOptionalFormString(formData.get('system_prompt')),
-    },
-    {
-      label: 'Character greeting_message',
-      value: normalizeOptionalFormString(formData.get('greeting_message')),
-    },
-  ])
 }
 
 function normalizeOptionalFormString(value: FormDataEntryValue | null): string | null {

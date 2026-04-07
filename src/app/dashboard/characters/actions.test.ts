@@ -249,8 +249,8 @@ describe('character actions plain-text contract', () => {
     consoleErrorSpy.mockRestore()
   })
 
-  it('rejects templated system prompts on create before any DB call', async () => {
-    const supabase = buildSupabase()
+  it('allows template syntax in system prompts on create', async () => {
+    const supabase = buildSupabase({ createCharacterId: 'char-tpl' })
     createClientMock.mockResolvedValue(supabase)
     const { createCharacter } = await import('./actions')
 
@@ -260,10 +260,9 @@ describe('character actions plain-text contract', () => {
       }),
     )
 
-    expect(result).toEqual({
-      error: 'Character system_prompt must be plain text. Template syntax {{...}} is not allowed.',
-    })
-    expect(supabase.state.characterInsertPayloads).toHaveLength(0)
+    expect(result).toBeUndefined()
+    expect(supabase.state.characterInsertPayloads).toHaveLength(1)
+    expect(supabase.state.characterInsertPayloads[0].system_prompt).toBe('You are {{char}}.')
   })
 
   it('returns login required on create when unauthenticated', async () => {
@@ -413,7 +412,7 @@ describe('character actions plain-text contract', () => {
     expect(redirectMock).toHaveBeenCalledWith('/dashboard/characters/char-modules')
   })
 
-  it('rejects templated greeting messages on update before any DB call', async () => {
+  it('allows template syntax in greeting messages on update', async () => {
     const supabase = buildSupabase()
     createClientMock.mockResolvedValue(supabase)
     const { updateCharacter } = await import('./actions')
@@ -425,11 +424,9 @@ describe('character actions plain-text contract', () => {
       }),
     )
 
-    expect(result).toEqual({
-      error:
-        'Character greeting_message must be plain text. Template syntax {{...}} is not allowed.',
-    })
-    expect(supabase.state.characterUpdateCalls).toHaveLength(0)
+    expect(result).toBeUndefined()
+    expect(supabase.state.characterUpdateCalls).toHaveLength(1)
+    expect(supabase.state.characterUpdateCalls[0].payload?.greeting_message).toBe('Hello {{user}}')
   })
 
   it('returns login required on update when unauthenticated', async () => {

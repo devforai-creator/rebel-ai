@@ -40,7 +40,7 @@ describe('rbx runtime contract', () => {
     expect(getRbxRuntimeContractViolations(manifest)).toEqual([])
   })
 
-  it('rejects background_html and template-bearing prompt fields', () => {
+  it('rejects background_html but allows template syntax in text fields', () => {
     const manifest = createManifest({
       character: {
         name: 'Legacy Character',
@@ -65,21 +65,42 @@ describe('rbx runtime contract', () => {
 
     const violations = getRbxRuntimeContractViolations(manifest)
 
-    expect(violations).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('background_html'),
-        expect.stringContaining('character.system_prompt'),
-        expect.stringContaining('character.greeting_message'),
-        expect.stringContaining('post_history_instructions'),
-        expect.stringContaining('alternate_greetings[1]'),
-      ]),
-    )
+    expect(violations).toEqual([
+      'character.metadata.background_html is not supported. Use ui_card instead.',
+    ])
     expect(() => assertRbxRuntimeContract(manifest)).toThrow(
       'RBX import rejected by runtime contract',
     )
   })
 
-  it('rejects legacy module triggers, toggle_definitions, editdisplay, and templated lorebook', () => {
+  it('accepts template syntax in all text fields when background_html is absent', () => {
+    const manifest = createManifest({
+      character: {
+        name: 'Template Character',
+        description: null,
+        system_prompt: 'You are {{char}}.',
+        greeting_message: 'Hello {{user}}',
+        visibility: 'private',
+        metadata: {
+          type: 'character',
+          post_history_instructions: '{{#if foo}}legacy{{/if}}',
+          alternate_greetings: ['Hi', 'Welcome {{user}}'],
+          ui_card: null,
+          ui_cards: {},
+          background_html: null,
+          default_variables: {},
+          character_list: [],
+          image_commands: {},
+          image_display: null,
+        },
+      },
+    })
+
+    expect(() => assertRbxRuntimeContract(manifest)).not.toThrow()
+    expect(getRbxRuntimeContractViolations(manifest)).toEqual([])
+  })
+
+  it('rejects legacy module triggers, toggle_definitions, and editdisplay but allows templated lorebook', () => {
     const manifest = createManifest({
       modules: [
         {
@@ -106,8 +127,10 @@ describe('rbx runtime contract', () => {
         expect.stringContaining('.triggers'),
         expect.stringContaining('.toggle_definitions'),
         expect.stringContaining('editdisplay'),
-        expect.stringContaining('.lorebook[0].content'),
       ]),
+    )
+    expect(violations).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('.lorebook[0].content')]),
     )
   })
 })

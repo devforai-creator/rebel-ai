@@ -104,18 +104,23 @@ RebelAI is set up to work well on Vercel, but production deployment should inclu
 - `INTERNAL_API_ORIGIN`
 
 Vercel Cron calls the trigger routes with bearer auth. You do not need query-string secrets.
+Per-minute Vercel Cron is the managed-path default and requires a plan that supports minute-level schedules. If you run on Vercel Hobby, use an external scheduler or worker instead.
 
-### Other hosts
+### Vercel Hobby / Other hosts
 
 If you deploy somewhere else, you still need:
 
 - a trusted `INTERNAL_API_ORIGIN`
 - a scheduler or worker for the chat/import runners
 
+The common low-cost setup is: app on Vercel Hobby or another Node host, Supabase Free, and an external scheduler hitting the internal trigger endpoints.
+
 You can either:
 
 - call the internal trigger routes with `Authorization: Bearer <CRON_SECRET>`
 - or run `npm run chat:jobs` and `npm run character:jobs` from your own worker process
+
+If you use hosted Supabase Free, keep imports within the provider's current storage limits and start with small `.rbx` packages.
 
 ## Troubleshooting
 
@@ -138,6 +143,7 @@ Check:
 - `CRON_SECRET` is set
 - your scheduler is actually hitting the trigger endpoints
 - `CHAT_ADMIN_SECRET` is set
+- if you are on Vercel Hobby, an external scheduler is configured instead of relying on Vercel Cron
 
 ### Production works inconsistently or internal calls fail
 

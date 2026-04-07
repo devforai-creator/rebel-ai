@@ -13,6 +13,7 @@
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdevforai-creator%2Frebel-ai&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,CHAT_ADMIN_SECRET,SUMMARY_GENERATION_SECRET,CRON_SECRET,INTERNAL_API_ORIGIN)
 
 [**🚀 Getting Started Guide**](./docs/GETTING_STARTED.md) — _New to RebelAI? Start here!_
+[**🧭 Hosting Profiles**](./docs/HOSTING_PROFILES.md) — _Managed production vs low-cost self-hosting_
 
 ---
 
@@ -24,13 +25,13 @@ Users manage their own API keys to control costs, with **RBX as the native forma
 ### Key Features
 
 - 🔑 **BYOK Architecture** - API keys encrypted via Vault, user-controlled costs + OpenAI Standard/Flex service tier selection
-- ⚠️ **Vercel Pro Plan Recommended** - Requires Pro plan for reliable LLM generation (300s timeout, minutely cron jobs)
+- ⚠️ **Managed vs Self-Hosted** - Vercel + Supabase Pro is the easiest production path, but low-cost self-hosting is supported with an external scheduler/worker and host-aware import limits.
 - 💾 **Prompt Caching** - Shared caching strategy for supported LLM providers:
   - **OpenAI**: Fixed cache keys per operation (`chat:…`, `summary:…`) with 24-hour retention
   - **Anthropic**: Compatibility hooks remain in place, but prompt caching is disabled by default
   - **Google / DeepSeek**: Provider-native caching behavior where available
 - 📦 **RBX Native Format** - RebelAI's native `.rbx` package is the recommended format for new cards: portable manifests, explicit asset references, declarative UI, and no script execution by design.
-- 📥 **Background RBX Import Jobs** - Upload `.rbx` packages up to 200MB, enqueue them into a background runner, and import characters/assets/modules without blocking the dashboard.
+- 📥 **Background RBX Import Jobs** - Queue `.rbx` packages into a background runner with configurable size limits. Practical maximum depends on your host and storage plan.
 - 🧩 **Safe UGC UI (SUU) Integration** - RBX `ui_card` and `image_display` payloads render via `@safe-ugc-ui/react`, giving native character cards a declarative safe UI layer for status panels and emotion-image layouts without adding new raw HTML/CSS paths.
 - 🧠 **Long-term Memory** - Dual memory system (semantic + episodic memory), custom prompts, Realtime updates, and optional Voyage embeddings-based retrieval. A 2-tier summary pipeline (chunk(10) → meta(100)) compresses long conversations without blocking chat generation.
 - 🌀 **Async Chat Queue (Realtime streaming)** - `/api/chat` (Node) enqueues jobs, runner uses `streamText` to update `messages` in real-time for Realtime subscription streaming. Job status API maintained as backup channel for completion/token aggregation.
@@ -117,6 +118,14 @@ npm run dev
 
 **Detailed setup guide:** See [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) for database configuration.
 
+### Hosting Profiles
+
+- **Managed production** — Vercel Pro + Supabase Pro. Easiest path for built-in minutely cron, larger hosted quotas, and always-on production projects.
+- **Low-cost self-hosted** — Vercel Hobby or another Node host + Supabase Free + external scheduler. Good for personal or small deployments; keep imports within your storage provider's file-size limits.
+- **Full self-hosted** — Any Node host + your own scheduler/worker + your own Supabase/Postgres stack.
+
+See [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md) for the tradeoffs and required infrastructure for each mode.
+
 ### Optional: Episodic Memory RAG
 
 1.  **Register Voyage Embeddings key** – In `/dashboard/api-keys`, select `Voyage (Embeddings)` provider and save your key.
@@ -132,6 +141,7 @@ npm run dev
 | --------------- | ------------------------------------------------------ | --------------------------------------------------------------- |
 | Setup           | [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md)             | Local + Supabase configuration walkthrough                      |
 | Getting started | [`docs/GETTING_STARTED.md`](./docs/GETTING_STARTED.md) | First-run guide for a fresh local deployment                    |
+| Hosting         | [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md) | Managed production vs low-cost self-hosted deployment profiles |
 | Database        | [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)           | Tables, RLS policies, RPC functions                             |
 | Format          | [`docs/rbx-spec.md`](./docs/rbx-spec.md)               | RBX package format and runtime contract                         |
 | Security        | [`SECURITY.md`](./SECURITY.md)                         | Reporting policy, security model, and self-hosting requirements |
@@ -147,7 +157,7 @@ The chat entry point (`/api/chat`) maintains a job queue in Node.js Runtime whil
 1. **Client** sends a message → `/api/chat` saves the user message (except for regeneration) and creates a job in `chat_generation_jobs` table, returning `202 { jobId }`. Rate limit check occurs via `/api/internal/chat-admin`.
 2. **Dashboard** subscribes to `chat-{chatId}` Realtime channel. **Job Runner** (`/api/internal/chat-job-runner`, Node.js Runtime) INSERTs first chunk via `streamText` and UPDATEs to accumulate content for streaming. `GET /api/chat/jobs/[jobId]` (Edge) continues polling for completion/error status and token aggregation, or as recovery for Realtime misses.
 3. **Job Runner** fetches pending jobs and performs: LLM call → message save/update → usage/cache hit recording → `debug_info` save.
-4. **Trigger Mechanism**: `/api/internal/chat-job-runner/trigger` invokes the runner via Vercel Cron (every minute on Pro plan) or manual `curl`/CLI commands. Requires `CRON_SECRET` authentication.
+4. **Trigger Mechanism**: `/api/internal/chat-job-runner/trigger` invokes the runner via Vercel Cron on Pro, or via any external scheduler/manual `curl`/CLI path on self-hosted or Hobby deployments. Requires `CRON_SECRET` authentication.
 
 ### Operations
 
@@ -158,9 +168,9 @@ The chat entry point (`/api/chat`) maintains a job queue in Node.js Runtime whil
   - `CHAT_ADMIN_SECRET`: Default Bearer token (used for Edge ↔ internal admin bridge & trigger → runner authentication).
   - `CHAT_JOB_RUNNER_BATCH_LIMIT` (optional): Jobs to process per batch (default 2, recommended max 5).
   - `RISUAI_ALLOW_REGEX_SCRIPTS` _(optional, default false)_: When `true`, executes `regex.script` blocks in compatibility modules. Only use in trusted offline environments; never enable in production.
-- **Schedule adjustment**: `vercel.json`'s `crons` entry registers the default schedule (`*/1 * * * *`). Modify this file or override in Vercel Dashboard → Cron Jobs for different intervals. Vercel automatically adds `Authorization: Bearer ${CRON_SECRET}` header, so `?secret=` parameter is unnecessary.
+- **Schedule adjustment**: `vercel.json` registers the default Vercel schedules (`*/1 * * * *`, etc.). On Vercel Pro you can keep using those jobs. On Vercel Hobby or other hosts, ignore `vercel.json` and schedule the same trigger endpoint yourself with `Authorization: Bearer ${CRON_SECRET}`.
 
-> **TIP:** To verify Cron is working, check Vercel Logs for 200 responses in order: `/api/internal/chat-job-runner/trigger` → `/api/internal/chat-job-runner`. For urgent cases, run `npm run chat:jobs` to drain jobs immediately.
+> **TIP:** To verify scheduled execution, check the logs for whichever scheduler you use. On Vercel Pro, look for `/api/internal/chat-job-runner/trigger` → `/api/internal/chat-job-runner`. For urgent cases, run `npm run chat:jobs` to drain jobs immediately.
 
 - **Health check**: Call `GET /api/internal/health` (requires `Authorization: Bearer ${CHAT_ADMIN_SECRET}` header) to check recent success/failure times and consecutive failure counts for chat runner trigger and summary trigger. If response `status` is `degraded`, one of Cron settings, runner logs, or summary bridge has consecutive failures.
 
@@ -194,7 +204,7 @@ Admin-only announcement system for immediate emergency maintenance/event notific
 
 ## Character Import Queue & Runner
 
-Uses the same architecture as Chat Job Runner for processing native RBX packages up to 200MB.
+Uses the same architecture as Chat Job Runner for processing native RBX packages with configurable host-dependent size limits.
 
 1. **Client** uploads an `.rbx` package → `POST /api/characters/import/storage` stores the file in the staged import bucket/job pipeline and creates a background import job. Legacy Supabase naming is retained internally.
 2. **Dashboard** polls `GET /api/characters/import/jobs/[jobId]` to track `status`; refreshes character list on completion.
@@ -209,9 +219,9 @@ Uses the same architecture as Chat Job Runner for processing native RBX packages
   - `CRON_SECRET`: Used by Vercel Cron for trigger route (same as chat job runner)
   - `CHARACTER_IMPORT_RUNNER_BATCH_LIMIT` (optional): Jobs per batch (default 1, recommended max 5). Legacy fallback: `CHARX_IMPORT_RUNNER_BATCH_LIMIT`
   - `ASSET_UPLOAD_CONCURRENCY` (optional): Concurrent asset uploads (default 8)
-- **Schedule adjustment**: `vercel.json`'s `crons` entry registers default schedule (`*/2 * * * *`, every 2 minutes). Modify this file or override in Vercel Dashboard for different intervals.
+- **Schedule adjustment**: `vercel.json` registers the default Vercel schedule (`*/2 * * * *`). On Vercel Pro you can keep it as-is. On Vercel Hobby or other hosts, run the same trigger endpoint from your own scheduler.
 
-> **TIP:** To verify Cron is working, check Vercel Logs for 200 responses in order: `/api/internal/character-import-runner/trigger` → `/api/internal/character-import-runner`. For urgent cases, run `npm run character:jobs` to drain jobs immediately.
+> **TIP:** To verify scheduled execution, check your scheduler logs. On Vercel Pro, look for `/api/internal/character-import-runner/trigger` → `/api/internal/character-import-runner`. For urgent cases, run `npm run character:jobs` to drain jobs immediately.
 
 ---
 
@@ -301,6 +311,8 @@ src/
 ### Large File Import
 
 RBX imports run as background jobs and are the supported path for large character packages. If Vercel import jobs time out or asset uploads stall, use `npm run character:jobs` to manually drain the queue and inspect runner logs.
+
+If you target low-cost hosted setups, keep packages within your storage provider's limits. For example, hosted Supabase Free plans currently enforce a smaller global file-size cap than Pro.
 
 **Manual:**
 

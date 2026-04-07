@@ -129,7 +129,7 @@ INTERNAL_API_ORIGIN=https://your-app.example.com
 - `DEVELOPER_EMAILS`: comma-separated allowlist for developer-only chat UI affordances
 - `CHAT_JOB_RUNNER_BATCH_LIMIT`: chat jobs processed per trigger
 - `CHARACTER_IMPORT_RUNNER_BATCH_LIMIT`: character import jobs processed per trigger
-- `NEXT_PUBLIC_IMPORT_MAX_UPLOAD_MB`: self-hosted import upload cap override
+- `NEXT_PUBLIC_IMPORT_MAX_UPLOAD_MB`: self-hosted import upload cap override. Hosted providers may still enforce a lower hard limit.
 - `VERCEL_AUTOMATION_BYPASS_SECRET`: only if Vercel Automation Protection is enabled and internal requests need the bypass header
 - `BACKFILL_API_PROVIDER`, `BACKFILL_API_KEY`, `BACKFILL_MODEL_NAME`: only for backfill scripts
 
@@ -176,14 +176,17 @@ If you deploy on Vercel:
 - verify `vercel.json` cron jobs are active after deployment
 
 Current trigger endpoints accept only bearer-token auth. You should not rely on query-string secrets.
+Minute-level Vercel Cron is the managed default and requires a plan that supports it. On Vercel Hobby, use an external scheduler or run the runner scripts from another process instead.
 
-### Non-Vercel Hosting
+### Vercel Hobby / Non-Vercel Hosting
 
-If you self-host elsewhere:
+If you self-host elsewhere, or you deploy the app on Vercel Hobby:
 
 - set `INTERNAL_API_ORIGIN` explicitly
 - provide a scheduler that calls the internal trigger routes with `Authorization: Bearer <CRON_SECRET>`
 - or run `npm run chat:jobs` / `npm run character:jobs` from your own worker process
+
+For low-cost hosted setups, keep RBX imports within your storage provider's limits. Raising `NEXT_PUBLIC_IMPORT_MAX_UPLOAD_MB` does not bypass hosted storage caps.
 
 ## Troubleshooting
 
@@ -211,7 +214,7 @@ Check:
 
 - `CRON_SECRET` is set
 - `CHAT_ADMIN_SECRET` is set
-- Vercel Cron is enabled or your external scheduler is running
+- Vercel Cron is enabled on a compatible plan or your external scheduler is running
 - internal trigger routes return `202`/`200` in logs
 
 ### Import or chat works locally but fails in production

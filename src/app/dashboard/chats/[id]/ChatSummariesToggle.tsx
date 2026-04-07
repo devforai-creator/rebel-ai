@@ -38,8 +38,8 @@ export default function ChatSummariesToggle({ children }: ChatSummariesTogglePro
         className={`hidden lg:flex fixed right-0 top-1/2 -translate-y-1/2 z-40 items-center justify-center w-6 h-16 bg-white dark:bg-gray-800 border border-r-0 border-gray-200 dark:border-gray-700 rounded-l-lg shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-all ${
           isOpen ? 'right-96' : 'right-0'
         }`}
-        aria-label={isOpen ? 'Close summary panel' : 'Open summary panel'}
-        title={isOpen ? 'Close summary panel' : 'Open summary panel'}
+        aria-label={isOpen ? 'Close memory panel' : 'Open memory panel'}
+        title={isOpen ? 'Close memory panel' : 'Open memory panel'}
       >
         <svg
           className={`w-4 h-4 text-gray-600 dark:text-gray-400 transition-transform ${
@@ -66,7 +66,7 @@ export default function ChatSummariesToggle({ children }: ChatSummariesTogglePro
       <button
         onClick={togglePanel}
         className="lg:hidden fixed bottom-20 right-4 z-40 w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-colors"
-        aria-label={isOpen ? 'Close summary panel' : 'Open summary panel'}
+        aria-label={isOpen ? 'Close memory panel' : 'Open memory panel'}
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
@@ -89,9 +89,7 @@ export default function ChatSummariesToggle({ children }: ChatSummariesTogglePro
           {/* Panel */}
           <div className="absolute right-0 top-0 bottom-0 w-80 max-w-[90vw] bg-white dark:bg-gray-800 shadow-xl overflow-y-auto">
             <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900 dark:text-white">
-                Long-term Memory Summary
-              </h3>
+              <h3 className="font-semibold text-gray-900 dark:text-white">Long-term Memory</h3>
               <button
                 onClick={() => setIsOpen(false)}
                 className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"

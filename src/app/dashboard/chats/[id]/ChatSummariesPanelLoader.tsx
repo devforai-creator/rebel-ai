@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { resolveChatMemoryConfig } from '@/lib/chat/model-config'
 import ChatSummariesPanel from './ChatSummariesPanel'
 
 interface Props {
@@ -13,6 +14,7 @@ export default async function ChatSummariesPanelLoader({ chatId }: Props) {
     { data: facts },
     { count: totalMessagesCount },
     { data: latestSequenceRow },
+    { data: chat },
   ] = await Promise.all([
     supabase
       .from('chat_summaries')
@@ -33,11 +35,17 @@ export default async function ChatSummariesPanelLoader({ chatId }: Props) {
       .order('sequence', { ascending: false })
       .limit(1)
       .maybeSingle<{ sequence: number }>(),
+    supabase
+      .from('chats')
+      .select('model_config')
+      .eq('id', chatId)
+      .single<{ model_config: unknown }>(),
   ])
 
   const totalMessages = typeof totalMessagesCount === 'number' ? totalMessagesCount : 0
   const latestSequence =
     typeof latestSequenceRow?.sequence === 'number' ? latestSequenceRow.sequence : totalMessages
+  const memoryConfig = resolveChatMemoryConfig(chat?.model_config ?? null)
 
   return (
     <ChatSummariesPanel
@@ -46,6 +54,7 @@ export default async function ChatSummariesPanelLoader({ chatId }: Props) {
       facts={facts || []}
       totalMessages={totalMessages}
       latestSequence={latestSequence}
+      memoryConfig={memoryConfig}
     />
   )
 }

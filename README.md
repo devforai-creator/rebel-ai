@@ -29,12 +29,12 @@ Web-based by design: server-side long-term memory, background chat generation, a
 - ⚠️ **Managed vs Self-Hosted** - Vercel + Supabase Pro is the easiest production path, but low-cost self-hosting is supported with an external scheduler/worker and host-aware import limits.
 - 💾 **Prompt Caching** - Shared caching strategy for supported LLM providers:
   - **OpenAI**: Fixed cache keys per operation (`chat:…`, `summary:…`) with 24-hour retention
-  - **Anthropic**: Compatibility hooks remain in place, but prompt caching is disabled by default
+  - **Anthropic**: Prefix-aware cache control for stable memory plans, including a switchable prefix-optimized chat mode for long conversations
   - **Google / DeepSeek**: Provider-native caching behavior where available
 - 📦 **RBX Native Format** - RebelAI's native `.rbx` package is the recommended format for new cards: portable manifests, explicit asset references, declarative UI, and no script execution by design.
 - 📥 **Background RBX Import Jobs** - Queue `.rbx` packages into a background runner with configurable size limits. Practical maximum depends on your host and storage plan.
 - 🧩 **Safe UGC UI (SUU) Integration** - RBX `ui_card` and `image_display` payloads render via `@safe-ugc-ui/react`, giving native character cards a declarative safe UI layer for status panels and emotion-image layouts without adding new raw HTML/CSS paths.
-- 🧠 **Long-term Memory** - Dual memory system (semantic + episodic memory), custom prompts, Realtime updates, and optional Voyage embeddings-based retrieval. A 2-tier summary pipeline (chunk(10) → meta(100)) compresses long conversations without blocking chat generation.
+- 🧠 **Long-term Memory** - Dual memory system (semantic + episodic memory), custom prompts, Realtime updates, optional Voyage embeddings-based retrieval, and switchable memory modes: the default summary-window mode plus a prefix-optimized mode for cache-friendly long chats.
 - 🌀 **Async Chat Queue (Realtime streaming)** - `/api/chat` (Node) enqueues jobs, runner uses `streamText` to update `messages` in real-time for Realtime subscription streaming. Job status API maintained as backup channel for completion/token aggregation.
 - 📄 **Message Pagination** - Optimized for large chats (loads 80 at a time, supports 1000+ messages)
 - ⚡ **SWR Data Caching** - Eliminates duplicate API calls, automatic revalidation
@@ -75,7 +75,7 @@ RebelAI is centered on **RBX + SUU**. Compatibility helpers remain only for migr
 
 - Chat input and inline editor share the `useAutosizeTextArea` hook, smoothly expanding up to max viewport height.
 - On mobile, input and send button stack vertically for thumb-friendly operation; desktop maintains horizontal layout.
-- **v0.8.0 Mobile Optimization**: Header/summary panel toggle, API key bar collapse (expand on click), lorebook overlay mode for maximum screen space utilization.
+- **v0.8.0 Mobile Optimization**: Header/memory panel toggle, API key bar collapse (expand on click), lorebook overlay mode for maximum screen space utilization.
 
 ### Tech Stack
 

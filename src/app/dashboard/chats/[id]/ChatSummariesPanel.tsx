@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { CHAT_CONTEXT_WINDOW } from '@/lib/chat-context-window'
+import type { ChatMemoryConfig } from '@/lib/chat/model-config'
+import { CHUNK_SIZE } from '@/lib/chat-summaries/config'
 import type { ChatSummary, ChatFacts } from '@/types/database.types'
 import {
   deleteSummary,
@@ -23,6 +25,7 @@ interface ChatSummariesPanelProps {
   facts: Array<Pick<ChatFacts, 'id' | 'start_seq' | 'end_seq' | 'facts' | 'created_at'>>
   totalMessages: number
   latestSequence: number
+  memoryConfig: Required<ChatMemoryConfig>
 }
 
 type SummaryType = ChatSummariesPanelProps['summaries'][number]
@@ -32,6 +35,59 @@ const LEVEL_LABEL: Record<number, string> = {
   2: 'Super Meta Summary',
   1: 'Meta Summary',
   0: 'Chunk Summary',
+}
+
+function formatMessageCountLabel(count: number): string {
+  return `${count} message${count === 1 ? '' : 's'}`
+}
+
+function getMemoryModeLabel(memoryConfig: Required<ChatMemoryConfig>): string {
+  return memoryConfig.mode === 'summary_window' ? 'Summary Window' : 'Prefix'
+}
+
+function getMemoryDescription(memoryConfig: Required<ChatMemoryConfig>): string {
+  if (memoryConfig.mode === 'summary_window') {
+    return `Summary Window mode keeps the most recent ${CHAT_CONTEXT_WINDOW} messages raw and summarizes older conversation in ${CHUNK_SIZE}-message chunks. Updates are generated automatically and may appear with a short delay.`
+  }
+
+  return `Prefix mode keeps the live conversation raw until ${formatMessageCountLabel(memoryConfig.sealEveryMessages)}, then seals older messages into memory while keeping the latest ${formatMessageCountLabel(memoryConfig.retainTailMessages)} raw. Updates are generated automatically and may appear with a short delay.`
+}
+
+function getNextMemoryCheckpoint(
+  messageCount: number,
+  memoryConfig: Required<ChatMemoryConfig>,
+): number {
+  if (memoryConfig.mode === 'summary_window') {
+    const firstCheckpoint = CHUNK_SIZE * 2
+    if (messageCount < firstCheckpoint) {
+      return firstCheckpoint
+    }
+
+    return Math.floor(messageCount / CHUNK_SIZE) * CHUNK_SIZE + CHUNK_SIZE
+  }
+
+  if (messageCount < memoryConfig.sealEveryMessages) {
+    return memoryConfig.sealEveryMessages
+  }
+
+  const sealedChunkSize = memoryConfig.sealEveryMessages - memoryConfig.retainTailMessages
+  if (sealedChunkSize < 1) {
+    return memoryConfig.sealEveryMessages
+  }
+
+  return (
+    memoryConfig.retainTailMessages +
+    (Math.floor((messageCount - memoryConfig.retainTailMessages) / sealedChunkSize) + 1) *
+      sealedChunkSize
+  )
+}
+
+function getEmptyStateText(memoryConfig: Required<ChatMemoryConfig>): string {
+  if (memoryConfig.mode === 'summary_window') {
+    return `No memory summaries yet. This mode starts generating them after ${formatMessageCountLabel(CHUNK_SIZE * 2)}.`
+  }
+
+  return `No sealed memory blocks yet. This mode starts sealing them after ${formatMessageCountLabel(memoryConfig.sealEveryMessages)}.`
 }
 
 function formatTimestamp(value: string | null): string | null {
@@ -59,6 +115,7 @@ export default function ChatSummariesPanel({
   facts: initialFacts,
   totalMessages,
   latestSequence,
+  memoryConfig,
 }: ChatSummariesPanelProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -226,9 +283,17 @@ export default function ChatSummariesPanel({
     [summaries],
   )
 
+  const rawMessageWindow = useMemo(
+    () =>
+      memoryConfig.mode === 'summary_window'
+        ? CHAT_CONTEXT_WINDOW
+        : memoryConfig.retainTailMessages,
+    [memoryConfig.mode, memoryConfig.retainTailMessages],
+  )
+
   const summaryCutoff = useMemo(
-    () => Math.max(currentLatestSequence - CHAT_CONTEXT_WINDOW, 0),
-    [currentLatestSequence],
+    () => Math.max(currentLatestSequence - rawMessageWindow, 0),
+    [currentLatestSequence, rawMessageWindow],
   )
 
   // Disable super meta summaries from context preview
@@ -281,7 +346,11 @@ export default function ChatSummariesPanel({
 
   const hasSummaries =
     superMetaSummaries.length > 0 || metaSummaries.length > 0 || visibleChunkSummaries.length > 0
-  const nextThreshold = messageCount < 20 ? 20 : Math.floor(messageCount / 10) * 10 + 10
+  const hasMemoryEntries = hasSummaries || facts.length > 0
+  const modeLabel = getMemoryModeLabel(memoryConfig)
+  const memoryDescription = getMemoryDescription(memoryConfig)
+  const nextCheckpoint = getNextMemoryCheckpoint(messageCount, memoryConfig)
+  const emptyStateText = getEmptyStateText(memoryConfig)
 
   const startSummaryEdit = (summaryId: string, currentSummary: string) => {
     setEditingFactId(null)
@@ -401,13 +470,8 @@ export default function ChatSummariesPanel({
     <aside className="h-full w-full border-l border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 flex-shrink-0">
       <div className="h-full overflow-y-auto p-4 lg:p-6">
         <div className="mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Long-term Memory Summary
-          </h2>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Recent 20 messages are kept as-is, while earlier conversations are summarized in groups
-            of 10. Summaries are generated automatically, with a slight delay possible.
-          </p>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Long-term Memory</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{memoryDescription}</p>
         </div>
 
         <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
@@ -417,7 +481,11 @@ export default function ChatSummariesPanel({
                 Total messages: <span className="font-medium">{messageCount}</span>
               </p>
               <p className="mt-1">
-                Next summary at: <span className="font-medium">{nextThreshold}</span> messages
+                Current mode: <span className="font-medium">{modeLabel}</span>
+              </p>
+              <p className="mt-1">
+                Next memory checkpoint: <span className="font-medium">{nextCheckpoint}</span>{' '}
+                messages
               </p>
             </div>
             <button
@@ -457,9 +525,9 @@ export default function ChatSummariesPanel({
           </div>
         </div>
 
-        {!hasSummaries && (
+        {!hasMemoryEntries && (
           <div className="rounded-lg border border-dashed border-gray-300 bg-white p-4 text-center text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400">
-            No summaries generated yet. Summaries will be created automatically after 20+ messages.
+            {emptyStateText}
           </div>
         )}
 

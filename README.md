@@ -1,14 +1,14 @@
 # RebelAI
 
-**Self-hostable BYOK Character Chat Platform**
+**Open-source, self-hosted character chat — your keys, your data, your server.**
 
 [![CI](https://github.com/devforai-creator/rebel-ai/actions/workflows/test.yml/badge.svg)](https://github.com/devforai-creator/rebel-ai/actions/workflows/test.yml)
 [![Version](https://img.shields.io/badge/version-0.9.3-blue)](#)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
-> **v0.9.3** - RBX-native character chat platform with realtime queueing, long-term memory, and declarative character UI.
-> Built with Next.js 15, Supabase, and Vercel AI SDK.
-> Responsive chat and editing flows work across desktop and mobile.
+> **v0.9.3** — A character chat web app you deploy on your own infrastructure.
+> Bring your own API keys to control costs. Keep conversations and characters in your own database.
+> Runs on free-tier cloud (Vercel Hobby + Supabase Free) or your own stack.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdevforai-creator%2Frebel-ai&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,CHAT_ADMIN_SECRET,SUMMARY_GENERATION_SECRET,CRON_SECRET,INTERNAL_API_ORIGIN)
 
@@ -19,8 +19,9 @@
 
 ## Overview
 
-**A self-hostable BYOK character chat platform.**
-Users manage their own API keys to control costs, with **RBX as the native format** for character packaging, assets, modules, and safe declarative UI.
+An open-source character chat web app that runs on your own infrastructure. You bring your own LLM API keys, and your conversations, characters, and data stay in your own database — nothing is hosted by a third party.
+
+Web-based by design: server-side long-term memory, background chat generation, and cross-device access are architectural choices, not add-ons. **RBX** is the native character package format, and **Safe UGC UI (SUU)** renders declarative character UI without script execution.
 
 ### Key Features
 

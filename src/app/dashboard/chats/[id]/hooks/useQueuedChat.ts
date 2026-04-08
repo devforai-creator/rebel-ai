@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { toast } from 'sonner'
 import type { Message } from '@/types/database.types'
@@ -13,6 +13,7 @@ import {
 import { isVisibleMessageStatus } from '@/lib/chat/message-status'
 import { resolveAlternateApiKeyId } from '@/lib/chat/alternate-models'
 import { pollJobStatus as pollJobStatusPure, DEFAULT_JOB_POLLER_CONFIG } from './job-poller'
+import { reconcileAssistantMessage } from './reconcile-assistant-message'
 
 export interface UseQueuedChatParams {
   chatId: string
@@ -55,9 +56,7 @@ export function useQueuedChat({
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [pendingJobId, setPendingJobId] = useState<string | null>(null)
-  const [pendingRegenerationTargetId, setPendingRegenerationTargetId] = useState<string | null>(
-    null,
-  )
+  const pendingRegenerationTargetIdRef = useRef<string | null>(null)
   const [error, setError] = useState<Error | null>(null)
 
   const handleInputChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -66,54 +65,36 @@ export function useQueuedChat({
 
   const upsertAssistantMessage = useCallback(
     (assistantMessage: Message) => {
-      if (!isVisibleMessageStatus(assistantMessage.message_status)) {
-        if (pendingRegenerationTargetId === assistantMessage.id) {
-          return
-        }
-
-        setMessages((prev) => prev.filter((msg) => msg.id !== assistantMessage.id))
-        persistedMessageIds.current.delete(assistantMessage.id)
-        debugInfoMap.current.delete(assistantMessage.id)
-        return
-      }
-
       const debugInfo = assistantMessage.debug_info as DebugInfo | null | undefined
       if (debugInfo) {
         debugInfoMap.current.set(assistantMessage.id, debugInfo)
       }
-      persistedMessageIds.current.add(assistantMessage.id)
 
       setMessages((prev) => {
-        const mapped = mapMessageToDisplay(assistantMessage)
-        const existingIndex = prev.findIndex((msg) => msg.id === mapped.id)
-        if (existingIndex !== -1) {
-          const next = [...prev]
-          next[existingIndex] = mapped
-          return next
+        const pendingRegenerationTargetId = pendingRegenerationTargetIdRef.current
+        const { nextMessages, idsToForget } = reconcileAssistantMessage({
+          prevMessages: prev,
+          assistantMessage,
+          pendingRegenerationTargetId,
+        })
+
+        if (isVisibleMessageStatus(assistantMessage.message_status)) {
+          persistedMessageIds.current.add(assistantMessage.id)
         }
 
-        if (pendingRegenerationTargetId) {
-          const targetIndex = prev.findIndex((msg) => msg.id === pendingRegenerationTargetId)
-          if (targetIndex !== -1) {
-            const next = [...prev]
-            next[targetIndex] = mapped
-            next.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
-            return next
+        for (const id of idsToForget) {
+          persistedMessageIds.current.delete(id)
+          debugInfoMap.current.delete(id)
+
+          if (pendingRegenerationTargetId === id) {
+            pendingRegenerationTargetIdRef.current = null
           }
         }
 
-        const next = [...prev, mapped]
-        next.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
-        return next
+        return nextMessages
       })
-
-      if (pendingRegenerationTargetId) {
-        persistedMessageIds.current.delete(pendingRegenerationTargetId)
-        debugInfoMap.current.delete(pendingRegenerationTargetId)
-        setPendingRegenerationTargetId(null)
-      }
     },
-    [debugInfoMap, pendingRegenerationTargetId, persistedMessageIds],
+    [debugInfoMap, persistedMessageIds],
   )
 
   const fetchLatestMessage = useCallback(async () => {
@@ -192,7 +173,7 @@ export function useQueuedChat({
           },
           onError: (error) => {
             setPendingJobId(null)
-            setPendingRegenerationTargetId(null)
+            pendingRegenerationTargetIdRef.current = null
             const isTimeout = error.message.includes('timed out')
             toast.error(error.message, {
               duration: isTimeout ? 10000 : 5000,
@@ -308,7 +289,7 @@ export function useQueuedChat({
         const normalized = err instanceof Error ? err : new Error('Chat request failed.')
         setError(normalized)
         if (isRegeneration) {
-          setPendingRegenerationTargetId(null)
+          pendingRegenerationTargetIdRef.current = null
         }
         // Only show toast if not already shown by pollJobStatus
         if (
@@ -372,7 +353,7 @@ export function useQueuedChat({
         return
       }
 
-      setPendingRegenerationTargetId(targetId)
+      pendingRegenerationTargetIdRef.current = targetId
 
       const payload = buildSanitizedMessages(historyMessages, messages)
       void sendChatRequest({

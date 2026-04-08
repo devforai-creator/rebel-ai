@@ -4,7 +4,7 @@ import { ensureUserFirstForAnthropic } from '@/lib/chat/anthropic-user-first'
 import { buildMemoryPlan } from '@/lib/chat-memory'
 import { getGlobalSystemPrompt } from '@/lib/chat/global-system-prompt'
 import { parseChatJobPayload, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
-import { streamText, APICallError } from 'ai'
+import { streamText } from 'ai'
 import { claimPendingJob } from '@/lib/chat/job-queue'
 import { getProviderOptions } from '@/lib/llm/provider-options'
 import { resolvePromptCacheDecision, resolveAnthropicCacheDecision } from '@/lib/llm/prompt-cache'
@@ -19,6 +19,7 @@ import { resolveInternalApiOrigin } from '@/lib/internal-api-origin'
 import { applyBilingualContext, isBilingualEnabled } from '@/lib/chat/bilingual-context'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
+import { normalizeProviderError } from '@/lib/llm/provider-error'
 import { buildLorebookDynamicContext } from '@/lib/lorebook/runtime'
 import { loadGenerationTranscript } from '@/lib/chat/turns'
 import { buildLanguageModel } from './model-factory'
@@ -65,7 +66,8 @@ async function collectTextFromStreamWithSnapshots({
   supabase,
   chatId,
   jobId,
-  textStream,
+  stream,
+  provider,
   regenerateAssistantMessageId,
   updateIntervalMs = 120,
   now = () => performance.now(),
@@ -73,7 +75,17 @@ async function collectTextFromStreamWithSnapshots({
   supabase: AdminSupabaseClient
   chatId: string
   jobId: string
-  textStream: AsyncIterable<string> | Iterable<string>
+  stream: {
+    textStream: AsyncIterable<string> | Iterable<string>
+    fullStream?:
+      | AsyncIterable<{ type: string; text?: string; error?: unknown }>
+      | Iterable<{
+          type: string
+          text?: string
+          error?: unknown
+        }>
+  }
+  provider: string
   regenerateAssistantMessageId: string | null
   updateIntervalMs?: number
   now?: () => number
@@ -122,13 +134,35 @@ async function collectTextFromStreamWithSnapshots({
     }
   }
 
-  for await (const chunk of textStream) {
-    fullText += chunk
+  if (stream.fullStream) {
+    for await (const part of stream.fullStream) {
+      if (part.type === 'text-delta' && typeof part.text === 'string') {
+        fullText += part.text
 
-    const currentTime = now()
-    if (currentTime - lastBroadcastAt >= updateIntervalMs) {
-      sendSnapshot(fullText)
-      lastBroadcastAt = currentTime
+        const currentTime = now()
+        if (currentTime - lastBroadcastAt >= updateIntervalMs) {
+          sendSnapshot(fullText)
+          lastBroadcastAt = currentTime
+        }
+      }
+
+      if (part.type === 'error') {
+        const normalizedError = normalizeProviderError({
+          provider,
+          error: part.error,
+        })
+        throw new Error(normalizedError.userMessage)
+      }
+    }
+  } else {
+    for await (const chunk of stream.textStream) {
+      fullText += chunk
+
+      const currentTime = now()
+      if (currentTime - lastBroadcastAt >= updateIntervalMs) {
+        sendSnapshot(fullText)
+        lastBroadcastAt = currentTime
+      }
     }
   }
 
@@ -584,28 +618,8 @@ async function executeJob({
       ...streamPayloadPlan.streamRequest,
     })
   } catch (error) {
-    // Handle Gemini content blocking errors
-    if (APICallError.isInstance(error) && error.responseBody) {
-      let blockReason: string | undefined
-      try {
-        const parsedBody = JSON.parse(error.responseBody)
-        blockReason = parsedBody?.promptFeedback?.blockReason
-      } catch (parseError) {
-        console.warn('[Chat Job Runner] Failed to parse API error response body', {
-          parseError: parseError instanceof Error ? parseError.message : String(parseError),
-        })
-      }
-
-      if (blockReason === 'PROHIBITED_CONTENT') {
-        throw new Error(
-          'Google Gemini blocked the prompt as prohibited content. ' +
-            'Try using a different LLM provider (OpenAI, Anthropic) or modify the character/prompt content.',
-        )
-      }
-    }
-
-    // Re-throw if it's not a handled content blocking error
-    throw error
+    const normalizedError = normalizeProviderError({ provider, error })
+    throw new Error(normalizedError.userMessage)
   }
 
   let fullText = ''
@@ -614,7 +628,8 @@ async function executeJob({
       supabase,
       chatId,
       jobId,
-      textStream: stream.textStream,
+      stream,
+      provider,
       regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
     })
   } catch (error) {
@@ -664,9 +679,12 @@ async function executeJob({
   const assistantText = fullText.trim()
 
   if (!assistantText) {
-    const filteredMessage = contentFilterInfo.blocked
-      ? 'Blocked by Google Gemini content filter. Please disable safe mode or refine your input and try again.'
-      : 'The assistant returned an empty response. Please try again later.'
+    const filteredMessage =
+      finishReason === 'error'
+        ? 'The provider returned an error before producing text. Please try again later.'
+        : contentFilterInfo.blocked
+          ? 'Blocked by Google Gemini content filter. Please disable safe mode or refine your input and try again.'
+          : 'The assistant returned an empty response. Please try again later.'
 
     // Error is stored in chat_jobs.error and shown via toast popup
     throw new Error(filteredMessage)

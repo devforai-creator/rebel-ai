@@ -663,6 +663,56 @@ describe('processChatJobs', () => {
     expect(supabase.messages).toHaveLength(0)
   })
 
+  it('maps OpenAI rate limit stream errors to a user-facing message', async () => {
+    const supabase = createChatJobRunnerSupabaseMock({
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    decryptSecretMock.mockResolvedValue('sk-test')
+    parseChatJobPayloadMock.mockReturnValue(
+      buildValidPayload({
+        requestId: 'req-openai-rate-limit',
+        provider: 'openai',
+        modelName: 'gpt-5-mini',
+      }),
+    )
+    streamTextMock.mockResolvedValue({
+      textStream: [],
+      fullStream: (async function* () {
+        yield {
+          type: 'error',
+          error: {
+            type: 'invalid_request_error',
+            code: 'rate_limit_exceeded',
+            message: "We're currently processing too many requests — please try again later.",
+            param: null,
+          },
+        }
+      })(),
+      finishReason: Promise.resolve('error'),
+      providerMetadata: Promise.resolve({}),
+      usage: Promise.resolve({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
+    })
+
+    claimPendingJobMock.mockResolvedValueOnce({
+      id: 'job-openai-rate-limit',
+      payload: { ok: true },
+    })
+    claimPendingJobMock.mockResolvedValueOnce(null)
+
+    const { processChatJobs } = await import('./service')
+    const result = await processChatJobs(1)
+
+    expect(result.results[0]).toMatchObject({
+      jobId: 'job-openai-rate-limit',
+      status: 'error',
+    })
+    expect(result.results[0].error).toContain('OpenAI is currently rate limiting requests')
+    expect(result.results[0].error).not.toContain('empty response')
+    expect(supabase.messages).toHaveLength(0)
+  })
+
   it('rethrows original API error when Gemini response body is not parseable JSON', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       rpc: { get_decrypted_secret: () => decryptSecretMock() },
@@ -703,6 +753,51 @@ describe('processChatJobs', () => {
       status: 'error',
     })
     expect(result.results[0].error).toContain('upstream api failure')
+    expect(supabase.messages).toHaveLength(0)
+  })
+
+  it('passes through unknown upstream API messages when no known mapping exists', async () => {
+    const supabase = createChatJobRunnerSupabaseMock({
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    decryptSecretMock.mockResolvedValue('sk-test')
+    parseChatJobPayloadMock.mockReturnValue(
+      buildValidPayload({
+        requestId: 'req-unknown-upstream-error',
+        provider: 'openai',
+        modelName: 'gpt-5-mini',
+      }),
+    )
+
+    const unknownUpstreamError = new MockAPICallError({
+      message: 'custom upstream failure',
+      responseBody: JSON.stringify({
+        error: {
+          type: 'weird_provider_error',
+          code: 'custom_failure',
+          message: 'custom upstream failure',
+          param: null,
+        },
+      }),
+    })
+    streamTextMock.mockRejectedValue(unknownUpstreamError)
+
+    claimPendingJobMock.mockResolvedValueOnce({
+      id: 'job-unknown-upstream-error',
+      payload: { ok: true },
+    })
+    claimPendingJobMock.mockResolvedValueOnce(null)
+
+    const { processChatJobs } = await import('./service')
+    const result = await processChatJobs(1)
+
+    expect(result.results[0]).toMatchObject({
+      jobId: 'job-unknown-upstream-error',
+      status: 'error',
+    })
+    expect(result.results[0].error).toContain('custom upstream failure')
     expect(supabase.messages).toHaveLength(0)
   })
 

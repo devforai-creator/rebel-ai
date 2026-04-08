@@ -283,6 +283,8 @@ describe('buildStreamPayloadPlan', () => {
     })
 
     expect(result.streamRequest.messages).toHaveLength(5)
+    expect(result.streamRequest.messages[0]).not.toHaveProperty('providerOptions')
+    expect(result.streamRequest.messages[1]).not.toHaveProperty('providerOptions')
     expect(result.streamRequest.messages[4]).toMatchObject({
       role: 'user',
       content: 'latest user',
@@ -297,6 +299,86 @@ describe('buildStreamPayloadPlan', () => {
       { role: 'user', content: 'older live' },
       { role: 'assistant', content: 'older reply' },
       { role: 'user', content: 'latest user' },
+    ])
+  })
+
+  it('adds an explicit system breakpoint before dynamic lorebook while keeping automatic caching', () => {
+    const result = buildStreamPayloadPlan({
+      ...BASE_ARGS,
+      provider: 'anthropic',
+      finalSystemPrompt: 'STATIC\n\nSEALED\n\nLOREBOOK',
+      staticSystemPrompt: 'STATIC',
+      dynamicContext: 'SEALED\n\nLOREBOOK',
+      anthropicCache: { enabled: true, ttl: '5m', minTokens: 1024 },
+      promptBlocks: [
+        {
+          role: 'system',
+          content: 'STATIC',
+          cachePreference: 'prefer-cache',
+          stability: 'static',
+        },
+        {
+          role: 'system',
+          content: 'SEALED',
+          cachePreference: 'prefer-cache',
+          stability: 'sealed',
+        },
+        {
+          role: 'system',
+          content: 'LOREBOOK',
+          cachePreference: 'avoid-cache',
+          stability: 'sealed',
+        },
+        {
+          role: 'user',
+          content: 'older live',
+          cachePreference: 'prefer-cache',
+          stability: 'live',
+        },
+        {
+          role: 'assistant',
+          content: 'older reply',
+          cachePreference: 'prefer-cache',
+          stability: 'live',
+        },
+      ],
+      anthropicConversationMessages: [
+        { role: 'user', content: 'older live' },
+        { role: 'assistant', content: 'older reply' },
+      ],
+    })
+
+    expect(result.streamRequest.providerOptions).toEqual({
+      anthropic: {
+        cacheControl: { type: 'ephemeral' },
+      },
+    })
+
+    expect(result.streamRequest.messages).toHaveLength(5)
+    expect(result.streamRequest.messages[0]).toMatchObject({
+      role: 'system',
+      content: 'STATIC',
+    })
+    expect(result.streamRequest.messages[0]).not.toHaveProperty('providerOptions')
+    expect(result.streamRequest.messages[1]).toMatchObject({
+      role: 'system',
+      content: 'SEALED',
+      providerOptions: {
+        anthropic: {
+          cacheControl: { type: 'ephemeral' },
+        },
+      },
+    })
+    expect(result.streamRequest.messages[2]).toMatchObject({
+      role: 'system',
+      content: 'LOREBOOK',
+    })
+    expect(result.streamRequest.messages[2]).not.toHaveProperty('providerOptions')
+
+    expect(result.actualPayload.systemMessages).toEqual([
+      { role: 'system', content: 'STATIC' },
+      { role: 'system', content: 'SEALED', cached: true },
+      { role: 'system', content: 'LOREBOOK' },
     ])
   })
 })

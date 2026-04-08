@@ -15,6 +15,24 @@ type StreamRequest = {
   providerOptions?: SharedV2ProviderOptions
 }
 
+function buildAnthropicMessage(
+  role: 'system' | 'user' | 'assistant',
+  content: string,
+  ttl?: AnthropicCacheDecision['ttl'],
+): CoreMessage {
+  if (!ttl) {
+    return { role, content }
+  }
+
+  return {
+    role,
+    content,
+    providerOptions: {
+      anthropic: buildAnthropicCacheControl(ttl),
+    },
+  }
+}
+
 function withAnthropicAutomaticCaching(
   providerOptions: SharedV2ProviderOptions | undefined,
   anthropicCache: AnthropicCacheDecision | null,
@@ -33,6 +51,43 @@ function withAnthropicAutomaticCaching(
       ...buildAnthropicCacheControl(anthropicCache.ttl),
     },
   }
+}
+
+function findSystemBreakpointBeforeDynamicSuffix(promptBlocks: MemoryPromptBlock[]): number {
+  let systemIndex = -1
+  let lastStableSystemIndex = -1
+  let sawDynamicSystemSuffix = false
+  let hasCacheableLiveAfter = false
+
+  for (const block of promptBlocks) {
+    if (block.role === 'system') {
+      systemIndex += 1
+
+      if (!sawDynamicSystemSuffix) {
+        if (block.cachePreference === 'avoid-cache') {
+          sawDynamicSystemSuffix = true
+        } else {
+          lastStableSystemIndex = systemIndex
+        }
+      }
+
+      continue
+    }
+
+    if (
+      sawDynamicSystemSuffix &&
+      block.stability === 'live' &&
+      block.cachePreference !== 'avoid-cache'
+    ) {
+      hasCacheableLiveAfter = true
+    }
+  }
+
+  if (!sawDynamicSystemSuffix || !hasCacheableLiveAfter) {
+    return -1
+  }
+
+  return lastStableSystemIndex
 }
 
 type BuildStreamPayloadPlanArgs = {
@@ -79,13 +134,25 @@ export function buildStreamPayloadPlan({
       const conversationMessages: Array<{ role: string; content: string }> = []
       const messagesForAnthropic: CoreMessage[] = []
       const mergedProviderOptions = withAnthropicAutomaticCaching(providerOptions, anthropicCache)
+      const explicitSystemBreakpointIndex = anthropicCache?.enabled
+        ? findSystemBreakpointBeforeDynamicSuffix(promptBlocks)
+        : -1
 
-      for (const block of systemBlocks) {
-        messagesForAnthropic.push({
+      for (const [index, block] of systemBlocks.entries()) {
+        const isExplicitBreakpoint = index === explicitSystemBreakpointIndex
+
+        messagesForAnthropic.push(
+          buildAnthropicMessage(
+            'system',
+            block.content,
+            isExplicitBreakpoint ? anthropicCache?.ttl : undefined,
+          ),
+        )
+        systemMessages.push({
           role: 'system',
           content: block.content,
+          cached: isExplicitBreakpoint || undefined,
         })
-        systemMessages.push({ role: 'system', content: block.content })
       }
 
       for (const message of anthropicConversationMessages) {

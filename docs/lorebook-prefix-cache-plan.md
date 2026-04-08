@@ -7,7 +7,7 @@ The main goal is to avoid losing product-level chat behavior during testing, wit
 ## Current State
 
 - The active chat-generation path now includes lorebook again through a single rendered dynamic block.
-- Anthropic transport currently uses request-level automatic caching, not block-level explicit breakpoints.
+- Anthropic transport uses request-level automatic caching and adds one explicit breakpoint on the stable prefix immediately before the dynamic lorebook block.
 - `prefix_live_blocks` is working, but stable-vs-dynamic lorebook separation is still pending.
 
 ## Problem
@@ -63,6 +63,7 @@ Why this phase exists:
 Tradeoff:
 
 - Cache behavior will be worse than the ideal architecture because the whole lorebook contribution is treated as changing suffix context.
+- The explicit guard before lorebook protects the stable prefix, but the lorebook block itself still churns as one unit.
 
 ### Phase 2: Split Stable and Dynamic Lorebook
 

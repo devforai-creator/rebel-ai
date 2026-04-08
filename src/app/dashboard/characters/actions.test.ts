@@ -275,6 +275,21 @@ describe('character actions template syntax handling', () => {
     expect(validateModuleOwnershipMock).not.toHaveBeenCalled()
   })
 
+  it('returns a validation error when the create payload is missing required fields', async () => {
+    const supabase = buildSupabase()
+    createClientMock.mockResolvedValue(supabase)
+    const { createCharacter } = await import('./actions')
+
+    const formData = buildCharacterFormData()
+    formData.delete('name')
+
+    const result = await createCharacter(formData)
+
+    expect(result).toEqual({ error: 'Character name is required.' })
+    expect(validateModuleOwnershipMock).not.toHaveBeenCalled()
+    expect(supabase.state.characterInsertPayloads).toHaveLength(0)
+  })
+
   it('rejects unauthorized module selections on create', async () => {
     const supabase = buildSupabase()
     createClientMock.mockResolvedValue(supabase)
@@ -436,6 +451,20 @@ describe('character actions template syntax handling', () => {
     const result = await updateCharacter('char-1', buildCharacterFormData())
 
     expect(result).toEqual({ error: 'Login required' })
+  })
+
+  it('returns a validation error when the update payload is missing required fields', async () => {
+    const supabase = buildSupabase()
+    createClientMock.mockResolvedValue(supabase)
+    const { updateCharacter } = await import('./actions')
+
+    const formData = buildCharacterFormData()
+    formData.delete('system_prompt')
+
+    const result = await updateCharacter('char-1', formData)
+
+    expect(result).toEqual({ error: 'System prompt is required.' })
+    expect(supabase.state.characterUpdateCalls).toHaveLength(0)
   })
 
   it('rejects unauthorized module selections on update', async () => {

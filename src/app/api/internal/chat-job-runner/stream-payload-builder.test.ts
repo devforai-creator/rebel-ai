@@ -10,7 +10,6 @@ const BASE_ARGS = {
     cachePreference: 'prefer-cache' | 'no-preference' | 'avoid-cache'
     stability: 'static' | 'sealed' | 'live'
   }>,
-  anthropicPlaceholderAdded: false,
   recentMessages: [] as Array<{ role: 'user' | 'assistant'; content: string }>,
   googleCacheResult: null,
   messagesToCacheForGoogle: [] as Array<{ role: 'user' | 'assistant'; content: string }>,

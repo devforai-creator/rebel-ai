@@ -2,8 +2,30 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { z } from 'zod'
+import { getFormDataErrorMessage, safeParseFormData } from '@/lib/form-data'
 import { validateModuleOwnership } from '@/lib/modules/ownership'
 import { createClient } from '@/lib/supabase/server'
+
+const characterFormSchema = z.object({
+  name: z.string().min(1, 'Character name is required.'),
+  description: z.string().optional().default(''),
+  system_prompt: z.string().min(1, 'System prompt is required.'),
+  greeting_message: z.string().optional(),
+  module_ids: z.string().optional(),
+})
+
+function parseCharacterFormData(formData: FormData) {
+  const parsed = safeParseFormData(formData, characterFormSchema)
+
+  if (!parsed.success) {
+    return {
+      error: getCharacterFormErrorMessage(parsed.error),
+    }
+  }
+
+  return { data: parsed.data }
+}
 
 export async function createCharacter(formData: FormData) {
   const supabase = await createClient()
@@ -16,7 +38,13 @@ export async function createCharacter(formData: FormData) {
     return { error: 'Login required' }
   }
 
-  const requestedModuleIds = parseModuleIds(formData.get('module_ids') as string | null)
+  const parsedForm = parseCharacterFormData(formData)
+
+  if ('error' in parsedForm) {
+    return parsedForm
+  }
+
+  const requestedModuleIds = parseModuleIds(parsedForm.data.module_ids ?? null)
   let authorizedModuleIds: string[] = []
 
   if (requestedModuleIds.length > 0) {
@@ -37,10 +65,10 @@ export async function createCharacter(formData: FormData) {
     .from('characters')
     .insert({
       user_id: user.id,
-      name: formData.get('name') as string,
-      description: formData.get('description') as string,
-      system_prompt: formData.get('system_prompt') as string,
-      greeting_message: formData.get('greeting_message') as string,
+      name: parsedForm.data.name,
+      description: parsedForm.data.description,
+      system_prompt: parsedForm.data.system_prompt,
+      greeting_message: normalizeNullableText(parsedForm.data.greeting_message),
       visibility: 'private',
     })
     .select()
@@ -91,7 +119,13 @@ export async function updateCharacter(id: string, formData: FormData) {
     return { error: 'Login required' }
   }
 
-  const requestedModuleIds = parseModuleIds(formData.get('module_ids') as string | null)
+  const parsedForm = parseCharacterFormData(formData)
+
+  if ('error' in parsedForm) {
+    return parsedForm
+  }
+
+  const requestedModuleIds = parseModuleIds(parsedForm.data.module_ids ?? null)
   let authorizedModuleIds: string[] = []
 
   if (requestedModuleIds.length > 0) {
@@ -111,10 +145,10 @@ export async function updateCharacter(id: string, formData: FormData) {
   const { error } = await supabase
     .from('characters')
     .update({
-      name: formData.get('name') as string,
-      description: formData.get('description') as string,
-      system_prompt: formData.get('system_prompt') as string,
-      greeting_message: formData.get('greeting_message') as string,
+      name: parsedForm.data.name,
+      description: parsedForm.data.description,
+      system_prompt: parsedForm.data.system_prompt,
+      greeting_message: normalizeNullableText(parsedForm.data.greeting_message),
     })
     .eq('id', id)
     .eq('user_id', user.id)
@@ -191,4 +225,23 @@ function parseModuleIds(raw: string | null): string[] {
     .split(',')
     .map((value) => value.trim())
     .filter((value) => value.length > 0)
+}
+
+function normalizeNullableText(value: string | undefined): string | null {
+  return value === undefined ? null : value
+}
+
+function getCharacterFormErrorMessage(error: z.ZodError): string {
+  const firstIssue = error.issues[0]
+  const field = typeof firstIssue?.path[0] === 'string' ? firstIssue.path[0] : null
+
+  if (field === 'name') {
+    return 'Character name is required.'
+  }
+
+  if (field === 'system_prompt') {
+    return 'System prompt is required.'
+  }
+
+  return getFormDataErrorMessage(error, 'Invalid character form submission.')
 }

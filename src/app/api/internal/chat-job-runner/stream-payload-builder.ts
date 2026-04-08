@@ -97,7 +97,6 @@ type BuildStreamPayloadPlanArgs = {
   dynamicContext: string | null
   anthropicCache: AnthropicCacheDecision | null
   anthropicConversationMessages: ConversationMessage[]
-  anthropicPlaceholderAdded: boolean
   promptBlocks: MemoryPromptBlock[]
   recentMessages: SanitizedMessage[]
   googleCacheResult: CreateGoogleCacheResult | null
@@ -119,7 +118,6 @@ export function buildStreamPayloadPlan({
   dynamicContext,
   anthropicCache,
   anthropicConversationMessages,
-  anthropicPlaceholderAdded,
   promptBlocks,
   recentMessages,
   googleCacheResult,

@@ -1,8 +1,11 @@
 'use server'
 
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { getFormDataErrorMessage, safeParseFormData } from '@/lib/form-data'
+import { PROVIDERS } from '@/lib/providers/catalog'
 import type { ApiServiceTier, Database, Provider, ReasoningEffort } from '@/types/database.types'
 import { MAX_API_KEY_LENGTH, PROVIDER_RULES } from './providerRules'
 
@@ -25,6 +28,53 @@ type VaultRpcClient = {
 }
 
 const adminSupabase = createAdminClient() as unknown as VaultRpcClient
+const allowedServiceTiers: ApiServiceTier[] = ['standard', 'flex', 'priority', 'batch']
+const allowedReasoningEfforts: ReasoningEffort[] = ['none', 'low', 'medium', 'high']
+
+const apiKeyFormSchema = z.object({
+  provider: z
+    .string()
+    .refine((value) => PROVIDERS.includes(value as Provider), {
+      message: 'Provider를 선택해주세요.',
+    }),
+  key_name: z
+    .string()
+    .transform((value) => value.trim())
+    .refine((value) => value.length > 0, {
+      message: '키 이름을 입력해주세요.',
+    }),
+  api_key: z
+    .string()
+    .transform((value) => value.trim())
+    .refine((value) => value.length > 0, {
+      message: 'API 키를 입력해주세요.',
+    }),
+  model_preference: z.string().optional().default(''),
+  service_tier: z
+    .string()
+    .optional()
+    .default('standard')
+    .transform((value) => value.trim().toLowerCase()),
+  reasoning_effort: z
+    .string()
+    .optional()
+    .transform((value) => value?.trim().toLowerCase()),
+})
+
+function parseApiKeyFormData(
+  formData: FormData,
+): { data: z.infer<typeof apiKeyFormSchema> } | { error: string; success: false } {
+  const parsed = safeParseFormData(formData, apiKeyFormSchema)
+
+  if (!parsed.success) {
+    return {
+      error: getApiKeyFormErrorMessage(parsed.error),
+      success: false,
+    } satisfies ApiKeyFormState
+  }
+
+  return { data: parsed.data }
+}
 
 export type ApiKeyFormState = {
   error: string | null
@@ -46,36 +96,28 @@ export async function createApiKey(
     return { error: '로그인이 필요합니다', success: false }
   }
 
-  const provider = formData.get('provider') as Provider
-  const keyName = (formData.get('key_name') as string | null)?.trim() ?? ''
-  const apiKey = (formData.get('api_key') as string | null)?.trim() ?? ''
-  const modelPreference = formData.get('model_preference') as string
-  const rawServiceTier =
-    (formData.get('service_tier') as string | null)?.trim().toLowerCase() ?? 'standard'
-  const allowedServiceTiers: ApiServiceTier[] = ['standard', 'flex', 'priority', 'batch']
+  const parsedForm = parseApiKeyFormData(formData)
+
+  if ('error' in parsedForm) {
+    return parsedForm
+  }
+
+  const provider = parsedForm.data.provider as Provider
+  const keyName = parsedForm.data.key_name
+  const apiKey = parsedForm.data.api_key
+  const modelPreference = parsedForm.data.model_preference
+  const rawServiceTier = parsedForm.data.service_tier
   const normalizedTier = allowedServiceTiers.includes(rawServiceTier as ApiServiceTier)
     ? (rawServiceTier as ApiServiceTier)
     : 'standard'
   const serviceTier: ApiServiceTier = provider === 'openai' ? normalizedTier : 'standard'
-  const rawReasoningEffort =
-    (formData.get('reasoning_effort') as string | null)?.trim().toLowerCase() ?? null
-  const allowedReasoningEfforts: ReasoningEffort[] = ['none', 'low', 'medium', 'high']
+  const rawReasoningEffort = parsedForm.data.reasoning_effort ?? null
   const reasoningEffort: ReasoningEffort | null =
-    rawReasoningEffort && allowedReasoningEfforts.includes(rawReasoningEffort as ReasoningEffort)
+    provider === 'openai' &&
+    rawReasoningEffort &&
+    allowedReasoningEfforts.includes(rawReasoningEffort as ReasoningEffort)
       ? (rawReasoningEffort as ReasoningEffort)
       : null
-
-  if (!keyName) {
-    return { error: '키 이름을 입력해주세요.', success: false }
-  }
-
-  if (!apiKey) {
-    return { error: 'API 키를 입력해주세요.', success: false }
-  }
-
-  if (!provider) {
-    return { error: 'Provider를 선택해주세요.', success: false }
-  }
 
   if (apiKey.length > MAX_API_KEY_LENGTH) {
     return {
@@ -248,6 +290,25 @@ export async function deleteApiKey(id: string) {
 
   revalidatePath('/dashboard/api-keys')
   return { success: true }
+}
+
+function getApiKeyFormErrorMessage(error: z.ZodError): string {
+  const firstIssue = error.issues[0]
+  const field = typeof firstIssue?.path[0] === 'string' ? firstIssue.path[0] : null
+
+  if (field === 'provider') {
+    return 'Provider를 선택해주세요.'
+  }
+
+  if (field === 'key_name') {
+    return '키 이름을 입력해주세요.'
+  }
+
+  if (field === 'api_key') {
+    return 'API 키를 입력해주세요.'
+  }
+
+  return getFormDataErrorMessage(error, '입력값을 확인해주세요.')
 }
 
 export async function toggleApiKey(id: string, isActive: boolean) {

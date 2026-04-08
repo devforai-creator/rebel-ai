@@ -458,7 +458,6 @@ async function executeJob({
       dynamicContext,
       anthropicCache,
       anthropicConversationMessages,
-      anthropicPlaceholderAdded,
       promptBlocks,
       recentMessages,
       googleCacheResult,

@@ -9,6 +9,7 @@ export interface ChatGenerationJobPayload {
   version: typeof CHAT_JOB_PAYLOAD_VERSION
   requestId: string
   chatId: string
+  turnId: string | null
   userId: string
   apiKeyId: string
   provider: Provider
@@ -59,6 +60,7 @@ export function parseChatJobPayload(payload: unknown): ChatGenerationJobPayload 
     version: CHAT_JOB_PAYLOAD_VERSION,
     requestId: candidate.requestId,
     chatId: candidate.chatId,
+    turnId: typeof candidate.turnId === 'string' ? candidate.turnId : null,
     userId: candidate.userId,
     apiKeyId: candidate.apiKeyId,
     provider: candidate.provider,

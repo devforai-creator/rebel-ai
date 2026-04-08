@@ -11,6 +11,7 @@ const basePayload: ChatGenerationJobPayload = {
   version: CHAT_JOB_PAYLOAD_VERSION,
   requestId: 'req-1',
   chatId: 'chat-1',
+  turnId: null,
   userId: 'user-1',
   apiKeyId: 'key-1',
   provider: 'openai',

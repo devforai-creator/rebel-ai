@@ -38,6 +38,7 @@ type RawCharacterTable = PublicTables['characters']
 type RawAnnouncementTable = PublicTables['announcements']
 type RawMessageTable = PublicTables['messages']
 type RawChatFactsTable = PublicTables['chat_facts']
+type RawChatTurnTable = PublicTables['chat_turns']
 
 type ProfileRow = RawProfileTable['Row']
 type ProfileInsertRow = RawProfileTable['Insert']
@@ -62,6 +63,10 @@ type MessageUpdateRow = RawMessageTable['Update']
 type ChatFactsRow = RawChatFactsTable['Row']
 type ChatFactsInsertRow = RawChatFactsTable['Insert']
 type ChatFactsUpdateRow = RawChatFactsTable['Update']
+
+type ChatTurnRow = RawChatTurnTable['Row']
+type ChatTurnInsertRow = RawChatTurnTable['Insert']
+type ChatTurnUpdateRow = RawChatTurnTable['Update']
 
 export type Profile = ProfileRow
 export type ProfileInsert = ProfileInsertRow
@@ -118,6 +123,10 @@ export type MessageInsert = Omit<MessageInsertRow, 'role'> & {
 export type MessageUpdate = Omit<MessageUpdateRow, 'role'> & {
   role?: MessageRole
 }
+
+export type ChatTurn = ChatTurnRow
+export type ChatTurnInsert = ChatTurnInsertRow
+export type ChatTurnUpdate = ChatTurnUpdateRow
 
 export type ChatFacts = Omit<ChatFactsRow, 'embedding'> & {
   embedding: number[] | null

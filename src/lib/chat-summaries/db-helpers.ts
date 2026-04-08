@@ -1,4 +1,5 @@
 import type { ServerSupabaseClient } from './types'
+import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 
 /**
  * Get total message count for a chat
@@ -11,6 +12,8 @@ export async function getMessageCount(
     .from('messages')
     .select('id', { count: 'exact', head: true })
     .eq('chat_id', chatId)
+    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+    .neq('message_status', MESSAGE_STATUS_GENERATING)
 
   if (error) {
     console.error('Failed to count messages:', error.message)
@@ -31,6 +34,8 @@ export async function getLatestMessageSequence(
     .from('messages')
     .select('sequence')
     .eq('chat_id', chatId)
+    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+    .neq('message_status', MESSAGE_STATUS_GENERATING)
     .order('sequence', { ascending: false })
     .limit(1)
     .maybeSingle<{ sequence: number }>()

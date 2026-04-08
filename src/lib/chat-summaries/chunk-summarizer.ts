@@ -1,5 +1,6 @@
 import { APICallError, generateText } from 'ai'
 import type { ChatSummaryInsert } from '@/types/database.types'
+import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 import { generateFactEmbedding } from '@/lib/embeddings'
 import { getProviderOptions } from '@/lib/llm/provider-options'
 import { resolvePromptCacheDecision } from '@/lib/llm/prompt-cache'
@@ -155,6 +156,8 @@ export async function createChunkSummary({
     .from('messages')
     .select<'role, content'>('role, content')
     .eq('chat_id', chatId)
+    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+    .neq('message_status', MESSAGE_STATUS_GENERATING)
     .order('sequence', { ascending: true })
     .range(fromIndex, toIndex)
 
@@ -249,6 +252,8 @@ export async function createChunkFacts({
     .from('messages')
     .select<'role, content'>('role, content')
     .eq('chat_id', chatId)
+    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+    .neq('message_status', MESSAGE_STATUS_GENERATING)
     .order('sequence', { ascending: true })
     .range(fromIndex, toIndex)
 

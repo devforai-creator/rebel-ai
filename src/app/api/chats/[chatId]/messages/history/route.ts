@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { CHAT_MESSAGE_PAGE_SIZE } from '@/lib/chat/constants'
+import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 
 export async function GET(req: Request, { params }: { params: Promise<{ chatId: string }> }) {
   const { chatId } = await params
@@ -36,9 +37,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ chatId: 
   const { data: historyData, error: historyError } = await supabase
     .from('messages')
     .select(
-      'id, chat_id, role, content, sequence, created_at, model_used, prompt_tokens, completion_tokens',
+      'id, chat_id, role, content, sequence, created_at, model_used, prompt_tokens, completion_tokens, turn_id, variant_index, supersedes_message_id, message_status',
     )
     .eq('chat_id', chatId)
+    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+    .neq('message_status', MESSAGE_STATUS_GENERATING)
     .lt('sequence', beforeSequence)
     .order('sequence', { ascending: false })
     .limit(CHAT_MESSAGE_PAGE_SIZE)

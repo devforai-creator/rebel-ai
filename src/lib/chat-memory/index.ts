@@ -15,6 +15,7 @@ import { formatFacts, formatSummarySegments } from '@/lib/chat-summaries/formatt
 import { processMetaSummaries } from '@/lib/chat-summaries/meta-summarizer'
 import { processRegenerationRequests } from '@/lib/chat-summaries/regeneration'
 import { updateSummaries } from '@/lib/chat-summaries/index'
+import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 import type {
   BuildContextOptions,
   RagResultInfo,
@@ -408,6 +409,8 @@ async function buildPrefixLiveBlocksPlan({
     .from('messages')
     .select<'role, content'>('role, content')
     .eq('chat_id', chatId)
+    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+    .neq('message_status', MESSAGE_STATUS_GENERATING)
     .gt('sequence', lastChunkEnd)
     .order('sequence', { ascending: true })
 

@@ -20,7 +20,9 @@ import {
 } from '@/lib/queue/admission'
 import { isLLMProvider } from '@/lib/api-keys/provider-utils'
 import { getDefaultModelForProvider } from '@/lib/llm/default-model'
+import { MESSAGE_STATUS_COMPLETED } from '@/lib/chat/message-status'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
+import { createChatTurn } from '@/lib/chat/turns'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
 import { after } from 'next/server'
 import { z } from 'zod'
@@ -148,26 +150,6 @@ export async function POST(req: Request) {
           }))
       : []
 
-    if (sanitizedMessages.length === 0) {
-      return new Response('Messages array required', { status: 400 })
-    }
-
-    const textEncoder = new TextEncoder()
-    const oversizedMessage = sanitizedMessages.find((message) => {
-      const byteLength = textEncoder.encode(message.content).length
-      return byteLength > MAX_MESSAGE_BYTES
-    })
-
-    if (oversizedMessage) {
-      return new Response('Message exceeds allowed size', { status: 400 })
-    }
-
-    const lastMessage = sanitizedMessages[sanitizedMessages.length - 1]
-
-    if (lastMessage.role !== 'user' || !lastMessage.content.trim()) {
-      return new Response('Last message must be a non-empty user message', { status: 400 })
-    }
-
     const regenerateAssistantMessageId =
       typeof rawRegenerateAssistantMessageId === 'string' &&
       rawRegenerateAssistantMessageId.trim().length > 0
@@ -175,6 +157,27 @@ export async function POST(req: Request) {
         : null
 
     const isRegeneration = rawIsRegeneration === true || regenerateAssistantMessageId !== null
+    const textEncoder = new TextEncoder()
+
+    if (isRegeneration && !regenerateAssistantMessageId) {
+      return new Response('regenerateAssistantMessageId is required', { status: 400 })
+    }
+
+    if (!isRegeneration) {
+      if (sanitizedMessages.length === 0) {
+        return new Response('Messages array required', { status: 400 })
+      }
+
+      const lastMessage = sanitizedMessages[sanitizedMessages.length - 1]
+      if (lastMessage.role !== 'user' || !lastMessage.content.trim()) {
+        return new Response('Last message must be a non-empty user message', { status: 400 })
+      }
+
+      const byteLength = textEncoder.encode(lastMessage.content).length
+      if (byteLength > MAX_MESSAGE_BYTES) {
+        return new Response('Message exceeds allowed size', { status: 400 })
+      }
+    }
 
     const { data: apiKeyData, error: apiKeyError } = await supabase
       .from('api_keys')
@@ -239,19 +242,29 @@ export async function POST(req: Request) {
       return new Response(buildActiveChatJobLimitMessage(), { status: 429 })
     }
 
-    if (regenerateAssistantMessageId) {
-      const { data: targetMessage, error: targetMessageError } = await supabase
-        .from('messages')
-        .select('id, chat_id, role')
-        .eq('id', regenerateAssistantMessageId)
-        .single()
+    let targetTurnId: string | null = null
 
-      if (
-        targetMessageError ||
-        !targetMessage ||
-        targetMessage.chat_id !== chatId ||
-        targetMessage.role !== 'assistant'
-      ) {
+    if (regenerateAssistantMessageId) {
+      const [
+        { data: targetTurn, error: targetTurnError },
+        { data: latestTurn, error: latestTurnError },
+      ] = await Promise.all([
+        supabase
+          .from('chat_turns')
+          .select('id, turn_index, active_assistant_message_id')
+          .eq('chat_id', chatId)
+          .eq('active_assistant_message_id', regenerateAssistantMessageId)
+          .single(),
+        supabase
+          .from('chat_turns')
+          .select('id, turn_index')
+          .eq('chat_id', chatId)
+          .order('turn_index', { ascending: false })
+          .limit(1)
+          .single(),
+      ])
+
+      if (targetTurnError || !targetTurn || latestTurnError || !latestTurn) {
         console.warn('[Chat API] Invalid regeneration target', {
           chatId,
           requestId,
@@ -259,6 +272,14 @@ export async function POST(req: Request) {
         })
         return new Response('Invalid regeneration target', { status: 400 })
       }
+
+      if (latestTurn.id !== targetTurn.id) {
+        return new Response('Only the latest assistant message can be regenerated', {
+          status: 400,
+        })
+      }
+
+      targetTurnId = targetTurn.id
     }
 
     if (!isLLMProvider(apiKeyData.provider)) {
@@ -269,6 +290,7 @@ export async function POST(req: Request) {
     const modelName = apiKeyData.model_preference || getDefaultModelForProvider(provider)
 
     let insertedUserMessageId: string | null = null
+    let insertedTurnId: string | null = targetTurnId
 
     if (!isRegeneration) {
       const userMessage = sanitizedMessages[sanitizedMessages.length - 1]
@@ -277,18 +299,44 @@ export async function POST(req: Request) {
         return new Response('Invalid user message', { status: 400 })
       }
 
+      insertedUserMessageId = crypto.randomUUID()
+      insertedTurnId = crypto.randomUUID()
+
+      try {
+        await createChatTurn({
+          supabase,
+          chatId,
+          userId: user.id,
+          turnId: insertedTurnId,
+          userMessageId: insertedUserMessageId,
+        })
+      } catch (turnError) {
+        console.error('[Chat API] Failed to create chat turn', {
+          chatId,
+          requestId,
+          error: turnError instanceof Error ? turnError.message : String(turnError),
+        })
+        return new Response('Failed to create chat turn', { status: 500 })
+      }
+
       const { data: insertedMessage, error: insertUserError } = await supabase
         .from('messages')
         .insert({
+          id: insertedUserMessageId,
           chat_id: chatId,
           role: 'user',
           content: userMessage.content,
+          turn_id: insertedTurnId,
           user_id: user.id,
+          message_status: MESSAGE_STATUS_COMPLETED,
         })
         .select('id')
         .single()
 
       if (insertUserError || !insertedMessage) {
+        if (insertedTurnId) {
+          await rollbackPersistedChatTurn(supabase, insertedTurnId, chatId, requestId)
+        }
         console.error('[Chat API] Failed to persist user message', {
           chatId,
           requestId,
@@ -304,6 +352,7 @@ export async function POST(req: Request) {
       version: CHAT_JOB_PAYLOAD_VERSION,
       requestId,
       chatId,
+      turnId: insertedTurnId,
       userId: user.id,
       apiKeyId,
       provider,
@@ -325,7 +374,9 @@ export async function POST(req: Request) {
       .single()
 
     if (jobError || !job) {
-      if (insertedUserMessageId) {
+      if (insertedTurnId && !isRegeneration) {
+        await rollbackPersistedChatTurn(supabase, insertedTurnId, chatId, requestId)
+      } else if (insertedUserMessageId) {
         await rollbackPersistedUserMessage(supabase, insertedUserMessageId, chatId, requestId)
       }
 
@@ -432,6 +483,23 @@ async function rollbackPersistedUserMessage(
       chatId,
       requestId,
       messageId,
+      error: error.message,
+    })
+  }
+}
+
+async function rollbackPersistedChatTurn(
+  supabase: RouteSupabaseClient,
+  turnId: string,
+  chatId: string,
+  requestId: string,
+): Promise<void> {
+  const { error } = await supabase.from('chat_turns').delete().eq('id', turnId)
+  if (error) {
+    console.error('[Chat API] Failed to rollback persisted chat turn', {
+      chatId,
+      requestId,
+      turnId,
       error: error.message,
     })
   }

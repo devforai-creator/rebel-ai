@@ -13,6 +13,7 @@ import ChatPersonaWidget from './ChatPersonaWidget'
 import { BASE_GLOBAL_SYSTEM_PROMPT } from '@/lib/chat/global-system-prompt'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
 import { isLLMProvider } from '@/lib/api-keys/provider-utils'
+import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 import type { Persona } from '@/types/database.types'
 
 interface Props {
@@ -99,9 +100,11 @@ export default async function ChatPage({ params, searchParams }: Props) {
       supabase
         .from('messages')
         .select(
-          'id, role, content, chat_id, user_id, sequence, model_used, prompt_tokens, completion_tokens, latency_ms, error_code, debug_info, content_en, created_at',
+          'id, role, content, chat_id, user_id, sequence, model_used, prompt_tokens, completion_tokens, latency_ms, error_code, debug_info, content_en, created_at, turn_id, variant_index, supersedes_message_id, message_status',
         )
         .eq('chat_id', id)
+        .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+        .neq('message_status', MESSAGE_STATUS_GENERATING)
         .order('sequence', { ascending: false })
         .limit(CHAT_MESSAGE_PAGE_SIZE + 1),
       supabase

@@ -26,6 +26,7 @@ function createPrefixModeSupabaseStub(options?: {
   const messagesQuery = {
     select: () => messagesQuery,
     eq: () => messagesQuery,
+    neq: () => messagesQuery,
     gt: () => messagesQuery,
     order: async () => ({
       data: liveMessages,

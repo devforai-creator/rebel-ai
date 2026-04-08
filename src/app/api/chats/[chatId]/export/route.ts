@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 import { toRisuFormat, generateExportFilename } from '@/lib/chat/risu-converter'
 import type { RebelMessage, RebelSummary, RebelFact } from '@/types/risu-chat'
 
@@ -64,6 +65,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ chatId: 
       .from('messages')
       .select('id, role, content, model_used, prompt_tokens, completion_tokens, created_at')
       .eq('chat_id', chatId)
+      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+      .neq('message_status', MESSAGE_STATUS_GENERATING)
       .order('sequence', { ascending: true })
       .range(offset, offset + PAGE_SIZE - 1)
 

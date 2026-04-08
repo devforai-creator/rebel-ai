@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 import { NextRequest } from 'next/server'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ chatId: string }> }) {
@@ -32,9 +33,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ chat
     const { data: messages, error: messagesError } = await supabase
       .from('messages')
       .select(
-        'id, chat_id, role, content, sequence, created_at, model_used, prompt_tokens, completion_tokens, debug_info',
+        'id, chat_id, role, content, sequence, created_at, model_used, prompt_tokens, completion_tokens, debug_info, turn_id, variant_index, supersedes_message_id, message_status',
       )
       .eq('chat_id', chatId)
+      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+      .neq('message_status', MESSAGE_STATUS_GENERATING)
       .order('created_at', { ascending: false })
       .limit(1)
 

@@ -651,6 +651,54 @@ export type Database = {
           },
         ]
       }
+      chat_turns: {
+        Row: {
+          active_assistant_message_id: string | null
+          chat_id: string
+          created_at: string
+          id: string
+          turn_index: number
+          updated_at: string
+          user_id: string
+          user_message_id: string | null
+        }
+        Insert: {
+          active_assistant_message_id?: string | null
+          chat_id: string
+          created_at?: string
+          id?: string
+          turn_index: number
+          updated_at?: string
+          user_id: string
+          user_message_id?: string | null
+        }
+        Update: {
+          active_assistant_message_id?: string | null
+          chat_id?: string
+          created_at?: string
+          id?: string
+          turn_index?: number
+          updated_at?: string
+          user_id?: string
+          user_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'chat_turns_chat_id_fkey'
+            columns: ['chat_id']
+            isOneToOne: false
+            referencedRelation: 'chats'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'chat_turns_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       chats: {
         Row: {
           character_id: string
@@ -853,11 +901,15 @@ export type Database = {
           error_code: string | null
           id: string
           latency_ms: number | null
+          message_status: string
           model_used: string | null
           prompt_tokens: number | null
           role: string
           sequence: number
+          supersedes_message_id: string | null
+          turn_id: string | null
           user_id: string
+          variant_index: number | null
         }
         Insert: {
           chat_id: string
@@ -869,11 +921,15 @@ export type Database = {
           error_code?: string | null
           id?: string
           latency_ms?: number | null
+          message_status?: string
           model_used?: string | null
           prompt_tokens?: number | null
           role: string
           sequence?: never
+          supersedes_message_id?: string | null
+          turn_id?: string | null
           user_id: string
+          variant_index?: number | null
         }
         Update: {
           chat_id?: string
@@ -885,11 +941,15 @@ export type Database = {
           error_code?: string | null
           id?: string
           latency_ms?: number | null
+          message_status?: string
           model_used?: string | null
           prompt_tokens?: number | null
           role?: string
           sequence?: never
+          supersedes_message_id?: string | null
+          turn_id?: string | null
           user_id?: string
+          variant_index?: number | null
         }
         Relationships: [
           {
@@ -897,6 +957,20 @@ export type Database = {
             columns: ['chat_id']
             isOneToOne: false
             referencedRelation: 'chats'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'messages_supersedes_message_id_fkey'
+            columns: ['supersedes_message_id']
+            isOneToOne: false
+            referencedRelation: 'messages'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'messages_turn_id_fkey'
+            columns: ['turn_id']
+            isOneToOne: false
+            referencedRelation: 'chat_turns'
             referencedColumns: ['id']
           },
         ]

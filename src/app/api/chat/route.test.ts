@@ -73,10 +73,23 @@ interface MessageRow {
   chat_id: string
   role: 'user' | 'assistant' | 'system'
   content: string
+  turn_id?: string | null
+  variant_index?: number | null
+  supersedes_message_id?: string | null
+  message_status?: string
   model_used?: string | null
   prompt_tokens?: number | null
   completion_tokens?: number | null
   error_code?: string | null
+}
+
+interface ChatTurnRow {
+  id: string
+  chat_id: string
+  user_id: string
+  turn_index: number
+  user_message_id: string | null
+  active_assistant_message_id: string | null
 }
 
 interface GlobalVariableRow {
@@ -119,7 +132,12 @@ interface SupabaseFixture {
     chat_id: string
     role: 'user' | 'assistant' | 'system'
     content: string
+    turn_id?: string | null
+    variant_index?: number | null
+    supersedes_message_id?: string | null
+    message_status?: string
   }>
+  chatTurns?: ChatTurnRow[]
   chatJobs?: ChatJobRow[]
   chatJobInsertError?: { message: string; code?: string | null }
 }
@@ -223,12 +241,19 @@ class SupabaseRouteMock {
           chat_id: msg.chat_id,
           role: msg.role,
           content: msg.content,
+          turn_id: msg.turn_id ?? null,
+          variant_index: msg.variant_index ?? null,
+          supersedes_message_id: msg.supersedes_message_id ?? null,
+          message_status: msg.message_status ?? 'completed',
           model_used: null,
           prompt_tokens: null,
           completion_tokens: null,
           error_code: null,
         })),
       )
+    }
+    if (fixture.chatTurns) {
+      this.chatTurns.push(...fixture.chatTurns.map((turn) => ({ ...turn })))
     }
     if (fixture.chatJobs) {
       this.chatJobs.push(...fixture.chatJobs.map((job) => ({ ...job })))
@@ -237,6 +262,7 @@ class SupabaseRouteMock {
 
   private readonly fixture: SupabaseFixture
   readonly messages: MessageRow[] = []
+  readonly chatTurns: ChatTurnRow[] = []
   readonly globalVariables: GlobalVariableRow[] = []
   readonly chatJobs: ChatJobRow[] = []
 
@@ -256,6 +282,8 @@ class SupabaseRouteMock {
         return new CharactersTable(this.fixture.characters)
       case 'messages':
         return new MessagesTable(this.messages)
+      case 'chat_turns':
+        return new ChatTurnsTable(this.chatTurns, this.messages)
       case 'global_variables':
         return new GlobalVariablesTable(this.globalVariables)
       case 'chat_generation_jobs':
@@ -499,10 +527,16 @@ class MessagesTable {
     const insertedRows: MessageRow[] = []
     records.forEach((record) => {
       const newRow: MessageRow = {
-        id: `msg-${this.rows.length + 1}`,
+        id:
+          ('id' in record && typeof record.id === 'string' ? record.id : null) ??
+          `msg-${this.rows.length + 1}`,
         chat_id: record.chat_id,
         role: record.role,
         content: record.content,
+        turn_id: record.turn_id ?? null,
+        variant_index: record.variant_index ?? null,
+        supersedes_message_id: record.supersedes_message_id ?? null,
+        message_status: record.message_status ?? 'completed',
         model_used: record.model_used ?? null,
         prompt_tokens: record.prompt_tokens ?? null,
         completion_tokens: record.completion_tokens ?? null,
@@ -526,6 +560,138 @@ class MessagesTable {
       then: <T>(onfulfilled?: (value: { data: MessageRow[]; error: null }) => T) =>
         Promise.resolve({ data: insertedRows, error: null as null }).then(onfulfilled),
     }
+  }
+}
+
+class ChatTurnsTable {
+  constructor(
+    private readonly rows: ChatTurnRow[],
+    private readonly messages: MessageRow[],
+  ) {}
+
+  select() {
+    const filters: Predicate<ChatTurnRow>[] = []
+    let limitCount: number | null = null
+    let orderField: keyof ChatTurnRow | null = null
+    let ascending = true
+
+    const builder = {
+      eq: (field: keyof ChatTurnRow, value: unknown) => {
+        filters.push((row) => row[field] === value)
+        return builder
+      },
+      order: (field: keyof ChatTurnRow, options?: { ascending?: boolean }) => {
+        orderField = field
+        ascending = options?.ascending ?? true
+        return builder
+      },
+      limit: (value: number) => {
+        limitCount = value
+        return builder
+      },
+      single: async () => {
+        const rows = this.resolveRows(filters, orderField, ascending, limitCount)
+        const row = rows[0]
+        if (!row) {
+          return { data: null, error: { message: 'Not found' } }
+        }
+        return { data: { ...row }, error: null }
+      },
+      maybeSingle: async () => {
+        const rows = this.resolveRows(filters, orderField, ascending, limitCount)
+        const row = rows[0]
+        return { data: row ? { ...row } : null, error: null }
+      },
+    }
+
+    return builder
+  }
+
+  insert(payload: Omit<ChatTurnRow, 'id'> | Array<Omit<ChatTurnRow, 'id'>>) {
+    const records = Array.isArray(payload) ? payload : [payload]
+    const insertedRows: ChatTurnRow[] = []
+
+    for (const record of records) {
+      const newRow: ChatTurnRow = {
+        id:
+          ('id' in record && typeof record.id === 'string' ? record.id : null) ??
+          `turn-${this.rows.length + 1}`,
+        chat_id: record.chat_id,
+        user_id: record.user_id,
+        turn_index: record.turn_index,
+        user_message_id: record.user_message_id ?? null,
+        active_assistant_message_id: record.active_assistant_message_id ?? null,
+      }
+      this.rows.push(newRow)
+      insertedRows.push(newRow)
+    }
+
+    return {
+      select: (_columns?: string) => {
+        void _columns
+        return {
+          single: async () => ({
+            data: insertedRows[0] ?? null,
+            error: null,
+          }),
+        }
+      },
+      then: <T>(onfulfilled?: (value: { data: ChatTurnRow[]; error: null }) => T) =>
+        Promise.resolve({ data: insertedRows, error: null as null }).then(onfulfilled),
+    }
+  }
+
+  delete() {
+    const filters: Predicate<ChatTurnRow>[] = []
+    const builder = {
+      eq: (field: keyof ChatTurnRow, value: unknown) => {
+        filters.push((row) => row[field] === value)
+        return builder
+      },
+      then: <TResult1 = unknown, TResult2 = never>(
+        onfulfilled?:
+          | ((value: { data: ChatTurnRow[]; error: null }) => TResult1 | PromiseLike<TResult1>)
+          | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+      ) => {
+        const removed = this.rows.filter((row) => filters.every((predicate) => predicate(row)))
+        const removedIds = new Set(removed.map((row) => row.id))
+        const remaining = this.rows.filter((row) => !removedIds.has(row.id))
+        this.rows.length = 0
+        this.rows.push(...remaining)
+
+        const remainingMessages = this.messages.filter((row) => !removedIds.has(row.turn_id ?? ''))
+        this.messages.length = 0
+        this.messages.push(...remainingMessages)
+
+        return Promise.resolve({ data: removed, error: null }).then(onfulfilled, onrejected)
+      },
+    }
+    return builder
+  }
+
+  private resolveRows(
+    filters: Predicate<ChatTurnRow>[],
+    orderField: keyof ChatTurnRow | null,
+    ascending: boolean,
+    limitCount: number | null,
+  ) {
+    let rows = this.rows.filter((row) => filters.every((predicate) => predicate(row)))
+    if (orderField) {
+      rows = rows.slice().sort((left, right) => {
+        const leftValue = left[orderField]
+        const rightValue = right[orderField]
+        if (leftValue === rightValue) return 0
+        if (leftValue === undefined || leftValue === null) return ascending ? 1 : -1
+        if (rightValue === undefined || rightValue === null) return ascending ? -1 : 1
+        if (leftValue > rightValue) return ascending ? 1 : -1
+        return ascending ? -1 : 1
+      })
+    }
+    if (typeof limitCount === 'number') {
+      rows = rows.slice(0, limitCount)
+    }
+    return rows
   }
 }
 
@@ -1491,6 +1657,16 @@ describe('POST /api/chat', () => {
           chat_id: 'chat-1',
           role: 'assistant',
           content: 'old reply',
+        },
+      ],
+      chatTurns: [
+        {
+          id: 'turn-1',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          turn_index: 1,
+          user_message_id: 'user-1-msg',
+          active_assistant_message_id: 'assistant-1',
         },
       ],
     })

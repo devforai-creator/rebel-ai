@@ -10,6 +10,7 @@ import {
   mapMessageToDisplay,
   buildSanitizedMessages,
 } from '../utils'
+import { isVisibleMessageStatus } from '@/lib/chat/message-status'
 import { resolveAlternateApiKeyId } from '@/lib/chat/alternate-models'
 import { pollJobStatus as pollJobStatusPure, DEFAULT_JOB_POLLER_CONFIG } from './job-poller'
 
@@ -54,11 +55,66 @@ export function useQueuedChat({
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [pendingJobId, setPendingJobId] = useState<string | null>(null)
+  const [pendingRegenerationTargetId, setPendingRegenerationTargetId] = useState<string | null>(
+    null,
+  )
   const [error, setError] = useState<Error | null>(null)
 
   const handleInputChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(event.target.value)
   }, [])
+
+  const upsertAssistantMessage = useCallback(
+    (assistantMessage: Message) => {
+      if (!isVisibleMessageStatus(assistantMessage.message_status)) {
+        if (pendingRegenerationTargetId === assistantMessage.id) {
+          return
+        }
+
+        setMessages((prev) => prev.filter((msg) => msg.id !== assistantMessage.id))
+        persistedMessageIds.current.delete(assistantMessage.id)
+        debugInfoMap.current.delete(assistantMessage.id)
+        return
+      }
+
+      const debugInfo = assistantMessage.debug_info as DebugInfo | null | undefined
+      if (debugInfo) {
+        debugInfoMap.current.set(assistantMessage.id, debugInfo)
+      }
+      persistedMessageIds.current.add(assistantMessage.id)
+
+      setMessages((prev) => {
+        const mapped = mapMessageToDisplay(assistantMessage)
+        const existingIndex = prev.findIndex((msg) => msg.id === mapped.id)
+        if (existingIndex !== -1) {
+          const next = [...prev]
+          next[existingIndex] = mapped
+          return next
+        }
+
+        if (pendingRegenerationTargetId) {
+          const targetIndex = prev.findIndex((msg) => msg.id === pendingRegenerationTargetId)
+          if (targetIndex !== -1) {
+            const next = [...prev]
+            next[targetIndex] = mapped
+            next.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
+            return next
+          }
+        }
+
+        const next = [...prev, mapped]
+        next.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
+        return next
+      })
+
+      if (pendingRegenerationTargetId) {
+        persistedMessageIds.current.delete(pendingRegenerationTargetId)
+        debugInfoMap.current.delete(pendingRegenerationTargetId)
+        setPendingRegenerationTargetId(null)
+      }
+    },
+    [debugInfoMap, pendingRegenerationTargetId, persistedMessageIds],
+  )
 
   const fetchLatestMessage = useCallback(async () => {
     try {
@@ -106,19 +162,8 @@ export function useQueuedChat({
     if (!latest || latest.role !== 'assistant') {
       return
     }
-
-    if (latest.debug_info) {
-      debugInfoMap.current.set(latest.id, latest.debug_info as DebugInfo)
-    }
-    persistedMessageIds.current.add(latest.id)
-
-    setMessages((prev) => {
-      if (prev.some((msg) => msg.id === latest.id)) {
-        return prev
-      }
-      return [...prev, mapMessageToDisplay(latest)]
-    })
-  }, [fetchLatestMessage, debugInfoMap, persistedMessageIds])
+    upsertAssistantMessage(latest)
+  }, [fetchLatestMessage, upsertAssistantMessage])
 
   const pollJobStatus = useCallback(
     async (jobId: string) => {
@@ -147,6 +192,7 @@ export function useQueuedChat({
           },
           onError: (error) => {
             setPendingJobId(null)
+            setPendingRegenerationTargetId(null)
             const isTimeout = error.message.includes('timed out')
             toast.error(error.message, {
               duration: isTimeout ? 10000 : 5000,
@@ -180,46 +226,12 @@ export function useQueuedChat({
       const oldMessage = (payload.old as Message | null) ?? null
 
       if (payload.eventType === 'INSERT' && newMessage && newMessage.role === 'assistant') {
-        setMessages((prev) => {
-          const mapped = mapMessageToDisplay(newMessage)
-          const existingIndex = prev.findIndex((msg) => msg.id === mapped.id)
-          if (existingIndex !== -1) {
-            const next = [...prev]
-            next[existingIndex] = mapped
-            return next
-          }
-
-          const next = [...prev, mapped]
-          next.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
-          return next
-        })
-
-        persistedMessageIds.current.add(newMessage.id)
-        if (newMessage.debug_info) {
-          debugInfoMap.current.set(newMessage.id, newMessage.debug_info as DebugInfo)
-        }
+        upsertAssistantMessage(newMessage)
         return
       }
 
       if (payload.eventType === 'UPDATE' && newMessage && newMessage.role === 'assistant') {
-        setMessages((prev) => {
-          const mapped = mapMessageToDisplay(newMessage)
-          const index = prev.findIndex((msg) => msg.id === newMessage.id)
-          if (index === -1) {
-            const next = [...prev, mapped]
-            next.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
-            return next
-          }
-
-          const next = [...prev]
-          next[index] = mapped
-          return next
-        })
-
-        persistedMessageIds.current.add(newMessage.id)
-        if (newMessage.debug_info) {
-          debugInfoMap.current.set(newMessage.id, newMessage.debug_info as DebugInfo)
-        }
+        upsertAssistantMessage(newMessage)
         return
       }
 
@@ -229,7 +241,7 @@ export function useQueuedChat({
         debugInfoMap.current.delete(oldMessage.id)
       }
     },
-    [persistedMessageIds, debugInfoMap],
+    [debugInfoMap, persistedMessageIds, upsertAssistantMessage],
   )
 
   const resolveNextApiKeyId = useCallback(
@@ -295,6 +307,9 @@ export function useQueuedChat({
       } catch (err) {
         const normalized = err instanceof Error ? err : new Error('Chat request failed.')
         setError(normalized)
+        if (isRegeneration) {
+          setPendingRegenerationTargetId(null)
+        }
         // Only show toast if not already shown by pollJobStatus
         if (
           !normalized.message.includes('timed out') &&
@@ -357,12 +372,9 @@ export function useQueuedChat({
         return
       }
 
-      const nextMessages = messages.filter((msg) => msg.id !== targetId)
-      setMessages(nextMessages)
-      persistedMessageIds.current.delete(targetId)
-      debugInfoMap.current.delete(targetId)
+      setPendingRegenerationTargetId(targetId)
 
-      const payload = buildSanitizedMessages(historyMessages, nextMessages)
+      const payload = buildSanitizedMessages(historyMessages, messages)
       void sendChatRequest({
         messagesPayload: payload,
         isRegeneration: true,
@@ -371,7 +383,7 @@ export function useQueuedChat({
         // Error state handled inside sendChatRequest
       })
     },
-    [messages, historyMessages, debugInfoMap, persistedMessageIds, sendChatRequest],
+    [messages, historyMessages, persistedMessageIds, sendChatRequest],
   )
 
   return {

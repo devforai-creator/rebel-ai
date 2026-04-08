@@ -68,6 +68,7 @@ describe('runPostGenerationPipeline', () => {
       requestId: 'req-1',
       assistantText: 'final answer',
       assistantMessageId: 'assistant-1',
+      turnId: null,
       regenerateAssistantMessageId: null,
       promptTokens: 11,
       completionTokens: 22,
@@ -116,18 +117,47 @@ describe('runPostGenerationPipeline', () => {
 
     const oldAssistant = supabase.messages.find((row) => row.id === 'assistant-old')
     expect(oldAssistant).toMatchObject({
-      debug_info: null,
+      debug_info: { stale: true },
     })
   })
 
-  it('inserts assistant message, applies summary preference, and appends summary warning on failure', async () => {
+  it('creates a new assistant variant for regeneration and keeps the prior variant as superseded', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
+      initialTurns: [
+        {
+          id: 'turn-1',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          turn_index: 1,
+          user_message_id: 'user-1-msg',
+          active_assistant_message_id: 'assistant-old',
+        },
+      ],
       initialMessages: [
+        {
+          id: 'user-1-msg',
+          chat_id: 'chat-1',
+          role: 'user',
+          content: 'hello',
+          turn_id: 'turn-1',
+          variant_index: null,
+          supersedes_message_id: null,
+          message_status: 'completed',
+          model_used: null,
+          prompt_tokens: null,
+          completion_tokens: null,
+          debug_info: null,
+          user_id: 'user-1',
+        },
         {
           id: 'assistant-old',
           chat_id: 'chat-1',
           role: 'assistant',
           content: 'old answer',
+          turn_id: 'turn-1',
+          variant_index: 1,
+          supersedes_message_id: null,
+          message_status: 'completed',
           model_used: null,
           prompt_tokens: null,
           completion_tokens: null,
@@ -139,6 +169,10 @@ describe('runPostGenerationPipeline', () => {
           chat_id: 'chat-1',
           role: 'assistant',
           content: 'older answer',
+          turn_id: 'other-turn',
+          variant_index: 1,
+          supersedes_message_id: null,
+          message_status: 'completed',
           model_used: null,
           prompt_tokens: null,
           completion_tokens: null,
@@ -175,6 +209,7 @@ describe('runPostGenerationPipeline', () => {
       requestId: 'req-2',
       assistantText: 'new answer',
       assistantMessageId: null,
+      turnId: 'turn-1',
       regenerateAssistantMessageId: 'assistant-old',
       promptTokens: 7,
       completionTokens: 12,
@@ -196,7 +231,6 @@ describe('runPostGenerationPipeline', () => {
     expect(result.messageInsertDuration).toBe(10)
     expect(result.usageEventInsertDurationMs).toBe(12)
     expect(result.summaryTriggerDurationMs).toBe(0)
-    expect(supabase.messages.find((row) => row.id === 'assistant-old')).toBeUndefined()
     expect(supabase.usageEvents).toHaveLength(1)
 
     await flushSummaryBackgroundTask()
@@ -214,6 +248,10 @@ describe('runPostGenerationPipeline', () => {
     const inserted = supabase.messages.find((row) => row.id === result.assistantMessageId)
     expect(inserted).toMatchObject({
       content: 'new answer',
+      turn_id: 'turn-1',
+      variant_index: 2,
+      supersedes_message_id: 'assistant-old',
+      message_status: 'completed',
       prompt_tokens: 7,
       completion_tokens: 12,
       debug_info: expect.objectContaining({
@@ -225,9 +263,21 @@ describe('runPostGenerationPipeline', () => {
       }),
     })
 
+    const superseded = supabase.messages.find((row) => row.id === 'assistant-old')
+    expect(superseded).toMatchObject({
+      message_status: 'superseded',
+    })
+
     const staleAssistant = supabase.messages.find((row) => row.id === 'assistant-prev')
     expect(staleAssistant).toMatchObject({
-      debug_info: null,
+      debug_info: { stale: true },
+    })
+
+    const updatedTurn = (supabase.state.chatTurns as Array<Record<string, unknown>>).find(
+      (row) => row.id === 'turn-1',
+    )
+    expect(updatedTurn).toMatchObject({
+      active_assistant_message_id: result.assistantMessageId,
     })
   })
 })

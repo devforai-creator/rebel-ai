@@ -1,14 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import type {
-  ApiKey,
-  Chat,
-  Database,
-  Message,
-  MessageInsert,
-  MessageUpdate,
-  Persona,
-  Character,
-} from '@/types/database.types'
+import type { ApiKey, Chat, Database, Persona, Character } from '@/types/database.types'
 import { ensureUserFirstForAnthropic } from '@/lib/chat/anthropic-user-first'
 import { buildMemoryPlan } from '@/lib/chat-memory'
 import { getGlobalSystemPrompt } from '@/lib/chat/global-system-prompt'
@@ -29,16 +20,15 @@ import { applyBilingualContext, isBilingualEnabled } from '@/lib/chat/bilingual-
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
 import { buildLorebookDynamicContext } from '@/lib/lorebook/runtime'
+import { loadGenerationTranscript } from '@/lib/chat/turns'
 import { buildLanguageModel } from './model-factory'
 import { evaluateContentFilter } from './content-filter'
 import { buildSystemPrompt } from './system-prompt-builder'
 import { buildChatDebugInfo, type ChatRunnerActualPayload } from './usage-debug'
 import { buildStreamPayloadPlan } from './stream-payload-builder'
-import { persistStreamedAssistantMessage } from './streaming-message-writer'
 import { runPostGenerationPipeline } from './post-generation-pipeline'
 
 const MAX_TOTAL_INPUT_TOKENS = 150_000
-const STREAM_UPDATE_INTERVAL_MS = 200
 const CHAT_JOB_RUNNER_DEBUG_ENABLED = process.env.CHAT_JOB_RUNNER_DEBUG === 'true'
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type ChatGenerationJobUpdate = Database['public']['Tables']['chat_generation_jobs']['Update']
@@ -51,7 +41,6 @@ type RunnerPersonaRow = Pick<Persona, 'name' | 'description'>
 type RunnerCharacterRow = Pick<Character, 'id' | 'name' | 'system_prompt'> & {
   post_history_instructions: string | null
 }
-type MessageIdRow = Pick<Message, 'id'>
 type VaultRpcClient = {
   rpc: (
     fn: 'get_decrypted_secret',
@@ -66,6 +55,16 @@ function logChatJobRunnerDebug(...args: unknown[]): void {
   if (CHAT_JOB_RUNNER_DEBUG_ENABLED) {
     console.debug(...args)
   }
+}
+
+async function collectTextFromStream(textStream: AsyncIterable<string> | Iterable<string>) {
+  let fullText = ''
+
+  for await (const chunk of textStream) {
+    fullText += chunk
+  }
+
+  return fullText
 }
 
 export async function processChatJobs(limit: number = 1) {
@@ -278,6 +277,14 @@ async function executeJob({
 
   const defaultSystemPrompt = getGlobalSystemPrompt()
   const normalizedModelConfig = normalizeChatModelConfig(chat.model_config)
+  const generationTranscript = payload.turnId
+    ? await loadGenerationTranscript({
+        supabase,
+        chatId,
+        turnId: payload.turnId,
+        excludeAssistantForTurnId: payload.isRegeneration ? payload.turnId : null,
+      })
+    : payload.sanitizedMessages
 
   stepStart = performance.now()
   const systemPrompt = await buildSystemPrompt({
@@ -293,7 +300,7 @@ async function executeJob({
     supabase,
     chatId,
     characterId: character.id,
-    chatHistory: payload.sanitizedMessages,
+    chatHistory: generationTranscript,
   })
   timings['6b_build_lorebook_context'] = performance.now() - stepStart
 
@@ -308,7 +315,7 @@ async function executeJob({
   } = await buildMemoryPlan({
     supabase,
     chatId,
-    sanitizedMessages: payload.sanitizedMessages,
+    sanitizedMessages: generationTranscript,
     baseSystemPrompt: systemPrompt,
     extraDynamicContext: lorebookDynamicContext ? [lorebookDynamicContext] : undefined,
     modelConfig: normalizedModelConfig,
@@ -526,58 +533,9 @@ async function executeJob({
     throw error
   }
 
-  const streamResult = await persistStreamedAssistantMessage({
-    textStream: stream.textStream,
-    updateIntervalMs: STREAM_UPDATE_INTERVAL_MS,
-    insertAssistantMessage: async (chunk) => {
-      const messageInsert: MessageInsert = {
-        chat_id: chatId,
-        role: 'assistant',
-        content: chunk,
-        model_used: modelName,
-        user_id: userId,
-      }
-      const { data: messageRow, error: messageInsertError } = await supabase
-        .from('messages')
-        .insert(messageInsert as never)
-        .select('id')
-        .single<MessageIdRow>()
-
-      if (messageInsertError || !messageRow) {
-        throw new Error('Failed to insert assistant message')
-      }
-
-      return messageRow.id
-    },
-    updateAssistantMessage: async (messageId, contentSnapshot) => {
-      const messageUpdate: MessageUpdate = { content: contentSnapshot }
-      const { error: messageUpdateError } = await supabase
-        .from('messages')
-        .update(messageUpdate as never)
-        .eq('id', messageId)
-        .eq('chat_id', chatId)
-
-      if (messageUpdateError) {
-        const now = performance.now()
-        console.error('[Chat Job Runner] Stream update failed', {
-          assistantMessageId: messageId,
-          chatId,
-          contentLength: contentSnapshot.length,
-          elapsedMs: Math.round(now - startTime),
-          error: messageUpdateError.message,
-          code: messageUpdateError.code,
-        })
-        throw new Error(`Failed to update assistant message content: ${messageUpdateError.message}`)
-      }
-    },
-    deleteAssistantMessage: async (messageId) => {
-      await supabase.from('messages').delete().eq('id', messageId).eq('chat_id', chatId)
-    },
-  })
-
-  const fullText = streamResult.fullText
-  let assistantMessageId = streamResult.assistantMessageId
-  let messageInsertDuration = streamResult.messageInsertDuration
+  const fullText = await collectTextFromStream(stream.textStream)
+  let assistantMessageId: string | null = null
+  let messageInsertDuration: number | null = null
 
   const finishReason = await stream.finishReason
   const providerMetadata = await stream.providerMetadata
@@ -616,10 +574,6 @@ async function executeJob({
     const filteredMessage = contentFilterInfo.blocked
       ? 'Blocked by Google Gemini content filter. Please disable safe mode or refine your input and try again.'
       : 'The assistant returned an empty response. Please try again later.'
-
-    if (assistantMessageId) {
-      await supabase.from('messages').delete().eq('id', assistantMessageId).eq('chat_id', chatId)
-    }
 
     // Error is stored in chat_jobs.error and shown via toast popup
     throw new Error(filteredMessage)
@@ -676,7 +630,7 @@ async function executeJob({
     modelName,
     finishReason,
     usage: usageMetrics,
-    sanitizedMessageCount: payload.sanitizedMessages.length,
+    sanitizedMessageCount: generationTranscript.length,
     ragInfo,
     actualPayload,
   })
@@ -692,6 +646,7 @@ async function executeJob({
     requestId: payload.requestId,
     assistantText,
     assistantMessageId,
+    turnId: payload.turnId,
     regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
     promptTokens,
     completionTokens,

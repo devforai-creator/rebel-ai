@@ -8,6 +8,11 @@ import type {
   MessageUpdate,
 } from '@/types/database.types'
 import {
+  MESSAGE_STATUS_COMPLETED,
+  MESSAGE_STATUS_GENERATING,
+  MESSAGE_STATUS_SUPERSEDED,
+} from '@/lib/chat/message-status'
+import {
   resolveSummaryModelPreference,
   type SummaryModelConfig,
 } from '@/lib/chat/summary-model-preference'
@@ -20,6 +25,14 @@ import {
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type MessageIdRow = Pick<Message, 'id'>
+type TurnStateRow = {
+  id: string
+  active_assistant_message_id: string | null
+}
+type AssistantVariantRow = {
+  id: string
+  variant_index: number | null
+}
 
 type ResolveSummaryModelPreferenceFn = (args: {
   supabase: AdminSupabaseClient
@@ -48,6 +61,7 @@ type RunPostGenerationPipelineArgs = {
   requestId: string
   assistantText: string
   assistantMessageId: string | null
+  turnId: string | null
   regenerateAssistantMessageId: string | null
   promptTokens: number | null
   completionTokens: number | null
@@ -195,6 +209,7 @@ export async function runPostGenerationPipeline({
   requestId,
   assistantText,
   assistantMessageId,
+  turnId,
   regenerateAssistantMessageId,
   promptTokens,
   completionTokens,
@@ -208,7 +223,7 @@ export async function runPostGenerationPipeline({
   triggerSummaryGenerationFn = triggerSummaryGeneration,
   now = () => performance.now(),
 }: RunPostGenerationPipelineArgs): Promise<PostGenerationPipelineResult> {
-  if (regenerateAssistantMessageId) {
+  if (regenerateAssistantMessageId && !turnId) {
     const { error: regenerationDeleteError } = await supabase
       .from('messages')
       .delete()
@@ -223,6 +238,47 @@ export async function runPostGenerationPipeline({
 
   let finalAssistantMessageId = assistantMessageId
   let finalMessageInsertDuration = messageInsertDuration
+  let previousActiveAssistantId: string | null = null
+  let nextVariantIndex: number | null = null
+  let insertedAssistantInPipeline = false
+  let activeAssistantPointerUpdated = false
+  let previousAssistantSuperseded = false
+
+  if (turnId) {
+    const { data: turnState, error: turnStateError } = await supabase
+      .from('chat_turns')
+      .select('id, active_assistant_message_id')
+      .eq('id', turnId)
+      .eq('chat_id', chatId)
+      .single<TurnStateRow>()
+
+    if (turnStateError || !turnState) {
+      throw new Error('Failed to load chat turn for assistant finalization')
+    }
+
+    previousActiveAssistantId = turnState.active_assistant_message_id
+    if (
+      regenerateAssistantMessageId &&
+      previousActiveAssistantId !== regenerateAssistantMessageId
+    ) {
+      throw new Error('Regeneration target is no longer the active assistant message')
+    }
+
+    const { data: latestVariant, error: latestVariantError } = await supabase
+      .from('messages')
+      .select('id, variant_index')
+      .eq('turn_id', turnId)
+      .eq('role', 'assistant')
+      .order('variant_index', { ascending: false })
+      .limit(1)
+      .maybeSingle<AssistantVariantRow>()
+
+    if (latestVariantError && latestVariantError.code !== 'PGRST116') {
+      throw new Error('Failed to load current assistant variants for turn')
+    }
+
+    nextVariantIndex = (latestVariant?.variant_index ?? 0) + 1
+  }
 
   if (!finalAssistantMessageId) {
     const insertStart = now()
@@ -231,6 +287,10 @@ export async function runPostGenerationPipeline({
       role: 'assistant',
       content: assistantText,
       model_used: modelName,
+      turn_id: turnId,
+      variant_index: nextVariantIndex,
+      supersedes_message_id: previousActiveAssistantId,
+      message_status: turnId ? MESSAGE_STATUS_GENERATING : MESSAGE_STATUS_COMPLETED,
       user_id: userId,
     }
     const { data: insertedMessage, error: messageInsertError } = await supabase
@@ -246,44 +306,92 @@ export async function runPostGenerationPipeline({
     }
 
     finalAssistantMessageId = insertedMessage.id
+    insertedAssistantInPipeline = true
   }
 
   if (!finalAssistantMessageId) {
     throw new Error('Failed to resolve assistant message id')
   }
 
-  const assistantFinalizeUpdate: MessageUpdate = {
-    content: assistantText,
-    model_used: modelName,
-    prompt_tokens: promptTokens,
-    completion_tokens: completionTokens,
-    debug_info: debugInfo as Json,
-    user_id: userId,
-  }
-  const { error: assistantFinalizeError } = await supabase
-    .from('messages')
-    .update(assistantFinalizeUpdate as never)
-    .eq('id', finalAssistantMessageId)
-    .eq('chat_id', chatId)
+  try {
+    const assistantFinalizeUpdate: MessageUpdate = {
+      content: assistantText,
+      model_used: modelName,
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      debug_info: debugInfo as Json,
+      turn_id: turnId,
+      variant_index: nextVariantIndex,
+      supersedes_message_id: previousActiveAssistantId,
+      message_status: MESSAGE_STATUS_COMPLETED,
+      user_id: userId,
+    }
+    const { error: assistantFinalizeError } = await supabase
+      .from('messages')
+      .update(assistantFinalizeUpdate as never)
+      .eq('id', finalAssistantMessageId)
+      .eq('chat_id', chatId)
 
-  if (assistantFinalizeError) {
-    throw new Error('Failed to finalize assistant message')
-  }
+    if (assistantFinalizeError) {
+      throw new Error(
+        `Failed to update assistant message content: ${assistantFinalizeError.message}`,
+      )
+    }
 
-  const debugClearUpdate: MessageUpdate = { debug_info: null }
-  const { error: debugClearError } = await supabase
-    .from('messages')
-    .update(debugClearUpdate as never)
-    .eq('chat_id', chatId)
-    .eq('role', 'assistant')
-    .neq('id', finalAssistantMessageId)
-    .not('debug_info', 'is', null)
+    if (turnId) {
+      const { error: activeAssistantUpdateError } = await supabase
+        .from('chat_turns')
+        .update({ active_assistant_message_id: finalAssistantMessageId } as never)
+        .eq('id', turnId)
+        .eq('chat_id', chatId)
 
-  if (debugClearError) {
-    console.warn('[Chat Job Runner] Failed to clear old debug_info', {
-      chatId,
-      error: debugClearError.message,
-    })
+      if (activeAssistantUpdateError) {
+        throw new Error('Failed to update active assistant variant for turn')
+      }
+      activeAssistantPointerUpdated = true
+
+      if (previousActiveAssistantId && previousActiveAssistantId !== finalAssistantMessageId) {
+        const supersedeUpdate: MessageUpdate = {
+          message_status: MESSAGE_STATUS_SUPERSEDED,
+        }
+        const { error: supersedeError } = await supabase
+          .from('messages')
+          .update(supersedeUpdate as never)
+          .eq('id', previousActiveAssistantId)
+          .eq('chat_id', chatId)
+
+        if (supersedeError) {
+          throw new Error('Failed to supersede previous assistant variant')
+        }
+        previousAssistantSuperseded = true
+      }
+    }
+  } catch (error) {
+    if (turnId && activeAssistantPointerUpdated) {
+      await supabase
+        .from('chat_turns')
+        .update({ active_assistant_message_id: previousActiveAssistantId } as never)
+        .eq('id', turnId)
+        .eq('chat_id', chatId)
+    }
+
+    if (previousAssistantSuperseded && previousActiveAssistantId) {
+      await supabase
+        .from('messages')
+        .update({ message_status: MESSAGE_STATUS_COMPLETED } as never)
+        .eq('id', previousActiveAssistantId)
+        .eq('chat_id', chatId)
+    }
+
+    if (insertedAssistantInPipeline) {
+      await supabase
+        .from('messages')
+        .delete()
+        .eq('id', finalAssistantMessageId)
+        .eq('chat_id', chatId)
+    }
+
+    throw error
   }
 
   if (bilingualEnabled) {

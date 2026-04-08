@@ -5,6 +5,8 @@ import type { FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { MESSAGE_STATUS_COMPLETED } from '@/lib/chat/message-status'
+import { createChatTurn } from '@/lib/chat/turns'
 import type { Character, ApiKey, Persona } from '@/types/database.types'
 
 interface Props {
@@ -68,13 +70,33 @@ export default function NewChatForm({ character, apiKeys, personas }: Props) {
 
         // {{user}}를 페르소나 이름으로 치환
         const processedGreeting = currentGreeting.replace(/\{\{user\}\}/g, userName)
+        const greetingMessageId = crypto.randomUUID()
+        const greetingTurnId = crypto.randomUUID()
 
-        await supabase.from('messages').insert({
+        await createChatTurn({
+          supabase,
+          chatId: chat.id,
+          userId: user.id,
+          turnId: greetingTurnId,
+          userMessageId: null,
+          activeAssistantMessageId: greetingMessageId,
+        })
+
+        const { error: greetingInsertError } = await supabase.from('messages').insert({
+          id: greetingMessageId,
           chat_id: chat.id,
           user_id: user.id,
           role: 'assistant',
           content: processedGreeting,
+          turn_id: greetingTurnId,
+          variant_index: 1,
+          supersedes_message_id: null,
+          message_status: MESSAGE_STATUS_COMPLETED,
         })
+
+        if (greetingInsertError) {
+          throw greetingInsertError
+        }
       }
 
       // 채팅 페이지로 이동 (API 키 ID 전달)

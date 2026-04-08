@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 import { resolveChatMemoryConfig } from '@/lib/chat/model-config'
 import ChatSummariesPanel from './ChatSummariesPanel'
 
@@ -27,11 +28,18 @@ export default async function ChatSummariesPanelLoader({ chatId }: Props) {
       .select('id, start_seq, end_seq, facts, created_at')
       .eq('chat_id', chatId)
       .order('start_seq', { ascending: true }),
-    supabase.from('messages').select('id', { head: true, count: 'exact' }).eq('chat_id', chatId),
+    supabase
+      .from('messages')
+      .select('id', { head: true, count: 'exact' })
+      .eq('chat_id', chatId)
+      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+      .neq('message_status', MESSAGE_STATUS_GENERATING),
     supabase
       .from('messages')
       .select('sequence')
       .eq('chat_id', chatId)
+      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+      .neq('message_status', MESSAGE_STATUS_GENERATING)
       .order('sequence', { ascending: false })
       .limit(1)
       .maybeSingle<{ sequence: number }>(),

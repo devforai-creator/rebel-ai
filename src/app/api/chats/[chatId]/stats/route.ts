@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 
 type LatestAssistantUsage = {
   id: string
@@ -64,6 +65,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
       .from('messages')
       .select('*', { count: 'exact', head: true })
       .eq('chat_id', chatId)
+      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+      .neq('message_status', MESSAGE_STATUS_GENERATING)
       .eq('user_id', user.id),
     supabase
       .from('chat_summaries')
@@ -75,6 +78,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
       .eq('chat_id', chatId)
       .eq('user_id', user.id)
       .eq('role', 'assistant')
+      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+      .neq('message_status', MESSAGE_STATUS_GENERATING)
       .order('sequence', { ascending: false })
       .limit(1)
       .maybeSingle(),

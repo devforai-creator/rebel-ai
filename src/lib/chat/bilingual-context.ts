@@ -1,5 +1,6 @@
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
+import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 import type { Message, Profile } from '@/types/database.types'
 
 type BilingualContextSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'from'>
@@ -55,6 +56,8 @@ export async function applyBilingualContext({
     .from('messages')
     .select<'role, content, content_en'>('role, content, content_en')
     .eq('chat_id', chatId)
+    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+    .neq('message_status', MESSAGE_STATUS_GENERATING)
     .not('content_en', 'is', null) // Only fetch if translation exists
 
   if (error) {

@@ -3,8 +3,41 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
+import { getFormDataErrorMessage, safeParseFormData } from '@/lib/form-data'
 import type { Profile } from '@/types/database.types'
 import { isLLMProvider } from '@/lib/api-keys/provider-utils'
+
+const optionalTrimmedStringSchema = z
+  .string()
+  .optional()
+  .transform((value) => normalizeOptionalString(value))
+
+const ragSettingsFormSchema = z.object({
+  enable_rag: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((value) => value === 'true'),
+  voyage_key_id: optionalTrimmedStringSchema,
+})
+
+const summaryModelPreferenceFormSchema = z.object({
+  summary_key_id: optionalTrimmedStringSchema,
+})
+
+const reprocessSettingsFormSchema = z.object({
+  reprocess_prompt: optionalTrimmedStringSchema,
+  reprocess_key_id: optionalTrimmedStringSchema,
+})
+
+const translationModelPreferenceFormSchema = z.object({
+  translation_key_id: optionalTrimmedStringSchema,
+})
+
+const changePasswordFormSchema = z.object({
+  new_password: z.string().min(6, 'Password must be at least 6 characters.'),
+})
 
 export async function deleteAccount() {
   const supabase = await createClient()
@@ -145,12 +178,18 @@ export async function updateRagSettings(
     return { error: 'Login required.', success: false }
   }
 
-  const enableFlag = formData.get('enable_rag')
-  const rawKeyId = formData.get('voyage_key_id')
+  const parsedForm = parseAccountFormData(
+    formData,
+    ragSettingsFormSchema,
+    'Please check your RAG settings input.',
+  )
 
-  const enableRag = enableFlag === 'true'
-  const selectedKeyId =
-    typeof rawKeyId === 'string' && rawKeyId.trim().length > 0 ? rawKeyId.trim() : null
+  if ('error' in parsedForm) {
+    return parsedForm
+  }
+
+  const enableRag = parsedForm.data.enable_rag
+  const selectedKeyId = parsedForm.data.voyage_key_id
 
   if (enableRag) {
     if (!selectedKeyId) {
@@ -212,9 +251,17 @@ export async function updateSummaryModelPreference(
     return { error: 'Login required.', success: false }
   }
 
-  const rawKeyId = formData.get('summary_key_id')
-  const summaryKeyId =
-    typeof rawKeyId === 'string' && rawKeyId.trim().length > 0 ? rawKeyId.trim() : null
+  const parsedForm = parseAccountFormData(
+    formData,
+    summaryModelPreferenceFormSchema,
+    'Please check your summary model settings input.',
+  )
+
+  if ('error' in parsedForm) {
+    return parsedForm
+  }
+
+  const summaryKeyId = parsedForm.data.summary_key_id
 
   if (summaryKeyId) {
     const { data: apiKey, error: keyError } = await supabase
@@ -270,13 +317,18 @@ export async function updateReprocessSettings(
     return { error: 'Login required.', success: false }
   }
 
-  const rawPrompt = formData.get('reprocess_prompt')
-  const rawKeyId = formData.get('reprocess_key_id')
+  const parsedForm = parseAccountFormData(
+    formData,
+    reprocessSettingsFormSchema,
+    'Please check your reprocess settings input.',
+  )
 
-  const reprocessPrompt =
-    typeof rawPrompt === 'string' && rawPrompt.trim().length > 0 ? rawPrompt.trim() : null
-  const reprocessKeyId =
-    typeof rawKeyId === 'string' && rawKeyId.trim().length > 0 ? rawKeyId.trim() : null
+  if ('error' in parsedForm) {
+    return parsedForm
+  }
+
+  const reprocessPrompt = parsedForm.data.reprocess_prompt
+  const reprocessKeyId = parsedForm.data.reprocess_key_id
 
   if (reprocessKeyId) {
     const { data: apiKey, error: keyError } = await supabase
@@ -335,9 +387,17 @@ export async function updateTranslationModelPreference(
     return { error: 'Login required.', success: false }
   }
 
-  const rawKeyId = formData.get('translation_key_id')
-  const translationKeyId =
-    typeof rawKeyId === 'string' && rawKeyId.trim().length > 0 ? rawKeyId.trim() : null
+  const parsedForm = parseAccountFormData(
+    formData,
+    translationModelPreferenceFormSchema,
+    'Please check your translation model settings input.',
+  )
+
+  if ('error' in parsedForm) {
+    return parsedForm
+  }
+
+  const translationKeyId = parsedForm.data.translation_key_id
 
   if (translationKeyId) {
     const { data: apiKey, error: keyError } = await supabase
@@ -387,14 +447,14 @@ export async function changePassword(formData: FormData) {
     return { error: 'Login required.' }
   }
 
-  const newPassword = formData.get('new_password') as string
+  const parsedForm = parsePasswordFormData(formData)
 
-  if (!newPassword || newPassword.length < 6) {
-    return { error: 'Password must be at least 6 characters.' }
+  if ('error' in parsedForm) {
+    return parsedForm
   }
 
   const { error } = await supabase.auth.updateUser({
-    password: newPassword,
+    password: parsedForm.data.new_password,
   })
 
   if (error) {
@@ -403,4 +463,51 @@ export async function changePassword(formData: FormData) {
   }
 
   return { success: true }
+}
+
+function normalizeOptionalString(value: string | undefined): string | null {
+  const trimmed = value?.trim()
+  return trimmed && trimmed.length > 0 ? trimmed : null
+}
+
+function parseAccountFormData<TSchema extends z.ZodTypeAny>(
+  formData: FormData,
+  schema: TSchema,
+  fallbackMessage: string,
+): { data: z.infer<TSchema> } | { error: string; success: false } {
+  const parsed = safeParseFormData(formData, schema)
+
+  if (!parsed.success) {
+    return {
+      error: getFormDataErrorMessage(parsed.error, fallbackMessage),
+      success: false,
+    }
+  }
+
+  return { data: parsed.data }
+}
+
+function parsePasswordFormData(
+  formData: FormData,
+): { data: z.infer<typeof changePasswordFormSchema> } | { error: string } {
+  const parsed = safeParseFormData(formData, changePasswordFormSchema)
+
+  if (!parsed.success) {
+    return {
+      error: getAccountFormErrorMessage(parsed.error, 'Please check your password input.'),
+    }
+  }
+
+  return { data: parsed.data }
+}
+
+function getAccountFormErrorMessage(error: z.ZodError, fallbackMessage: string): string {
+  const firstIssue = error.issues[0]
+  const field = typeof firstIssue?.path[0] === 'string' ? firstIssue.path[0] : null
+
+  if (field === 'new_password') {
+    return 'Password must be at least 6 characters.'
+  }
+
+  return getFormDataErrorMessage(error, fallbackMessage)
 }

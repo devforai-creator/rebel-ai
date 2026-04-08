@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
 import {
   recordChatRunnerTriggerFailure,
@@ -9,11 +9,15 @@ import {
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
+/** Seconds to wait for the runner request to be delivered before aborting.
+ *  The runner route responds with a fast 202 dispatch ack. */
+const RUNNER_DELIVERY_TIMEOUT_S = 10
+
 export async function GET(req: NextRequest) {
   const adminSecret = process.env.CHAT_ADMIN_SECRET
   const cronSecret = process.env.CRON_SECRET
 
-  if (!adminSecret || !cronSecret) {
+  if (!adminSecret) {
     console.error('[Chat Job Runner Trigger] Required secrets not configured', {
       hasAdminSecret: !!adminSecret,
       hasCronSecret: !!cronSecret,
@@ -24,7 +28,7 @@ export async function GET(req: NextRequest) {
   // Security: only accept bearer token auth to avoid query secret leakage in logs.
   const authHeader = req.headers.get('authorization')
 
-  const isValidCron = authHeader === `Bearer ${cronSecret}`
+  const isValidCron = cronSecret ? authHeader === `Bearer ${cronSecret}` : false
   const isValidAdmin = authHeader === `Bearer ${adminSecret}`
 
   if (!isValidCron && !isValidAdmin) {
@@ -39,19 +43,42 @@ export async function GET(req: NextRequest) {
   const limit = resolveBatchLimit()
   const endpoint = buildInternalApiUrl('/api/internal/chat-job-runner')
   const headers = buildAuthHeaders(adminSecret)
-  const body = JSON.stringify({ limit })
 
-  // Fire-and-forget: trigger job runner without waiting for response
-  // This prevents cron timeout when LLM generation takes > 300 seconds
-  // Job runner runs as independent serverless instance
-  fetch(endpoint, { method: 'POST', headers, body })
-    .then(() => {
-      recordChatRunnerTriggerSuccess({ attempt: 1, status: 200, processedCount: null })
-    })
-    .catch((error) => {
+  // Use after() to guarantee the fetch is delivered after 202 is sent.
+  // Abort after RUNNER_DELIVERY_TIMEOUT_S — the runner continues independently
+  // once Vercel's router accepts the request.
+  after(async () => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), RUNNER_DELIVERY_TIMEOUT_S * 1000)
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ limit, dispatch: true }),
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        const text = await response.text()
+        const error = new Error(
+          `Runner dispatch failed (${response.status}): ${text || 'Unknown error'}`,
+        )
+        recordChatRunnerTriggerFailure(error, { attempt: 1, status: response.status })
+        console.error('[Chat Job Runner Trigger] Runner dispatch failed', {
+          status: response.status,
+          body: text,
+        })
+        return
+      }
+
+      recordChatRunnerTriggerSuccess({ attempt: 1, status: response.status, processedCount: null })
+    } catch (error) {
       recordChatRunnerTriggerFailure(error, { attempt: 1 })
       console.error('[Chat Job Runner Trigger] Failed to invoke runner', error)
-    })
+    } finally {
+      clearTimeout(timer)
+    }
+  })
 
   return NextResponse.json(
     {

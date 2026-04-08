@@ -22,6 +22,7 @@ import { isLLMProvider } from '@/lib/api-keys/provider-utils'
 import { getDefaultModelForProvider } from '@/lib/llm/default-model'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
+import { after } from 'next/server'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
@@ -349,38 +350,51 @@ export async function POST(req: Request) {
       triggerMessageTranslation(insertedUserMessageId, user.id)
     }
 
-    // Trigger job runner immediately (fire-and-forget)
-    // Cron still runs as backup for any missed jobs
+    // Trigger job runner via trigger endpoint (returns 202 quickly)
+    // Uses after() to guarantee delivery; cron still runs as backup
     const adminSecret = process.env.CHAT_ADMIN_SECRET
     if (adminSecret) {
-      const jobRunnerUrl = buildInternalApiUrl('/api/internal/chat-job-runner').toString()
+      const triggerUrl = buildInternalApiUrl('/api/internal/chat-job-runner/trigger').toString()
 
       logChatApiDebug('[Chat API] Triggering job runner', {
         chatId,
         requestId,
-        jobRunnerUrl,
+        triggerUrl,
         vercelEnv: process.env.VERCEL_ENV,
       })
 
-      fetch(jobRunnerUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${adminSecret}`,
-          ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET && {
-            'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
-          }),
-        },
-        body: JSON.stringify({ limit: 1 }),
-      }).catch((err) => {
-        // Job is still queued and will be picked up by cron as backup
-        console.error('[Chat API] Failed to trigger job runner', {
-          chatId,
-          requestId,
-          jobId: job.id,
-          jobRunnerUrl,
-          error: err instanceof Error ? err.message : String(err),
-        })
+      after(async () => {
+        try {
+          const response = await fetch(triggerUrl, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${adminSecret}`,
+              ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET && {
+                'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+              }),
+            },
+          })
+
+          if (!response.ok) {
+            const text = await response.text()
+            console.error('[Chat API] Job runner trigger responded with non-OK status', {
+              chatId,
+              requestId,
+              jobId: job.id,
+              triggerUrl,
+              status: response.status,
+              body: text,
+            })
+          }
+        } catch (err) {
+          console.error('[Chat API] Failed to trigger job runner', {
+            chatId,
+            requestId,
+            jobId: job.id,
+            triggerUrl,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
       })
     }
 

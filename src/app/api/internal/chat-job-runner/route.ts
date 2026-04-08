@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { processChatJobs } from './service'
 
 export const runtime = 'nodejs'
@@ -20,7 +20,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { limit = 1 } = ((await req.json().catch(() => ({}))) as { limit?: number }) ?? {}
+  const { limit = 1, dispatch = false } =
+    ((await req.json().catch(() => ({}))) as {
+      limit?: number
+      dispatch?: boolean
+    }) ?? {}
+
+  if (dispatch === true) {
+    after(async () => {
+      try {
+        await processChatJobs(limit)
+      } catch (error) {
+        console.error('[Chat Job Runner] Background dispatch failed', error)
+      }
+    })
+
+    return NextResponse.json(
+      {
+        accepted: true,
+        dispatched: true,
+      },
+      { status: 202 },
+    )
+  }
 
   const results = await processChatJobs(limit)
 

@@ -33,6 +33,16 @@ vi.mock('@/lib/chat/translation-trigger', () => ({
   triggerMessageTranslation: vi.fn(),
 }))
 
+vi.mock('next/server', async () => {
+  const actual = await vi.importActual('next/server')
+  return {
+    ...actual,
+    after: vi.fn((cb: () => void | Promise<void>) => {
+      cb()
+    }),
+  }
+})
+
 vi.stubGlobal('fetch', fetchMock)
 
 import { POST } from './route'
@@ -143,6 +153,13 @@ fetchMock.mockImplementation(async (input, init) => {
     typeof input === 'string' || input instanceof URL
       ? new URL(input.toString())
       : new URL(String(input))
+
+  if (url.pathname === '/api/internal/chat-job-runner/trigger') {
+    return new Response(JSON.stringify({ triggered: true }), {
+      status: 202,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 
   if (url.pathname !== '/api/internal/chat-admin') {
     throw new Error(`Unexpected fetch call: ${url.toString()}`)

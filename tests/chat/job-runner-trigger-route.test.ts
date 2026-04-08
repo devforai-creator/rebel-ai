@@ -2,6 +2,16 @@ import { beforeEach, describe, expect, it, vi, afterEach, afterAll } from 'vites
 import { NextRequest } from 'next/server'
 import { __resetChatRunnerTriggerStatsForTest } from '@/lib/chat/runner-trigger-monitor'
 
+vi.mock('next/server', async () => {
+  const actual = await vi.importActual('next/server')
+  return {
+    ...actual,
+    after: vi.fn((cb: () => void | Promise<void>) => {
+      cb()
+    }),
+  }
+})
+
 const ORIGINAL_ENV = { ...process.env }
 const originalFetch = global.fetch
 
@@ -44,8 +54,8 @@ describe('chat job runner trigger route', () => {
 
   it('returns 202 immediately with fire-and-forget trigger', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ processedCount: 1, processed: [] }), {
-        status: 200,
+      new Response(JSON.stringify({ accepted: true, dispatched: true }), {
+        status: 202,
       }),
     )
     global.fetch = fetchMock as typeof fetch
@@ -67,7 +77,8 @@ describe('chat job runner trigger route', () => {
         headers: expect.objectContaining({
           Authorization: 'Bearer admin-secret',
         }),
-        body: JSON.stringify({ limit: 2 }),
+        body: JSON.stringify({ limit: 2, dispatch: true }),
+        signal: expect.any(AbortSignal),
       },
     )
   })
@@ -111,5 +122,23 @@ describe('chat job runner trigger route', () => {
     expect(response.status).toBe(500)
     expect(body.error).toBe('Server misconfigured')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('allows admin-authenticated dispatch even when CRON_SECRET is missing', async () => {
+    delete process.env.CRON_SECRET
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ accepted: true, dispatched: true }), {
+        status: 202,
+      }),
+    )
+    global.fetch = fetchMock as typeof fetch
+
+    const { GET } = await import('@/app/api/internal/chat-job-runner/trigger/route')
+    const response = await GET(buildRequest('Bearer admin-secret'))
+    const body = await response.json()
+
+    expect(response.status).toBe(202)
+    expect(body.triggered).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,10 +1,9 @@
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
-import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 import type { Message, Profile } from '@/types/database.types'
 
 type BilingualContextSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'from'>
-type TranslatedMessageRow = Pick<Message, 'role' | 'content' | 'content_en'>
+type TranslatedMessageRow = Pick<Message, 'id' | 'content_en'>
 type BilingualProfileRow = Pick<Profile, 'translation_api_key_id'>
 
 /**
@@ -50,14 +49,23 @@ export async function applyBilingualContext({
     return messages
   }
 
-  // Fetch translations from DB
-  // We match by content since we don't have sequence info in SanitizedMessage
+  const recentStartIndex = messages.length - recentKoreanCount
+  const olderMessages = messages.slice(0, recentStartIndex)
+  const translationIds = olderMessages
+    .map((message) => message.messageId)
+    .filter(
+      (messageId): messageId is string => typeof messageId === 'string' && messageId.length > 0,
+    )
+
+  if (translationIds.length === 0) {
+    return messages
+  }
+
   const { data, error } = await supabase
     .from('messages')
-    .select<'role, content, content_en'>('role, content, content_en')
+    .select<'id, content_en'>('id, content_en')
     .eq('chat_id', chatId)
-    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-    .neq('message_status', MESSAGE_STATUS_GENERATING)
+    .in('id', translationIds)
     .not('content_en', 'is', null) // Only fetch if translation exists
 
   if (error) {
@@ -72,19 +80,16 @@ export async function applyBilingualContext({
     return messages
   }
 
-  // Build lookup map: "role:content" -> content_en
+  // Build lookup map: message id -> content_en
   const translationMap = new Map<string, string>()
   for (const msg of dbMessages) {
-    if (msg.content_en) {
-      // Use first 200 chars of content as key to handle long messages
-      const key = `${msg.role}:${msg.content.slice(0, 200)}`
-      translationMap.set(key, msg.content_en)
+    if (msg.id && msg.content_en) {
+      translationMap.set(msg.id, msg.content_en)
     }
   }
 
   // Apply translations to older messages
   const result: SanitizedMessage[] = []
-  const recentStartIndex = messages.length - recentKoreanCount
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]
@@ -93,13 +98,12 @@ export async function applyBilingualContext({
       // Recent messages: keep original Korean
       result.push(msg)
     } else {
-      // Older messages: use English translation if available
-      const key = `${msg.role}:${msg.content.slice(0, 200)}`
-      const translation = translationMap.get(key)
+      const translation =
+        typeof msg.messageId === 'string' ? translationMap.get(msg.messageId) : undefined
 
       if (translation) {
         result.push({
-          role: msg.role,
+          ...msg,
           content: translation,
         })
       } else {

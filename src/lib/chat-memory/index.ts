@@ -428,6 +428,7 @@ async function buildPrefixLiveBlocksPlan({
     fallbackMessages = conversationMessages.slice(lastChunkEnd).map((message) => ({
       role: message.role,
       content: message.content,
+      messageId: message.id,
     }))
   } catch (error) {
     console.error(

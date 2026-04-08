@@ -18,6 +18,7 @@ export type MessageTranscriptRow = Pick<Message, 'role' | 'content'>
 export interface SanitizedMessage {
   role: ChatRole
   content: string
+  messageId?: string | null
 }
 
 // Range type for summary boundaries

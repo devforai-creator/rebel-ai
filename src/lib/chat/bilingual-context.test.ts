@@ -47,9 +47,9 @@ describe('bilingual-context', () => {
       })
 
       const messages: SanitizedMessage[] = [
-        { role: 'user', content: '안녕하세요' },
-        { role: 'assistant', content: '반갑습니다' },
-        { role: 'user', content: '날씨가 좋네요' },
+        { role: 'user', content: '안녕하세요', messageId: 'msg-1' },
+        { role: 'assistant', content: '반갑습니다', messageId: 'msg-2' },
+        { role: 'user', content: '날씨가 좋네요', messageId: 'msg-3' },
       ]
 
       const result = await applyBilingualContext({
@@ -68,19 +68,31 @@ describe('bilingual-context', () => {
           messages: {
             rows: [
               // No content_en in any message
-              { chat_id: 'chat-1', role: 'user', content: '안녕하세요', content_en: null },
-              { chat_id: 'chat-1', role: 'assistant', content: '반갑습니다', content_en: null },
+              {
+                id: 'msg-1',
+                chat_id: 'chat-1',
+                role: 'user',
+                content: '안녕하세요',
+                content_en: null,
+              },
+              {
+                id: 'msg-2',
+                chat_id: 'chat-1',
+                role: 'assistant',
+                content: '반갑습니다',
+                content_en: null,
+              },
             ],
           },
         },
       })
 
       const messages: SanitizedMessage[] = [
-        { role: 'user', content: '안녕하세요' },
-        { role: 'assistant', content: '반갑습니다' },
-        { role: 'user', content: '오늘 뭐해요?' },
-        { role: 'assistant', content: '일하고 있어요' },
-        { role: 'user', content: '힘내세요!' },
+        { role: 'user', content: '안녕하세요', messageId: 'msg-1' },
+        { role: 'assistant', content: '반갑습니다', messageId: 'msg-2' },
+        { role: 'user', content: '오늘 뭐해요?', messageId: 'msg-3' },
+        { role: 'assistant', content: '일하고 있어요', messageId: 'msg-4' },
+        { role: 'user', content: '힘내세요!', messageId: 'msg-5' },
       ]
 
       const result = await applyBilingualContext({
@@ -99,27 +111,43 @@ describe('bilingual-context', () => {
         tables: {
           messages: {
             rows: [
-              { chat_id: 'chat-1', role: 'user', content: '안녕하세요', content_en: 'Hello' },
               {
+                id: 'msg-1',
+                chat_id: 'chat-1',
+                role: 'user',
+                content: '안녕하세요',
+                content_en: 'Hello',
+              },
+              {
+                id: 'msg-2',
                 chat_id: 'chat-1',
                 role: 'assistant',
                 content: '반갑습니다',
                 content_en: 'Nice to meet you',
               },
               {
+                id: 'msg-3',
                 chat_id: 'chat-1',
                 role: 'user',
                 content: '오늘 뭐해요?',
                 content_en: 'What are you doing today?',
               },
               {
+                id: 'msg-4',
                 chat_id: 'chat-1',
                 role: 'assistant',
                 content: '일하고 있어요',
                 content_en: 'I am working',
               },
-              { chat_id: 'chat-1', role: 'user', content: '힘내세요!', content_en: 'Cheer up!' },
               {
+                id: 'msg-5',
+                chat_id: 'chat-1',
+                role: 'user',
+                content: '힘내세요!',
+                content_en: 'Cheer up!',
+              },
+              {
+                id: 'msg-6',
                 chat_id: 'chat-1',
                 role: 'assistant',
                 content: '감사합니다',
@@ -131,12 +159,12 @@ describe('bilingual-context', () => {
       })
 
       const messages: SanitizedMessage[] = [
-        { role: 'user', content: '안녕하세요' },
-        { role: 'assistant', content: '반갑습니다' },
-        { role: 'user', content: '오늘 뭐해요?' },
-        { role: 'assistant', content: '일하고 있어요' },
-        { role: 'user', content: '힘내세요!' },
-        { role: 'assistant', content: '감사합니다' },
+        { role: 'user', content: '안녕하세요', messageId: 'msg-1' },
+        { role: 'assistant', content: '반갑습니다', messageId: 'msg-2' },
+        { role: 'user', content: '오늘 뭐해요?', messageId: 'msg-3' },
+        { role: 'assistant', content: '일하고 있어요', messageId: 'msg-4' },
+        { role: 'user', content: '힘내세요!', messageId: 'msg-5' },
+        { role: 'assistant', content: '감사합니다', messageId: 'msg-6' },
       ]
 
       const result = await applyBilingualContext({
@@ -147,14 +175,26 @@ describe('bilingual-context', () => {
       })
 
       // First 4 messages should be translated
-      expect(result[0]).toEqual({ role: 'user', content: 'Hello' })
-      expect(result[1]).toEqual({ role: 'assistant', content: 'Nice to meet you' })
-      expect(result[2]).toEqual({ role: 'user', content: 'What are you doing today?' })
-      expect(result[3]).toEqual({ role: 'assistant', content: 'I am working' })
+      expect(result[0]).toEqual({ role: 'user', content: 'Hello', messageId: 'msg-1' })
+      expect(result[1]).toEqual({
+        role: 'assistant',
+        content: 'Nice to meet you',
+        messageId: 'msg-2',
+      })
+      expect(result[2]).toEqual({
+        role: 'user',
+        content: 'What are you doing today?',
+        messageId: 'msg-3',
+      })
+      expect(result[3]).toEqual({
+        role: 'assistant',
+        content: 'I am working',
+        messageId: 'msg-4',
+      })
 
       // Last 2 messages should keep Korean
-      expect(result[4]).toEqual({ role: 'user', content: '힘내세요!' })
-      expect(result[5]).toEqual({ role: 'assistant', content: '감사합니다' })
+      expect(result[4]).toEqual({ role: 'user', content: '힘내세요!', messageId: 'msg-5' })
+      expect(result[5]).toEqual({ role: 'assistant', content: '감사합니다', messageId: 'msg-6' })
     })
 
     it('uses original content when translation missing for some messages', async () => {
@@ -162,9 +202,16 @@ describe('bilingual-context', () => {
         tables: {
           messages: {
             rows: [
-              { chat_id: 'chat-1', role: 'user', content: '안녕하세요', content_en: 'Hello' },
+              {
+                id: 'msg-1',
+                chat_id: 'chat-1',
+                role: 'user',
+                content: '안녕하세요',
+                content_en: 'Hello',
+              },
               // No translation for assistant message
               {
+                id: 'msg-3',
                 chat_id: 'chat-1',
                 role: 'user',
                 content: '오늘 뭐해요?',
@@ -176,11 +223,11 @@ describe('bilingual-context', () => {
       })
 
       const messages: SanitizedMessage[] = [
-        { role: 'user', content: '안녕하세요' },
-        { role: 'assistant', content: '반갑습니다' }, // No translation
-        { role: 'user', content: '오늘 뭐해요?' },
-        { role: 'assistant', content: '일하고 있어요' },
-        { role: 'user', content: '힘내세요!' },
+        { role: 'user', content: '안녕하세요', messageId: 'msg-1' },
+        { role: 'assistant', content: '반갑습니다', messageId: 'msg-2' }, // No translation
+        { role: 'user', content: '오늘 뭐해요?', messageId: 'msg-3' },
+        { role: 'assistant', content: '일하고 있어요', messageId: 'msg-4' },
+        { role: 'user', content: '힘내세요!', messageId: 'msg-5' },
       ]
 
       const result = await applyBilingualContext({
@@ -191,14 +238,18 @@ describe('bilingual-context', () => {
       })
 
       // Translated
-      expect(result[0]).toEqual({ role: 'user', content: 'Hello' })
+      expect(result[0]).toEqual({ role: 'user', content: 'Hello', messageId: 'msg-1' })
       // Fallback to Korean (no translation)
-      expect(result[1]).toEqual({ role: 'assistant', content: '반갑습니다' })
+      expect(result[1]).toEqual({ role: 'assistant', content: '반갑습니다', messageId: 'msg-2' })
       // Translated
-      expect(result[2]).toEqual({ role: 'user', content: 'What are you doing today?' })
+      expect(result[2]).toEqual({
+        role: 'user',
+        content: 'What are you doing today?',
+        messageId: 'msg-3',
+      })
       // Recent - keep Korean
-      expect(result[3]).toEqual({ role: 'assistant', content: '일하고 있어요' })
-      expect(result[4]).toEqual({ role: 'user', content: '힘내세요!' })
+      expect(result[3]).toEqual({ role: 'assistant', content: '일하고 있어요', messageId: 'msg-4' })
+      expect(result[4]).toEqual({ role: 'user', content: '힘내세요!', messageId: 'msg-5' })
     })
 
     it('only fetches translations for the specified chatId', async () => {
@@ -207,12 +258,14 @@ describe('bilingual-context', () => {
           messages: {
             rows: [
               {
+                id: 'msg-1',
                 chat_id: 'chat-1',
                 role: 'user',
                 content: '안녕하세요',
                 content_en: 'Hello from chat-1',
               },
               {
+                id: 'msg-2',
                 chat_id: 'chat-2',
                 role: 'user',
                 content: '안녕하세요',
@@ -224,11 +277,11 @@ describe('bilingual-context', () => {
       })
 
       const messages: SanitizedMessage[] = [
-        { role: 'user', content: '안녕하세요' },
-        { role: 'assistant', content: '반갑습니다' },
-        { role: 'user', content: '날씨 좋아요' },
-        { role: 'assistant', content: '그렇네요' },
-        { role: 'user', content: '뭐해요?' },
+        { role: 'user', content: '안녕하세요', messageId: 'msg-1' },
+        { role: 'assistant', content: '반갑습니다', messageId: 'msg-a' },
+        { role: 'user', content: '날씨 좋아요', messageId: 'msg-b' },
+        { role: 'assistant', content: '그렇네요', messageId: 'msg-c' },
+        { role: 'user', content: '뭐해요?', messageId: 'msg-d' },
       ]
 
       const result = await applyBilingualContext({
@@ -247,24 +300,60 @@ describe('bilingual-context', () => {
         tables: {
           messages: {
             rows: [
-              { chat_id: 'chat-1', role: 'user', content: 'msg1', content_en: 'msg1-en' },
-              { chat_id: 'chat-1', role: 'assistant', content: 'msg2', content_en: 'msg2-en' },
-              { chat_id: 'chat-1', role: 'user', content: 'msg3', content_en: 'msg3-en' },
-              { chat_id: 'chat-1', role: 'assistant', content: 'msg4', content_en: 'msg4-en' },
-              { chat_id: 'chat-1', role: 'user', content: 'msg5', content_en: 'msg5-en' },
-              { chat_id: 'chat-1', role: 'assistant', content: 'msg6', content_en: 'msg6-en' },
+              {
+                id: 'msg-1',
+                chat_id: 'chat-1',
+                role: 'user',
+                content: 'msg1',
+                content_en: 'msg1-en',
+              },
+              {
+                id: 'msg-2',
+                chat_id: 'chat-1',
+                role: 'assistant',
+                content: 'msg2',
+                content_en: 'msg2-en',
+              },
+              {
+                id: 'msg-3',
+                chat_id: 'chat-1',
+                role: 'user',
+                content: 'msg3',
+                content_en: 'msg3-en',
+              },
+              {
+                id: 'msg-4',
+                chat_id: 'chat-1',
+                role: 'assistant',
+                content: 'msg4',
+                content_en: 'msg4-en',
+              },
+              {
+                id: 'msg-5',
+                chat_id: 'chat-1',
+                role: 'user',
+                content: 'msg5',
+                content_en: 'msg5-en',
+              },
+              {
+                id: 'msg-6',
+                chat_id: 'chat-1',
+                role: 'assistant',
+                content: 'msg6',
+                content_en: 'msg6-en',
+              },
             ],
           },
         },
       })
 
       const messages: SanitizedMessage[] = [
-        { role: 'user', content: 'msg1' },
-        { role: 'assistant', content: 'msg2' },
-        { role: 'user', content: 'msg3' },
-        { role: 'assistant', content: 'msg4' },
-        { role: 'user', content: 'msg5' },
-        { role: 'assistant', content: 'msg6' },
+        { role: 'user', content: 'msg1', messageId: 'msg-1' },
+        { role: 'assistant', content: 'msg2', messageId: 'msg-2' },
+        { role: 'user', content: 'msg3', messageId: 'msg-3' },
+        { role: 'assistant', content: 'msg4', messageId: 'msg-4' },
+        { role: 'user', content: 'msg5', messageId: 'msg-5' },
+        { role: 'assistant', content: 'msg6', messageId: 'msg-6' },
       ]
 
       // Don't pass recentKoreanCount - should default to 4
@@ -283,6 +372,80 @@ describe('bilingual-context', () => {
       expect(result[3].content).toBe('msg4')
       expect(result[4].content).toBe('msg5')
       expect(result[5].content).toBe('msg6')
+    })
+
+    it('keeps original content when older messages have no message ids', async () => {
+      supabase = createSupabaseMock({
+        tables: {
+          messages: {
+            rows: [
+              {
+                id: 'msg-1',
+                chat_id: 'chat-1',
+                role: 'user',
+                content: '안녕하세요',
+                content_en: 'Hello',
+              },
+            ],
+          },
+        },
+      })
+
+      const messages: SanitizedMessage[] = [
+        { role: 'user', content: '안녕하세요' },
+        { role: 'assistant', content: '반갑습니다', messageId: 'msg-2' },
+        { role: 'user', content: '최근 메시지', messageId: 'msg-3' },
+      ]
+
+      const result = await applyBilingualContext({
+        supabase: supabase as any,
+        chatId: 'chat-1',
+        messages,
+        recentKoreanCount: 1,
+      })
+
+      expect(result[0].content).toBe('안녕하세요')
+      expect(result[0].messageId).toBeUndefined()
+    })
+
+    it('matches translations by message id even when content is duplicated', async () => {
+      supabase = createSupabaseMock({
+        tables: {
+          messages: {
+            rows: [
+              {
+                id: 'msg-1',
+                chat_id: 'chat-1',
+                role: 'user',
+                content: '중복',
+                content_en: 'first duplicate',
+              },
+              {
+                id: 'msg-2',
+                chat_id: 'chat-1',
+                role: 'user',
+                content: '중복',
+                content_en: 'second duplicate',
+              },
+            ],
+          },
+        },
+      })
+
+      const messages: SanitizedMessage[] = [
+        { role: 'user', content: '중복', messageId: 'msg-2' },
+        { role: 'assistant', content: '최근 응답', messageId: 'msg-3' },
+        { role: 'user', content: '마지막', messageId: 'msg-4' },
+      ]
+
+      const result = await applyBilingualContext({
+        supabase: supabase as any,
+        chatId: 'chat-1',
+        messages,
+        recentKoreanCount: 2,
+      })
+
+      expect(result[0].content).toBe('second duplicate')
     })
   })
 

@@ -144,10 +144,14 @@ export async function POST(req: Request) {
             return typeof candidate.role === 'string' && typeof candidate.content === 'string'
           })
           .filter((message) => message.role === 'user' || message.role === 'assistant')
-          .map((message) => ({
-            role: message.role as 'user' | 'assistant',
-            content: message.content,
-          }))
+          .map((message) => {
+            const candidate = message as Record<string, unknown>
+            return {
+              role: message.role as 'user' | 'assistant',
+              content: message.content,
+              messageId: typeof candidate.messageId === 'string' ? candidate.messageId : null,
+            }
+          })
       : []
 
     const regenerateAssistantMessageId =

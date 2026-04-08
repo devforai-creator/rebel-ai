@@ -310,6 +310,7 @@ export async function loadGenerationTranscript({
         transcript.push({
           role: userMessage.role,
           content: userMessage.content,
+          messageId: userMessage.id,
         })
       }
     }
@@ -323,6 +324,7 @@ export async function loadGenerationTranscript({
         transcript.push({
           role: assistantMessage.role,
           content: assistantMessage.content,
+          messageId: assistantMessage.id,
         })
       }
     }

@@ -65,7 +65,11 @@ export function parseChatJobPayload(payload: unknown): ChatGenerationJobPayload 
     apiKeyId: candidate.apiKeyId,
     provider: candidate.provider,
     modelName: candidate.modelName,
-    sanitizedMessages: candidate.sanitizedMessages,
+    sanitizedMessages: candidate.sanitizedMessages.map((message) => ({
+      role: message.role,
+      content: message.content,
+      ...(typeof message.messageId === 'string' ? { messageId: message.messageId } : {}),
+    })),
     isRegeneration: candidate.isRegeneration,
     regenerateAssistantMessageId:
       typeof candidate.regenerateAssistantMessageId === 'string'

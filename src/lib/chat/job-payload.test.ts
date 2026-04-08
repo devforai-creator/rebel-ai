@@ -87,4 +87,15 @@ describe('chat job payload parsing', () => {
 
     expect(parsed?.regenerateAssistantMessageId).toBe('assistant-1')
   })
+
+  it('retains message ids when provided on sanitized messages', () => {
+    const parsed = parseChatJobPayload({
+      ...basePayload,
+      sanitizedMessages: [{ role: 'user', content: 'Hello', messageId: 'msg-1' }],
+    })
+
+    expect(parsed?.sanitizedMessages).toEqual([
+      { role: 'user', content: 'Hello', messageId: 'msg-1' },
+    ])
+  })
 })

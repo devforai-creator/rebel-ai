@@ -229,12 +229,13 @@ export function mapMessageToDisplay(message: Message): DisplayMessage {
 export function buildSanitizedMessages(
   history: Message[],
   current: DisplayMessage[],
-): Array<{ role: 'user' | 'assistant'; content: string }> {
+): Array<{ role: 'user' | 'assistant'; content: string; messageId: string | null }> {
   const historyDisplay = history.map(mapMessageToDisplay)
   return [...historyDisplay, ...current]
     .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
     .map((msg) => ({
       role: msg.role as 'user' | 'assistant',
       content: msg.content,
+      messageId: msg.temp ? null : msg.id,
     }))
 }

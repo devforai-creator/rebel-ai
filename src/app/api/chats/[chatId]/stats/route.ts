@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
+import { countProjectedChatMessages, loadLatestProjectedAssistantMessage } from '@/lib/chat/turns'
 
 type LatestAssistantUsage = {
   id: string
@@ -61,42 +61,24 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
 
   // Fetch counts in parallel with other queries
   const [messageCountResult, summaryCountResult, latestAssistantUsageResult] = await Promise.all([
-    supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('chat_id', chatId)
-      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-      .neq('message_status', MESSAGE_STATUS_GENERATING)
-      .eq('user_id', user.id),
+    countProjectedChatMessages({
+      supabase,
+      chatId,
+    }),
     supabase
       .from('chat_summaries')
       .select('*', { count: 'exact', head: true })
       .eq('chat_id', chatId),
-    supabase
-      .from('messages')
-      .select('id, sequence, prompt_tokens, completion_tokens, created_at, debug_info')
-      .eq('chat_id', chatId)
-      .eq('user_id', user.id)
-      .eq('role', 'assistant')
-      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-      .neq('message_status', MESSAGE_STATUS_GENERATING)
-      .order('sequence', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+    loadLatestProjectedAssistantMessage({
+      supabase,
+      chatId,
+    }),
   ])
 
-  const messageCount = messageCountResult.count ?? 0
+  const messageCount = messageCountResult
   const summaryCount = summaryCountResult.count ?? 0
 
-  const { data: latestAssistantUsage, error: latestUsageError } = latestAssistantUsageResult as {
-    data: LatestAssistantUsage | null
-    error: unknown
-  }
-
-  if (latestUsageError) {
-    console.error('[Chat stats] Failed to load latest message usage', latestUsageError)
-    return NextResponse.json({ error: 'Failed to load stats' }, { status: 500 })
-  }
+  const latestAssistantUsage = latestAssistantUsageResult as LatestAssistantUsage | null
 
   const { data: latestUsageEvent, error: latestUsageEventError } = (await supabase
     .from('chat_usage_events')

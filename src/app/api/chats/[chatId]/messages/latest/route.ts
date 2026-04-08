@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
+import { loadLatestProjectedMessage } from '@/lib/chat/turns'
 import { NextRequest } from 'next/server'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ chatId: string }> }) {
@@ -28,24 +28,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ chat
       return new Response('Chat not found', { status: 404 })
     }
 
-    // 최근 메시지 1개 가져오기
-    // Note: debug_info included for dev tools; cleared for old messages by job runner
-    const { data: messages, error: messagesError } = await supabase
-      .from('messages')
-      .select(
-        'id, chat_id, role, content, sequence, created_at, model_used, prompt_tokens, completion_tokens, debug_info, turn_id, variant_index, supersedes_message_id, message_status',
-      )
-      .eq('chat_id', chatId)
-      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-      .neq('message_status', MESSAGE_STATUS_GENERATING)
-      .order('created_at', { ascending: false })
-      .limit(1)
+    const message = await loadLatestProjectedMessage({
+      supabase,
+      chatId,
+    })
 
-    if (messagesError) {
-      return new Response('Failed to fetch messages', { status: 500 })
-    }
-
-    return Response.json(messages?.[0] || null)
+    return Response.json(message)
   } catch (error) {
     console.error('Latest message API error:', error)
     return new Response('Internal server error', { status: 500 })

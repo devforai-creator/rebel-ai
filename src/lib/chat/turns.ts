@@ -1,7 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
-import type { Database, ChatTurnInsert, ChatTurn, MessageInsert } from '@/types/database.types'
-import { MESSAGE_STATUS_COMPLETED, MESSAGE_STATUS_SUPERSEDED } from './message-status'
+import type {
+  Database,
+  ChatTurnInsert,
+  ChatTurn,
+  Message,
+  MessageInsert,
+} from '@/types/database.types'
+import {
+  MESSAGE_STATUS_COMPLETED,
+  MESSAGE_STATUS_GENERATING,
+  MESSAGE_STATUS_SUPERSEDED,
+} from './message-status'
 
 type TurnClient = Pick<SupabaseClient<Database>, 'from'>
 
@@ -9,6 +19,27 @@ type TurnSequenceRow = Pick<ChatTurn, 'turn_index'>
 type PersistedTurnRow = Pick<
   ChatTurn,
   'id' | 'turn_index' | 'user_message_id' | 'active_assistant_message_id'
+>
+type ProjectedTurnMessage = Pick<
+  Message,
+  | 'id'
+  | 'role'
+  | 'content'
+  | 'chat_id'
+  | 'user_id'
+  | 'sequence'
+  | 'model_used'
+  | 'prompt_tokens'
+  | 'completion_tokens'
+  | 'latency_ms'
+  | 'error_code'
+  | 'debug_info'
+  | 'content_en'
+  | 'created_at'
+  | 'turn_id'
+  | 'variant_index'
+  | 'supersedes_message_id'
+  | 'message_status'
 >
 type PersistedMessageRow = Pick<MessageInsert, 'id' | 'role' | 'content'> & {
   id: string
@@ -30,6 +61,15 @@ export type OrderedChatMessageInsert = Omit<MessageInsert, 'sequence'> & {
   id: string
   role: 'user' | 'assistant' | 'system'
 }
+
+export type ProjectedChatWindow = {
+  messages: ProjectedTurnMessage[]
+  hasMore: boolean
+  nextCursor: number | null
+}
+
+export const PROJECTED_CHAT_MESSAGE_COLUMNS =
+  'id, role, content, chat_id, user_id, sequence, model_used, prompt_tokens, completion_tokens, latency_ms, error_code, debug_info, content_en, created_at, turn_id, variant_index, supersedes_message_id, message_status'
 
 export function buildTurnGraphForMessages({
   chatId,
@@ -218,7 +258,7 @@ export async function loadGenerationTranscript({
     throw new Error('Chat turn not found')
   }
 
-  const turnsResult = (await (supabase
+  const turnsResult = await (supabase
     .from('chat_turns')
     .select('id, turn_index, user_message_id, active_assistant_message_id')
     .eq('chat_id', chatId)
@@ -226,7 +266,7 @@ export async function loadGenerationTranscript({
     .order('turn_index', { ascending: true }) as unknown as Promise<{
     data: PersistedTurnRow[]
     error: { message: string } | null
-  }>))
+  }>)
 
   if (turnsResult.error) {
     throw new Error(`Failed to load chat turns: ${turnsResult.error.message}`)
@@ -286,4 +326,322 @@ export async function loadGenerationTranscript({
   }
 
   return transcript
+}
+
+function getTurnMessageIds(turn: PersistedTurnRow | null): string[] {
+  if (!turn) return []
+
+  const ids: string[] = []
+  if (turn.user_message_id) {
+    ids.push(turn.user_message_id)
+  }
+  if (turn.active_assistant_message_id) {
+    ids.push(turn.active_assistant_message_id)
+  }
+  return ids
+}
+
+function getLowerSequenceBound(
+  turn: PersistedTurnRow | null,
+  messageMap: Map<string, ProjectedTurnMessage>,
+): number | null {
+  if (!turn) return null
+
+  const sequences = getTurnMessageIds(turn)
+    .map((messageId) => messageMap.get(messageId)?.sequence ?? null)
+    .filter((value): value is number => typeof value === 'number')
+
+  if (sequences.length === 0) {
+    return null
+  }
+
+  return Math.min(...sequences)
+}
+
+async function loadProjectedMessagesByIds({
+  supabase,
+  messageIds,
+}: {
+  supabase: TurnClient
+  messageIds: string[]
+}): Promise<Map<string, ProjectedTurnMessage>> {
+  if (messageIds.length === 0) {
+    return new Map()
+  }
+
+  const { data, error } = await supabase
+    .from('messages')
+    .select(PROJECTED_CHAT_MESSAGE_COLUMNS)
+    .in('id', [...new Set(messageIds)])
+
+  if (error) {
+    throw new Error(`Failed to load projected messages: ${error.message}`)
+  }
+
+  return new Map(
+    ((data ?? []) as ProjectedTurnMessage[]).map((message) => [message.id, message] as const),
+  )
+}
+
+async function loadStandaloneSystemMessages({
+  supabase,
+  chatId,
+  lowerSequenceBound,
+  upperSequenceBound,
+}: {
+  supabase: TurnClient
+  chatId: string
+  lowerSequenceBound?: number | null
+  upperSequenceBound?: number | null
+}): Promise<ProjectedTurnMessage[]> {
+  let query = supabase
+    .from('messages')
+    .select(PROJECTED_CHAT_MESSAGE_COLUMNS)
+    .eq('chat_id', chatId)
+    .eq('role', 'system')
+    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+    .neq('message_status', MESSAGE_STATUS_GENERATING)
+
+  if (typeof lowerSequenceBound === 'number') {
+    query = query.gte('sequence', lowerSequenceBound)
+  }
+
+  if (typeof upperSequenceBound === 'number') {
+    query = query.lt('sequence', upperSequenceBound)
+  }
+
+  const { data, error } = await query.order('sequence', { ascending: true })
+
+  if (error) {
+    throw new Error(`Failed to load standalone system messages: ${error.message}`)
+  }
+
+  return (data ?? []) as ProjectedTurnMessage[]
+}
+
+export async function loadProjectedChatWindow({
+  supabase,
+  chatId,
+  beforeTurnIndex = null,
+  limitTurns,
+}: {
+  supabase: TurnClient
+  chatId: string
+  beforeTurnIndex?: number | null
+  limitTurns: number
+}): Promise<ProjectedChatWindow> {
+  let turnsQuery = supabase
+    .from('chat_turns')
+    .select('id, turn_index, user_message_id, active_assistant_message_id')
+    .eq('chat_id', chatId)
+    .order('turn_index', { ascending: false })
+    .limit(limitTurns + 1)
+
+  if (typeof beforeTurnIndex === 'number') {
+    turnsQuery = turnsQuery.lt('turn_index', beforeTurnIndex)
+  }
+
+  const [turnsResult, boundaryTurnResult] = await Promise.all([
+    turnsQuery as unknown as Promise<{
+      data: PersistedTurnRow[] | null
+      error: { message: string } | null
+    }>,
+    typeof beforeTurnIndex === 'number'
+      ? (supabase
+          .from('chat_turns')
+          .select('id, turn_index, user_message_id, active_assistant_message_id')
+          .eq('chat_id', chatId)
+          .eq('turn_index', beforeTurnIndex)
+          .maybeSingle() as unknown as Promise<{
+          data: PersistedTurnRow | null
+          error: { code: string; message: string } | null
+        }>)
+      : Promise.resolve({
+          data: null,
+          error: null,
+        }),
+  ])
+
+  if (turnsResult.error) {
+    throw new Error(`Failed to load chat turns: ${turnsResult.error.message}`)
+  }
+
+  if (boundaryTurnResult.error && boundaryTurnResult.error.code !== 'PGRST116') {
+    throw new Error(`Failed to load boundary chat turn: ${boundaryTurnResult.error.message}`)
+  }
+
+  const fetchedTurns = turnsResult.data ?? []
+  const hasMore = fetchedTurns.length > limitTurns
+  const visibleTurnsDesc = hasMore ? fetchedTurns.slice(0, limitTurns) : fetchedTurns
+  const visibleTurns = visibleTurnsDesc.slice().sort((a, b) => a.turn_index - b.turn_index)
+  const oldestVisibleTurn = visibleTurns[0] ?? null
+  const boundaryTurn = boundaryTurnResult.data ?? null
+
+  const projectionMessageIds = [
+    ...visibleTurns.flatMap((turn) => getTurnMessageIds(turn)),
+    ...getTurnMessageIds(boundaryTurn),
+  ]
+  const messageMap = await loadProjectedMessagesByIds({
+    supabase,
+    messageIds: projectionMessageIds,
+  })
+
+  const turnMessages = visibleTurns
+    .flatMap((turn) =>
+      getTurnMessageIds(turn).map((messageId) => messageMap.get(messageId) ?? null),
+    )
+    .filter((message): message is ProjectedTurnMessage => message !== null)
+
+  const lowerSequenceBound =
+    oldestVisibleTurn?.turn_index === 1
+      ? null
+      : getLowerSequenceBound(oldestVisibleTurn, messageMap)
+  const upperSequenceBound = getLowerSequenceBound(boundaryTurn, messageMap)
+  const systemMessages =
+    visibleTurns.length === 0 && typeof beforeTurnIndex !== 'number'
+      ? await loadStandaloneSystemMessages({ supabase, chatId })
+      : await loadStandaloneSystemMessages({
+          supabase,
+          chatId,
+          lowerSequenceBound,
+          upperSequenceBound,
+        })
+
+  const mergedMessages = [...turnMessages, ...systemMessages].sort(
+    (a, b) => a.sequence - b.sequence,
+  )
+  const nextCursor = hasMore ? (oldestVisibleTurn?.turn_index ?? null) : null
+
+  return {
+    messages: mergedMessages,
+    hasMore,
+    nextCursor,
+  }
+}
+
+export async function loadProjectedChatMessages({
+  supabase,
+  chatId,
+}: {
+  supabase: TurnClient
+  chatId: string
+}): Promise<ProjectedTurnMessage[]> {
+  const turnsResult = await (supabase
+    .from('chat_turns')
+    .select('id, turn_index, user_message_id, active_assistant_message_id')
+    .eq('chat_id', chatId)
+    .order('turn_index', { ascending: true }) as unknown as Promise<{
+    data: PersistedTurnRow[] | null
+    error: { message: string } | null
+  }>)
+
+  if (turnsResult.error) {
+    throw new Error(`Failed to load chat turns: ${turnsResult.error.message}`)
+  }
+
+  const turns = turnsResult.data ?? []
+  const messageMap = await loadProjectedMessagesByIds({
+    supabase,
+    messageIds: turns.flatMap((turn) => getTurnMessageIds(turn)),
+  })
+
+  const turnMessages = turns
+    .flatMap((turn) =>
+      getTurnMessageIds(turn).map((messageId) => messageMap.get(messageId) ?? null),
+    )
+    .filter((message): message is ProjectedTurnMessage => message !== null)
+  const systemMessages = await loadStandaloneSystemMessages({ supabase, chatId })
+
+  return [...turnMessages, ...systemMessages].sort((a, b) => a.sequence - b.sequence)
+}
+
+export async function loadLatestProjectedMessage({
+  supabase,
+  chatId,
+}: {
+  supabase: TurnClient
+  chatId: string
+}): Promise<ProjectedTurnMessage | null> {
+  const { messages } = await loadProjectedChatWindow({
+    supabase,
+    chatId,
+    limitTurns: 1,
+  })
+
+  return messages[messages.length - 1] ?? null
+}
+
+export async function loadLatestProjectedAssistantMessage({
+  supabase,
+  chatId,
+}: {
+  supabase: TurnClient
+  chatId: string
+}): Promise<ProjectedTurnMessage | null> {
+  const turnsResult = await (supabase
+    .from('chat_turns')
+    .select('id, turn_index, user_message_id, active_assistant_message_id')
+    .eq('chat_id', chatId)
+    .order('turn_index', { ascending: false }) as unknown as Promise<{
+    data: PersistedTurnRow[] | null
+    error: { message: string } | null
+  }>)
+
+  if (turnsResult.error) {
+    throw new Error(`Failed to load chat turns: ${turnsResult.error.message}`)
+  }
+
+  const latestAssistantId =
+    (turnsResult.data ?? []).find((turn) => !!turn.active_assistant_message_id)
+      ?.active_assistant_message_id ?? null
+
+  if (!latestAssistantId) {
+    return null
+  }
+
+  const messageMap = await loadProjectedMessagesByIds({
+    supabase,
+    messageIds: [latestAssistantId],
+  })
+
+  return messageMap.get(latestAssistantId) ?? null
+}
+
+export async function countProjectedChatMessages({
+  supabase,
+  chatId,
+}: {
+  supabase: TurnClient
+  chatId: string
+}): Promise<number> {
+  const [turnsResult, systemCountResult] = await Promise.all([
+    supabase
+      .from('chat_turns')
+      .select('user_message_id, active_assistant_message_id')
+      .eq('chat_id', chatId) as unknown as Promise<{
+      data: Array<Pick<ChatTurn, 'user_message_id' | 'active_assistant_message_id'>> | null
+      error: { message: string } | null
+    }>,
+    supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('chat_id', chatId)
+      .eq('role', 'system')
+      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+      .neq('message_status', MESSAGE_STATUS_GENERATING),
+  ])
+
+  if (turnsResult.error) {
+    throw new Error(`Failed to count projected chat turns: ${turnsResult.error.message}`)
+  }
+
+  if (systemCountResult.error) {
+    throw new Error(`Failed to count projected system messages: ${systemCountResult.error.message}`)
+  }
+
+  const turnMessageCount = (turnsResult.data ?? []).reduce((count, turn) => {
+    return count + (turn.user_message_id ? 1 : 0) + (turn.active_assistant_message_id ? 1 : 0)
+  }, 0)
+
+  return turnMessageCount + (systemCountResult.count ?? 0)
 }

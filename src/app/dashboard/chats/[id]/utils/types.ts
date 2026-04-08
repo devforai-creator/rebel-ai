@@ -200,7 +200,7 @@ export interface ChatInterfaceProps {
   initialModelConfig?: ChatModelConfig | null
   initialUsageStats: LatestMessageTokenStats | null
   character: ChatCharacter
-  initialOldestSequence: number | null
+  initialHistoryCursor: number | null
   hasMoreHistory: boolean
   isDeveloper?: boolean
 }

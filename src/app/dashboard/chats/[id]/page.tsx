@@ -13,7 +13,7 @@ import ChatPersonaWidget from './ChatPersonaWidget'
 import { BASE_GLOBAL_SYSTEM_PROMPT } from '@/lib/chat/global-system-prompt'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
 import { isLLMProvider } from '@/lib/api-keys/provider-utils'
-import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
+import { loadProjectedChatWindow } from '@/lib/chat/turns'
 import type { Persona } from '@/types/database.types'
 
 interface Props {
@@ -95,18 +95,8 @@ export default async function ChatPage({ params, searchParams }: Props) {
     .eq('user_id', user.id)
     .order('name', { ascending: true })
 
-  const [{ data: latestMessages }, { data: apiKeys }, persona, { data: availablePersonas }] =
+  const [{ data: apiKeys }, persona, { data: availablePersonas }, initialWindow] =
     await Promise.all([
-      supabase
-        .from('messages')
-        .select(
-          'id, role, content, chat_id, user_id, sequence, model_used, prompt_tokens, completion_tokens, latency_ms, error_code, debug_info, content_en, created_at, turn_id, variant_index, supersedes_message_id, message_status',
-        )
-        .eq('chat_id', id)
-        .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-        .neq('message_status', MESSAGE_STATUS_GENERATING)
-        .order('sequence', { ascending: false })
-        .limit(CHAT_MESSAGE_PAGE_SIZE + 1),
       supabase
         .from('api_keys')
         .select('id, key_name, provider, model_preference, service_tier')
@@ -115,15 +105,15 @@ export default async function ChatPage({ params, searchParams }: Props) {
         .order('key_name', { ascending: true }),
       personaPromise,
       availablePersonasPromise,
+      loadProjectedChatWindow({
+        supabase,
+        chatId: id,
+        limitTurns: CHAT_MESSAGE_PAGE_SIZE,
+      }),
     ])
 
-  const fetchedMessages = latestMessages || []
-  const hasMoreHistory = fetchedMessages.length > CHAT_MESSAGE_PAGE_SIZE
-  const trimmedMessages = hasMoreHistory
-    ? fetchedMessages.slice(0, CHAT_MESSAGE_PAGE_SIZE)
-    : fetchedMessages
-  const initialMessages = trimmedMessages.sort((a, b) => a.sequence - b.sequence)
-  const oldestSequence = initialMessages[0]?.sequence ?? null
+  const initialMessages = initialWindow.messages
+  const historyCursor = initialWindow.nextCursor
 
   // Filter to only include LLM providers (exclude embedding-only providers)
   const apiKeyList = (apiKeys || []).filter((key) => isLLMProvider(key.provider))
@@ -171,8 +161,8 @@ export default async function ChatPage({ params, searchParams }: Props) {
                 avatar_url: character?.avatar_url || null,
                 metadata: character?.metadata || null,
               }}
-              initialOldestSequence={oldestSequence}
-              hasMoreHistory={hasMoreHistory}
+              initialHistoryCursor={historyCursor}
+              hasMoreHistory={initialWindow.hasMore}
               isDeveloper={isDeveloper}
             />
           </div>

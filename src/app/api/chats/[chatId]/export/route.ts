@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 import { toRisuFormat, generateExportFilename } from '@/lib/chat/risu-converter'
+import { loadProjectedChatMessages } from '@/lib/chat/turns'
 import type { RebelMessage, RebelSummary, RebelFact } from '@/types/risu-chat'
 
 interface ChatWithCharacter {
@@ -46,8 +46,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ chatId: 
 
   const typedChat = chat as unknown as ChatWithCharacter
 
-  // Fetch all messages with pagination (Supabase default limit is 1000)
-  const allMessages: Array<{
+  let allMessages: Array<{
     id: string
     role: string
     content: string
@@ -56,32 +55,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ chatId: 
     completion_tokens: number | null
     created_at: string
   }> = []
-  const PAGE_SIZE = 1000
-  let offset = 0
-  let hasMore = true
 
-  while (hasMore) {
-    const { data, error } = await supabase
-      .from('messages')
-      .select('id, role, content, model_used, prompt_tokens, completion_tokens, created_at')
-      .eq('chat_id', chatId)
-      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-      .neq('message_status', MESSAGE_STATUS_GENERATING)
-      .order('sequence', { ascending: true })
-      .range(offset, offset + PAGE_SIZE - 1)
-
-    if (error) {
-      console.error('[Chat export] Failed to fetch messages:', error)
-      return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 })
-    }
-
-    if (data && data.length > 0) {
-      allMessages.push(...data)
-      offset += PAGE_SIZE
-      hasMore = data.length === PAGE_SIZE
-    } else {
-      hasMore = false
-    }
+  try {
+    allMessages = await loadProjectedChatMessages({
+      supabase,
+      chatId,
+    })
+  } catch (error) {
+    console.error('[Chat export] Failed to fetch messages:', error)
+    return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 })
   }
 
   // Get summaries and facts (parallel)

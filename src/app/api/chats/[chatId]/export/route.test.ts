@@ -11,6 +11,7 @@ function buildSupabase(options: {
   user: { id: string } | null
   chats?: Array<Record<string, unknown>>
   messages?: Array<Record<string, unknown>>
+  turns?: Array<Record<string, unknown>>
   summaries?: Array<Record<string, unknown>>
   facts?: Array<Record<string, unknown>>
 }) {
@@ -21,6 +22,9 @@ function buildSupabase(options: {
       },
       messages: {
         rows: options.messages ?? [],
+      },
+      chat_turns: {
+        rows: options.turns ?? buildTurns(options.messages ?? []),
       },
       chat_summaries: {
         rows: options.summaries ?? [],
@@ -45,6 +49,51 @@ function buildSupabase(options: {
 
 function buildContext(chatId: string) {
   return { params: Promise.resolve({ chatId }) }
+}
+
+function buildTurns(messages: Array<Record<string, unknown>>) {
+  const ordered = [...messages]
+    .filter((message) => message.chat_id && typeof message.sequence === 'number')
+    .sort((a, b) => Number(a.sequence) - Number(b.sequence))
+
+  const turns: Array<Record<string, unknown>> = []
+  let currentTurn: Record<string, unknown> | null = null
+  let turnIndex = 0
+
+  for (const message of ordered) {
+    if (message.role === 'system') {
+      continue
+    }
+
+    if (message.role === 'user') {
+      turnIndex += 1
+      currentTurn = {
+        id: `turn-${turnIndex}`,
+        chat_id: message.chat_id,
+        turn_index: turnIndex,
+        user_message_id: message.id,
+        active_assistant_message_id: null,
+      }
+      turns.push(currentTurn)
+      continue
+    }
+
+    if (!currentTurn || currentTurn.active_assistant_message_id) {
+      turnIndex += 1
+      currentTurn = {
+        id: `turn-${turnIndex}`,
+        chat_id: message.chat_id,
+        turn_index: turnIndex,
+        user_message_id: null,
+        active_assistant_message_id: null,
+      }
+      turns.push(currentTurn)
+    }
+
+    currentTurn.active_assistant_message_id = message.id
+  }
+
+  return turns
 }
 
 function buildMessages(count: number, chatId: string) {
@@ -115,13 +164,25 @@ describe('GET /api/chats/[chatId]/export', () => {
       if (table === 'messages') {
         return {
           select: () => ({
-            eq: () => ({
-              order: () => ({
-                range: async () => ({
-                  data: null,
-                  error: { message: 'message query failed' },
-                }),
-              }),
+            in: async () => ({
+              data: null,
+              error: { message: 'message query failed' },
+            }),
+            eq() {
+              return this
+            },
+            neq() {
+              return this
+            },
+            gte() {
+              return this
+            },
+            lt() {
+              return this
+            },
+            order: async () => ({
+              data: null,
+              error: { message: 'message query failed' },
             }),
           }),
         } as unknown as ReturnType<typeof supabase.from>
@@ -238,7 +299,7 @@ describe('GET /api/chats/[chatId]/export', () => {
     ])
   })
 
-  it('handles 1000-message pagination and null summary/fact payloads', async () => {
+  it('exports a large projected transcript and null summary/fact payloads', async () => {
     const chatId = 'chat-paged'
     const supabase = buildSupabase({
       user: { id: 'user-1' },

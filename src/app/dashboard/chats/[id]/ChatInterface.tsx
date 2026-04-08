@@ -56,7 +56,7 @@ export default function ChatInterface({
   initialModelConfig,
   initialUsageStats,
   character,
-  initialOldestSequence,
+  initialHistoryCursor,
   hasMoreHistory,
   isDeveloper = false,
 }: ChatInterfaceProps) {
@@ -187,7 +187,7 @@ export default function ChatInterface({
 
   // History pagination
   const [historyMessages, setHistoryMessages] = useState<Message[]>([])
-  const [oldestSequence, setOldestSequence] = useState<number | null>(initialOldestSequence)
+  const [historyCursor, setHistoryCursor] = useState<number | null>(initialHistoryCursor)
   const [historyHasMore, setHistoryHasMore] = useState(hasMoreHistory)
   const [isHistoryLoading, setIsHistoryLoading] = useState(false)
   const [reprocessingMessageId, setReprocessingMessageId] = useState<string | null>(null)
@@ -475,13 +475,15 @@ export default function ChatInterface({
 
   // Load older messages
   const loadOlderMessages = useCallback(async () => {
-    if (!historyHasMore || isHistoryLoading || oldestSequence === null) return
+    if (!historyHasMore || isHistoryLoading || historyCursor === null) return
 
     setIsHistoryLoading(true)
     try {
       const response = await fetch(
-        `/api/chats/${chatId}/messages/history?before=${oldestSequence}`,
-        { cache: 'no-store' },
+        `/api/chats/${chatId}/messages/history?before=${historyCursor}`,
+        {
+          cache: 'no-store',
+        },
       )
 
       if (!response.ok) {
@@ -498,7 +500,7 @@ export default function ChatInterface({
 
       if (Array.isArray(data.messages) && data.messages.length > 0) {
         setHistoryMessages((prev) => [...data.messages, ...prev])
-        setOldestSequence(data.nextCursor)
+        setHistoryCursor(data.nextCursor)
         setHistoryHasMore(data.hasMore)
 
         for (const msg of data.messages) {
@@ -515,7 +517,7 @@ export default function ChatInterface({
     } finally {
       setIsHistoryLoading(false)
     }
-  }, [chatId, historyHasMore, isHistoryLoading, oldestSequence])
+  }, [chatId, historyCursor, historyHasMore, isHistoryLoading])
 
   // Combined messages
   const combinedMessages = useMemo<DisplayMessage[]>(() => {

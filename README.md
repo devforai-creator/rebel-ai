@@ -144,12 +144,13 @@ See [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md) for the tradeoffs a
 | Getting started | [`docs/GETTING_STARTED.md`](./docs/GETTING_STARTED.md)   | First-run guide for a fresh local deployment                    |
 | Hosting         | [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md) | Managed production vs low-cost self-hosted deployment profiles  |
 | Database        | [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)             | Tables, RLS policies, RPC functions                             |
+| Database ops    | [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md) | Migration workflow, production pushes, and drift recovery    |
 | Format          | [`docs/rbx-spec.md`](./docs/rbx-spec.md)                 | RBX package format and runtime contract                         |
 | Security        | [`SECURITY.md`](./SECURITY.md)                           | Reporting policy, security model, and self-hosting requirements |
 
 > **Tip:** Keep the public entry points small: setup, schema, security, and the RBX spec should be enough to deploy and extend the project.
 
-For database bootstrapping, treat `supabase/migrations/` as the source of truth. `supabase/schema.sql` is the generated hosted bootstrap snapshot and should be regenerated after migration changes.
+For database bootstrapping, treat `supabase/migrations/` as the source of truth. `supabase/schema.sql` is the generated hosted bootstrap snapshot and should be regenerated after migration changes. Use SQL Editor for first-time hosted bootstrap only, not for ongoing production schema changes. See [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md) for the operational workflow.
 
 ---
 

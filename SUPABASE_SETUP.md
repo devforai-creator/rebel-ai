@@ -27,6 +27,8 @@ RebelAI ships both:
 ### Option A: Hosted Supabase project via SQL Editor
 
 This is the simplest path for a fresh cloud project.
+It is for first-time bootstrap only, not for incremental production schema
+changes after the project is live.
 
 Before running the hosted bootstrap SQL, enable the `vault` and `pgsodium` extensions in Supabase Dashboard if they are not already available for the project.
 
@@ -37,6 +39,11 @@ Before running the hosted bootstrap SQL, enable the `vault` and `pgsodium` exten
 5. Copy the full contents of [`supabase/schema.sql`](./supabase/schema.sql).
 6. Run it once.
 7. Verify that core tables such as `profiles`, `api_keys`, `characters`, `chats`, `messages`, `chat_generation_jobs`, `character_assets`, and `module_assets` exist.
+
+After this first bootstrap, switch to the migration workflow in
+[`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md). Do not keep making
+schema changes directly in SQL Editor unless you are handling an emergency and
+will immediately backfill the exact SQL into a migration file.
 
 ### Option B: Local Supabase CLI workflow
 
@@ -58,6 +65,19 @@ If you change migrations and still support the hosted SQL Editor path, regenerat
 ```bash
 npm run db:schema
 ```
+
+## 2A. Ongoing Schema Changes
+
+Once a project exists, use this rule:
+
+- write the change in the next file under `supabase/migrations/`
+- test locally with `supabase db push --local` or `supabase db reset`
+- regenerate `supabase/schema.sql` with `npm run db:schema`
+- push to production with `supabase db push --linked`
+- verify with `supabase db diff --linked --schema public`
+
+For the full workflow and drift recovery steps, see
+[`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md).
 
 ## 3. Collect Supabase Credentials
 

@@ -1,9 +1,9 @@
 import { APICallError, generateText } from 'ai'
 import type { ChatSummaryInsert } from '@/types/database.types'
-import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 import { generateFactEmbedding } from '@/lib/embeddings'
 import { getProviderOptions } from '@/lib/llm/provider-options'
 import { resolvePromptCacheDecision } from '@/lib/llm/prompt-cache'
+import { loadProjectedConversationMessages } from '@/lib/chat/turns'
 import type {
   MessageTranscriptRow,
   ProcessChunkOptions,
@@ -134,6 +134,34 @@ export async function generateSummaryWithFallback({
   }
 }
 
+async function loadChunkTranscriptMessages({
+  supabase,
+  chatId,
+  startSeq,
+  endSeq,
+  transcriptMessages,
+}: {
+  supabase: CreateChunkSummaryOptions['supabase']
+  chatId: string
+  startSeq: number
+  endSeq: number
+  transcriptMessages?: MessageTranscriptRow[]
+}): Promise<MessageTranscriptRow[]> {
+  const transcript =
+    transcriptMessages ??
+    (
+      await loadProjectedConversationMessages({
+        supabase,
+        chatId,
+      })
+    ).map((message) => ({
+      role: message.role,
+      content: message.content,
+    }))
+
+  return transcript.slice(startSeq - 1, endSeq)
+}
+
 /**
  * Create a chunk summary for a message range
  */
@@ -148,24 +176,22 @@ export async function createChunkSummary({
   endSeq,
   systemPrompt,
   expectedMessageCount = CHUNK_SIZE,
+  transcriptMessages,
 }: CreateChunkSummaryOptions): Promise<void> {
-  const fromIndex = startSeq - 1
-  const toIndex = endSeq - 1
+  let chunkMessages: MessageTranscriptRow[] = []
 
-  const { data: messages, error: messageError } = await supabase
-    .from('messages')
-    .select<'role, content'>('role, content')
-    .eq('chat_id', chatId)
-    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-    .neq('message_status', MESSAGE_STATUS_GENERATING)
-    .order('sequence', { ascending: true })
-    .range(fromIndex, toIndex)
-
-  if (messageError) {
-    throw new Error(`Failed to load chunk messages: ${messageError.message}`)
+  try {
+    chunkMessages = await loadChunkTranscriptMessages({
+      supabase,
+      chatId,
+      startSeq,
+      endSeq,
+      transcriptMessages,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to load chunk messages: ${message}`)
   }
-
-  const chunkMessages = (messages ?? []) as MessageTranscriptRow[]
 
   if (typeof expectedMessageCount === 'number' && chunkMessages.length !== expectedMessageCount) {
     throw new Error(
@@ -229,6 +255,7 @@ export async function createChunkFacts({
   startSeq,
   endSeq,
   factPrompt,
+  transcriptMessages,
 }: CreateChunkFactsOptions): Promise<void> {
   logFactsExtractionDebug('[Facts Extraction] Function called', {
     chatId,
@@ -237,46 +264,38 @@ export async function createChunkFacts({
     endSeq,
   })
 
-  const fromIndex = startSeq - 1
-  const toIndex = endSeq - 1
-
   logFactsExtractionDebug('[Facts Extraction] Loading messages from database', {
     chatId,
     startSeq,
     endSeq,
-    fromIndex,
-    toIndex,
   })
+  let chunkMessages: MessageTranscriptRow[] = []
 
-  const { data: messages, error: messageError } = await supabase
-    .from('messages')
-    .select<'role, content'>('role, content')
-    .eq('chat_id', chatId)
-    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-    .neq('message_status', MESSAGE_STATUS_GENERATING)
-    .order('sequence', { ascending: true })
-    .range(fromIndex, toIndex)
-
-  if (messageError) {
+  try {
+    chunkMessages = await loadChunkTranscriptMessages({
+      supabase,
+      chatId,
+      startSeq,
+      endSeq,
+      transcriptMessages,
+    })
+  } catch (error) {
     console.error('[Facts Extraction] Failed to load messages', {
       chatId,
       startSeq,
       endSeq,
-      error: messageError.message,
-      code: messageError.code,
+      error: error instanceof Error ? error.message : String(error),
     })
     return
   }
-
-  const chunkMessages = (messages ?? []) as MessageTranscriptRow[]
 
   logFactsExtractionDebug('[Facts Extraction] Messages loaded from database', {
     chatId,
     startSeq,
     endSeq,
     messageCount: chunkMessages.length,
-    messagesIsNull: messages === null,
-    messagesIsArray: Array.isArray(messages),
+    messagesIsNull: false,
+    messagesIsArray: true,
   })
 
   if (chunkMessages.length === 0) {
@@ -284,8 +303,6 @@ export async function createChunkFacts({
       chatId,
       startSeq,
       endSeq,
-      fromIndex,
-      toIndex,
     })
     return
   }
@@ -479,6 +496,15 @@ export async function processChunkSummaries({
 
   const existingSet = new Set(existingChunks?.map((c) => c.start_seq) ?? [])
   const toCreate = boundaries.filter((b) => !existingSet.has(b.start))
+  const transcriptMessages = (
+    await loadProjectedConversationMessages({
+      supabase,
+      chatId,
+    })
+  ).map((message) => ({
+    role: message.role,
+    content: message.content,
+  }))
 
   for (const boundary of toCreate) {
     try {
@@ -493,6 +519,7 @@ export async function processChunkSummaries({
         startSeq: boundary.start,
         endSeq: boundary.end,
         systemPrompt: chunkPrompt,
+        transcriptMessages,
       })
 
       // Extract facts (episodic memory)
@@ -506,6 +533,7 @@ export async function processChunkSummaries({
         startSeq: boundary.start,
         endSeq: boundary.end,
         factPrompt,
+        transcriptMessages,
       })
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {

@@ -1,53 +1,45 @@
 import type { ServerSupabaseClient } from './types'
-import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
+import { countProjectedConversationMessages } from '@/lib/chat/turns'
 
 /**
- * Get total message count for a chat
+ * Get total visible conversation message count for a chat.
+ * This counts the active user/assistant transcript only.
  */
 export async function getMessageCount(
   supabase: ServerSupabaseClient,
   chatId: string,
 ): Promise<number | null> {
-  const { count, error } = await supabase
-    .from('messages')
-    .select('id', { count: 'exact', head: true })
-    .eq('chat_id', chatId)
-    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-    .neq('message_status', MESSAGE_STATUS_GENERATING)
-
-  if (error) {
-    console.error('Failed to count messages:', error.message)
+  try {
+    return await countProjectedConversationMessages({
+      supabase,
+      chatId,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('Failed to count messages:', message)
     return null
   }
-
-  return count ?? 0
 }
 
 /**
- * Get the latest message sequence number for a chat
+ * Get the latest visible conversation ordinal for a chat.
+ * The function name is kept for compatibility with older callers.
  */
 export async function getLatestMessageSequence(
   supabase: ServerSupabaseClient,
   chatId: string,
 ): Promise<number | null> {
-  const { data, error } = await supabase
-    .from('messages')
-    .select('sequence')
-    .eq('chat_id', chatId)
-    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-    .neq('message_status', MESSAGE_STATUS_GENERATING)
-    .order('sequence', { ascending: false })
-    .limit(1)
-    .maybeSingle<{ sequence: number }>()
-
-  if (error) {
-    if (error.code !== 'PGRST116') {
-      console.error('Failed to fetch latest message sequence:', error.message)
-    }
+  try {
+    const count = await countProjectedConversationMessages({
+      supabase,
+      chatId,
+    })
+    return count > 0 ? count : null
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('Failed to fetch latest message sequence:', message)
     return null
   }
-
-  return data?.sequence ?? null
 }
 
 /**

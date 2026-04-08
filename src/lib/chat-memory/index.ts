@@ -15,7 +15,7 @@ import { formatFacts, formatSummarySegments } from '@/lib/chat-summaries/formatt
 import { processMetaSummaries } from '@/lib/chat-summaries/meta-summarizer'
 import { processRegenerationRequests } from '@/lib/chat-summaries/regeneration'
 import { updateSummaries } from '@/lib/chat-summaries/index'
-import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
+import { loadProjectedConversationMessages } from '@/lib/chat/turns'
 import type {
   BuildContextOptions,
   RagResultInfo,
@@ -196,6 +196,16 @@ export async function updateMemoryState({
   )
 
   if (boundaries.length > 0) {
+    const transcriptMessages = (
+      await loadProjectedConversationMessages({
+        supabase,
+        chatId,
+      })
+    ).map((message) => ({
+      role: message.role,
+      content: message.content,
+    }))
+
     const { data: existingChunks } = await supabase
       .from('chat_summaries')
       .select('start_seq, end_seq')
@@ -222,6 +232,7 @@ export async function updateMemoryState({
           endSeq: boundary.end,
           systemPrompt: prompts.chunkPrompt,
           expectedMessageCount: sealedChunkSize,
+          transcriptMessages,
         })
 
         await createChunkFacts({
@@ -234,6 +245,7 @@ export async function updateMemoryState({
           startSeq: boundary.start,
           endSeq: boundary.end,
           factPrompt: prompts.factPrompt,
+          transcriptMessages,
         })
       } catch (error) {
         if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
@@ -405,29 +417,24 @@ async function buildPrefixLiveBlocksPlan({
     })
   }
 
-  const { data: liveMessages, error: liveMessageError } = await supabase
-    .from('messages')
-    .select<'role, content'>('role, content')
-    .eq('chat_id', chatId)
-    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-    .neq('message_status', MESSAGE_STATUS_GENERATING)
-    .gt('sequence', lastChunkEnd)
-    .order('sequence', { ascending: true })
+  let fallbackMessages: SanitizedMessage[] = []
 
-  if (liveMessageError) {
-    console.error('[chat-memory] Failed to load live messages:', liveMessageError.message)
-  }
+  try {
+    const conversationMessages = await loadProjectedConversationMessages({
+      supabase,
+      chatId,
+    })
 
-  const fallbackMessages = ((liveMessages ?? []) as Array<{ role: string; content: string }>)
-    .filter(
-      (message): message is SanitizedMessage =>
-        (message.role === 'user' || message.role === 'assistant') &&
-        typeof message.content === 'string',
-    )
-    .map((message) => ({
+    fallbackMessages = conversationMessages.slice(lastChunkEnd).map((message) => ({
       role: message.role,
       content: message.content,
     }))
+  } catch (error) {
+    console.error(
+      '[chat-memory] Failed to load live messages:',
+      error instanceof Error ? error.message : String(error),
+    )
+  }
 
   for (const message of fallbackMessages) {
     promptBlocks.push({

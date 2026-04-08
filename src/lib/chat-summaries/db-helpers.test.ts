@@ -13,7 +13,7 @@ describe('db-helpers', () => {
   })
 
   describe('getMessageCount', () => {
-    it('returns message count on success', async () => {
+    it('returns visible conversation count on success', async () => {
       const supabase = createChatSummariesSupabaseMock({
         messages: [
           { id: '1', chat_id: 'chat-1', sequence: 1, role: 'user', content: 'Hello' },
@@ -51,14 +51,40 @@ describe('db-helpers', () => {
       expect(result).toBe(2)
     })
 
+    it('ignores superseded assistant variants through turn projection', async () => {
+      const supabase = createChatSummariesSupabaseMock({
+        messages: [
+          { id: '1', chat_id: 'chat-1', sequence: 1, role: 'user', content: 'Hello' },
+          {
+            id: '2',
+            chat_id: 'chat-1',
+            sequence: 2,
+            role: 'assistant',
+            content: 'Old reply',
+            message_status: 'superseded',
+          },
+          {
+            id: '3',
+            chat_id: 'chat-1',
+            sequence: 3,
+            role: 'assistant',
+            content: 'Active reply',
+          },
+        ],
+      })
+
+      const result = await getMessageCount(supabase as unknown as ServerSupabaseClient, 'chat-1')
+
+      expect(result).toBe(2)
+    })
+
     it('returns null and logs error on failure', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-      // Create a mock that returns an error
       const supabase = {
         from: () => ({
           select: () => ({
-            eq: () => Promise.resolve({ count: null, error: { message: 'Database error' } }),
+            eq: () => Promise.resolve({ data: null, error: { message: 'Database error' } }),
           }),
         }),
       }
@@ -66,12 +92,15 @@ describe('db-helpers', () => {
       const result = await getMessageCount(supabase as unknown as ServerSupabaseClient, 'chat-1')
 
       expect(result).toBeNull()
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to count messages:', 'Database error')
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Failed to count messages:',
+        'Failed to count projected conversation messages: Database error',
+      )
     })
   })
 
   describe('getLatestMessageSequence', () => {
-    it('returns latest sequence number', async () => {
+    it('returns latest visible transcript ordinal', async () => {
       const supabase = createChatSummariesSupabaseMock({
         messages: [
           { id: '1', chat_id: 'chat-1', sequence: 1, role: 'user', content: 'Hello' },
@@ -85,7 +114,7 @@ describe('db-helpers', () => {
         'chat-1',
       )
 
-      expect(result).toBe(10)
+      expect(result).toBe(3)
     })
 
     it('returns null when no messages exist', async () => {
@@ -114,26 +143,16 @@ describe('db-helpers', () => {
         'chat-1',
       )
 
-      expect(result).toBe(5)
+      expect(result).toBe(1)
     })
 
-    it('returns null and logs error on non-PGRST116 error', async () => {
+    it('returns null and logs error on helper failure', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
       const supabase = {
         from: () => ({
           select: () => ({
-            eq: () => ({
-              order: () => ({
-                limit: () => ({
-                  maybeSingle: () =>
-                    Promise.resolve({
-                      data: null,
-                      error: { code: 'OTHER_ERROR', message: 'Something went wrong' },
-                    }),
-                }),
-              }),
-            }),
+            eq: () => Promise.resolve({ data: null, error: { message: 'Something went wrong' } }),
           }),
         }),
       }
@@ -146,38 +165,8 @@ describe('db-helpers', () => {
       expect(result).toBeNull()
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         'Failed to fetch latest message sequence:',
-        'Something went wrong',
+        'Failed to count projected conversation messages: Something went wrong',
       )
-    })
-
-    it('returns null silently on PGRST116 (no rows) error', async () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-      const supabase = {
-        from: () => ({
-          select: () => ({
-            eq: () => ({
-              order: () => ({
-                limit: () => ({
-                  maybeSingle: () =>
-                    Promise.resolve({
-                      data: null,
-                      error: { code: 'PGRST116', message: 'No rows found' },
-                    }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      }
-
-      const result = await getLatestMessageSequence(
-        supabase as unknown as ServerSupabaseClient,
-        'chat-1',
-      )
-
-      expect(result).toBeNull()
-      expect(consoleErrorSpy).not.toHaveBeenCalled()
     })
   })
 

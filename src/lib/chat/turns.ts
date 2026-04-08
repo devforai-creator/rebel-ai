@@ -41,6 +41,9 @@ type ProjectedTurnMessage = Pick<
   | 'supersedes_message_id'
   | 'message_status'
 >
+export type ProjectedConversationMessage = ProjectedTurnMessage & {
+  role: 'user' | 'assistant'
+}
 type PersistedMessageRow = Pick<MessageInsert, 'id' | 'role' | 'content'> & {
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -341,6 +344,34 @@ function getTurnMessageIds(turn: PersistedTurnRow | null): string[] {
   return ids
 }
 
+function buildProjectedConversationMessages({
+  turns,
+  messageMap,
+}: {
+  turns: PersistedTurnRow[]
+  messageMap: Map<string, ProjectedTurnMessage>
+}): ProjectedConversationMessage[] {
+  const messages: ProjectedConversationMessage[] = []
+
+  for (const turn of turns) {
+    if (turn.user_message_id) {
+      const userMessage = messageMap.get(turn.user_message_id)
+      if (userMessage?.role === 'user') {
+        messages.push(userMessage as ProjectedConversationMessage)
+      }
+    }
+
+    if (turn.active_assistant_message_id) {
+      const assistantMessage = messageMap.get(turn.active_assistant_message_id)
+      if (assistantMessage?.role === 'assistant') {
+        messages.push(assistantMessage as ProjectedConversationMessage)
+      }
+    }
+  }
+
+  return messages
+}
+
 function getLowerSequenceBound(
   turn: PersistedTurnRow | null,
   messageMap: Map<string, ProjectedTurnMessage>,
@@ -555,6 +586,57 @@ export async function loadProjectedChatMessages({
   return [...turnMessages, ...systemMessages].sort((a, b) => a.sequence - b.sequence)
 }
 
+export async function loadProjectedConversationMessages({
+  supabase,
+  chatId,
+}: {
+  supabase: TurnClient
+  chatId: string
+}): Promise<ProjectedConversationMessage[]> {
+  const turnsResult = await (supabase
+    .from('chat_turns')
+    .select('id, turn_index, user_message_id, active_assistant_message_id')
+    .eq('chat_id', chatId)
+    .order('turn_index', { ascending: true }) as unknown as Promise<{
+    data: PersistedTurnRow[] | null
+    error: { message: string } | null
+  }>)
+
+  if (turnsResult.error) {
+    throw new Error(`Failed to load chat turns: ${turnsResult.error.message}`)
+  }
+
+  const turns = turnsResult.data ?? []
+  const messageMap = await loadProjectedMessagesByIds({
+    supabase,
+    messageIds: turns.flatMap((turn) => getTurnMessageIds(turn)),
+  })
+
+  return buildProjectedConversationMessages({
+    turns,
+    messageMap,
+  })
+}
+
+export async function loadProjectedConversationRange({
+  supabase,
+  chatId,
+  startOrdinal,
+  endOrdinal,
+}: {
+  supabase: TurnClient
+  chatId: string
+  startOrdinal: number
+  endOrdinal: number
+}): Promise<ProjectedConversationMessage[]> {
+  const messages = await loadProjectedConversationMessages({
+    supabase,
+    chatId,
+  })
+
+  return messages.slice(Math.max(0, startOrdinal - 1), Math.max(0, endOrdinal))
+}
+
 export async function loadLatestProjectedMessage({
   supabase,
   chatId,
@@ -644,4 +726,28 @@ export async function countProjectedChatMessages({
   }, 0)
 
   return turnMessageCount + (systemCountResult.count ?? 0)
+}
+
+export async function countProjectedConversationMessages({
+  supabase,
+  chatId,
+}: {
+  supabase: TurnClient
+  chatId: string
+}): Promise<number> {
+  const turnsResult = await (supabase
+    .from('chat_turns')
+    .select('user_message_id, active_assistant_message_id')
+    .eq('chat_id', chatId) as unknown as Promise<{
+    data: Array<Pick<ChatTurn, 'user_message_id' | 'active_assistant_message_id'>> | null
+    error: { message: string } | null
+  }>)
+
+  if (turnsResult.error) {
+    throw new Error(`Failed to count projected conversation messages: ${turnsResult.error.message}`)
+  }
+
+  return (turnsResult.data ?? []).reduce((count, turn) => {
+    return count + (turn.user_message_id ? 1 : 0) + (turn.active_assistant_message_id ? 1 : 0)
+  }, 0)
 }

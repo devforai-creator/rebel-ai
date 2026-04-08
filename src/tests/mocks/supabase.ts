@@ -590,9 +590,63 @@ type ChatFactRow = Record<string, unknown>
 type MessageRow = {
   role: string
   content: string
+  id?: string
   sequence?: number
   chat_id: string
+  message_status?: string
   [key: string]: unknown
+}
+
+function normalizeSummaryMockMessages(messages: MessageRow[]): MessageRow[] {
+  return messages.map((message, index) => ({
+    id: message.id ?? `msg-${index + 1}`,
+    ...message,
+  }))
+}
+
+function deriveChatTurnsFromMessages(messages: MessageRow[]): Array<Record<string, unknown>> {
+  const orderedMessages = [...messages]
+    .filter((message) => typeof message.sequence === 'number')
+    .sort((a, b) => Number(a.sequence) - Number(b.sequence))
+
+  const turns: Array<Record<string, unknown>> = []
+  let currentTurn: Record<string, unknown> | null = null
+  let turnIndex = 0
+
+  for (const message of orderedMessages) {
+    if (message.role === 'system') {
+      continue
+    }
+
+    if (message.role === 'user') {
+      turnIndex += 1
+      currentTurn = {
+        id: `turn-${turnIndex}`,
+        chat_id: message.chat_id,
+        turn_index: turnIndex,
+        user_message_id: message.id,
+        active_assistant_message_id: null,
+      }
+      turns.push(currentTurn)
+      continue
+    }
+
+    if (!currentTurn || currentTurn.chat_id !== message.chat_id) {
+      turnIndex += 1
+      currentTurn = {
+        id: `turn-${turnIndex}`,
+        chat_id: message.chat_id,
+        turn_index: turnIndex,
+        user_message_id: null,
+        active_assistant_message_id: null,
+      }
+      turns.push(currentTurn)
+    }
+
+    currentTurn.active_assistant_message_id = message.id
+  }
+
+  return turns
 }
 
 export function createChatSummariesSupabaseMock(
@@ -602,10 +656,17 @@ export function createChatSummariesSupabaseMock(
     chatFacts?: ChatFactRow[]
   } = {},
 ): SupabaseMock {
+  const normalizedMessages = normalizeSummaryMockMessages(options.messages ?? [])
+
   return createSupabaseMock({
     tables: {
       messages: {
-        rows: options.messages ?? [],
+        rows: normalizedMessages,
+        primaryKeys: ['id'],
+      },
+      chat_turns: {
+        rows: deriveChatTurnsFromMessages(normalizedMessages),
+        primaryKeys: ['id'],
       },
       chat_summaries: {
         rows: options.chatSummaries ?? [],

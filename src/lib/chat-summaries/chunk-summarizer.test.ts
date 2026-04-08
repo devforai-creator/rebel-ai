@@ -257,16 +257,31 @@ describe('chunk-summarizer', () => {
   it('throws when chunk message query fails', async () => {
     const failingSupabase = {
       from: (table: string) => {
-        if (table === 'messages') {
+        if (table === 'chat_turns') {
           return {
             select: () => ({
               eq: () => ({
                 order: () => ({
-                  range: async () => ({
-                    data: null,
-                    error: { message: 'db unavailable' },
-                  }),
+                  data: [
+                    {
+                      id: 'turn-1',
+                      turn_index: 1,
+                      user_message_id: 'msg-1',
+                      active_assistant_message_id: 'msg-2',
+                    },
+                  ],
+                  error: null,
                 }),
+              }),
+            }),
+          }
+        }
+        if (table === 'messages') {
+          return {
+            select: () => ({
+              in: async () => ({
+                data: null,
+                error: { message: 'db unavailable' },
               }),
             }),
           }
@@ -293,7 +308,9 @@ describe('chunk-summarizer', () => {
         endSeq: CHUNK_SIZE,
         systemPrompt: 'SYS',
       }),
-    ).rejects.toThrow('Failed to load chunk messages: db unavailable')
+    ).rejects.toThrow(
+      'Failed to load chunk messages: Failed to load projected messages: db unavailable',
+    )
   })
 
   it('creates fallback chunk summary when LLM call fails', async () => {
@@ -384,15 +401,13 @@ describe('chunk-summarizer', () => {
   it('returns early when createChunkFacts cannot load messages', async () => {
     const failingSupabase = {
       from: (table: string) => {
-        if (table === 'messages') {
+        if (table === 'chat_turns') {
           return {
             select: () => ({
               eq: () => ({
                 order: () => ({
-                  range: async () => ({
-                    data: null,
-                    error: { message: 'messages table error', code: 'XX001' },
-                  }),
+                  data: null,
+                  error: { message: 'messages table error', code: 'XX001' },
                 }),
               }),
             }),
@@ -460,21 +475,6 @@ describe('chunk-summarizer', () => {
       finishReason: 'stop',
     })
 
-    const messagesTable = {
-      select: () => ({
-        eq: () => ({
-          order: () => ({
-            range: async () => ({
-              data: [
-                { role: 'user', content: 'hi', sequence: 1, chat_id: 'chat-1' },
-                { role: 'assistant', content: 'response', sequence: 2, chat_id: 'chat-1' },
-              ],
-              error: null,
-            }),
-          }),
-        }),
-      }),
-    }
     const chatFactsTable = {
       insert: async () => ({
         error: { message: 'insert failed' },
@@ -482,7 +482,44 @@ describe('chunk-summarizer', () => {
     }
     const supabase = {
       from: (table: string) => {
-        if (table === 'messages') return messagesTable
+        if (table === 'chat_turns') {
+          return {
+            select: () => ({
+              eq: () => ({
+                order: () => ({
+                  data: [
+                    {
+                      id: 'turn-1',
+                      turn_index: 1,
+                      user_message_id: 'msg-1',
+                      active_assistant_message_id: 'msg-2',
+                    },
+                  ],
+                  error: null,
+                }),
+              }),
+            }),
+          }
+        }
+        if (table === 'messages') {
+          return {
+            select: () => ({
+              in: async () => ({
+                data: [
+                  { id: 'msg-1', role: 'user', content: 'hi', sequence: 1, chat_id: 'chat-1' },
+                  {
+                    id: 'msg-2',
+                    role: 'assistant',
+                    content: 'response',
+                    sequence: 2,
+                    chat_id: 'chat-1',
+                  },
+                ],
+                error: null,
+              }),
+            }),
+          }
+        }
         if (table === 'chat_facts') return chatFactsTable
         throw new Error(`Unexpected table: ${table}`)
       },
@@ -572,7 +609,12 @@ describe('chunk-summarizer', () => {
   })
 
   it('continues processChunkSummaries on duplicate-key style errors (code 23505)', async () => {
-    let rangeCallCount = 0
+    generateTextMock.mockResolvedValue({
+      text: 'summary',
+      usage: { outputTokens: 1 },
+      finishReason: 'stop',
+    })
+    let insertCallCount = 0
     const supabase = {
       from: (table: string) => {
         if (table === 'chat_summaries') {
@@ -584,18 +626,41 @@ describe('chunk-summarizer', () => {
               }
               return builder
             },
+            insert: async () => {
+              insertCallCount += 1
+              throw { code: '23505' }
+            },
+          }
+        }
+        if (table === 'chat_turns') {
+          return {
+            select: () => ({
+              eq: () => ({
+                order: () => ({
+                  data: Array.from({ length: 30 }, (_, idx) => ({
+                    id: `turn-${idx + 1}`,
+                    turn_index: idx + 1,
+                    user_message_id: `msg-${idx + 1}`,
+                    active_assistant_message_id: null,
+                  })),
+                  error: null,
+                }),
+              }),
+            }),
           }
         }
         if (table === 'messages') {
           return {
             select: () => ({
-              eq: () => ({
-                order: () => ({
-                  range: async () => {
-                    rangeCallCount += 1
-                    throw { code: '23505' }
-                  },
-                }),
+              in: async () => ({
+                data: Array.from({ length: 30 }, (_, idx) => ({
+                  id: `msg-${idx + 1}`,
+                  role: 'user',
+                  content: `m-${idx + 1}`,
+                  sequence: idx + 1,
+                  chat_id: 'chat-1',
+                })),
+                error: null,
               }),
             }),
           }
@@ -623,11 +688,16 @@ describe('chunk-summarizer', () => {
       }),
     ).resolves.toBeUndefined()
 
-    expect(rangeCallCount).toBeGreaterThan(1)
+    expect(insertCallCount).toBeGreaterThan(1)
   })
 
   it('aborts processChunkSummaries on non-duplicate errors', async () => {
-    let rangeCallCount = 0
+    generateTextMock.mockResolvedValue({
+      text: 'summary',
+      usage: { outputTokens: 1 },
+      finishReason: 'stop',
+    })
+    let insertCallCount = 0
     const supabase = {
       from: (table: string) => {
         if (table === 'chat_summaries') {
@@ -639,18 +709,41 @@ describe('chunk-summarizer', () => {
               }
               return builder
             },
+            insert: async () => {
+              insertCallCount += 1
+              throw new Error('insert failed')
+            },
+          }
+        }
+        if (table === 'chat_turns') {
+          return {
+            select: () => ({
+              eq: () => ({
+                order: () => ({
+                  data: Array.from({ length: 30 }, (_, idx) => ({
+                    id: `turn-${idx + 1}`,
+                    turn_index: idx + 1,
+                    user_message_id: `msg-${idx + 1}`,
+                    active_assistant_message_id: null,
+                  })),
+                  error: null,
+                }),
+              }),
+            }),
           }
         }
         if (table === 'messages') {
           return {
             select: () => ({
-              eq: () => ({
-                order: () => ({
-                  range: async () => {
-                    rangeCallCount += 1
-                    throw new Error('range failed')
-                  },
-                }),
+              in: async () => ({
+                data: Array.from({ length: 30 }, (_, idx) => ({
+                  id: `msg-${idx + 1}`,
+                  role: 'user',
+                  content: `m-${idx + 1}`,
+                  sequence: idx + 1,
+                  chat_id: 'chat-1',
+                })),
+                error: null,
               }),
             }),
           }
@@ -678,6 +771,6 @@ describe('chunk-summarizer', () => {
       }),
     ).resolves.toBeUndefined()
 
-    expect(rangeCallCount).toBe(1)
+    expect(insertCallCount).toBe(1)
   })
 })

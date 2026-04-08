@@ -42,20 +42,30 @@ function createSupabaseStub(options?: {
   ragError?: StubError | null
 }): ChatSummariesSupabaseClient {
   const latestSequence = options?.latestSequence
-  const latestSequenceError =
-    options?.latestSequenceError ??
-    (typeof latestSequence === 'number' ? null : { code: 'PGRST116', message: 'No rows found' })
+  const latestSequenceError = options?.latestSequenceError ?? null
 
-  const messagesQuery = {
-    select: () => messagesQuery,
-    eq: () => messagesQuery,
-    order: () => messagesQuery,
-    limit: () => messagesQuery,
-    maybeSingle: async () => {
+  const chatTurnsQuery = {
+    select: () => chatTurnsQuery,
+    eq: () => chatTurnsQuery,
+    then<TResult1 = { data: unknown; error: StubError | null }, TResult2 = never>(
+      onfulfilled?:
+        | ((value: { data: unknown; error: StubError | null }) => TResult1 | PromiseLike<TResult1>)
+        | null,
+      onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    ) {
       if (latestSequenceError) {
-        return { data: null, error: latestSequenceError }
+        return Promise.resolve({ data: null, error: latestSequenceError }).then(
+          onfulfilled,
+          onrejected,
+        )
       }
-      return { data: { sequence: latestSequence }, error: null }
+      return Promise.resolve({
+        data: Array.from({ length: latestSequence ?? 0 }, (_, index) => ({
+          user_message_id: `user-${index + 1}`,
+          active_assistant_message_id: null,
+        })),
+        error: null,
+      }).then(onfulfilled, onrejected)
     },
   }
 
@@ -108,7 +118,10 @@ function createSupabaseStub(options?: {
   return {
     from: (table: string) => {
       if (table === 'messages') {
-        return messagesQuery
+        return {}
+      }
+      if (table === 'chat_turns') {
+        return chatTurnsQuery
       }
       if (table === 'chat_summaries') {
         return summaryQuery

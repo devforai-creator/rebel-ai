@@ -112,6 +112,7 @@ export interface CreateChunkSummaryOptions {
   endSeq: number
   systemPrompt: string
   expectedMessageCount?: number | null
+  transcriptMessages?: MessageTranscriptRow[]
 }
 
 // Create chunk facts options
@@ -125,6 +126,7 @@ export interface CreateChunkFactsOptions {
   startSeq: number
   endSeq: number
   factPrompt: string
+  transcriptMessages?: MessageTranscriptRow[]
 }
 
 // Higher level summary options

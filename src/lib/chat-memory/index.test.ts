@@ -65,7 +65,7 @@ describe('calculatePrefixLiveBlockBoundaries', () => {
 })
 
 describe('buildMemoryPlan', () => {
-  it('builds prefix_live_blocks from database-backed live messages', async () => {
+  it('builds prefix_live_blocks from the provided live transcript', async () => {
     const supabase = createPrefixModeSupabaseStub({
       liveMessages: [
         { role: 'user', content: 'db-user-1' },
@@ -81,7 +81,10 @@ describe('buildMemoryPlan', () => {
     const result = await buildMemoryPlan({
       supabase,
       chatId: 'chat-1',
-      sanitizedMessages: [{ role: 'user', content: 'client-only' }],
+      sanitizedMessages: [
+        { role: 'user', content: 'db-user-1', messageId: 'msg-1' },
+        { role: 'assistant', content: 'db-assistant-2', messageId: 'msg-2' },
+      ],
       baseSystemPrompt: 'STATIC PROMPT',
       modelConfig,
     })
@@ -114,7 +117,7 @@ describe('buildMemoryPlan', () => {
     ])
   })
 
-  it('uses only the active assistant variant for live memory messages', async () => {
+  it('falls back to the active assistant variant from DB when no transcript is provided', async () => {
     const supabase = createSupabaseMock({
       tables: {
         chat_summaries: {
@@ -165,7 +168,7 @@ describe('buildMemoryPlan', () => {
     const result = await buildMemoryPlan({
       supabase,
       chatId: 'chat-1',
-      sanitizedMessages: [{ role: 'user', content: 'client-only' }],
+      sanitizedMessages: [],
       baseSystemPrompt: 'STATIC PROMPT',
       modelConfig,
     })
@@ -173,6 +176,73 @@ describe('buildMemoryPlan', () => {
     expect(result.fallbackMessages).toEqual([
       { role: 'user', content: 'db-user-1', messageId: 'msg-1' },
       { role: 'assistant', content: 'active-assistant', messageId: 'msg-3' },
+    ])
+  })
+
+  it('does not reintroduce the active assistant during regeneration in prefix mode', async () => {
+    const supabase = createSupabaseMock({
+      tables: {
+        chat_summaries: {
+          rows: [],
+        },
+        chat_facts: {
+          rows: [],
+        },
+        chat_turns: {
+          rows: [
+            {
+              id: 'turn-1',
+              chat_id: 'chat-1',
+              turn_index: 1,
+              user_message_id: 'msg-1',
+              active_assistant_message_id: 'msg-2',
+            },
+          ],
+        },
+        messages: {
+          rows: [
+            { id: 'msg-1', chat_id: 'chat-1', role: 'user', content: 'db-user-1', sequence: 1 },
+            {
+              id: 'msg-2',
+              chat_id: 'chat-1',
+              role: 'assistant',
+              content: 'old-active-assistant',
+              sequence: 2,
+            },
+          ],
+        },
+      },
+    }) as unknown as ChatSummariesSupabaseClient
+    const modelConfig: ChatModelConfig = {
+      memory: {
+        mode: 'prefix_live_blocks',
+      },
+    }
+
+    const result = await buildMemoryPlan({
+      supabase,
+      chatId: 'chat-1',
+      sanitizedMessages: [{ role: 'user', content: 'db-user-1', messageId: 'msg-1' }],
+      baseSystemPrompt: 'STATIC PROMPT',
+      modelConfig,
+    })
+
+    expect(result.fallbackMessages).toEqual([
+      { role: 'user', content: 'db-user-1', messageId: 'msg-1' },
+    ])
+    expect(result.promptBlocks).toEqual([
+      {
+        role: 'system',
+        content: 'STATIC PROMPT',
+        cachePreference: 'prefer-cache',
+        stability: 'static',
+      },
+      {
+        role: 'user',
+        content: 'db-user-1',
+        cachePreference: 'prefer-cache',
+        stability: 'live',
+      },
     ])
   })
 })

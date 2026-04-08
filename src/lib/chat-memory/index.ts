@@ -125,6 +125,7 @@ export async function buildMemoryPlan({
     chatId,
     baseSystemPrompt,
     extraDynamicContext,
+    sanitizedMessages,
   })
 }
 
@@ -329,11 +330,13 @@ async function buildPrefixLiveBlocksPlan({
   chatId,
   baseSystemPrompt,
   extraDynamicContext,
+  sanitizedMessages,
 }: {
   supabase: ServerSupabaseClient
   chatId: string
   baseSystemPrompt: string
   extraDynamicContext?: string[]
+  sanitizedMessages: SanitizedMessage[]
 }): Promise<MemoryPlan> {
   const lastChunkEnd = (await getLastSummaryEnd(supabase, chatId, SUMMARY_LEVEL_CHUNK)) ?? 0
   const staticSystemPrompt = baseSystemPrompt.trim()
@@ -419,22 +422,30 @@ async function buildPrefixLiveBlocksPlan({
 
   let fallbackMessages: SanitizedMessage[] = []
 
-  try {
-    const conversationMessages = await loadProjectedConversationMessages({
-      supabase,
-      chatId,
-    })
-
-    fallbackMessages = conversationMessages.slice(lastChunkEnd).map((message) => ({
+  if (sanitizedMessages.length > 0) {
+    fallbackMessages = sanitizedMessages.slice(lastChunkEnd).map((message) => ({
       role: message.role,
       content: message.content,
-      messageId: message.id,
+      ...(typeof message.messageId === 'string' ? { messageId: message.messageId } : {}),
     }))
-  } catch (error) {
-    console.error(
-      '[chat-memory] Failed to load live messages:',
-      error instanceof Error ? error.message : String(error),
-    )
+  } else {
+    try {
+      const conversationMessages = await loadProjectedConversationMessages({
+        supabase,
+        chatId,
+      })
+
+      fallbackMessages = conversationMessages.slice(lastChunkEnd).map((message) => ({
+        role: message.role,
+        content: message.content,
+        messageId: message.id,
+      }))
+    } catch (error) {
+      console.error(
+        '[chat-memory] Failed to load live messages:',
+        error instanceof Error ? error.message : String(error),
+      )
+    }
   }
 
   for (const message of fallbackMessages) {

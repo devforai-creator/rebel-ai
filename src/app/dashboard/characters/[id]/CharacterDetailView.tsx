@@ -4,41 +4,14 @@ import dynamic from 'next/dynamic'
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import type { Character } from '@/types/database.types'
-import CharacterForm, { type EditableCharacterFields } from '../CharacterForm'
-import { deleteChat } from '@/app/dashboard/chats/actions'
-import { useRouter } from 'next/navigation'
+import CharacterForm from '../CharacterForm'
 import ChatImportModal from './ChatImportModal'
+import type { CharacterDetailViewProps } from './character-detail-types'
+import { useCharacterChats } from './hooks/useCharacterChats'
 
 const NewChatButton = dynamic(() => import('./NewChatButton'), {
   ssr: false,
 })
-
-interface Chat {
-  id: string
-  title: string | null
-  updated_at: string
-  created_at: string
-  lastMessage: { content: string; role: string } | null
-}
-
-interface Module {
-  id: string
-  name: string
-}
-
-export type CharacterDetail = EditableCharacterFields &
-  Pick<Character, 'avatar_url' | 'visibility' | 'created_at'>
-
-interface Props {
-  character: CharacterDetail
-  chats: Chat[]
-  isStarter: boolean
-  modules: Module[]
-  initialModuleIds: string[]
-  hasMoreChats: boolean
-  initialChatCursor: string | null
-}
 
 export default function CharacterDetailView({
   character,
@@ -48,74 +21,24 @@ export default function CharacterDetailView({
   initialModuleIds,
   hasMoreChats,
   initialChatCursor,
-}: Props) {
-  const router = useRouter()
+}: CharacterDetailViewProps) {
   const [isEditMode, setIsEditMode] = useState(false)
-  const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
-  const [chatList, setChatList] = useState(chats)
-  const [chatCursor, setChatCursor] = useState(initialChatCursor)
-  const [hasMoreChatPages, setHasMoreChatPages] = useState(hasMoreChats)
-  const [isChatLoading, setIsChatLoading] = useState(false)
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
-  const [exportingChatId, setExportingChatId] = useState<string | null>(null)
-
-  async function handleExportChat(chatId: string) {
-    setExportingChatId(chatId)
-    try {
-      const response = await fetch(`/api/chats/${chatId}/export`)
-      if (!response.ok) {
-        throw new Error('Export failed')
-      }
-
-      // Extract filename from Content-Disposition header
-      const disposition = response.headers.get('Content-Disposition')
-      let filename = 'chat_export.json'
-      if (disposition) {
-        const match = disposition.match(/filename="(.+)"/)
-        if (match) {
-          filename = decodeURIComponent(match[1])
-        }
-      }
-
-      // Download as Blob
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error('Export failed:', error)
-      alert('Failed to export chat')
-    } finally {
-      setExportingChatId(null)
-    }
-  }
-
-  async function handleDeleteChat(chatId: string, chatTitle: string | null) {
-    if (
-      !confirm(
-        `Are you sure you want to delete "${chatTitle || 'this chat'}"?\n\nAll messages and summaries will be deleted and cannot be recovered.`,
-      )
-    ) {
-      return
-    }
-
-    setDeletingChatId(chatId)
-    const result = await deleteChat(chatId, false) // shouldRedirect = false
-
-    if (result?.error) {
-      alert(result.error)
-      setDeletingChatId(null)
-    } else {
-      // Refresh page on success
-      setDeletingChatId(null)
-      router.refresh()
-    }
-  }
+  const {
+    deletingChatId,
+    exportingChatId,
+    chatList,
+    hasMoreChatPages,
+    isChatLoading,
+    exportChat,
+    deleteCharacterChat,
+    loadMoreChats,
+  } = useCharacterChats({
+    characterId: character.id,
+    initialChats: chats,
+    initialChatCursor,
+    initialHasMoreChats: hasMoreChats,
+  })
 
   if (isEditMode) {
     return (
@@ -139,44 +62,6 @@ export default function CharacterDetailView({
         />
       </div>
     )
-  }
-
-  async function handleLoadMoreChats() {
-    if (!hasMoreChatPages || isChatLoading || !chatCursor) {
-      return
-    }
-
-    setIsChatLoading(true)
-
-    try {
-      const response = await fetch(
-        `/api/characters/${character.id}/chats?before=${encodeURIComponent(chatCursor)}`,
-      )
-
-      if (!response.ok) {
-        console.error('Failed to load more chats:', response.statusText)
-        return
-      }
-
-      const data = (await response.json()) as {
-        chats: Chat[]
-        hasMore: boolean
-        nextCursor: string | null
-      }
-
-      if (Array.isArray(data.chats) && data.chats.length > 0) {
-        setChatList((prev) => [...prev, ...data.chats])
-        setHasMoreChatPages(data.hasMore)
-        setChatCursor(data.nextCursor)
-      } else {
-        setHasMoreChatPages(false)
-        setChatCursor(null)
-      }
-    } catch (error) {
-      console.error('Failed to load more chats:', error)
-    } finally {
-      setIsChatLoading(false)
-    }
   }
 
   return (
@@ -312,14 +197,14 @@ export default function CharacterDetailView({
                   </Link>
                   <div className="px-4 pb-3 border-t border-gray-200 dark:border-gray-600 pt-2 flex items-center gap-3">
                     <button
-                      onClick={() => handleExportChat(chat.id)}
+                      onClick={() => exportChat(chat.id)}
                       disabled={exportingChatId === chat.id}
                       className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-50"
                     >
                       {exportingChatId === chat.id ? 'Exporting...' : 'Export'}
                     </button>
                     <button
-                      onClick={() => handleDeleteChat(chat.id, chat.title)}
+                      onClick={() => deleteCharacterChat(chat.id, chat.title)}
                       disabled={deletingChatId === chat.id}
                       className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50"
                     >
@@ -356,7 +241,7 @@ export default function CharacterDetailView({
           {hasMoreChatPages && (
             <div className="mt-6 flex justify-center">
               <button
-                onClick={handleLoadMoreChats}
+                onClick={loadMoreChats}
                 disabled={isChatLoading}
                 className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
               >

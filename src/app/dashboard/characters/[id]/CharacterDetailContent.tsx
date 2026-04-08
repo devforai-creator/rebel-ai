@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import CharacterDetailView, { type CharacterDetail } from './CharacterDetailView'
 import { CHARACTER_CHAT_PAGE_SIZE } from '@/lib/chat/constants'
+import CharacterDetailView from './CharacterDetailView'
+import type { CharacterDetail } from './character-detail-types'
 
 const CHARACTER_CHAT_FIELDS = `
   id,

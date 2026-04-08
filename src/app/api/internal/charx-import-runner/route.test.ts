@@ -22,6 +22,16 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: vi.fn(() => supabaseMock),
 }))
 
+vi.mock('next/server', async () => {
+  const actual = await vi.importActual('next/server')
+  return {
+    ...actual,
+    after: vi.fn((cb: () => void | Promise<void>) => {
+      cb()
+    }),
+  }
+})
+
 function createSupabaseMock(jobs: JobRow[]) {
   const eqCalls: Array<[string, unknown]> = []
 
@@ -184,5 +194,34 @@ describe('POST /api/internal/charx-import-runner', () => {
 
     // Recovery is handled by a separate janitor route, not the runner hot path.
     expect(stuckJob.status).toBe('processing')
+  })
+
+  it('returns 202 and dispatches jobs in the background when dispatch=true', async () => {
+    process.env.CHAT_ADMIN_SECRET = 'admin-secret'
+    const pendingJob: JobRow = {
+      id: 'job-1',
+      user_id: 'user-1',
+      storage_path: 'path/file.rbx',
+      original_filename: 'file.rbx',
+      file_type: 'application/json',
+      status: 'pending',
+      updated_at: new Date().toISOString(),
+    }
+    supabaseMock = createSupabaseMock([pendingJob])
+    processCharacterImportJobMock.mockResolvedValueOnce(undefined)
+
+    const { POST } = await import('./route')
+    const response = await POST(buildRequest({ limit: 1, dispatch: true }, 'Bearer admin-secret'))
+    const body = await response.json()
+
+    expect(response.status).toBe(202)
+    expect(body).toEqual({
+      accepted: true,
+      dispatched: true,
+    })
+    expect(processCharacterImportJobMock).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: 'job-1' }),
+      supabaseMock,
+    )
   })
 })

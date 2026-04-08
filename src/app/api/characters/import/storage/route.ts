@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { NextRequest, NextResponse } from 'next/server'
+import { after, NextRequest, NextResponse } from 'next/server'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -132,9 +132,9 @@ async function cleanupStagedUpload(supabase: RouteSupabaseClient, path: string):
 }
 
 function scheduleCharacterImportRunner(jobId: string) {
-  setTimeout(() => {
-    void triggerCharacterImportRunner(jobId)
-  }, 0)
+  after(async () => {
+    await triggerCharacterImportRunner(jobId)
+  })
 }
 
 async function triggerCharacterImportRunner(jobId: string) {
@@ -147,10 +147,12 @@ async function triggerCharacterImportRunner(jobId: string) {
     return
   }
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 5000)
+
   try {
     const endpoint = buildInternalApiUrl('/api/internal/character-import-runner/trigger')
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 5000)
+    endpoint.searchParams.set('jobId', jobId)
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${adminSecret}`,
@@ -165,7 +167,6 @@ async function triggerCharacterImportRunner(jobId: string) {
       headers,
       signal: controller.signal,
     })
-    clearTimeout(timeout)
 
     if (!response.ok) {
       const text = await response.text()
@@ -177,15 +178,14 @@ async function triggerCharacterImportRunner(jobId: string) {
     }
   } catch (error) {
     if ((error as { name?: string }).name === 'AbortError') {
-      console.warn(
-        '[Character Import][storage] Runner trigger aborted after 5s (job will rely on cron/manual runner)',
-        {
-          jobId,
-        },
-      )
+      console.error('[Character Import][storage] Runner trigger timed out after 5s', {
+        jobId,
+      })
       return
     }
 
     console.error('[Character Import][storage] Runner trigger error:', error)
+  } finally {
+    clearTimeout(timeout)
   }
 }

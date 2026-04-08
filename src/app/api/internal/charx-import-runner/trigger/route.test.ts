@@ -5,6 +5,16 @@ const ORIGINAL_ENV = { ...process.env }
 const originalFetch = global.fetch
 const mockFetch = vi.fn()
 
+vi.mock('next/server', async () => {
+  const actual = await vi.importActual('next/server')
+  return {
+    ...actual,
+    after: vi.fn((cb: () => void | Promise<void>) => {
+      cb()
+    }),
+  }
+})
+
 function restoreEnv() {
   for (const key of Object.keys(process.env)) {
     if (!(key in ORIGINAL_ENV)) {
@@ -54,16 +64,21 @@ describe('GET /api/internal/charx-import-runner/trigger', () => {
     expect(body.error).toBe('Server misconfigured')
   })
 
-  it('returns 500 when CRON_SECRET is missing', async () => {
+  it('allows admin auth when CRON_SECRET is missing', async () => {
     process.env.CHAT_ADMIN_SECRET = 'admin-secret'
     delete process.env.CRON_SECRET
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ accepted: true, dispatched: true }), {
+        status: 202,
+      }),
+    )
     const { GET } = await import('./route')
 
     const response = await GET(buildRequest({ authHeader: 'Bearer admin-secret' }))
 
-    expect(response.status).toBe(500)
+    expect(response.status).toBe(202)
     const body = await response.json()
-    expect(body.error).toBe('Server misconfigured')
+    expect(body.triggered).toBe(true)
   })
 
   it('returns 401 when no authorization provided', async () => {
@@ -101,15 +116,16 @@ describe('GET /api/internal/charx-import-runner/trigger', () => {
   it('authorizes with cron secret in Bearer header', async () => {
     process.env.CHAT_ADMIN_SECRET = 'admin-secret'
     process.env.CRON_SECRET = 'cron-secret'
-    mockFetch.mockResolvedValueOnce({
-      status: 200,
-      text: () => Promise.resolve(JSON.stringify({ processed: 1 })),
-    })
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ accepted: true, dispatched: true }), {
+        status: 202,
+      }),
+    )
     const { GET } = await import('./route')
 
     const response = await GET(buildRequest({ authHeader: 'Bearer cron-secret' }))
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(202)
     expect(mockFetch).toHaveBeenCalledWith(
       'http://localhost/api/internal/character-import-runner',
       expect.objectContaining({
@@ -117,6 +133,8 @@ describe('GET /api/internal/charx-import-runner/trigger', () => {
         headers: expect.objectContaining({
           Authorization: 'Bearer admin-secret',
         }),
+        body: JSON.stringify({ limit: 1, jobId: null, dispatch: true }),
+        signal: expect.any(AbortSignal),
       }),
     )
   })
@@ -124,72 +142,75 @@ describe('GET /api/internal/charx-import-runner/trigger', () => {
   it('authorizes with admin secret in Bearer header', async () => {
     process.env.CHAT_ADMIN_SECRET = 'admin-secret'
     process.env.CRON_SECRET = 'cron-secret'
-    mockFetch.mockResolvedValueOnce({
-      status: 200,
-      text: () => Promise.resolve(JSON.stringify({ processed: 1 })),
-    })
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ accepted: true, dispatched: true }), {
+        status: 202,
+      }),
+    )
     const { GET } = await import('./route')
 
     const response = await GET(buildRequest({ authHeader: 'Bearer admin-secret' }))
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(202)
   })
 
-  it('forwards response from character-import-runner', async () => {
+  it('returns 202 immediately after dispatching the runner', async () => {
     process.env.CHAT_ADMIN_SECRET = 'admin-secret'
     process.env.CRON_SECRET = 'cron-secret'
-    const runnerResponse = {
-      processedCount: 2,
-      processed: [{ jobId: 'job-1' }, { jobId: 'job-2' }],
-    }
-    mockFetch.mockResolvedValueOnce({
-      status: 200,
-      text: () => Promise.resolve(JSON.stringify(runnerResponse)),
-    })
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ accepted: true, dispatched: true }), {
+        status: 202,
+      }),
+    )
     const { GET } = await import('./route')
 
     const response = await GET(buildRequest({ authHeader: 'Bearer cron-secret' }))
     const body = await response.json()
 
-    expect(response.status).toBe(200)
-    expect(body).toEqual(runnerResponse)
+    expect(response.status).toBe(202)
+    expect(body.triggered).toBe(true)
+    expect(body.timestamp).toBeDefined()
   })
 
-  it('forwards error status from character-import-runner', async () => {
+  it('still returns 202 when runner dispatch responds with an error status', async () => {
     process.env.CHAT_ADMIN_SECRET = 'admin-secret'
     process.env.CRON_SECRET = 'cron-secret'
-    mockFetch.mockResolvedValueOnce({
-      status: 500,
-      text: () => Promise.resolve(JSON.stringify({ error: 'Runner failed' })),
-    })
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'Runner failed' }), {
+        status: 500,
+      }),
+    )
     const { GET } = await import('./route')
 
     const response = await GET(buildRequest({ authHeader: 'Bearer cron-secret' }))
+    const body = await response.json()
 
-    expect(response.status).toBe(500)
+    expect(response.status).toBe(202)
+    expect(body.triggered).toBe(true)
   })
 
-  it('returns 500 when fetch throws', async () => {
+  it('returns 202 when fetch throws', async () => {
     process.env.CHAT_ADMIN_SECRET = 'admin-secret'
     process.env.CRON_SECRET = 'cron-secret'
     mockFetch.mockRejectedValueOnce(new Error('Network error'))
     const { GET } = await import('./route')
 
     const response = await GET(buildRequest({ authHeader: 'Bearer cron-secret' }))
-
-    expect(response.status).toBe(500)
     const body = await response.json()
-    expect(body.error).toBe('Failed to invoke character import runner')
+
+    expect(response.status).toBe(202)
+    expect(body.triggered).toBe(true)
   })
 
   it('uses default batch limit of 1', async () => {
     process.env.CHAT_ADMIN_SECRET = 'admin-secret'
     process.env.CRON_SECRET = 'cron-secret'
     delete process.env.CHARX_IMPORT_RUNNER_BATCH_LIMIT
-    mockFetch.mockResolvedValueOnce({
-      status: 200,
-      text: () => Promise.resolve('{}'),
-    })
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ accepted: true, dispatched: true }), {
+        status: 202,
+      }),
+    )
     const { GET } = await import('./route')
 
     await GET(buildRequest({ authHeader: 'Bearer cron-secret' }))
@@ -197,7 +218,7 @@ describe('GET /api/internal/charx-import-runner/trigger', () => {
     expect(mockFetch).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
-        body: JSON.stringify({ limit: 1 }),
+        body: JSON.stringify({ limit: 1, jobId: null, dispatch: true }),
       }),
     )
   })
@@ -206,10 +227,11 @@ describe('GET /api/internal/charx-import-runner/trigger', () => {
     process.env.CHAT_ADMIN_SECRET = 'admin-secret'
     process.env.CRON_SECRET = 'cron-secret'
     process.env.VERCEL_AUTOMATION_BYPASS_SECRET = 'bypass-secret'
-    mockFetch.mockResolvedValueOnce({
-      status: 200,
-      text: () => Promise.resolve('{}'),
-    })
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ accepted: true, dispatched: true }), {
+        status: 202,
+      }),
+    )
     const { GET } = await import('./route')
 
     await GET(buildRequest({ authHeader: 'Bearer cron-secret' }))
@@ -220,6 +242,34 @@ describe('GET /api/internal/charx-import-runner/trigger', () => {
         headers: expect.objectContaining({
           'x-vercel-protection-bypass': 'bypass-secret',
         }),
+      }),
+    )
+  })
+
+  it('forwards a specific jobId to the runner dispatch payload', async () => {
+    process.env.CHAT_ADMIN_SECRET = 'admin-secret'
+    process.env.CRON_SECRET = 'cron-secret'
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ accepted: true, dispatched: true }), {
+        status: 202,
+      }),
+    )
+    const url = 'http://localhost/api/internal/charx-import-runner/trigger?jobId=job-123'
+    const request = new NextRequest(url, {
+      method: 'GET',
+      headers: { authorization: 'Bearer admin-secret' },
+    })
+    const { GET } = await import('./route')
+
+    const response = await GET(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(202)
+    expect(body.jobId).toBe('job-123')
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        body: JSON.stringify({ limit: 1, jobId: 'job-123', dispatch: true }),
       }),
     )
   })

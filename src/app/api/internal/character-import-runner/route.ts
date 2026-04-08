@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/database.types'
 import { processCharacterImportJob } from '@/lib/character-import-jobs'
@@ -9,6 +9,7 @@ export const maxDuration = 300
 type RunnerRequest = {
   limit?: number
   jobId?: string
+  dispatch?: boolean
 }
 
 type JobRow = {
@@ -26,6 +27,7 @@ type PendingImportJobRow = Pick<
   ImportJobRow,
   'id' | 'user_id' | 'storage_path' | 'original_filename' | 'file_type' | 'status'
 >
+type ProcessedJob = { jobId: string; status: 'success' | 'skipped' | 'error'; error?: string }
 
 export async function POST(req: NextRequest) {
   const adminSecret = process.env.CHAT_ADMIN_SECRET
@@ -45,11 +47,40 @@ export async function POST(req: NextRequest) {
   const limit =
     Number.isFinite(body.limit) && (body.limit ?? 0) > 0 ? Math.min(body.limit as number, 5) : 1
   const jobId = typeof body.jobId === 'string' ? body.jobId : null
+  const dispatch = body.dispatch === true
+
+  if (dispatch) {
+    after(async () => {
+      try {
+        await processCharacterImportJobs({ limit, jobId })
+      } catch (error) {
+        console.error('[Character Import Runner] Background dispatch failed', error)
+      }
+    })
+
+    return NextResponse.json(
+      {
+        accepted: true,
+        dispatched: true,
+      },
+      { status: 202 },
+    )
+  }
+
+  const results = await processCharacterImportJobs({ limit, jobId })
+
+  return NextResponse.json(results)
+}
+
+async function processCharacterImportJobs({
+  limit,
+  jobId,
+}: {
+  limit: number
+  jobId: string | null
+}) {
   const jobLimit = jobId ? 1 : limit
-
   const supabase = createAdminClient()
-
-  type ProcessedJob = { jobId: string; status: 'success' | 'skipped' | 'error'; error?: string }
   const processed: ProcessedJob[] = []
 
   for (let index = 0; index < jobLimit; index += 1) {
@@ -87,10 +118,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({
+  return {
     processedCount: processed.length,
     processed,
-  })
+  }
 }
 
 async function claimPendingCharacterImportJob(

@@ -29,6 +29,16 @@ vi.mock('@/lib/internal-api-origin', () => ({
   buildInternalApiUrl: (path: string) => new URL(`http://localhost${path}`),
 }))
 
+vi.mock('next/server', async () => {
+  const actual = await vi.importActual('next/server')
+  return {
+    ...actual,
+    after: vi.fn((cb: () => void | Promise<void>) => {
+      cb()
+    }),
+  }
+})
+
 import { POST } from './route'
 import { ACTIVE_IMPORT_JOB_CONFLICT_MESSAGE } from '@/lib/queue/admission'
 import { MAX_IMPORT_UPLOAD_BYTES, IMPORT_UPLOAD_BUCKET } from '@/lib/import/constants'
@@ -185,7 +195,8 @@ function buildRequest(body: string | Record<string, unknown>) {
 }
 
 async function runQueuedBackgroundTask() {
-  await vi.advanceTimersByTimeAsync(0)
+  await Promise.resolve()
+  await Promise.resolve()
 }
 
 describe('POST /api/characters/import/storage', () => {
@@ -465,7 +476,7 @@ describe('POST /api/characters/import/storage', () => {
 
     expect(response.status).toBe(200)
     expect(global.fetch).toHaveBeenCalledWith(
-      new URL('http://localhost/api/internal/character-import-runner/trigger'),
+      new URL('http://localhost/api/internal/character-import-runner/trigger?jobId=job-234'),
       expect.objectContaining({
         method: 'GET',
         headers: expect.objectContaining({
@@ -502,8 +513,8 @@ describe('POST /api/characters/import/storage', () => {
     await runQueuedBackgroundTask()
 
     expect(response.status).toBe(200)
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
-      '[Character Import][storage] Runner trigger aborted after 5s (job will rely on cron/manual runner)',
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[Character Import][storage] Runner trigger timed out after 5s',
       { jobId: 'job-345' },
     )
   })

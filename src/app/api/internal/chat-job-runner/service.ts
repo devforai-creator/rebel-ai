@@ -27,6 +27,10 @@ import { buildSystemPrompt } from './system-prompt-builder'
 import { buildChatDebugInfo, type ChatRunnerActualPayload } from './usage-debug'
 import { buildStreamPayloadPlan } from './stream-payload-builder'
 import { runPostGenerationPipeline } from './post-generation-pipeline'
+import {
+  broadcastAssistantStreamError,
+  broadcastAssistantStreamSnapshot,
+} from './assistant-stream-broadcaster'
 
 const MAX_TOTAL_INPUT_TOKENS = 150_000
 const CHAT_JOB_RUNNER_DEBUG_ENABLED = process.env.CHAT_JOB_RUNNER_DEBUG === 'true'
@@ -57,11 +61,80 @@ function logChatJobRunnerDebug(...args: unknown[]): void {
   }
 }
 
-async function collectTextFromStream(textStream: AsyncIterable<string> | Iterable<string>) {
+async function collectTextFromStreamWithSnapshots({
+  supabase,
+  chatId,
+  jobId,
+  textStream,
+  regenerateAssistantMessageId,
+  updateIntervalMs = 120,
+  now = () => performance.now(),
+}: {
+  supabase: AdminSupabaseClient
+  chatId: string
+  jobId: string
+  textStream: AsyncIterable<string> | Iterable<string>
+  regenerateAssistantMessageId: string | null
+  updateIntervalMs?: number
+  now?: () => number
+}) {
   let fullText = ''
+  let lastBroadcastAt = now()
+  let sendInFlight: Promise<void> | null = null
+  let queuedContent: string | null = null
+  let lastSentContent = ''
+
+  const sendSnapshot = (content: string) => {
+    if (content === lastSentContent) {
+      return
+    }
+
+    if (sendInFlight) {
+      queuedContent = content
+      return
+    }
+
+    const snapshot = content
+    sendInFlight = broadcastAssistantStreamSnapshot({
+      supabase,
+      chatId,
+      jobId,
+      content: snapshot,
+      regenerateAssistantMessageId,
+    }).finally(() => {
+      lastSentContent = snapshot
+      sendInFlight = null
+
+      if (queuedContent && queuedContent !== lastSentContent) {
+        const nextContent = queuedContent
+        queuedContent = null
+        sendSnapshot(nextContent)
+        return
+      }
+
+      queuedContent = null
+    })
+  }
+
+  const flushSnapshots = async () => {
+    while (sendInFlight) {
+      await sendInFlight
+    }
+  }
 
   for await (const chunk of textStream) {
     fullText += chunk
+
+    const currentTime = now()
+    if (currentTime - lastBroadcastAt >= updateIntervalMs) {
+      sendSnapshot(fullText)
+      lastBroadcastAt = currentTime
+    }
+  }
+
+  if (fullText) {
+    sendSnapshot(fullText)
+    await flushSnapshots()
   }
 
   return fullText
@@ -130,7 +203,7 @@ async function processJob({
   }
 
   try {
-    await executeJob({ supabase, payload, origin })
+    await executeJob({ supabase, jobId, payload, origin })
 
     const successUpdate: ChatGenerationJobUpdate = { status: 'success', error: null }
     await supabase
@@ -154,10 +227,12 @@ async function processJob({
 
 async function executeJob({
   supabase,
+  jobId,
   payload,
   origin,
 }: {
   supabase: AdminSupabaseClient
+  jobId: string
   payload: ChatGenerationJobPayload
   origin: string
 }) {
@@ -533,7 +608,25 @@ async function executeJob({
     throw error
   }
 
-  const fullText = await collectTextFromStream(stream.textStream)
+  let fullText = ''
+  try {
+    fullText = await collectTextFromStreamWithSnapshots({
+      supabase,
+      chatId,
+      jobId,
+      textStream: stream.textStream,
+      regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
+    })
+  } catch (error) {
+    await broadcastAssistantStreamError({
+      supabase,
+      chatId,
+      jobId,
+      error: error instanceof Error ? error.message : String(error),
+      regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
+    })
+    throw error
+  }
   let assistantMessageId: string | null = null
   let messageInsertDuration: number | null = null
 

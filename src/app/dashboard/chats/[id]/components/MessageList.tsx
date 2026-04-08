@@ -6,6 +6,7 @@ import type { CharacterAsset } from '@/lib/asset-resolver'
 import { useAutosizeTextArea } from '@/hooks/useAutosizeTextArea'
 import {
   DisplayMessage,
+  StreamingAssistantDraft,
   ModuleRegexEntry,
   InlineUiCardRegistry,
   ChatCharacter,
@@ -147,6 +148,7 @@ export const ChatMessageRow = memo(function ChatMessageRow({
   const isUser = message.role === 'user'
   const isSystem = message.role === 'system'
   const isAssistant = message.role === 'assistant'
+  const isStreaming = message.streaming === true
   const isEditing = editingMessageId === message.id
   const isReprocessing = reprocessingMessageId === message.id
   const isRetranslating = retranslatingMessageId === message.id
@@ -253,7 +255,26 @@ export const ChatMessageRow = memo(function ChatMessageRow({
                 </div>
               )}
               <div className="whitespace-pre-wrap break-words max-w-full overflow-x-auto [&_img]:max-w-full [&_img]:h-auto [&_img]:block">
-                {renderedContent}
+                {isStreaming && !message.content ? (
+                  <div className="flex items-center gap-2 py-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.2s' }}
+                    />
+                    <div
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.4s' }}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    {renderedContent}
+                    {isStreaming && (
+                      <span className="inline-block w-2 h-4 ml-1 align-middle bg-current/60 animate-pulse" />
+                    )}
+                  </>
+                )}
               </div>
             </div>
             <div className="flex gap-2 items-center flex-wrap">
@@ -324,6 +345,7 @@ export const ChatMessageRow = memo(function ChatMessageRow({
 
 export interface MessageListProps {
   messages: DisplayMessage[]
+  streamingDraft?: StreamingAssistantDraft | null
   character: ChatCharacter
   characterAssets: CharacterAsset[]
   assetUrlMap?: Record<string, string>
@@ -363,6 +385,7 @@ export interface MessageListProps {
 
 export const MessageList = memo(function MessageList({
   messages,
+  streamingDraft,
   character,
   characterAssets,
   assetUrlMap,
@@ -394,13 +417,32 @@ export const MessageList = memo(function MessageList({
   onUiCardAction,
   imageDisplay,
 }: MessageListProps) {
+  const visibleMessages = useMemo(() => {
+    if (!streamingDraft) {
+      return messages
+    }
+
+    if (streamingDraft.replaceMessageId) {
+      const targetIndex = messages.findIndex(
+        (message) => message.id === streamingDraft.replaceMessageId,
+      )
+      if (targetIndex !== -1) {
+        const nextMessages = [...messages]
+        nextMessages[targetIndex] = streamingDraft
+        return nextMessages
+      }
+    }
+
+    return [...messages, streamingDraft]
+  }, [messages, streamingDraft])
+
   // Find the index of the last assistant message for runtime state targeting
   const lastAssistantIndex = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'assistant') return i
+    for (let i = visibleMessages.length - 1; i >= 0; i--) {
+      if (visibleMessages[i].role === 'assistant') return i
     }
     return -1
-  }, [messages])
+  }, [visibleMessages])
 
   return (
     <>
@@ -417,12 +459,12 @@ export const MessageList = memo(function MessageList({
         </div>
       )}
 
-      {messages.length === 0 ? (
+      {visibleMessages.length === 0 ? (
         <div className="text-center text-gray-500 dark:text-gray-400 mt-8">
           <p>Start a conversation!</p>
         </div>
       ) : (
-        messages.map((message, index) => (
+        visibleMessages.map((message, index) => (
           <ChatMessageRow
             key={message.id}
             message={message}
@@ -443,7 +485,7 @@ export const MessageList = memo(function MessageList({
             onShowDebugInfo={onShowDebugInfo}
             developerMode={developerMode}
             persistedMessageIds={persistedMessageIds}
-            isLastMessage={index === messages.length - 1}
+            isLastMessage={index === visibleMessages.length - 1}
             isLoading={isLoading}
             reprocessingMessageId={reprocessingMessageId}
             retranslatingMessageId={retranslatingMessageId}
@@ -458,7 +500,7 @@ export const MessageList = memo(function MessageList({
         ))
       )}
 
-      {isLoading && <TypingIndicator character={character} />}
+      {isLoading && !streamingDraft && <TypingIndicator character={character} />}
       <div ref={messagesEndRef} />
     </>
   )

@@ -1,6 +1,7 @@
 // Types
 export type {
   DisplayMessage,
+  StreamingAssistantDraft,
   LatestMessageTokenStats,
   MessageChangePayload,
   ModuleRegexEntry,

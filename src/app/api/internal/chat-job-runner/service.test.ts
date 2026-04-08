@@ -6,6 +6,7 @@ const claimPendingJobMock = vi.fn()
 const parseChatJobPayloadMock = vi.fn()
 const decryptSecretMock = vi.fn()
 const buildMemoryPlanMock = vi.fn()
+const loadGenerationTranscriptMock = vi.fn()
 const streamTextMock = vi.fn()
 const triggerSummaryGenerationMock = vi.fn()
 const resolveGoogleCacheDecisionMock = vi.fn()
@@ -31,6 +32,9 @@ vi.mock('@/lib/chat/global-system-prompt', () => ({
 }))
 vi.mock('@/lib/chat-memory', () => ({
   buildMemoryPlan: (...args: unknown[]) => buildMemoryPlanMock(...args),
+}))
+vi.mock('@/lib/chat/turns', () => ({
+  loadGenerationTranscript: (...args: unknown[]) => loadGenerationTranscriptMock(...args),
 }))
 buildMemoryPlanMock.mockResolvedValue({
   mode: 'summary_window',
@@ -133,6 +137,7 @@ function buildValidPayload(overrides: Record<string, unknown> = {}) {
     provider: 'openai',
     modelName: 'gpt-4o-mini',
     sanitizedMessages: [{ role: 'user', content: 'Hello' }],
+    turnId: null,
     isRegeneration: false,
     regenerateAssistantMessageId: null,
     ...overrides,
@@ -149,7 +154,8 @@ describe('processChatJobs', () => {
     claimPendingJobMock.mockReset()
     parseChatJobPayloadMock.mockReset()
     decryptSecretMock.mockReset()
-    buildMemoryPlanMock.mockClear()
+    buildMemoryPlanMock.mockReset()
+    loadGenerationTranscriptMock.mockReset()
     triggerSummaryGenerationMock.mockClear()
     streamTextMock.mockClear()
     resolveGoogleCacheDecisionMock.mockReset()
@@ -167,9 +173,32 @@ describe('processChatJobs', () => {
       providerMetadata: Promise.resolve({}),
       usage: Promise.resolve({ inputTokens: 10, outputTokens: 20, totalTokens: 30 }),
     })
+    buildMemoryPlanMock.mockResolvedValue({
+      mode: 'summary_window',
+      promptBlocks: [
+        {
+          role: 'system',
+          content: 'CTX',
+          cachePreference: 'prefer-cache',
+          stability: 'static',
+        },
+        {
+          role: 'user',
+          content: 'Hello',
+          cachePreference: 'avoid-cache',
+          stability: 'live',
+        },
+      ],
+      fallbackSystemPrompt: 'CTX',
+      fallbackMessages: [{ role: 'user', content: 'Hello' }],
+      staticSystemPrompt: 'CTX',
+      dynamicContext: null,
+      ragInfo: null,
+    })
     resolveGoogleCacheDecisionMock.mockReturnValue({ enabled: false, minTokens: null })
     isGoogleExplicitCacheEnabledMock.mockReturnValue(true)
     createGoogleCacheMock.mockResolvedValue({ success: false, error: 'cache disabled' })
+    loadGenerationTranscriptMock.mockResolvedValue([{ role: 'user', content: 'Hello' }])
   })
 
   afterEach(() => {
@@ -1043,6 +1072,127 @@ describe('processChatJobs', () => {
         }),
       })
     })
+  })
+
+  it('excludes the superseded assistant from the actual stream payload during prefix-mode regeneration', async () => {
+    const supabase = createChatJobRunnerSupabaseMock({
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+      initialTurns: [
+        {
+          id: 'turn-1',
+          chat_id: 'chat-1',
+          turn_index: 1,
+          user_message_id: 'user-1',
+          active_assistant_message_id: 'assistant-1',
+        },
+      ],
+      initialMessages: [
+        {
+          id: 'user-1',
+          chat_id: 'chat-1',
+          turn_id: 'turn-1',
+          role: 'user',
+          content: 'old question',
+          message_status: 'completed',
+          user_id: 'user-1',
+        },
+        {
+          id: 'assistant-1',
+          chat_id: 'chat-1',
+          turn_id: 'turn-1',
+          role: 'assistant',
+          content: 'old active assistant',
+          message_status: 'completed',
+          user_id: 'user-1',
+        },
+      ],
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    decryptSecretMock.mockResolvedValue('sk-test')
+    loadGenerationTranscriptMock.mockResolvedValue([
+      { role: 'user', content: 'latest user message', messageId: 'user-1' },
+    ])
+    buildMemoryPlanMock.mockImplementation(
+      async ({ baseSystemPrompt, sanitizedMessages }: Record<string, unknown>) => ({
+        mode: 'prefix_live_blocks',
+        promptBlocks: [
+          {
+            role: 'system',
+            content: baseSystemPrompt as string,
+            cachePreference: 'prefer-cache',
+            stability: 'static',
+          },
+          ...((sanitizedMessages as Array<{ role: string; content: string }>) ?? []).map(
+            (message) => ({
+              role: message.role,
+              content: message.content,
+              cachePreference: 'prefer-cache',
+              stability: 'live',
+            }),
+          ),
+        ],
+        fallbackSystemPrompt: baseSystemPrompt as string,
+        fallbackMessages: sanitizedMessages,
+        staticSystemPrompt: baseSystemPrompt as string,
+        dynamicContext: null,
+        ragInfo: null,
+      }),
+    )
+    parseChatJobPayloadMock.mockReturnValue(
+      buildValidPayload({
+        requestId: 'req-prefix-regen',
+        turnId: 'turn-1',
+        sanitizedMessages: [
+          { role: 'user', content: 'old question' },
+          { role: 'assistant', content: 'old active assistant' },
+        ],
+        isRegeneration: true,
+        regenerateAssistantMessageId: 'assistant-1',
+      }),
+    )
+    streamTextMock.mockResolvedValue({
+      textStream: ['regenerated answer'],
+      finishReason: Promise.resolve('stop'),
+      providerMetadata: Promise.resolve({}),
+      usage: Promise.resolve({ inputTokens: 5, outputTokens: 10, totalTokens: 15 }),
+    })
+    claimPendingJobMock.mockResolvedValueOnce({
+      id: 'job-prefix-regen',
+      payload: { ok: true },
+    })
+    claimPendingJobMock.mockResolvedValueOnce(null)
+
+    const { processChatJobs } = await import('./service')
+    const result = await processChatJobs(1)
+
+    expect(result.results[0]).toMatchObject({ status: 'success', jobId: 'job-prefix-regen' })
+    expect(loadGenerationTranscriptMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatId: 'chat-1',
+        turnId: 'turn-1',
+        excludeAssistantForTurnId: 'turn-1',
+      }),
+    )
+    expect(buildMemoryPlanMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sanitizedMessages: [{ role: 'user', content: 'latest user message', messageId: 'user-1' }],
+      }),
+    )
+
+    const call = streamTextMock.mock.calls[0]?.[0] as {
+      messages?: Array<{ content: string; messageId?: string; role: string }>
+    }
+    expect(call.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: 'user', content: 'latest user message' }),
+      ]),
+    )
+    expect(call.messages).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: 'assistant', content: 'old active assistant' }),
+      ]),
+    )
   })
 
   it('uses split-system strategy for Anthropic prompt caching', async () => {

@@ -3,10 +3,12 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { toast } from 'sonner'
 import type { Message } from '@/types/database.types'
 import type { AlternateModelsConfig } from '@/lib/chat/model-config'
+import type { AssistantStreamBroadcastPayload } from '@/lib/chat/assistant-stream'
 import {
   DisplayMessage,
   MessageChangePayload,
   DebugInfo,
+  StreamingAssistantDraft,
   mapMessageToDisplay,
   buildSanitizedMessages,
 } from '../utils'
@@ -29,6 +31,7 @@ export interface UseQueuedChatParams {
 export interface UseQueuedChatReturn {
   messages: DisplayMessage[]
   setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>
+  streamingDraft: StreamingAssistantDraft | null
   input: string
   handleInputChange: (event: ChangeEvent<HTMLTextAreaElement>) => void
   handleSubmit: (event?: FormEvent<HTMLFormElement>) => void
@@ -38,6 +41,7 @@ export interface UseQueuedChatReturn {
     body?: { isRegeneration?: boolean; regenerateAssistantMessageId?: string }
   }) => void
   handleRealtimeMessageChange: (payload: MessageChangePayload) => void
+  handleAssistantStreamEvent: (payload: AssistantStreamBroadcastPayload) => void
 }
 
 export function useQueuedChat({
@@ -56,7 +60,9 @@ export function useQueuedChat({
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [pendingJobId, setPendingJobId] = useState<string | null>(null)
+  const pendingJobIdRef = useRef<string | null>(null)
   const pendingRegenerationTargetIdRef = useRef<string | null>(null)
+  const [streamingDraft, setStreamingDraft] = useState<StreamingAssistantDraft | null>(null)
   const [error, setError] = useState<Error | null>(null)
 
   const handleInputChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -93,9 +99,37 @@ export function useQueuedChat({
 
         return nextMessages
       })
+
+      if (
+        pendingJobIdRef.current &&
+        isVisibleMessageStatus(assistantMessage.message_status) &&
+        assistantMessage.id !== pendingRegenerationTargetIdRef.current
+      ) {
+        setStreamingDraft(null)
+      }
     },
     [debugInfoMap, persistedMessageIds],
   )
+
+  const startStreamingDraft = useCallback(
+    (jobId: string, regenerateAssistantMessageId: string | null) => {
+      setStreamingDraft({
+        id: `stream-${jobId}`,
+        jobId,
+        role: 'assistant',
+        content: '',
+        created_at: new Date().toISOString(),
+        streaming: true,
+        replaceMessageId: regenerateAssistantMessageId,
+      })
+    },
+    [],
+  )
+
+  const clearPendingJob = useCallback(() => {
+    pendingJobIdRef.current = null
+    setPendingJobId(null)
+  }, [])
 
   const fetchLatestMessage = useCallback(async () => {
     try {
@@ -167,13 +201,15 @@ export function useQueuedChat({
             }
           },
           onSuccess: async () => {
-            setPendingJobId(null)
             await appendAssistantMessage()
             await fetchLatestUsage()
+            clearPendingJob()
+            setStreamingDraft(null)
           },
           onError: (error) => {
-            setPendingJobId(null)
+            clearPendingJob()
             pendingRegenerationTargetIdRef.current = null
+            setStreamingDraft(null)
             const isTimeout = error.message.includes('timed out')
             toast.error(error.message, {
               duration: isTimeout ? 10000 : 5000,
@@ -198,7 +234,7 @@ export function useQueuedChat({
         throw result.error
       }
     },
-    [appendAssistantMessage, fetchLatestUsage],
+    [appendAssistantMessage, clearPendingJob, fetchLatestUsage],
   )
 
   const handleRealtimeMessageChange = useCallback(
@@ -224,6 +260,37 @@ export function useQueuedChat({
     },
     [debugInfoMap, persistedMessageIds, upsertAssistantMessage],
   )
+
+  const handleAssistantStreamEvent = useCallback((payload: AssistantStreamBroadcastPayload) => {
+    if (!pendingJobIdRef.current || payload.jobId !== pendingJobIdRef.current) {
+      return
+    }
+
+    if (payload.kind === 'error') {
+      setStreamingDraft(null)
+      return
+    }
+
+    setStreamingDraft((current) => {
+      if (!current || current.jobId !== payload.jobId) {
+        return {
+          id: `stream-${payload.jobId}`,
+          jobId: payload.jobId,
+          role: 'assistant',
+          content: payload.content,
+          created_at: new Date().toISOString(),
+          streaming: true,
+          replaceMessageId: payload.regenerateAssistantMessageId,
+        }
+      }
+
+      return {
+        ...current,
+        content: payload.content,
+        replaceMessageId: payload.regenerateAssistantMessageId,
+      }
+    })
+  }, [])
 
   const resolveNextApiKeyId = useCallback(
     () =>
@@ -283,7 +350,9 @@ export function useQueuedChat({
         }
 
         const data = (await response.json()) as { jobId: string }
+        pendingJobIdRef.current = data.jobId
         setPendingJobId(data.jobId)
+        startStreamingDraft(data.jobId, regenerateAssistantMessageId)
         await pollJobStatus(data.jobId)
       } catch (err) {
         const normalized = err instanceof Error ? err : new Error('Chat request failed.')
@@ -291,6 +360,8 @@ export function useQueuedChat({
         if (isRegeneration) {
           pendingRegenerationTargetIdRef.current = null
         }
+        clearPendingJob()
+        setStreamingDraft(null)
         // Only show toast if not already shown by pollJobStatus
         if (
           !normalized.message.includes('timed out') &&
@@ -304,7 +375,14 @@ export function useQueuedChat({
         setSending(false)
       }
     },
-    [chatId, resolveNextApiKeyId, pollJobStatus, syncLatestUserMessage],
+    [
+      chatId,
+      clearPendingJob,
+      pollJobStatus,
+      resolveNextApiKeyId,
+      startStreamingDraft,
+      syncLatestUserMessage,
+    ],
   )
 
   const handleSubmit = useCallback(
@@ -370,6 +448,7 @@ export function useQueuedChat({
   return {
     messages,
     setMessages,
+    streamingDraft,
     input,
     handleInputChange,
     handleSubmit,
@@ -377,5 +456,6 @@ export function useQueuedChat({
     error,
     reload,
     handleRealtimeMessageChange,
+    handleAssistantStreamEvent,
   }
 }

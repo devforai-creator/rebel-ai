@@ -16,6 +16,13 @@ export type DisplayMessage = {
   created_at?: string
   debug_info?: unknown
   temp?: boolean
+  streaming?: boolean
+}
+
+export type StreamingAssistantDraft = DisplayMessage & {
+  streaming: true
+  jobId: string
+  replaceMessageId: string | null
 }
 
 /**
@@ -232,7 +239,7 @@ export function buildSanitizedMessages(
 ): Array<{ role: 'user' | 'assistant'; content: string; messageId: string | null }> {
   const historyDisplay = history.map(mapMessageToDisplay)
   return [...historyDisplay, ...current]
-    .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
+    .filter((msg) => (msg.role === 'user' || msg.role === 'assistant') && !msg.streaming)
     .map((msg) => ({
       role: msg.role as 'user' | 'assistant',
       content: msg.content,

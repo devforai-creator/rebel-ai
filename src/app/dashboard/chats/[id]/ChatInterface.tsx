@@ -25,6 +25,11 @@ import { useQueuedChat } from './hooks'
 import { updateChatModelConfig } from './actions'
 import { MessageList, TokenStatsPanel, DebugModal } from './components'
 import {
+  CHAT_ASSISTANT_STREAM_EVENT,
+  getChatAssistantStreamChannelName,
+  type AssistantStreamBroadcastPayload,
+} from '@/lib/chat/assistant-stream'
+import {
   DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
   DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
   normalizeChatModelConfig,
@@ -370,12 +375,14 @@ export default function ChatInterface({
   const {
     messages,
     setMessages,
+    streamingDraft,
     input,
     handleInputChange,
     handleSubmit,
     isLoading,
     reload,
     handleRealtimeMessageChange,
+    handleAssistantStreamEvent,
   } = useQueuedChat({
     chatId,
     initialMessages,
@@ -401,7 +408,7 @@ export default function ChatInterface({
       if (!isActive) return
 
       channel = supabase
-        .channel(`chat-${chatId}-token-stats`, {
+        .channel(getChatAssistantStreamChannelName(chatId), {
           config: {
             broadcast: { self: true },
             presence: { key: `token-stats-${chatId}` },
@@ -421,6 +428,10 @@ export default function ChatInterface({
             handleRealtimeMessageChange(messagePayload)
           },
         )
+        .on('broadcast', { event: CHAT_ASSISTANT_STREAM_EVENT }, (payload) => {
+          const streamPayload = payload.payload as AssistantStreamBroadcastPayload
+          handleAssistantStreamEvent(streamPayload)
+        })
         .subscribe()
     }
 
@@ -432,7 +443,13 @@ export default function ChatInterface({
         void supabase.removeChannel(channel)
       }
     }
-  }, [chatId, supabase, handleUsageRealtime, handleRealtimeMessageChange])
+  }, [
+    chatId,
+    supabase,
+    handleAssistantStreamEvent,
+    handleUsageRealtime,
+    handleRealtimeMessageChange,
+  ])
 
   useAutosizeTextArea(composerRef, input, { minHeight: 96, maxHeight: 600 })
 
@@ -790,6 +807,7 @@ export default function ChatInterface({
         <div className="max-w-4xl mx-auto p-4 space-y-4">
           <MessageList
             messages={combinedMessages}
+            streamingDraft={streamingDraft}
             character={character}
             characterAssets={characterAssets as CharacterAsset[]}
             assetUrlMap={assetUrlMap}

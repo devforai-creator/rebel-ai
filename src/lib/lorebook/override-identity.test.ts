@@ -202,6 +202,24 @@ describe('override-identity', () => {
       expect(fp1).toBe(fp2)
     })
 
+    it('treats missing mode and explicit normal mode the same', () => {
+      const implicitNormal: LorebookEntryIdentityInput = {
+        key: 'test',
+        content: 'test',
+      }
+
+      const explicitNormal: LorebookEntryIdentityInput = {
+        key: 'test',
+        content: 'test',
+        mode: 'normal',
+      }
+
+      const fp1 = computeLorebookEntryFingerprint('module-1', implicitNormal)
+      const fp2 = computeLorebookEntryFingerprint('module-1', explicitNormal)
+
+      expect(fp1).toBe(fp2)
+    })
+
     it('differentiates based on boolean fields', () => {
       const entryActive: LorebookEntryIdentityInput = {
         key: 'test',

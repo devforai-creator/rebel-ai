@@ -14,8 +14,13 @@ export type LorebookEntryIdentityInput = Readonly<{
 }>
 
 function normalizeIdentityInput(entry: LorebookEntryIdentityInput) {
+  const normalizedMode =
+    entry.mode === null || entry.mode === undefined || entry.mode === '' || entry.mode === 'normal'
+      ? 'normal'
+      : entry.mode
+
   return [
-    entry.mode ?? '',
+    normalizedMode,
     entry.key ?? '',
     entry.secondkey ?? '',
     entry.comment ?? '',

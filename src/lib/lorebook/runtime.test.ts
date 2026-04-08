@@ -96,13 +96,19 @@ describe('buildLorebookDynamicContext', () => {
             {
               chat_id: 'chat-1',
               module_id: 'module-1',
-              entry_fingerprint: computeLorebookEntryFingerprint('module-1', pinnedEntry),
+              entry_fingerprint: computeLorebookEntryFingerprint('module-1', {
+                ...pinnedEntry,
+                mode: 'normal',
+              }),
               enabled: true,
             },
             {
               chat_id: 'chat-1',
               module_id: 'module-1',
-              entry_fingerprint: computeLorebookEntryFingerprint('module-1', disabledEntry),
+              entry_fingerprint: computeLorebookEntryFingerprint('module-1', {
+                ...disabledEntry,
+                mode: 'normal',
+              }),
               enabled: false,
             },
           ],

@@ -89,8 +89,8 @@ describe('buildMemoryPlan', () => {
     expect(result.mode).toBe('prefix_live_blocks')
     expect(result.fallbackSystemPrompt).toBe('STATIC PROMPT')
     expect(result.fallbackMessages).toEqual([
-      { role: 'user', content: 'db-user-1' },
-      { role: 'assistant', content: 'db-assistant-2' },
+      { role: 'user', content: 'db-user-1', messageId: 'msg-1' },
+      { role: 'assistant', content: 'db-assistant-2', messageId: 'msg-2' },
     ])
     expect(result.promptBlocks).toEqual([
       {
@@ -171,8 +171,8 @@ describe('buildMemoryPlan', () => {
     })
 
     expect(result.fallbackMessages).toEqual([
-      { role: 'user', content: 'db-user-1' },
-      { role: 'assistant', content: 'active-assistant' },
+      { role: 'user', content: 'db-user-1', messageId: 'msg-1' },
+      { role: 'assistant', content: 'active-assistant', messageId: 'msg-3' },
     ])
   })
 })

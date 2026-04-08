@@ -36,6 +36,7 @@ function createGenerateTextResult(text: string, completionTokens: number): Gener
 type ChatRole = 'user' | 'assistant'
 
 interface MessageRow extends Record<string, unknown> {
+  id: string
   chat_id: string
   sequence: number
   role: ChatRole
@@ -43,6 +44,13 @@ interface MessageRow extends Record<string, unknown> {
 }
 
 type ChatSummaryRow = ChatSummary & Record<string, unknown>
+type ChatTurnRow = {
+  id: string
+  chat_id: string
+  turn_index: number
+  user_message_id: string | null
+  active_assistant_message_id: string | null
+}
 
 // NOTE: SUMMARY_LEVEL_SUPER_META, SUMMARY_GROUP_SIZE, and SUPER_SUMMARY_GROUP_SIZE
 // were removed because the active summary pipeline does not use super-meta summaries.
@@ -175,17 +183,22 @@ function mapColumns<T extends Record<string, unknown>>(columns: string) {
 class SupabaseMock {
   constructor(messages: MessageRow[]) {
     this.messages = messages
+    this.chatTurns = deriveChatTurns(messages)
     this.chatSummaries = []
     this.chatFacts = []
   }
 
   messages: MessageRow[]
+  chatTurns: ChatTurnRow[]
   chatSummaries: ChatSummaryRow[]
   chatFacts: Array<Record<string, unknown>>
 
   from(table: string) {
     if (table === 'messages') {
       return new MessagesTable(this)
+    }
+    if (table === 'chat_turns') {
+      return new ChatTurnsTable(this)
     }
     if (table === 'chat_summaries') {
       return new ChatSummariesTable(this)
@@ -198,6 +211,44 @@ class SupabaseMock {
     }
     throw new Error(`Unsupported table "${table}"`)
   }
+}
+
+function deriveChatTurns(messages: MessageRow[]): ChatTurnRow[] {
+  const orderedMessages = [...messages].sort((a, b) => a.sequence - b.sequence)
+  const turns: ChatTurnRow[] = []
+  let currentTurn: ChatTurnRow | null = null
+  let turnIndex = 0
+
+  for (const message of orderedMessages) {
+    if (message.role === 'user') {
+      turnIndex += 1
+      currentTurn = {
+        id: `turn-${turnIndex}`,
+        chat_id: message.chat_id,
+        turn_index: turnIndex,
+        user_message_id: message.id,
+        active_assistant_message_id: null,
+      }
+      turns.push(currentTurn)
+      continue
+    }
+
+    if (!currentTurn) {
+      turnIndex += 1
+      currentTurn = {
+        id: `turn-${turnIndex}`,
+        chat_id: message.chat_id,
+        turn_index: turnIndex,
+        user_message_id: null,
+        active_assistant_message_id: null,
+      }
+      turns.push(currentTurn)
+    }
+
+    currentTurn.active_assistant_message_id = message.id
+  }
+
+  return turns
 }
 
 class MessagesTable {
@@ -217,6 +268,20 @@ class MessagesCountQuery {
   async eq(field: keyof MessageRow, value: unknown) {
     const count = this.mock.messages.filter((row) => row[field] === value).length
     return { count, error: null }
+  }
+}
+
+class ChatTurnsTable {
+  constructor(private readonly mock: SupabaseMock) {}
+
+  select(columns: string) {
+    return new ChatTurnsQuery(this.mock, columns)
+  }
+}
+
+class ChatTurnsQuery extends BaseQuery<ChatTurnRow> {
+  constructor(mock: SupabaseMock, columns: string) {
+    super(() => mock.chatTurns, mapColumns<ChatTurnRow>(columns))
   }
 }
 
@@ -339,6 +404,7 @@ class MessagesQuery extends BaseQuery<MessageRow> {
 
 function makeMessages(total: number, chatId = 'chat-1'): MessageRow[] {
   return Array.from({ length: total }, (_, index) => ({
+    id: `msg-${index + 1}`,
     chat_id: chatId,
     sequence: index + 1,
     role: index % 2 === 0 ? 'user' : 'assistant',

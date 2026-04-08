@@ -475,16 +475,12 @@ async function executeJob({
       }
 
       if (anthropicCache?.enabled) {
-        logChatJobRunnerDebug(
-          '[Chat Job Runner] Anthropic prompt caching enabled (split-system strategy)',
-          {
-            ttl: anthropicCache.ttl,
-            staticPromptTokens,
-            cachedSystemTokens: staticPromptTokens,
-            dynamicContextTokens: dynamicContext ? estimateTokens(dynamicContext) : 0,
-            hasDynamicContext: !!dynamicContext,
-          },
-        )
+        logChatJobRunnerDebug('[Chat Job Runner] Anthropic prompt caching enabled (automatic)', {
+          ttl: anthropicCache.ttl,
+          staticPromptTokens,
+          dynamicContextTokens: dynamicContext ? estimateTokens(dynamicContext) : 0,
+          hasDynamicContext: !!dynamicContext,
+        })
       }
     }
 

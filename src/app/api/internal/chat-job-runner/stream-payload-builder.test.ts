@@ -18,7 +18,7 @@ const BASE_ARGS = {
 }
 
 describe('buildStreamPayloadPlan', () => {
-  it('builds anthropic split-system payload with cache on the static prompt', () => {
+  it('builds anthropic split-system payload with automatic cache control at request level', () => {
     const providerOptions: SharedV2ProviderOptions = {
       anthropic: { version: '2025-01-01' },
     }
@@ -65,19 +65,24 @@ describe('buildStreamPayloadPlan', () => {
 
     expect(result.strategy).toBe('anthropic-split-system')
     expect(result.streamRequest.system).toBeUndefined()
-    expect(result.streamRequest.providerOptions).toEqual(providerOptions)
+    expect(result.streamRequest.providerOptions).toEqual({
+      anthropic: {
+        version: '2025-01-01',
+        cacheControl: { type: 'ephemeral' },
+      },
+    })
 
     // 2 system messages + 2 conversation = 4 total
     expect(result.streamRequest.messages).toHaveLength(4)
 
-    // System 1: static (cached)
+    // System 1: static
     expect(result.streamRequest.messages[0]).toMatchObject({
       role: 'system',
       content: 'STATIC',
     })
-    expect(result.streamRequest.messages[0]).toHaveProperty('providerOptions')
+    expect(result.streamRequest.messages[0]).not.toHaveProperty('providerOptions')
 
-    // System 2: summaries+facts (NOT cached)
+    // System 2: summaries+facts
     expect(result.streamRequest.messages[1]).toMatchObject({
       role: 'system',
       content: 'SUMMARIES_FACTS',
@@ -88,8 +93,8 @@ describe('buildStreamPayloadPlan', () => {
       provider: 'anthropic',
       strategy: 'anthropic-split-system',
       systemMessages: [
-        { role: 'system', content: 'STATIC', cached: true },
-        { role: 'system', content: 'SUMMARIES_FACTS', cached: false },
+        { role: 'system', content: 'STATIC' },
+        { role: 'system', content: 'SUMMARIES_FACTS' },
       ],
       conversationMessages: [
         { role: 'user', content: 'hello' },
@@ -123,16 +128,19 @@ describe('buildStreamPayloadPlan', () => {
       anthropicConversationMessages: [{ role: 'user', content: 'hello' }],
     })
 
-    // 1 system message (static cached) + 1 conversation = 2
+    // 1 system message + 1 conversation = 2
     expect(result.streamRequest.messages).toHaveLength(2)
-    expect(result.streamRequest.messages[0]).toHaveProperty('providerOptions')
     expect(result.streamRequest.messages[0]).toMatchObject({
       role: 'system',
       content: 'STATIC',
     })
-    expect(result.actualPayload.systemMessages).toEqual([
-      { role: 'system', content: 'STATIC', cached: true },
-    ])
+    expect(result.streamRequest.messages[0]).not.toHaveProperty('providerOptions')
+    expect(result.streamRequest.providerOptions).toEqual({
+      anthropic: {
+        cacheControl: { type: 'ephemeral' },
+      },
+    })
+    expect(result.actualPayload.systemMessages).toEqual([{ role: 'system', content: 'STATIC' }])
   })
 
   it('no cache applied when anthropicCache is null', () => {
@@ -160,7 +168,7 @@ describe('buildStreamPayloadPlan', () => {
       anthropicConversationMessages: [{ role: 'user', content: 'hello' }],
     })
 
-    // 1 system message (static, no cache) + 1 conversation = 2
+    // 1 system message (no cache) + 1 conversation = 2
     expect(result.streamRequest.messages).toHaveLength(2)
     expect(result.streamRequest.messages[0]).not.toHaveProperty('providerOptions')
   })
@@ -227,7 +235,7 @@ describe('buildStreamPayloadPlan', () => {
     expect(result.streamRequest.providerOptions).toEqual(providerOptions)
   })
 
-  it('places anthropic cache control on the last live block for prefix mode', () => {
+  it('uses request-level automatic cache control for prefix mode', () => {
     const result = buildStreamPayloadPlan({
       ...BASE_ARGS,
       provider: 'anthropic',
@@ -279,7 +287,12 @@ describe('buildStreamPayloadPlan', () => {
       role: 'user',
       content: 'latest user',
     })
-    expect(result.streamRequest.messages[4]).toHaveProperty('providerOptions')
+    expect(result.streamRequest.messages[4]).not.toHaveProperty('providerOptions')
+    expect(result.streamRequest.providerOptions).toEqual({
+      anthropic: {
+        cacheControl: { type: 'ephemeral' },
+      },
+    })
     expect(result.actualPayload.conversationMessages).toEqual([
       { role: 'user', content: 'older live' },
       { role: 'assistant', content: 'older reply' },

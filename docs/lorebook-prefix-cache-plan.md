@@ -6,9 +6,9 @@ The main goal is to avoid losing product-level chat behavior during testing, wit
 
 ## Current State
 
-- The active chat-generation path currently uses only plain-text system fields, memory blocks, and conversation history.
-- Lorebook is not currently injected into the runtime prompt.
-- `prefix_live_blocks` is working, but real product testing feels incomplete without lorebook behavior.
+- The active chat-generation path now includes lorebook again through a single rendered dynamic block.
+- Anthropic transport currently uses request-level automatic caching, not block-level explicit breakpoints.
+- `prefix_live_blocks` is working, but stable-vs-dynamic lorebook separation is still pending.
 
 ## Problem
 

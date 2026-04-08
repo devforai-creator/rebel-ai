@@ -131,8 +131,8 @@ Notes:
 Anthropic-specific cache behavior lives only in the payload builder.
 
 - Render `promptBlocks` into ordered Anthropic system/message blocks.
-- Use explicit `cache_control` on the final cacheable breakpoint.
-- Rely on Anthropic automatic prefix checking for the longest reusable prefix before that point.
+- Use request-level automatic caching rather than block-level explicit breakpoints in V1.
+- Let Anthropic move the cache point forward automatically as the conversation grows.
 - In Mode B, live conversation is still part of the prompt prefix and should not be force-separated into an always-uncached block.
 
 Mode B exists for general architecture reasons, but Anthropic is the primary provider expected to benefit immediately.
@@ -224,7 +224,7 @@ Required coverage for V1:
 - Mode A output matches current behavior closely enough to avoid regressions
 - Mode B accumulates live messages without per-turn FIFO trimming
 - Mode B seals at the configured threshold and retains the configured tail
-- Anthropic payload builder places cache control on the intended breakpoint for Mode B
+- Anthropic payload builder applies request-level automatic caching for Mode B
 
 ## Migration Notes
 

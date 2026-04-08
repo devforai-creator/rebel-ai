@@ -1,5 +1,5 @@
 import type { CoreMessage } from 'ai'
-import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
+import type { JSONValue, SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import type { MemoryPromptBlock } from '@/lib/chat-memory'
 import { buildAnthropicCacheControl } from '@/lib/llm/provider-options'
@@ -13,6 +13,26 @@ type StreamRequest = {
   system?: string
   messages: CoreMessage[]
   providerOptions?: SharedV2ProviderOptions
+}
+
+function withAnthropicAutomaticCaching(
+  providerOptions: SharedV2ProviderOptions | undefined,
+  anthropicCache: AnthropicCacheDecision | null,
+): SharedV2ProviderOptions | undefined {
+  if (!anthropicCache?.enabled) {
+    return providerOptions
+  }
+
+  const anthropicOptions =
+    (providerOptions?.anthropic as Record<string, JSONValue> | undefined) ?? {}
+
+  return {
+    ...(providerOptions ?? {}),
+    anthropic: {
+      ...anthropicOptions,
+      ...buildAnthropicCacheControl(anthropicCache.ttl),
+    },
+  }
 }
 
 type BuildStreamPayloadPlanArgs = {
@@ -55,74 +75,32 @@ export function buildStreamPayloadPlan({
   if (provider === 'anthropic') {
     if (promptBlocks.length > 0) {
       const systemBlocks = promptBlocks.filter((block) => block.role === 'system')
-      const conversationMetas = promptBlocks.filter((block) => block.role !== 'system')
-      const placeholderCachePreference = conversationMetas[0]?.cachePreference ?? 'avoid-cache'
-      const orderedConversationMetas = anthropicPlaceholderAdded
-        ? [
-            {
-              role: 'user',
-              content: '(continue)',
-              cachePreference: placeholderCachePreference,
-              stability: 'live',
-            },
-          ].concat(conversationMetas)
-        : conversationMetas
-
-      const lastCacheableIndex = anthropicCache?.enabled
-        ? findLastCacheableIndex([...systemBlocks, ...orderedConversationMetas])
-        : -1
-
       const systemMessages: Array<{ role: string; content: string; cached?: boolean }> = []
       const conversationMessages: Array<{ role: string; content: string }> = []
       const messagesForAnthropic: CoreMessage[] = []
-
-      let orderedIndex = 0
+      const mergedProviderOptions = withAnthropicAutomaticCaching(providerOptions, anthropicCache)
 
       for (const block of systemBlocks) {
-        const isCached = orderedIndex === lastCacheableIndex
-        messagesForAnthropic.push(
-          isCached
-            ? {
-                role: 'system',
-                content: block.content,
-                providerOptions: {
-                  anthropic: buildAnthropicCacheControl(anthropicCache?.ttl ?? '5m'),
-                },
-              }
-            : {
-                role: 'system',
-                content: block.content,
-              },
-        )
-        systemMessages.push({ role: 'system', content: block.content, cached: isCached })
-        orderedIndex += 1
+        messagesForAnthropic.push({
+          role: 'system',
+          content: block.content,
+        })
+        systemMessages.push({ role: 'system', content: block.content })
       }
 
       for (const message of anthropicConversationMessages) {
-        const isCached = orderedIndex === lastCacheableIndex
-        messagesForAnthropic.push(
-          isCached
-            ? {
-                role: message.role,
-                content: message.content,
-                providerOptions: {
-                  anthropic: buildAnthropicCacheControl(anthropicCache?.ttl ?? '5m'),
-                },
-              }
-            : {
-                role: message.role,
-                content: message.content,
-              },
-        )
+        messagesForAnthropic.push({
+          role: message.role,
+          content: message.content,
+        })
         conversationMessages.push({ role: message.role, content: message.content })
-        orderedIndex += 1
       }
 
       return {
         strategy: 'anthropic-split-system',
         streamRequest: {
           messages: messagesForAnthropic,
-          providerOptions,
+          providerOptions: mergedProviderOptions,
         },
         actualPayload: {
           provider: 'anthropic',
@@ -134,24 +112,13 @@ export function buildStreamPayloadPlan({
     }
 
     const messagesForAnthropic: CoreMessage[] = []
+    const mergedProviderOptions = withAnthropicAutomaticCaching(providerOptions, anthropicCache)
 
-    // System 1: static prompt (base + character + persona) — cacheable.
-    messagesForAnthropic.push(
-      anthropicCache?.enabled
-        ? {
-            role: 'system',
-            content: staticSystemPrompt,
-            providerOptions: {
-              anthropic: buildAnthropicCacheControl(anthropicCache.ttl),
-            },
-          }
-        : {
-            role: 'system',
-            content: staticSystemPrompt,
-          },
-    )
+    messagesForAnthropic.push({
+      role: 'system',
+      content: staticSystemPrompt,
+    })
 
-    // System 2: summaries + facts — not cached because it changes with history.
     if (dynamicContext) {
       messagesForAnthropic.push({
         role: 'system',
@@ -170,18 +137,17 @@ export function buildStreamPayloadPlan({
       {
         role: 'system',
         content: staticSystemPrompt,
-        cached: anthropicCache?.enabled ?? false,
       },
     ]
     if (dynamicContext) {
-      systemMessages.push({ role: 'system', content: dynamicContext, cached: false })
+      systemMessages.push({ role: 'system', content: dynamicContext })
     }
 
     return {
       strategy: 'anthropic-split-system',
       streamRequest: {
         messages: messagesForAnthropic,
-        providerOptions,
+        providerOptions: mergedProviderOptions,
       },
       actualPayload: {
         provider: 'anthropic',
@@ -245,18 +211,4 @@ export function buildStreamPayloadPlan({
       })),
     },
   }
-}
-
-function findLastCacheableIndex(
-  blocks: Array<
-    | Pick<MemoryPromptBlock, 'cachePreference'>
-    | { cachePreference: 'no-preference'; role: string; content: string }
-  >,
-): number {
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    if (blocks[index].cachePreference !== 'avoid-cache') {
-      return index
-    }
-  }
-  return -1
 }

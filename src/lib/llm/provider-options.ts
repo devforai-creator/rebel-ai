@@ -52,23 +52,11 @@ export function getProviderOptions(
 }
 
 /**
- * Build Anthropic cache control object for message parts.
+ * Build Anthropic cache control object for provider options.
  *
- * Anthropic caching is applied per-message-part using providerOptions.
- *
- * @example
- * ```typescript
- * const system = [
- *   { type: 'text', text: 'Short instructions' },
- *   {
- *     type: 'text',
- *     text: longContext,
- *     providerOptions: {
- *       anthropic: buildAnthropicCacheControl('5m')
- *     }
- *   }
- * ]
- * ```
+ * This helper is used for request-level automatic caching and can also be
+ * reused anywhere the Anthropic provider expects the shared `cacheControl`
+ * option shape.
  */
 export function buildAnthropicCacheControl(
   ttl: AnthropicCacheTTL = '5m',

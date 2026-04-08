@@ -32,11 +32,9 @@ const allowedServiceTiers: ApiServiceTier[] = ['standard', 'flex', 'priority', '
 const allowedReasoningEfforts: ReasoningEffort[] = ['none', 'low', 'medium', 'high']
 
 const apiKeyFormSchema = z.object({
-  provider: z
-    .string()
-    .refine((value) => PROVIDERS.includes(value as Provider), {
-      message: 'Provider를 선택해주세요.',
-    }),
+  provider: z.string().refine((value) => PROVIDERS.includes(value as Provider), {
+    message: 'Provider를 선택해주세요.',
+  }),
   key_name: z
     .string()
     .transform((value) => value.trim())

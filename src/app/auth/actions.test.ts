@@ -42,9 +42,7 @@ function buildLoginFormData(overrides?: {
 function buildSupabase(options: AuthSupabaseOptions = {}) {
   return {
     auth: {
-      signInWithPassword: vi
-        .fn()
-        .mockResolvedValue({ error: options.signInError ?? null }),
+      signInWithPassword: vi.fn().mockResolvedValue({ error: options.signInError ?? null }),
       signOut: vi.fn().mockResolvedValue({ error: null }),
     },
   }

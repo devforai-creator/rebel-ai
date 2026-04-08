@@ -103,10 +103,12 @@ function buildSupabase(options: ApiKeysSupabaseOptions = {}) {
   }
 }
 
-function createAdminSupabase(options: {
-  createSecretError?: RpcError | null
-  deleteSecretError?: RpcError | null
-} = {}) {
+function createAdminSupabase(
+  options: {
+    createSecretError?: RpcError | null
+    deleteSecretError?: RpcError | null
+  } = {},
+) {
   return {
     rpc: vi.fn(
       async (

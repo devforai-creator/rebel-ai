@@ -23,4 +23,3 @@ export function isVisibleMessageStatus(status: string | null | undefined): boole
     typeof status !== 'undefined'
   )
 }
-

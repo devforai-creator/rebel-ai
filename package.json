@@ -1,6 +1,6 @@
 {
   "name": "rebel-ai",
-  "version": "0.9.3",
+  "version": "0.0.0-dev",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -22,8 +22,7 @@
     "character:jobs": "node scripts/run-character-import-jobs.js",
     "import:jobs": "node scripts/run-character-import-jobs.js",
     "backfill:facts": "node scripts/backfill-facts.js",
-    "backfill:embeddings": "node scripts/backfill-embeddings.js",
-    "release": "bash scripts/release.sh"
+    "backfill:embeddings": "node scripts/backfill-embeddings.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.70",

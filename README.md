@@ -3,10 +3,9 @@
 **Open-source, self-hosted character chat — your keys, your data, your server.**
 
 [![CI](https://github.com/devforai-creator/rebel-ai/actions/workflows/test.yml/badge.svg)](https://github.com/devforai-creator/rebel-ai/actions/workflows/test.yml)
-[![Version](https://img.shields.io/badge/version-0.9.3-blue)](#)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
-> **v0.9.3** — A character chat web app you deploy on your own infrastructure.
+> A character chat web app you deploy on your own infrastructure.
 > Bring your own API keys to control costs. Keep conversations and characters in your own database.
 > Runs on free-tier cloud (Vercel Hobby + Supabase Free) or your own stack.
 

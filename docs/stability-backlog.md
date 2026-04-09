@@ -152,6 +152,20 @@ Done when:
 - tests cover storage-success / DB-failure explicitly
 - cleanup tooling or policy exists for both asset buckets
 
+Current status as of 2026-04-09:
+
+- character delete and RBX import rollback now clean up `character-assets` storage paths, with regression coverage in [src/app/dashboard/characters/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/actions.test.ts) and [src/lib/rbx-importer.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/rbx-importer.test.ts)
+- one-off cleanup tooling exists at [scripts/cleanup-orphaned-character-assets.js](/home/tmdduq96kr/projects/rebel-ai/scripts/cleanup-orphaned-character-assets.js)
+- linked production cleanup reduced `character-assets` orphan count from `141677` to `1644`
+- linked production now has `0` `character-assets` orphans older than `3 days`
+- remaining `character-assets` orphans are all recent and should be treated as a leak investigation, not a historical backfill
+
+Next session start here:
+
+- inspect which current write path is still creating recent `character-assets` orphans within the last `3 days`
+- verify whether `module-assets` has the same upload-success / DB-failure orphan pattern and add equivalent cleanup if needed
+- decide whether a short-window janitor policy is still needed after the write-path leak is fixed
+
 ### P1-4. CI Guardrail Tightening
 
 Scope:

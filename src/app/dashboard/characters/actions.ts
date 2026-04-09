@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { getFormDataErrorMessage, safeParseFormData } from '@/lib/form-data'
+import { cleanupOrphanedModules, listCharacterModuleIds } from '@/lib/modules/orphan-cleanup'
 import { validateModuleOwnership } from '@/lib/modules/ownership'
 import { createClient } from '@/lib/supabase/server'
 
@@ -119,6 +120,15 @@ export async function updateCharacter(id: string, formData: FormData) {
     return { error: 'Login required' }
   }
 
+  const previousModuleIds = await listCharacterModuleIds(supabase, id).catch((error: Error) => {
+    console.error('[Character] Failed to load linked modules before update', {
+      characterId: id,
+      userId: user.id,
+      error: error.message,
+    })
+    return []
+  })
+
   const parsedForm = parseCharacterFormData(formData)
 
   if ('error' in parsedForm) {
@@ -163,7 +173,20 @@ export async function updateCharacter(id: string, formData: FormData) {
     return { error: 'Failed to update character. Please try again.' }
   }
 
-  await supabase.from('character_modules').delete().eq('character_id', id)
+  const { error: unlinkError } = await supabase
+    .from('character_modules')
+    .delete()
+    .eq('character_id', id)
+
+  if (unlinkError) {
+    console.error('[Character] Failed to clear existing module links during update', {
+      characterId: id,
+      userId: user.id,
+      error: unlinkError.message,
+      code: unlinkError.code,
+    })
+    return { error: 'An error occurred while unlinking existing modules. Please try again later.' }
+  }
 
   if (authorizedModuleIds.length > 0) {
     const rows = authorizedModuleIds.map((moduleId, index) => ({
@@ -184,8 +207,15 @@ export async function updateCharacter(id: string, formData: FormData) {
     }
   }
 
+  await cleanupOrphanedModules(supabase, previousModuleIds, {
+    action: 'updateCharacter',
+    characterId: id,
+    userId: user.id,
+  })
+
   revalidatePath('/dashboard/characters')
   revalidatePath(`/dashboard/characters/${id}`)
+  revalidatePath('/dashboard/modules')
   redirect(`/dashboard/characters/${id}`)
 }
 
@@ -200,6 +230,15 @@ export async function deleteCharacter(id: string) {
     return { error: 'Login required' }
   }
 
+  const previousModuleIds = await listCharacterModuleIds(supabase, id).catch((error: Error) => {
+    console.error('[Character] Failed to load linked modules before delete', {
+      characterId: id,
+      userId: user.id,
+      error: error.message,
+    })
+    return []
+  })
+
   const { error } = await supabase.from('characters').delete().eq('id', id).eq('user_id', user.id)
 
   if (error) {
@@ -212,7 +251,14 @@ export async function deleteCharacter(id: string) {
     return { error: 'Failed to delete character. Please try again.' }
   }
 
+  await cleanupOrphanedModules(supabase, previousModuleIds, {
+    action: 'deleteCharacter',
+    characterId: id,
+    userId: user.id,
+  })
+
   revalidatePath('/dashboard/characters')
+  revalidatePath('/dashboard/modules')
   return { success: true }
 }
 

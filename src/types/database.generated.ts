@@ -1422,6 +1422,10 @@ export type Database = {
             Args: { requester?: string; secret_name: string }
             Returns: undefined
           }
+      delete_orphaned_modules: {
+        Args: { module_ids: string[]; requester?: string | null }
+        Returns: number
+      }
       get_character_asset_url: { Args: { asset_id: string }; Returns: string }
       get_character_assets: {
         Args: { p_character_id: string }

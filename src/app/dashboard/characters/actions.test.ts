@@ -48,6 +48,7 @@ type CharactersSupabaseOptions = {
   deleteCharacterError?: DbError | null
   insertCharacterModulesError?: DbError | null
   deleteCharacterModulesError?: DbError | null
+  cleanupOrphanedModulesError?: DbError | null
   createCharacterId?: string
   characters?: CharacterRow[]
   characterModules?: CharacterModuleRow[]
@@ -56,6 +57,11 @@ type CharactersSupabaseOptions = {
 type MutationCall = {
   payload?: Record<string, unknown>
   filters: Array<[string, unknown]>
+}
+
+type RpcCall = {
+  name: string
+  params: Record<string, unknown> | undefined
 }
 
 function buildCharacterFormData(overrides?: {
@@ -110,6 +116,37 @@ function createThenableMutation(
   return builder
 }
 
+function createThenableQuery<T>(
+  resolve: (
+    filters: Array<[string, unknown]>,
+  ) => { data: T; error: DbError | null } | Promise<{ data: T; error: DbError | null }>,
+) {
+  const filters: Array<[string, unknown]> = []
+  let settled = false
+
+  const builder = {
+    eq(field: string, value: unknown) {
+      filters.push([field, value])
+      return builder
+    },
+    then<TResult1 = { data: T; error: DbError | null }, TResult2 = never>(
+      onfulfilled?:
+        | ((value: { data: T; error: DbError | null }) => TResult1 | PromiseLike<TResult1>)
+        | null,
+      onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    ) {
+      if (settled) {
+        return Promise.resolve({ data: [] as T, error: null }).then(onfulfilled, onrejected)
+      }
+
+      settled = true
+      return Promise.resolve(resolve([...filters])).then(onfulfilled, onrejected)
+    },
+  }
+
+  return builder
+}
+
 function matchesFilters(row: Record<string, unknown>, filters: Array<[string, unknown]>) {
   return filters.every(([field, value]) => row[field] === value)
 }
@@ -136,6 +173,7 @@ function buildSupabase(options: CharactersSupabaseOptions = {}) {
     characterDeleteCalls: [] as MutationCall[],
     characterModuleInsertPayloads: [] as CharacterModuleRow[][],
     characterModuleDeleteCalls: [] as MutationCall[],
+    rpcCalls: [] as RpcCall[],
   }
 
   return {
@@ -203,6 +241,14 @@ function buildSupabase(options: CharactersSupabaseOptions = {}) {
 
       if (table === 'character_modules') {
         return {
+          select() {
+            return createThenableQuery((filters) => ({
+              data: state.characterModules
+                .filter((row) => matchesFilters(row, filters))
+                .map((row) => ({ module_id: row.module_id })),
+              error: null,
+            }))
+          },
           insert(payload: CharacterModuleRow[]) {
             state.characterModuleInsertPayloads.push(payload)
             if (options.insertCharacterModulesError) {
@@ -230,6 +276,19 @@ function buildSupabase(options: CharactersSupabaseOptions = {}) {
       }
 
       throw new Error(`Unexpected table: ${table}`)
+    },
+    rpc(name: string, params?: Record<string, unknown>) {
+      state.rpcCalls.push({ name, params })
+
+      if (name !== 'delete_orphaned_modules') {
+        throw new Error(`Unexpected rpc: ${name}`)
+      }
+
+      if (options.cleanupOrphanedModulesError) {
+        return Promise.resolve({ data: null, error: options.cleanupOrphanedModulesError })
+      }
+
+      return Promise.resolve({ data: 0, error: null })
     },
   }
 }
@@ -545,9 +604,37 @@ describe('character actions template syntax handling', () => {
     expect(supabase.state.characterModuleInsertPayloads).toEqual([
       [{ character_id: 'char-1', module_id: 'mod-1', enabled: true, priority: 1 }],
     ])
+    expect(supabase.state.rpcCalls).toEqual([])
   })
 
-  it('updates a character, relinks modules, revalidates, and redirects', async () => {
+  it('returns an unlink error when clearing previous module links fails', async () => {
+    const supabase = buildSupabase({
+      characterModules: [
+        { character_id: 'char-1', module_id: 'old-mod', enabled: true, priority: 1 },
+      ],
+      deleteCharacterModulesError: { message: 'delete links failed', code: '23503' },
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { updateCharacter } = await import('./actions')
+
+    const result = await updateCharacter('char-1', buildCharacterFormData())
+
+    expect(result).toEqual({
+      error: 'An error occurred while unlinking existing modules. Please try again later.',
+    })
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[Character] Failed to clear existing module links during update',
+      expect.objectContaining({
+        characterId: 'char-1',
+        userId: 'user-1',
+        error: 'delete links failed',
+        code: '23503',
+      }),
+    )
+    expect(supabase.state.rpcCalls).toEqual([])
+  })
+
+  it('updates a character, relinks modules, cleans up orphans, revalidates, and redirects', async () => {
     const supabase = buildSupabase({
       characterModules: [
         { character_id: 'char-1', module_id: 'old-mod', enabled: true, priority: 1 },
@@ -588,8 +675,18 @@ describe('character actions template syntax handling', () => {
         { character_id: 'char-1', module_id: 'mod-1', enabled: true, priority: 1 },
       ],
     ])
+    expect(supabase.state.rpcCalls).toEqual([
+      {
+        name: 'delete_orphaned_modules',
+        params: {
+          module_ids: ['old-mod'],
+          requester: 'user-1',
+        },
+      },
+    ])
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/characters')
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/characters/char-1')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/modules')
     expect(redirectMock).toHaveBeenCalledWith('/dashboard/characters/char-1')
   })
 
@@ -617,6 +714,15 @@ describe('character actions template syntax handling', () => {
       },
     ])
     expect(supabase.state.characterModuleInsertPayloads).toHaveLength(0)
+    expect(supabase.state.rpcCalls).toEqual([
+      {
+        name: 'delete_orphaned_modules',
+        params: {
+          module_ids: ['old-mod'],
+          requester: 'user-1',
+        },
+      },
+    ])
     expect(redirectMock).toHaveBeenCalledWith('/dashboard/characters/char-1')
   })
 
@@ -654,7 +760,11 @@ describe('character actions template syntax handling', () => {
   })
 
   it('deletes a character successfully and revalidates the list', async () => {
-    const supabase = buildSupabase()
+    const supabase = buildSupabase({
+      characterModules: [
+        { character_id: 'char-1', module_id: 'old-mod', enabled: true, priority: 1 },
+      ],
+    })
     createClientMock.mockResolvedValue(supabase)
     const { deleteCharacter } = await import('./actions')
 
@@ -669,6 +779,16 @@ describe('character actions template syntax handling', () => {
         ],
       },
     ])
+    expect(supabase.state.rpcCalls).toEqual([
+      {
+        name: 'delete_orphaned_modules',
+        params: {
+          module_ids: ['old-mod'],
+          requester: 'user-1',
+        },
+      },
+    ])
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/characters')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/modules')
   })
 })

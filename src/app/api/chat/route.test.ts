@@ -140,6 +140,10 @@ interface SupabaseFixture {
   chatTurns?: ChatTurnRow[]
   chatJobs?: ChatJobRow[]
   chatJobInsertError?: { message: string; code?: string | null }
+  activeChatJobsError?: { message: string; code?: string | null }
+  activeUserJobsError?: { message: string; code?: string | null }
+  chatTurnInsertError?: { message: string; code?: string | null }
+  messageInsertError?: { message: string; code?: string | null }
 }
 
 type ChatAdminRequest =
@@ -281,13 +285,21 @@ class SupabaseRouteMock {
       case 'characters':
         return new CharactersTable(this.fixture.characters)
       case 'messages':
-        return new MessagesTable(this.messages)
+        return new MessagesTable(this.messages, this.fixture.messageInsertError)
       case 'chat_turns':
-        return new ChatTurnsTable(this.chatTurns, this.messages)
+        return new ChatTurnsTable(
+          this.chatTurns,
+          this.messages,
+          this.fixture.chatTurnInsertError,
+        )
       case 'global_variables':
         return new GlobalVariablesTable(this.globalVariables)
       case 'chat_generation_jobs':
-        return new ChatGenerationJobsTable(this.chatJobs, this.fixture.chatJobInsertError)
+        return new ChatGenerationJobsTable(this.chatJobs, {
+          insertError: this.fixture.chatJobInsertError,
+          activeChatJobsError: this.fixture.activeChatJobsError,
+          activeUserJobsError: this.fixture.activeUserJobsError,
+        })
       default:
         throw new Error(`Unsupported table: ${table}`)
     }
@@ -478,7 +490,10 @@ class CharactersTable {
 }
 
 class MessagesTable {
-  constructor(private readonly rows: MessageRow[]) {}
+  constructor(
+    private readonly rows: MessageRow[],
+    private readonly insertError?: { message: string; code?: string | null },
+  ) {}
 
   select() {
     const filters: Predicate<MessageRow>[] = []
@@ -523,6 +538,20 @@ class MessagesTable {
   }
 
   insert(payload: Omit<MessageRow, 'id'> | Array<Omit<MessageRow, 'id'>>) {
+    if (this.insertError) {
+      return {
+        select: (_columns?: string) => {
+          void _columns
+          return {
+            single: async () => ({
+              data: null,
+              error: this.insertError,
+            }),
+          }
+        },
+      }
+    }
+
     const records = Array.isArray(payload) ? payload : [payload]
     const insertedRows: MessageRow[] = []
     records.forEach((record) => {
@@ -567,6 +596,7 @@ class ChatTurnsTable {
   constructor(
     private readonly rows: ChatTurnRow[],
     private readonly messages: MessageRow[],
+    private readonly insertError?: { message: string; code?: string | null },
   ) {}
 
   select() {
@@ -608,6 +638,20 @@ class ChatTurnsTable {
   }
 
   insert(payload: Omit<ChatTurnRow, 'id'> | Array<Omit<ChatTurnRow, 'id'>>) {
+    if (this.insertError) {
+      return {
+        select: (_columns?: string) => {
+          void _columns
+          return {
+            single: async () => ({
+              data: null,
+              error: this.insertError,
+            }),
+          }
+        },
+      }
+    }
+
     const records = Array.isArray(payload) ? payload : [payload]
     const insertedRows: ChatTurnRow[] = []
 
@@ -1386,6 +1430,56 @@ describe('POST /api/chat', () => {
     expect(supabase.chatJobs).toHaveLength(1)
   })
 
+  it('returns 500 when checking the active chat job fails', async () => {
+    createSupabaseMock(
+      buildDefaultAuthenticatedFixture({
+        activeChatJobsError: {
+          message: 'failed to read active chat jobs',
+          code: 'XX001',
+        },
+      }),
+    )
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        messages: [{ role: 'user', content: 'blocked' }],
+      }),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(500)
+    expect(await response.text()).toBe('Failed to inspect active chat jobs')
+  })
+
+  it('returns 500 when checking the active user job count fails', async () => {
+    createSupabaseMock(
+      buildDefaultAuthenticatedFixture({
+        activeUserJobsError: {
+          message: 'failed to count active user jobs',
+          code: 'XX001',
+        },
+      }),
+    )
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        messages: [{ role: 'user', content: 'blocked' }],
+      }),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(500)
+    expect(await response.text()).toBe('Failed to inspect active chat jobs')
+  })
+
   it('returns 429 when the user already has too many active chat jobs', async () => {
     const supabase = createSupabaseMock(
       buildDefaultAuthenticatedFixture({
@@ -1440,6 +1534,35 @@ describe('POST /api/chat', () => {
 
     expect(response.status).toBe(409)
     expect(await response.text()).toBe('This chat already has a pending or in-progress response.')
+    expect(supabase.messages).toHaveLength(0)
+    expect(supabase.chatJobs).toHaveLength(0)
+  })
+
+  it('returns 429 when enqueuing hits the active-user limit race', async () => {
+    const supabase = createSupabaseMock(
+      buildDefaultAuthenticatedFixture({
+        chatJobInsertError: {
+          code: 'P0001',
+          message: 'active chat generation jobs limit exceeded',
+        },
+      }),
+    )
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        messages: [{ role: 'user', content: 'race me too' }],
+      }),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(429)
+    expect(await response.text()).toBe(
+      'You already have 3 active chat responses. Wait for one to finish before sending another message.',
+    )
     expect(supabase.messages).toHaveLength(0)
     expect(supabase.chatJobs).toHaveLength(0)
   })
@@ -1697,6 +1820,127 @@ describe('POST /api/chat', () => {
     })
   })
 
+  it('returns 400 when regeneration targets a non-latest assistant turn', async () => {
+    createSupabaseMock({
+      user: { id: 'user-1' },
+      apiKeys: [
+        {
+          id: 'api-key-1',
+          user_id: 'user-1',
+          provider: 'google',
+          is_active: true,
+          vault_secret_name: 'secret-key',
+          model_preference: 'gemini-2.5-flash',
+        },
+      ],
+      chats: [
+        {
+          id: 'chat-1',
+          user_id: 'user-1',
+          character_id: 'character-1',
+          max_context_messages: 20,
+        },
+      ],
+      characters: [
+        {
+          id: 'character-1',
+          system_prompt: 'character system prompt',
+        },
+      ],
+      chatTurns: [
+        {
+          id: 'turn-1',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          turn_index: 1,
+          user_message_id: 'user-1-msg',
+          active_assistant_message_id: 'assistant-1',
+        },
+        {
+          id: 'turn-2',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          turn_index: 2,
+          user_message_id: 'user-2-msg',
+          active_assistant_message_id: 'assistant-2',
+        },
+      ],
+    })
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        isRegeneration: true,
+        regenerateAssistantMessageId: 'assistant-1',
+        messages: [
+          { role: 'assistant', content: 'older reply' },
+          { role: 'user', content: 'retry please' },
+        ],
+      }),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(400)
+    expect(await response.text()).toBe('Only the latest assistant message can be regenerated')
+  })
+
+  it('returns 500 when creating the chat turn fails', async () => {
+    const supabase = createSupabaseMock(
+      buildDefaultAuthenticatedFixture({
+        chatTurnInsertError: {
+          message: 'failed to insert turn',
+          code: 'XX001',
+        },
+      }),
+    )
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        messages: [{ role: 'user', content: 'create turn please' }],
+      }),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(500)
+    expect(await response.text()).toBe('Failed to create chat turn')
+    expect(supabase.messages).toHaveLength(0)
+    expect(supabase.chatTurns).toHaveLength(0)
+  })
+
+  it('rolls back the chat turn when saving the user message fails', async () => {
+    const supabase = createSupabaseMock(
+      buildDefaultAuthenticatedFixture({
+        messageInsertError: {
+          message: 'failed to insert message',
+          code: 'XX001',
+        },
+      }),
+    )
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        messages: [{ role: 'user', content: 'persist me' }],
+      }),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(500)
+    expect(await response.text()).toBe('Failed to save user message')
+    expect(supabase.messages).toHaveLength(0)
+    expect(supabase.chatTurns).toHaveLength(0)
+  })
+
   it('returns 400 when regeneration target is missing or not an assistant message', async () => {
     createSupabaseMock(
       buildDefaultAuthenticatedFixture({
@@ -1743,19 +1987,26 @@ describe('Security: Runtime Configuration', () => {
 class ChatGenerationJobsTable {
   constructor(
     private readonly rows: ChatJobRow[],
-    private readonly insertError?: { message: string; code?: string | null },
+    private readonly errors: {
+      insertError?: { message: string; code?: string | null }
+      activeChatJobsError?: { message: string; code?: string | null }
+      activeUserJobsError?: { message: string; code?: string | null }
+    } = {},
   ) {}
 
   select() {
     const filters: Predicate<ChatJobRow>[] = []
+    const filterFields = new Set<keyof ChatJobRow>()
     let limitCount: number | null = null
     const builder = {
       eq: (field: keyof ChatJobRow, value: unknown) => {
         filters.push((row) => row[field] === value)
+        filterFields.add(field)
         return builder
       },
       in: (field: keyof ChatJobRow, values: unknown[]) => {
         filters.push((row) => values.includes(row[field]))
+        filterFields.add(field)
         return builder
       },
       limit: (value: number) => {
@@ -1764,10 +2015,29 @@ class ChatGenerationJobsTable {
       },
       then: <TResult1 = unknown, TResult2 = never>(
         onfulfilled?:
-          | ((value: { data: ChatJobRow[]; error: null }) => TResult1 | PromiseLike<TResult1>)
+          | ((
+              value: {
+                data: ChatJobRow[] | null
+                error: { message: string; code?: string | null } | null
+              },
+            ) => TResult1 | PromiseLike<TResult1>)
           | null,
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
       ) => {
+        if (filterFields.has('chat_id') && this.errors.activeChatJobsError) {
+          return Promise.resolve({
+            data: null,
+            error: this.errors.activeChatJobsError,
+          }).then(onfulfilled, onrejected)
+        }
+
+        if (filterFields.has('user_id') && this.errors.activeUserJobsError) {
+          return Promise.resolve({
+            data: null,
+            error: this.errors.activeUserJobsError,
+          }).then(onfulfilled, onrejected)
+        }
+
         const filtered = this.rows.filter((row) => filters.every((predicate) => predicate(row)))
         const data = limitCount === null ? filtered : filtered.slice(0, limitCount)
         return Promise.resolve({ data, error: null as null }).then(onfulfilled, onrejected)
@@ -1777,12 +2047,12 @@ class ChatGenerationJobsTable {
   }
 
   insert(payload: Omit<ChatJobRow, 'id'> | Array<Omit<ChatJobRow, 'id'>>) {
-    if (this.insertError) {
+    if (this.errors.insertError) {
       return {
         select: () => ({
           single: async () => ({
             data: null,
-            error: this.insertError,
+            error: this.errors.insertError,
           }),
         }),
       }

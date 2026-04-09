@@ -215,6 +215,46 @@ describe('processChatJobs', () => {
     expect(claimPendingJobMock).toHaveBeenCalled()
   })
 
+  it('defaults to processing a single job when the requested limit is invalid', async () => {
+    const supabase = createChatJobRunnerSupabaseMock({
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    claimPendingJobMock.mockResolvedValue({ id: 'job-1', payload: { bad: 'data' } })
+    parseChatJobPayloadMock.mockReturnValue(null)
+
+    const { processChatJobs } = await import('./service')
+
+    const result = await processChatJobs(0)
+
+    expect(result.processedCount).toBe(1)
+    expect(claimPendingJobMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('caps batch processing to five jobs even when a larger limit is requested', async () => {
+    const supabase = createChatJobRunnerSupabaseMock({
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    claimPendingJobMock
+      .mockResolvedValueOnce({ id: 'job-1', payload: { bad: 'data' } })
+      .mockResolvedValueOnce({ id: 'job-2', payload: { bad: 'data' } })
+      .mockResolvedValueOnce({ id: 'job-3', payload: { bad: 'data' } })
+      .mockResolvedValueOnce({ id: 'job-4', payload: { bad: 'data' } })
+      .mockResolvedValueOnce({ id: 'job-5', payload: { bad: 'data' } })
+      .mockResolvedValueOnce({ id: 'job-6', payload: { bad: 'data' } })
+    parseChatJobPayloadMock.mockReturnValue(null)
+
+    const { processChatJobs } = await import('./service')
+
+    const result = await processChatJobs(99)
+
+    expect(result.processedCount).toBe(5)
+    expect(claimPendingJobMock).toHaveBeenCalledTimes(5)
+  })
+
   it('marks job as error when payload parsing fails', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       rpc: { get_decrypted_secret: () => decryptSecretMock() },

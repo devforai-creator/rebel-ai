@@ -21,6 +21,7 @@
     "chat:jobs": "node scripts/run-chat-jobs.js",
     "character:jobs": "node scripts/run-character-import-jobs.js",
     "import:jobs": "node scripts/run-character-import-jobs.js",
+    "cleanup:character-assets": "node scripts/cleanup-orphaned-character-assets.js",
     "backfill:facts": "node scripts/backfill-facts.js",
     "backfill:embeddings": "node scripts/backfill-embeddings.js"
   },

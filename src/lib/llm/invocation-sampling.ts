@@ -6,8 +6,6 @@ type ResolveInvocationSamplingOptionsInput = {
 
 export function resolveInvocationSamplingOptions({
   provider,
-  modelName: _modelName,
-  reasoningEffort: _reasoningEffort,
 }: ResolveInvocationSamplingOptionsInput): Record<string, never> {
   if (provider === 'openrouter') {
     return {}

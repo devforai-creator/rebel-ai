@@ -44,11 +44,6 @@ type ProjectedTurnMessage = Pick<
 export type ProjectedConversationMessage = ProjectedTurnMessage & {
   role: 'user' | 'assistant'
 }
-type PersistedMessageRow = Pick<MessageInsert, 'id' | 'role' | 'content'> & {
-  id: string
-  role: 'user' | 'assistant' | 'system'
-  content: string
-}
 
 export type OrderedChatMessageDraft = {
   id: string

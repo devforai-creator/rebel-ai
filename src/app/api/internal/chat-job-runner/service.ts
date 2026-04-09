@@ -20,6 +20,7 @@ import { applyBilingualContext, isBilingualEnabled } from '@/lib/chat/bilingual-
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
 import { normalizeProviderError } from '@/lib/llm/provider-error'
+import { resolveInvocationSamplingOptions } from '@/lib/llm/invocation-sampling'
 import { buildLorebookDynamicContext } from '@/lib/lorebook/runtime'
 import { loadGenerationTranscript } from '@/lib/chat/turns'
 import { buildLanguageModel } from './model-factory'
@@ -559,6 +560,11 @@ async function executeJob({
     promptCacheRetention: promptCache?.retention,
     reasoningEffort: apiKeyData.reasoning_effort,
   })
+  const samplingOptions = resolveInvocationSamplingOptions({
+    provider,
+    modelName,
+    reasoningEffort: apiKeyData.reasoning_effort,
+  })
 
   stepStart = performance.now()
   let stream
@@ -614,7 +620,7 @@ async function executeJob({
     actualPayload = streamPayloadPlan.actualPayload
     stream = await streamText({
       model,
-      temperature: 1,
+      ...samplingOptions,
       ...streamPayloadPlan.streamRequest,
     })
   } catch (error) {

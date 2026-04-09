@@ -998,6 +998,39 @@ describe('processChatJobs', () => {
     )
   })
 
+  it('omits temperature from chat generation requests by default', async () => {
+    const supabase = createChatJobRunnerSupabaseMock({
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    decryptSecretMock.mockResolvedValue('sk-test')
+    parseChatJobPayloadMock.mockReturnValue(
+      buildValidPayload({
+        requestId: 'req-omit-temperature',
+        provider: 'openai',
+        modelName: 'gpt-5.1-chat-latest',
+      }),
+    )
+    streamTextMock.mockResolvedValue({
+      textStream: ['hello world'],
+      finishReason: Promise.resolve('stop'),
+      providerMetadata: Promise.resolve({}),
+      usage: Promise.resolve({ inputTokens: 10, outputTokens: 20, totalTokens: 30 }),
+    })
+    claimPendingJobMock.mockResolvedValueOnce({
+      id: 'job-omit-temperature',
+      payload: { ok: true },
+    })
+    claimPendingJobMock.mockResolvedValueOnce(null)
+
+    const { processChatJobs } = await import('./service')
+    await processChatJobs(1)
+
+    const call = streamTextMock.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(call).not.toHaveProperty('temperature')
+  })
+
   it('passes active lorebook as extra dynamic context into memory planning', async () => {
     const moduleData: unknown = {
       id: 'module-1',

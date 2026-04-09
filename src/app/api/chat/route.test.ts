@@ -287,11 +287,7 @@ class SupabaseRouteMock {
       case 'messages':
         return new MessagesTable(this.messages, this.fixture.messageInsertError)
       case 'chat_turns':
-        return new ChatTurnsTable(
-          this.chatTurns,
-          this.messages,
-          this.fixture.chatTurnInsertError,
-        )
+        return new ChatTurnsTable(this.chatTurns, this.messages, this.fixture.chatTurnInsertError)
       case 'global_variables':
         return new GlobalVariablesTable(this.globalVariables)
       case 'chat_generation_jobs':
@@ -2015,12 +2011,10 @@ class ChatGenerationJobsTable {
       },
       then: <TResult1 = unknown, TResult2 = never>(
         onfulfilled?:
-          | ((
-              value: {
-                data: ChatJobRow[] | null
-                error: { message: string; code?: string | null } | null
-              },
-            ) => TResult1 | PromiseLike<TResult1>)
+          | ((value: {
+              data: ChatJobRow[] | null
+              error: { message: string; code?: string | null } | null
+            }) => TResult1 | PromiseLike<TResult1>)
           | null,
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
       ) => {

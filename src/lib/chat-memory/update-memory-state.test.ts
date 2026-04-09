@@ -75,7 +75,13 @@ function createMemorySupabaseStub(options?: {
     meta_summary_prompt?: string | null
     fact_extraction_prompt?: string | null
   }>
-  summaries?: Array<{ chat_id: string; level: number; start_seq: number; end_seq: number; summary: string }>
+  summaries?: Array<{
+    chat_id: string
+    level: number
+    start_seq: number
+    end_seq: number
+    summary: string
+  }>
   facts?: Array<{ chat_id: string; start_seq: number; end_seq: number; facts: string }>
 }): ChatSummariesSupabaseClient {
   return createSupabaseMock({
@@ -112,9 +118,11 @@ describe('chat memory orchestration', () => {
     hoistedMocks.createChunkSummaryMock.mockResolvedValue(undefined)
     hoistedMocks.filterRedundantChunksMock.mockImplementation((rows) => rows)
     hoistedMocks.formatFactsMock.mockImplementation((facts) =>
-      facts.map((fact: { start_seq: number; end_seq: number; facts: string }) => {
-        return `[${fact.start_seq}-${fact.end_seq}]\n${fact.facts}`
-      }).join('\n\n'),
+      facts
+        .map((fact: { start_seq: number; end_seq: number; facts: string }) => {
+          return `[${fact.start_seq}-${fact.end_seq}]\n${fact.facts}`
+        })
+        .join('\n\n'),
     )
     hoistedMocks.formatSummarySegmentsMock.mockImplementation((summaries) =>
       summaries.map((summary: { start_seq: number; end_seq: number; summary: string }) => {

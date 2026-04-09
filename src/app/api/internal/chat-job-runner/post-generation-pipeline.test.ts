@@ -63,10 +63,12 @@ function wrapMutationBuilder(
           maybeSingle: async () => ({ data: null, error }),
         }
       }
-      return builder.select?.(columns) ?? {
-        single: async () => ({ data: null, error: null }),
-        maybeSingle: async () => ({ data: null, error: null }),
-      }
+      return (
+        builder.select?.(columns) ?? {
+          single: async () => ({ data: null, error: null }),
+          maybeSingle: async () => ({ data: null, error: null }),
+        }
+      )
     },
     then<TResult1 = { error: null }, TResult2 = never>(
       onfulfilled?:
@@ -464,14 +466,16 @@ describe('runPostGenerationPipeline', () => {
         return null
       }
 
-        return {
-          ...handler,
-          delete: () =>
-            wrapMutationBuilder(
-            (handler.delete as () => {
-              eq: (field: string, value: unknown) => unknown
-              then: (...args: unknown[]) => Promise<unknown>
-            })(),
+      return {
+        ...handler,
+        delete: () =>
+          wrapMutationBuilder(
+            (
+              handler.delete as () => {
+                eq: (field: string, value: unknown) => unknown
+                then: (...args: unknown[]) => Promise<unknown>
+              }
+            )(),
             (filters) =>
               matchesFilters(filters, [
                 { field: 'id', value: 'assistant-old' },
@@ -535,19 +539,21 @@ describe('runPostGenerationPipeline', () => {
           ...handler,
           select: (columns?: string) =>
             wrapQueryBuilder(
-              (handler.select as (columns?: string) => {
-                eq: (field: string, value: unknown) => unknown
-                order: (field: string, options?: { ascending?: boolean }) => unknown
-                limit: (count: number) => unknown
-                maybeSingle: () => Promise<{
-                  data: Record<string, unknown> | null
-                  error: MockError | null
-                }>
-                single: () => Promise<{
-                  data: Record<string, unknown> | null
-                  error: MockError | null
-                }>
-              })(columns),
+              (
+                handler.select as (columns?: string) => {
+                  eq: (field: string, value: unknown) => unknown
+                  order: (field: string, options?: { ascending?: boolean }) => unknown
+                  limit: (count: number) => unknown
+                  maybeSingle: () => Promise<{
+                    data: Record<string, unknown> | null
+                    error: MockError | null
+                  }>
+                  single: () => Promise<{
+                    data: Record<string, unknown> | null
+                    error: MockError | null
+                  }>
+                }
+              )(columns),
               (filters) =>
                 matchesFilters(filters, [
                   { field: 'id', value: 'turn-1' },
@@ -703,10 +709,12 @@ describe('runPostGenerationPipeline', () => {
           ...handler,
           update: (payload: Record<string, unknown>) =>
             wrapMutationBuilder(
-              (handler.update as (payload: Record<string, unknown>) => {
-                eq: (field: string, value: unknown) => unknown
-                then: (...args: unknown[]) => Promise<unknown>
-              })(payload),
+              (
+                handler.update as (payload: Record<string, unknown>) => {
+                  eq: (field: string, value: unknown) => unknown
+                  then: (...args: unknown[]) => Promise<unknown>
+                }
+              )(payload),
               (filters) =>
                 payload.active_assistant_message_id !== 'assistant-old' &&
                 matchesFilters(filters, [
@@ -808,10 +816,12 @@ describe('runPostGenerationPipeline', () => {
           ...handler,
           update: (payload: Record<string, unknown>) =>
             wrapMutationBuilder(
-              (handler.update as (payload: Record<string, unknown>) => {
-                eq: (field: string, value: unknown) => unknown
-                then: (...args: unknown[]) => Promise<unknown>
-              })(payload),
+              (
+                handler.update as (payload: Record<string, unknown>) => {
+                  eq: (field: string, value: unknown) => unknown
+                  then: (...args: unknown[]) => Promise<unknown>
+                }
+              )(payload),
               (filters) =>
                 payload.message_status === 'superseded' &&
                 matchesFilters(filters, [
@@ -901,19 +911,21 @@ describe('runPostGenerationPipeline', () => {
           ...handler,
           select: (columns?: string) =>
             wrapQueryBuilder(
-              (handler.select as (columns?: string) => {
-                eq: (field: string, value: unknown) => unknown
-                order: (field: string, options?: { ascending?: boolean }) => unknown
-                limit: (count: number) => unknown
-                maybeSingle: () => Promise<{
-                  data: Record<string, unknown> | null
-                  error: MockError | null
-                }>
-                single: () => Promise<{
-                  data: Record<string, unknown> | null
-                  error: MockError | null
-                }>
-              })(columns),
+              (
+                handler.select as (columns?: string) => {
+                  eq: (field: string, value: unknown) => unknown
+                  order: (field: string, options?: { ascending?: boolean }) => unknown
+                  limit: (count: number) => unknown
+                  maybeSingle: () => Promise<{
+                    data: Record<string, unknown> | null
+                    error: MockError | null
+                  }>
+                  single: () => Promise<{
+                    data: Record<string, unknown> | null
+                    error: MockError | null
+                  }>
+                }
+              )(columns),
               (filters) =>
                 matchesFilters(filters, [
                   { field: 'turn_id', value: 'turn-1' },

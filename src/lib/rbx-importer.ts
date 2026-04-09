@@ -330,17 +330,17 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
     }
 
     // Rollback: delete orphaned modules (character CASCADE only removes the link, not the module itself)
-    for (const module of createdModules) {
-      console.error('[RBX Importer] Rolling back orphaned module:', module.id)
+    for (const createdModule of createdModules) {
+      console.error('[RBX Importer] Rolling back orphaned module:', createdModule.id)
       // module_assets CASCADE-deletes when module is deleted
       const { error: deleteModuleError } = await supabase
         .from('modules')
         .delete()
-        .eq('id', module.id)
+        .eq('id', createdModule.id)
 
-      if (!deleteModuleError && module.uploadedAssetPaths.length > 0) {
-        await removeStorageObjects(supabase, 'module-assets', module.uploadedAssetPaths, {
-          entityId: module.id,
+      if (!deleteModuleError && createdModule.uploadedAssetPaths.length > 0) {
+        await removeStorageObjects(supabase, 'module-assets', createdModule.uploadedAssetPaths, {
+          entityId: createdModule.id,
           entityType: 'module',
           operation: 'rollbackImport',
         })

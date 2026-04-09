@@ -8,9 +8,14 @@ updates:
       day: 'monday'
       time: '09:00'
       timezone: 'Asia/Seoul'
+    groups:
+      npm-patch-updates:
+        applies-to: 'version-updates'
+        patterns:
+          - '*'
+        update-types:
+          - 'patch'
     open-pull-requests-limit: 5
-    labels:
-      - 'dependencies'
 
   - package-ecosystem: 'github-actions'
     directory: '/'
@@ -20,5 +25,3 @@ updates:
       time: '09:15'
       timezone: 'Asia/Seoul'
     open-pull-requests-limit: 2
-    labels:
-      - 'dependencies'

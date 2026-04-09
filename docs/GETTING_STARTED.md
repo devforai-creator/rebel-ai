@@ -160,7 +160,8 @@ Check:
 
 - `GET /api/internal/storage-janitor` is scheduled at least daily
 - the route is called with `Authorization: Bearer <CRON_SECRET>` or `Bearer <CHAT_ADMIN_SECRET>`
-- a manual dry-run such as `/api/internal/storage-janitor?dryRun=1` returns `orphanCount: 0` for both buckets after cleanup
+- the scheduler endpoint returns `202` quickly instead of timing out
+- a manual dry-run such as `POST /api/internal/storage-janitor` with body `{"execute":false,"sampleSize":10}` returns `orphanCount: 0` for both buckets after cleanup
 
 ## Next Docs
 

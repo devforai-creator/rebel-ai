@@ -232,14 +232,20 @@ Uses the same architecture as Chat Job Runner for processing native RBX packages
 
 Use the storage janitor to cap unexpected orphan buildup in `character-assets` and `module-assets`.
 
-- **Endpoint**: `GET /api/internal/storage-janitor`
-- **Auth**: `Authorization: Bearer ${CRON_SECRET}` or `Authorization: Bearer ${CHAT_ADMIN_SECRET}`
+- **Scheduler endpoint**: `GET /api/internal/storage-janitor`
+- **Runner endpoint**: `POST /api/internal/storage-janitor`
+- **Auth**:
+  - Scheduler trigger accepts `Authorization: Bearer ${CRON_SECRET}` or `Authorization: Bearer ${CHAT_ADMIN_SECRET}`
+  - Runner accepts `Authorization: Bearer ${CHAT_ADMIN_SECRET}`
 - **Default behavior**: execute mode, `olderThanDays=1`, `maxDelete=500` per bucket
 - **Optional query params**:
-  - `dryRun=1` to report without deleting
+  - `dryRun=1` to trigger background dry-run mode instead of deletion
   - `olderThanDays=<n>` to widen or narrow the age window
   - `maxDelete=<n>` to cap deletes per bucket for a single run
-  - `sampleSize=<n>` to control how many orphan sample paths are returned
+  - `sampleSize=<n>` to control how many orphan sample paths are collected by the runner
+- **Behavior**:
+  - `GET` returns a fast `202` and dispatches the janitor in the background, which avoids cron-job.org timeouts
+  - use `POST` directly when you want the full JSON result body back synchronously for manual inspection
 - **Recommended schedule**: once per day from the same scheduler that already calls the internal trigger routes
 
 ---

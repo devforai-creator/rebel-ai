@@ -26,6 +26,11 @@ const createMockSupabaseClient = (authenticated: boolean, user = mockUser) => {
             : { data: { user: null }, error: { message: 'No session' } },
         ),
     },
+    storage: {
+      from: vi.fn().mockReturnValue({
+        remove: vi.fn().mockResolvedValue({ data: [], error: null }),
+      }),
+    },
     from: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnThis(),
       insert: vi.fn().mockReturnThis(),
@@ -150,11 +155,20 @@ describe('API Authentication Patterns', () => {
       const mockClient = createMockSupabaseClient(true)
       const eqMock = vi.fn().mockReturnThis()
 
-      mockClient.from = vi.fn().mockReturnValue({
-        delete: vi.fn().mockReturnThis(),
-        eq: eqMock.mockReturnValue({
-          eq: eqMock.mockResolvedValue({ error: null }),
-        }),
+      mockClient.from = vi.fn((table: string) => {
+        if (table === 'module_assets') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+          }
+        }
+
+        return {
+          delete: vi.fn().mockReturnThis(),
+          eq: eqMock.mockReturnValue({
+            eq: eqMock.mockResolvedValue({ error: null }),
+          }),
+        }
       })
 
       vi.doMock('@/lib/supabase/server', () => ({

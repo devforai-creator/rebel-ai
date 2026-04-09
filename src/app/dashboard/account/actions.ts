@@ -1,10 +1,12 @@
 'use server'
 
+import { removeStorageObjects } from '@/lib/assets/storage-cleanup'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { getFormDataErrorMessage, safeParseFormData } from '@/lib/form-data'
+import { IMPORT_UPLOAD_BUCKET } from '@/lib/import/constants'
 import type { Profile } from '@/types/database.types'
 import { isLLMProvider } from '@/lib/api-keys/provider-utils'
 
@@ -69,37 +71,28 @@ export async function deleteAccount() {
     }
   }
 
-  if (apiKeys?.length) {
-    for (const { vault_secret_name: secretName } of apiKeys) {
-      const { error: vaultError } = await supabase.rpc('delete_secret', {
-        secret_name: secretName,
-      })
+  let characterAssetPaths: string[] = []
+  let moduleAssetPaths: string[] = []
+  let importUploadPaths: string[] = []
 
-      if (vaultError) {
-        const message = vaultError.message?.toLowerCase() ?? ''
-
-        if (message.includes('secret not found')) {
-          console.warn('[Account] delete_secret reported missing secret', {
-            userId: user.id,
-            secretName,
-          })
-          continue
-        }
-
-        console.error('[Account] delete_secret failed during account removal', {
-          userId: user.id,
-          secretName,
-          error: vaultError.message,
-        })
-
-        return {
-          error: 'An error occurred while deleting Vault secret. Please try again later.',
-        }
-      }
+  try {
+    ;[characterAssetPaths, moduleAssetPaths, importUploadPaths] = await Promise.all([
+      listCharacterAssetStoragePathsForUser(supabase, user.id),
+      listModuleAssetStoragePathsForUser(supabase, user.id),
+      listImportUploadStoragePathsForUser(supabase, user.id),
+    ])
+  } catch (error) {
+    console.error('[Account] Failed to prepare storage cleanup before deletion', {
+      userId: user.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return {
+      error: 'An error occurred while preparing account deletion. Please try again later.',
     }
   }
 
   const admin = createAdminClient()
+  const secretNames = extractVaultSecretNames(apiKeys ?? [])
 
   const { error: deleteError } = await admin.auth.admin.deleteUser(user.id)
 
@@ -111,6 +104,23 @@ export async function deleteAccount() {
     return { error: 'An error occurred while deleting account. Please try again later.' }
   }
 
+  await removeStorageObjects(admin, 'character-assets', characterAssetPaths, {
+    entityId: user.id,
+    entityType: 'user',
+    operation: 'deleteAccount',
+  })
+  await removeStorageObjects(admin, 'module-assets', moduleAssetPaths, {
+    entityId: user.id,
+    entityType: 'user',
+    operation: 'deleteAccount',
+  })
+  await removeStorageObjects(admin, IMPORT_UPLOAD_BUCKET, importUploadPaths, {
+    entityId: user.id,
+    entityType: 'user',
+    operation: 'deleteAccount',
+  })
+  await deleteVaultSecretsAfterAccountDeletion(admin, user.id, secretNames)
+
   const { error: signOutError } = await supabase.auth.signOut()
 
   if (signOutError) {
@@ -121,6 +131,116 @@ export async function deleteAccount() {
   }
 
   return { success: true }
+}
+
+type DeleteAccountApiKeyRow = {
+  vault_secret_name: string | null
+}
+
+type DeleteAccountStorageRow = {
+  storage_path: string
+}
+
+type DeleteAccountStorageSupabase = Awaited<ReturnType<typeof createClient>>
+type DeleteAccountAdminSupabase = ReturnType<typeof createAdminClient>
+
+async function listCharacterAssetStoragePathsForUser(
+  supabase: Pick<DeleteAccountStorageSupabase, 'from'>,
+  userId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('character_assets')
+    .select('storage_path')
+    .eq('user_id', userId)
+
+  if (error) {
+    throw error
+  }
+
+  return dedupeStoragePaths(data ?? [])
+}
+
+async function listModuleAssetStoragePathsForUser(
+  supabase: Pick<DeleteAccountStorageSupabase, 'from'>,
+  userId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('module_assets')
+    .select('storage_path')
+    .eq('user_id', userId)
+
+  if (error) {
+    throw error
+  }
+
+  return dedupeStoragePaths(data ?? [])
+}
+
+async function listImportUploadStoragePathsForUser(
+  supabase: Pick<DeleteAccountStorageSupabase, 'from'>,
+  userId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('charx_import_jobs')
+    .select('storage_path')
+    .eq('user_id', userId)
+
+  if (error) {
+    throw error
+  }
+
+  return dedupeStoragePaths(data ?? [])
+}
+
+function dedupeStoragePaths(rows: DeleteAccountStorageRow[]): string[] {
+  return Array.from(
+    new Set(
+      rows
+        .map((row) => row.storage_path)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0),
+    ),
+  )
+}
+
+function extractVaultSecretNames(rows: DeleteAccountApiKeyRow[]): string[] {
+  return Array.from(
+    new Set(
+      rows
+        .map((row) => row.vault_secret_name)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0),
+    ),
+  )
+}
+
+async function deleteVaultSecretsAfterAccountDeletion(
+  admin: Pick<DeleteAccountAdminSupabase, 'rpc'>,
+  userId: string,
+  secretNames: string[],
+): Promise<void> {
+  for (const secretName of secretNames) {
+    const { error } = await admin.rpc('delete_secret', {
+      secret_name: secretName,
+    })
+
+    if (!error) {
+      continue
+    }
+
+    const message = error.message?.toLowerCase() ?? ''
+    if (message.includes('secret not found')) {
+      console.warn('[Account] delete_secret reported missing secret after account removal', {
+        userId,
+        secretName,
+      })
+      continue
+    }
+
+    console.error('[Account] delete_secret failed after account removal', {
+      userId,
+      secretName,
+      error: error.message,
+    })
+  }
 }
 
 /**

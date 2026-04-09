@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { listModuleAssetStoragePaths, removeStorageObjects } from '@/lib/assets/storage-cleanup'
 import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
@@ -86,6 +87,17 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing module ID' }, { status: 400 })
     }
 
+    const moduleAssetPaths = await listModuleAssetStoragePaths(supabase, moduleId).catch(
+      (error: Error) => {
+        console.error('[Modules API] Failed to load module asset paths before delete:', {
+          moduleId,
+          userId: user.id,
+          error: error.message,
+        })
+        return []
+      },
+    )
+
     // Delete module (RLS ensures user can only delete their own)
     const { error: deleteError } = await supabase
       .from('modules')
@@ -97,6 +109,12 @@ export async function DELETE(request: NextRequest) {
       console.error('[Modules API] Failed to delete module:', deleteError)
       return NextResponse.json({ error: 'Failed to delete module' }, { status: 500 })
     }
+
+    await removeStorageObjects(supabase, 'module-assets', moduleAssetPaths, {
+      entityId: moduleId,
+      entityType: 'module',
+      operation: 'deleteModule',
+    })
 
     return NextResponse.json({
       success: true,

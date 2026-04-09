@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * One-off cleanup for orphaned objects in the `character-assets` bucket.
+ * One-off cleanup for orphaned objects in the `module-assets` bucket.
  *
- * It compares Storage objects against `public.character_assets.storage_path`
+ * It compares Storage objects against `public.module_assets.storage_path`
  * and deletes only objects that have no matching database row.
  *
  * Default mode is dry-run. Pass `--execute` to actually delete objects.
@@ -12,11 +12,11 @@
  * local service-role env vars so it can run in the current repository setup.
  *
  * Usage:
- *   npm run cleanup:character-assets
- *   npm run cleanup:character-assets -- --prefix user-id
- *   npm run cleanup:character-assets -- --older-than-days 30
- *   npm run cleanup:character-assets -- --execute --delete-batch-size 100
- *   npm run cleanup:character-assets -- --execute --prefix user-id --max-delete 5000
+ *   npm run cleanup:module-assets
+ *   npm run cleanup:module-assets -- --prefix user-id
+ *   npm run cleanup:module-assets -- --older-than-days 30
+ *   npm run cleanup:module-assets -- --execute --delete-batch-size 100
+ *   npm run cleanup:module-assets -- --execute --prefix user-id --max-delete 5000
  */
 
 const {
@@ -26,8 +26,9 @@ const {
   walkStorageObjects,
 } = require('./supabase-rest-client')
 
-const BUCKET = 'character-assets'
-const SCRIPT_NAME = 'cleanup:character-assets'
+const BUCKET = 'module-assets'
+const TABLE = 'module_assets'
+const SCRIPT_NAME = 'cleanup:module-assets'
 const DEFAULT_PAGE_SIZE = 1000
 const DEFAULT_DELETE_BATCH_SIZE = 100
 const DEFAULT_SAMPLE_SIZE = 20
@@ -38,8 +39,8 @@ const restConfig = loadSupabaseRestConfig()
 async function main() {
   printRunHeader()
 
-  const pathSet = await loadCharacterAssetPathSet()
-  console.log(`Loaded ${pathSet.size.toLocaleString()} character_assets paths from DB.`)
+  const pathSet = await loadStoragePathSet()
+  console.log(`Loaded ${pathSet.size.toLocaleString()} ${TABLE} paths from DB.`)
 
   const result = await scanAndMaybeDeleteOrphans(pathSet)
   printSummary(result)
@@ -109,6 +110,7 @@ function printRunHeader() {
     JSON.stringify(
       {
         bucket: BUCKET,
+        table: TABLE,
         projectRef: restConfig.projectRef,
         authMode: 'service-role-rest',
         mode: options.execute ? 'execute' : 'dry-run',
@@ -144,7 +146,7 @@ function removeStoragePaths(paths) {
   return paths.length
 }
 
-async function loadCharacterAssetPathSet() {
+async function loadStoragePathSet() {
   const pathSet = new Set()
   let cursor = null
   let page = 0
@@ -161,7 +163,7 @@ async function loadCharacterAssetPathSet() {
     }
 
     const rows = await selectPage(restConfig, {
-      table: 'character_assets',
+      table: TABLE,
       select: 'storage_path',
       orderBy: 'storage_path',
       limit: options.pageSize,
@@ -273,6 +275,7 @@ function printSummary(result) {
         authMode: 'service-role-rest',
         mode: options.execute ? 'execute' : 'dry-run',
         bucket: BUCKET,
+        table: TABLE,
         prefix: options.prefix,
         olderThanIso: result.olderThanIso,
         objectsScanned: result.objectsScanned,

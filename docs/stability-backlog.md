@@ -61,6 +61,12 @@ Done when:
 - `deleteAccount` no longer deletes secrets before the account deletion boundary is safely handled
 - regression tests cover partial-failure behavior explicitly
 
+Current status as of 2026-04-10:
+
+- `deleteAccount` now treats `admin.deleteUser` as the deletion boundary, and only runs Vault secret cleanup after that succeeds
+- `deleteAccount` now preloads and removes `character-assets`, `module-assets`, and `charx-uploads` storage paths after account deletion, with partial-failure regression coverage in [src/app/dashboard/account/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/actions.test.ts)
+- `deleteApiKey` mixed-failure handling is still the remaining item in this backlog slice
+
 ### P0-2. Internal Secret Handling at Request Time
 
 Scope:
@@ -152,19 +158,24 @@ Done when:
 - tests cover storage-success / DB-failure explicitly
 - cleanup tooling or policy exists for both asset buckets
 
-Current status as of 2026-04-09:
+Current status as of 2026-04-10:
 
 - character delete and RBX import rollback now clean up `character-assets` storage paths, with regression coverage in [src/app/dashboard/characters/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/actions.test.ts) and [src/lib/rbx-importer.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/rbx-importer.test.ts)
-- one-off cleanup tooling exists at [scripts/cleanup-orphaned-character-assets.js](/home/tmdduq96kr/projects/rebel-ai/scripts/cleanup-orphaned-character-assets.js)
-- linked production cleanup reduced `character-assets` orphan count from `141677` to `1644`
-- linked production now has `0` `character-assets` orphans older than `3 days`
-- remaining `character-assets` orphans are all recent and should be treated as a leak investigation, not a historical backfill
+- one-off cleanup tooling now exists for both asset buckets at [scripts/cleanup-orphaned-character-assets.js](/home/tmdduq96kr/projects/rebel-ai/scripts/cleanup-orphaned-character-assets.js) and [scripts/cleanup-orphaned-module-assets.js](/home/tmdduq96kr/projects/rebel-ai/scripts/cleanup-orphaned-module-assets.js)
+- both cleanup scripts now read DB references through `service_role` REST and walk Storage via recursive listing, so linked production sweeps no longer depend on `SUPABASE_DB_PASSWORD`
+- linked production dry-run on 2026-04-10 found `1644` orphaned `character-assets` files and `1` orphaned `module-assets` file
+- linked production execute sweep on 2026-04-10 deleted `500` `character-assets` orphans in a first safety batch, then deleted the remaining `1144`; it also deleted the lone `module-assets` orphan
+- linked production verification on 2026-04-10 confirmed `0` `character-assets` orphans older than `1 day` and `0` `module-assets` orphans older than `1 day`
+- a short-window janitor route now exists at [src/app/api/internal/storage-janitor/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/storage-janitor/route.ts), backed by [src/lib/assets/orphaned-storage-janitor.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/assets/orphaned-storage-janitor.ts), with default policy `olderThanDays=1` and `maxDelete=500` per bucket
+- RBX importer now removes uploaded objects from both buckets when storage upload succeeds but `character_assets` or `module_assets` insert fails, with explicit regression coverage in [src/lib/rbx-importer.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/rbx-importer.test.ts)
+- RBX import rollback now removes already-persisted `module-assets` storage paths when a later module step fails
+- direct module deletion now removes `module-assets` storage paths in [src/app/api/modules/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/modules/route.ts), with regression coverage in [src/app/api/modules/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/modules/route.test.ts)
+- orphaned-module cleanup triggered from character update/delete now removes `module-assets` storage only for modules actually deleted, with regression coverage in [src/app/dashboard/characters/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/actions.test.ts)
 
 Next session start here:
 
-- inspect which current write path is still creating recent `character-assets` orphans within the last `3 days`
-- verify whether `module-assets` has the same upload-success / DB-failure orphan pattern and add equivalent cleanup if needed
-- decide whether a short-window janitor policy is still needed after the write-path leak is fixed
+- run a fresh recent-orphan scan against linked production focused on assets created after the 2026-04-10 sweep to confirm the leak has stopped
+- wire the deployed scheduler to hit `/api/internal/storage-janitor` daily if it is not already configured
 
 ### P1-4. CI Guardrail Tightening
 

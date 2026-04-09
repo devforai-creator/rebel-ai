@@ -22,6 +22,7 @@
     "character:jobs": "node scripts/run-character-import-jobs.js",
     "import:jobs": "node scripts/run-character-import-jobs.js",
     "cleanup:character-assets": "node scripts/cleanup-orphaned-character-assets.js",
+    "cleanup:module-assets": "node scripts/cleanup-orphaned-module-assets.js",
     "backfill:facts": "node scripts/backfill-facts.js",
     "backfill:embeddings": "node scripts/backfill-embeddings.js"
   },

@@ -228,6 +228,20 @@ Uses the same architecture as Chat Job Runner for processing native RBX packages
 
 > **TIP:** To verify scheduled execution, check your scheduler logs. On Vercel Pro, look for `/api/internal/character-import-runner/trigger` → `/api/internal/character-import-runner`. For urgent cases, run `npm run character:jobs` to drain jobs immediately.
 
+## Storage Janitor
+
+Use the storage janitor to cap unexpected orphan buildup in `character-assets` and `module-assets`.
+
+- **Endpoint**: `GET /api/internal/storage-janitor`
+- **Auth**: `Authorization: Bearer ${CRON_SECRET}` or `Authorization: Bearer ${CHAT_ADMIN_SECRET}`
+- **Default behavior**: execute mode, `olderThanDays=1`, `maxDelete=500` per bucket
+- **Optional query params**:
+  - `dryRun=1` to report without deleting
+  - `olderThanDays=<n>` to widen or narrow the age window
+  - `maxDelete=<n>` to cap deletes per bucket for a single run
+  - `sampleSize=<n>` to control how many orphan sample paths are returned
+- **Recommended schedule**: once per day from the same scheduler that already calls the internal trigger routes
+
 ---
 
 ## Development

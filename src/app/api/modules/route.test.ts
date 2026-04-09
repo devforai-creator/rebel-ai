@@ -11,18 +11,39 @@ vi.mock('@/lib/supabase/server', () => ({
 function buildSupabase(options: {
   user: { id: string } | null
   modules?: Array<Record<string, unknown>>
+  moduleAssets?: Array<Record<string, unknown>>
 }) {
   const supabase = createSupabaseMock({
     tables: {
       modules: {
         rows: options.modules ?? [],
       },
+      module_assets: {
+        rows: options.moduleAssets ?? [],
+      },
     },
   })
 
   Object.assign(supabase, {
+    state: {
+      ...supabase.state,
+      storageRemoveCalls: [] as Array<{ bucket: string; paths: string[] }>,
+    },
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: options.user }, error: null }),
+    },
+    storage: {
+      from: vi.fn((bucket: string) => ({
+        remove: vi.fn((paths: string[]) => {
+          ;(
+            supabase.state.storageRemoveCalls as Array<{
+              bucket: string
+              paths: string[]
+            }>
+          ).push({ bucket, paths })
+          return Promise.resolve({ data: [], error: null })
+        }),
+      })),
     },
   })
 
@@ -161,6 +182,41 @@ describe('/api/modules', () => {
       expect(response.status).toBe(200)
       expect(body.success).toBe(true)
       expect(supabase.state.modules).toEqual([])
+    })
+
+    it('removes module-assets storage after deleting the module', async () => {
+      const supabase = buildSupabase({
+        user: { id: 'user-1' },
+        modules: [{ id: 'mod-1', user_id: 'user-1' }],
+        moduleAssets: [
+          {
+            id: 'asset-1',
+            module_id: 'mod-1',
+            user_id: 'user-1',
+            storage_path: 'user-1/mod-1/bg.webp',
+          },
+          {
+            id: 'asset-2',
+            module_id: 'mod-1',
+            user_id: 'user-1',
+            storage_path: 'user-1/mod-1/pose.png',
+          },
+        ],
+      })
+      createClientMock.mockResolvedValue(supabase)
+      const { DELETE } = await import('./route')
+
+      const response = await DELETE(
+        new NextRequest('http://localhost/api/modules?id=mod-1', { method: 'DELETE' }),
+      )
+
+      expect(response.status).toBe(200)
+      expect(supabase.state.storageRemoveCalls).toEqual([
+        {
+          bucket: 'module-assets',
+          paths: ['user-1/mod-1/bg.webp', 'user-1/mod-1/pose.png'],
+        },
+      ])
     })
 
     it('returns 500 when delete fails', async () => {

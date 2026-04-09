@@ -7,7 +7,7 @@ const STORAGE_REMOVE_CHUNK_SIZE = 100
 
 type StorageCleanupContext = {
   entityId: string
-  entityType: 'character' | 'import'
+  entityType: 'character' | 'import' | 'module' | 'user'
   operation: string
 }
 
@@ -19,6 +19,28 @@ export async function listCharacterAssetStoragePaths(
     .from('character_assets')
     .select('storage_path')
     .eq('character_id', characterId)
+
+  if (error) {
+    throw error
+  }
+
+  return Array.from(
+    new Set(
+      (data ?? [])
+        .map((row) => row.storage_path)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0),
+    ),
+  )
+}
+
+export async function listModuleAssetStoragePaths(
+  supabase: Pick<SupabaseClient<Database>, 'from'>,
+  moduleId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('module_assets')
+    .select('storage_path')
+    .eq('module_id', moduleId)
 
   if (error) {
     throw error

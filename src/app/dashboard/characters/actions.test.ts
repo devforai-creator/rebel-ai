@@ -41,6 +41,11 @@ type CharacterModuleRow = {
   priority: number
 }
 
+type ModuleRow = {
+  id: string
+  user_id: string
+}
+
 type CharactersSupabaseOptions = {
   user?: { id: string } | null
   createCharacterError?: DbError | null
@@ -52,7 +57,10 @@ type CharactersSupabaseOptions = {
   createCharacterId?: string
   characters?: CharacterRow[]
   characterModules?: CharacterModuleRow[]
+  modules?: ModuleRow[]
   characterAssetPaths?: Array<{ character_id: string; storage_path: string }>
+  moduleAssetPaths?: Array<{ module_id: string; storage_path: string }>
+  deletedOrphanedModuleIds?: string[]
 }
 
 type MutationCall = {
@@ -130,6 +138,10 @@ function createThenableQuery<T>(
       filters.push([field, value])
       return builder
     },
+    in(field: string, values: unknown[]) {
+      filters.push([field, values])
+      return builder
+    },
     then<TResult1 = { data: T; error: DbError | null }, TResult2 = never>(
       onfulfilled?:
         | ((value: { data: T; error: DbError | null }) => TResult1 | PromiseLike<TResult1>)
@@ -149,7 +161,13 @@ function createThenableQuery<T>(
 }
 
 function matchesFilters(row: Record<string, unknown>, filters: Array<[string, unknown]>) {
-  return filters.every(([field, value]) => row[field] === value)
+  return filters.every(([field, value]) => {
+    if (Array.isArray(value)) {
+      return value.includes(row[field])
+    }
+
+    return row[field] === value
+  })
 }
 
 function buildSupabase(options: CharactersSupabaseOptions = {}) {
@@ -169,7 +187,9 @@ function buildSupabase(options: CharactersSupabaseOptions = {}) {
       },
     ],
     characterModules: options.characterModules?.map((row) => ({ ...row })) ?? [],
+    modules: options.modules?.map((row) => ({ ...row })) ?? [],
     characterAssets: options.characterAssetPaths?.map((row) => ({ ...row })) ?? [],
+    moduleAssets: options.moduleAssetPaths?.map((row) => ({ ...row })) ?? [],
     characterInsertPayloads: [] as Array<Record<string, unknown>>,
     characterUpdateCalls: [] as MutationCall[],
     characterDeleteCalls: [] as MutationCall[],
@@ -291,6 +311,35 @@ function buildSupabase(options: CharactersSupabaseOptions = {}) {
         }
       }
 
+      if (table === 'module_assets') {
+        return {
+          select() {
+            return createThenableQuery((filters) => ({
+              data: state.moduleAssets
+                .filter((row) => matchesFilters(row, filters))
+                .map((row) => ({
+                  module_id: row.module_id,
+                  storage_path: row.storage_path,
+                })),
+              error: null,
+            }))
+          },
+        }
+      }
+
+      if (table === 'modules') {
+        return {
+          select() {
+            return createThenableQuery((filters) => ({
+              data: state.modules
+                .filter((row) => matchesFilters(row, filters))
+                .map((row) => ({ id: row.id })),
+              error: null,
+            }))
+          },
+        }
+      }
+
       throw new Error(`Unexpected table: ${table}`)
     },
     rpc(name: string, params?: Record<string, unknown>) {
@@ -304,7 +353,12 @@ function buildSupabase(options: CharactersSupabaseOptions = {}) {
         return Promise.resolve({ data: null, error: options.cleanupOrphanedModulesError })
       }
 
-      return Promise.resolve({ data: 0, error: null })
+      const deletedIds = options.deletedOrphanedModuleIds ?? []
+      if (deletedIds.length > 0) {
+        state.modules = state.modules.filter((row) => !deletedIds.includes(row.id))
+      }
+
+      return Promise.resolve({ data: deletedIds.length, error: null })
     },
     storage: {
       from(bucket: string) {
@@ -752,6 +806,41 @@ describe('character actions template syntax handling', () => {
     expect(redirectMock).toHaveBeenCalledWith('/dashboard/characters/char-1')
   })
 
+  it('only removes module-assets storage for modules actually deleted by orphan cleanup', async () => {
+    const supabase = buildSupabase({
+      characterModules: [
+        { character_id: 'char-1', module_id: 'old-mod', enabled: true, priority: 2 },
+        { character_id: 'char-1', module_id: 'shared-mod', enabled: true, priority: 1 },
+      ],
+      modules: [
+        { id: 'old-mod', user_id: 'user-1' },
+        { id: 'shared-mod', user_id: 'user-1' },
+      ],
+      moduleAssetPaths: [
+        { module_id: 'old-mod', storage_path: 'user-1/old-mod/a.webp' },
+        { module_id: 'shared-mod', storage_path: 'user-1/shared-mod/b.webp' },
+      ],
+      deletedOrphanedModuleIds: ['old-mod'],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { updateCharacter } = await import('./actions')
+
+    const result = await updateCharacter(
+      'char-1',
+      buildCharacterFormData({
+        omitModuleIds: true,
+      }),
+    )
+
+    expect(result).toBeUndefined()
+    expect(supabase.state.storageRemoveCalls).toEqual([
+      {
+        bucket: 'module-assets',
+        paths: ['user-1/old-mod/a.webp'],
+      },
+    ])
+  })
+
   it('returns login required on delete when unauthenticated', async () => {
     createClientMock.mockResolvedValue(buildSupabase({ user: null }))
     const { deleteCharacter } = await import('./actions')
@@ -790,10 +879,13 @@ describe('character actions template syntax handling', () => {
       characterModules: [
         { character_id: 'char-1', module_id: 'old-mod', enabled: true, priority: 1 },
       ],
+      modules: [{ id: 'old-mod', user_id: 'user-1' }],
       characterAssetPaths: [
         { character_id: 'char-1', storage_path: 'user-1/char-1/asset-a.webp' },
         { character_id: 'char-1', storage_path: 'user-1/char-1/asset-b.png' },
       ],
+      moduleAssetPaths: [{ module_id: 'old-mod', storage_path: 'user-1/old-mod/module.webp' }],
+      deletedOrphanedModuleIds: ['old-mod'],
     })
     createClientMock.mockResolvedValue(supabase)
     const { deleteCharacter } = await import('./actions')
@@ -819,6 +911,10 @@ describe('character actions template syntax handling', () => {
       },
     ])
     expect(supabase.state.storageRemoveCalls).toEqual([
+      {
+        bucket: 'module-assets',
+        paths: ['user-1/old-mod/module.webp'],
+      },
       {
         bucket: 'character-assets',
         paths: ['user-1/char-1/asset-a.webp', 'user-1/char-1/asset-b.png'],

@@ -113,12 +113,14 @@ If you deploy somewhere else, you still need:
 
 - a trusted `INTERNAL_API_ORIGIN`
 - a scheduler or worker for the chat/import runners
+- a daily call to the storage janitor if you want automatic orphan cleanup
 
 The common low-cost setup is: app on Vercel Hobby or another Node host, Supabase Free, and an external scheduler hitting the internal trigger endpoints.
 
 You can either:
 
 - call the internal trigger routes with `Authorization: Bearer <CRON_SECRET>`
+- call `GET /api/internal/storage-janitor` with the same bearer auth once per day
 - or run `npm run chat:jobs` and `npm run character:jobs` from your own worker process
 
 Verified reference setup on April 7, 2026: `Vercel Hobby + Supabase Free + cron-job.org`. That configuration successfully processed both character imports and chat jobs end-to-end.
@@ -151,6 +153,14 @@ Check:
 ### Production works inconsistently or internal calls fail
 
 Check `INTERNAL_API_ORIGIN` first. In non-local environments it must be set to the canonical app URL.
+
+### Storage keeps growing unexpectedly
+
+Check:
+
+- `GET /api/internal/storage-janitor` is scheduled at least daily
+- the route is called with `Authorization: Bearer <CRON_SECRET>` or `Bearer <CHAT_ADMIN_SECRET>`
+- a manual dry-run such as `/api/internal/storage-janitor?dryRun=1` returns `orphanCount: 0` for both buckets after cleanup
 
 ## Next Docs
 

@@ -38,6 +38,26 @@ type UpdateCall = {
   filters: Array<[string, unknown]>
 }
 
+type AccountDeleteSupabaseOptions = {
+  user?: { id: string } | null
+  apiKeys?: Array<{ vault_secret_name: string | null }>
+  characterAssetPaths?: string[]
+  moduleAssetPaths?: string[]
+  importUploadPaths?: string[]
+  queryErrors?: {
+    apiKeys?: DbError | null
+    characterAssets?: DbError | null
+    moduleAssets?: DbError | null
+    importJobs?: DbError | null
+  }
+  signOutError?: DbError | null
+}
+
+type AccountDeleteAdminOptions = {
+  deleteUserError?: DbError | null
+  deleteSecretErrors?: Record<string, DbError | null>
+}
+
 function buildFormData(entries: Record<string, string | undefined>) {
   const formData = new FormData()
 
@@ -73,6 +93,37 @@ function createThenableMutation(
 
       settled = true
       return Promise.resolve(commit([...filters])).then(onfulfilled, onrejected)
+    },
+  }
+
+  return builder
+}
+
+function createThenableQuery<T>(
+  resolve: (
+    filters: Array<[string, unknown]>,
+  ) => { data: T; error: DbError | null } | Promise<{ data: T; error: DbError | null }>,
+) {
+  const filters: Array<[string, unknown]> = []
+  let settled = false
+
+  const builder = {
+    eq(field: string, value: unknown) {
+      filters.push([field, value])
+      return builder
+    },
+    then<TResult1 = { data: T; error: DbError | null }, TResult2 = never>(
+      onfulfilled?:
+        | ((value: { data: T; error: DbError | null }) => TResult1 | PromiseLike<TResult1>)
+        | null,
+      onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    ) {
+      if (settled) {
+        return Promise.resolve({ data: [] as T, error: null }).then(onfulfilled, onrejected)
+      }
+
+      settled = true
+      return Promise.resolve(resolve([...filters])).then(onfulfilled, onrejected)
     },
   }
 
@@ -161,6 +212,146 @@ function buildSupabase(options: AccountSupabaseOptions = {}) {
       }
 
       throw new Error(`Unexpected table: ${table}`)
+    },
+  }
+}
+
+function buildDeleteAccountSupabase(options: AccountDeleteSupabaseOptions = {}) {
+  const user = options.user === undefined ? { id: 'user-1' } : options.user
+  const state = {
+    signOutCalls: 0,
+  }
+
+  return {
+    state,
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: { user },
+        error: user ? null : { message: 'No session' },
+      }),
+      signOut: vi.fn().mockImplementation(async () => {
+        state.signOutCalls += 1
+        return { error: options.signOutError ?? null }
+      }),
+    },
+    from(table: string) {
+      if (table === 'api_keys') {
+        return {
+          select() {
+            return createThenableQuery((filters) => {
+              if (options.queryErrors?.apiKeys) {
+                return { data: null as never, error: options.queryErrors.apiKeys }
+              }
+
+              const targetUserId = filters.find(([field]) => field === 'user_id')?.[1]
+              const rows = targetUserId === user?.id ? (options.apiKeys ?? []) : []
+              return { data: rows, error: null }
+            })
+          },
+        }
+      }
+
+      if (table === 'character_assets') {
+        return {
+          select() {
+            return createThenableQuery((filters) => {
+              if (options.queryErrors?.characterAssets) {
+                return { data: null as never, error: options.queryErrors.characterAssets }
+              }
+
+              const targetUserId = filters.find(([field]) => field === 'user_id')?.[1]
+              const rows =
+                targetUserId === user?.id
+                  ? (options.characterAssetPaths ?? []).map((storage_path) => ({ storage_path }))
+                  : []
+              return { data: rows, error: null }
+            })
+          },
+        }
+      }
+
+      if (table === 'module_assets') {
+        return {
+          select() {
+            return createThenableQuery((filters) => {
+              if (options.queryErrors?.moduleAssets) {
+                return { data: null as never, error: options.queryErrors.moduleAssets }
+              }
+
+              const targetUserId = filters.find(([field]) => field === 'user_id')?.[1]
+              const rows =
+                targetUserId === user?.id
+                  ? (options.moduleAssetPaths ?? []).map((storage_path) => ({ storage_path }))
+                  : []
+              return { data: rows, error: null }
+            })
+          },
+        }
+      }
+
+      if (table === 'charx_import_jobs') {
+        return {
+          select() {
+            return createThenableQuery((filters) => {
+              if (options.queryErrors?.importJobs) {
+                return { data: null as never, error: options.queryErrors.importJobs }
+              }
+
+              const targetUserId = filters.find(([field]) => field === 'user_id')?.[1]
+              const rows =
+                targetUserId === user?.id
+                  ? (options.importUploadPaths ?? []).map((storage_path) => ({ storage_path }))
+                  : []
+              return { data: rows, error: null }
+            })
+          },
+        }
+      }
+
+      throw new Error(`Unexpected table: ${table}`)
+    },
+  }
+}
+
+function buildDeleteAccountAdmin(options: AccountDeleteAdminOptions = {}) {
+  const state = {
+    events: [] as string[],
+    deleteSecretCalls: [] as string[],
+    storageRemoveCalls: [] as Array<{ bucket: string; paths: string[] }>,
+  }
+
+  return {
+    state,
+    auth: {
+      admin: {
+        deleteUser: vi.fn(async (userId: string) => {
+          state.events.push(`deleteUser:${userId}`)
+          return { error: options.deleteUserError ?? null }
+        }),
+      },
+    },
+    rpc: vi.fn(async (name: string, params?: { secret_name?: string }) => {
+      if (name !== 'delete_secret') {
+        throw new Error(`Unexpected rpc: ${name}`)
+      }
+
+      const secretName = params?.secret_name ?? ''
+      state.events.push(`delete_secret:${secretName}`)
+      state.deleteSecretCalls.push(secretName)
+
+      return {
+        data: null,
+        error: options.deleteSecretErrors?.[secretName] ?? null,
+      }
+    }),
+    storage: {
+      from: vi.fn((bucket: string) => ({
+        remove: vi.fn(async (paths: string[]) => {
+          state.events.push(`remove:${bucket}`)
+          state.storageRemoveCalls.push({ bucket, paths })
+          return { data: [], error: null }
+        }),
+      })),
     },
   }
 }
@@ -322,5 +513,71 @@ describe('account actions', () => {
     expect(supabase.auth.updateUser).toHaveBeenCalledWith({
       password: 'updated-password',
     })
+  })
+
+  it('does not clean up storage or vault secrets when deleteUser fails', async () => {
+    const supabase = buildDeleteAccountSupabase({
+      apiKeys: [{ vault_secret_name: 'secret-1' }],
+      characterAssetPaths: ['user-1/char-1/a.webp'],
+      moduleAssetPaths: ['user-1/mod-1/a.webp'],
+      importUploadPaths: ['user-1/imports/a.rbx'],
+    })
+    const admin = buildDeleteAccountAdmin({
+      deleteUserError: { message: 'delete user failed' },
+    })
+    createClientMock.mockResolvedValue(supabase)
+    createAdminClientMock.mockReturnValue(admin)
+    const { deleteAccount } = await import('./actions')
+
+    const result = await deleteAccount()
+
+    expect(result).toEqual({
+      error: 'An error occurred while deleting account. Please try again later.',
+    })
+    expect(admin.state.events).toEqual(['deleteUser:user-1'])
+    expect(admin.state.storageRemoveCalls).toEqual([])
+    expect(admin.state.deleteSecretCalls).toEqual([])
+    expect(supabase.auth.signOut).not.toHaveBeenCalled()
+  })
+
+  it('deletes storage objects and vault secrets only after deleteUser succeeds', async () => {
+    const supabase = buildDeleteAccountSupabase({
+      apiKeys: [{ vault_secret_name: 'secret-1' }, { vault_secret_name: 'secret-2' }],
+      characterAssetPaths: ['user-1/char-1/a.webp', 'user-1/char-1/b.png'],
+      moduleAssetPaths: ['user-1/mod-1/module.webp'],
+      importUploadPaths: ['user-1/imports/a.rbx'],
+    })
+    const admin = buildDeleteAccountAdmin()
+    createClientMock.mockResolvedValue(supabase)
+    createAdminClientMock.mockReturnValue(admin)
+    const { deleteAccount } = await import('./actions')
+
+    const result = await deleteAccount()
+
+    expect(result).toEqual({ success: true })
+    expect(admin.state.events).toEqual([
+      'deleteUser:user-1',
+      'remove:character-assets',
+      'remove:module-assets',
+      'remove:charx-uploads',
+      'delete_secret:secret-1',
+      'delete_secret:secret-2',
+    ])
+    expect(admin.state.storageRemoveCalls).toEqual([
+      {
+        bucket: 'character-assets',
+        paths: ['user-1/char-1/a.webp', 'user-1/char-1/b.png'],
+      },
+      {
+        bucket: 'module-assets',
+        paths: ['user-1/mod-1/module.webp'],
+      },
+      {
+        bucket: 'charx-uploads',
+        paths: ['user-1/imports/a.rbx'],
+      },
+    ])
+    expect(admin.state.deleteSecretCalls).toEqual(['secret-1', 'secret-2'])
+    expect(supabase.auth.signOut).toHaveBeenCalledTimes(1)
   })
 })

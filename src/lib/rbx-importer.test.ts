@@ -494,6 +494,38 @@ describe('importRbx', () => {
       expect(result.stats?.failedAssetSamples[0].reason).toContain('DB insert failed')
     })
 
+    it('cleans up uploaded character storage when character_assets insert fails', async () => {
+      const mock = createMockSupabase({ assetInsertError: { message: 'DB insert failed' } })
+      const parseResult = createMinimalParseResult({
+        manifest: {
+          assets: [
+            {
+              file_name: 'a.png',
+              asset_type: 'character_image',
+              content_type: 'image/png',
+              display_name: null,
+              canonical_name: null,
+              display_order: 0,
+              metadata: { aliases: [] },
+            },
+          ],
+        },
+        characterAssets: [createAssetFile('a.png')],
+      })
+
+      const result = await importRbx({
+        userId: 'user-123',
+        parseResult,
+        supabaseClient: mock.client,
+      })
+
+      expect(result.success).toBe(true)
+      expect(mock.calls.storageRemovals).toHaveLength(1)
+      expect(mock.calls.storageRemovals[0].bucket).toBe('character-assets')
+      expect(mock.calls.storageRemovals[0].paths).toHaveLength(1)
+      expect(mock.calls.storageRemovals[0].paths[0]).toMatch(/^user-123\/char-test-123\/.+\.png$/)
+    })
+
     it('counts missing asset files as failed and records fileName', async () => {
       const mock = createMockSupabase()
       const parseResult = createMinimalParseResult({
@@ -797,6 +829,57 @@ describe('importRbx', () => {
       expect(moduleUploads).toHaveLength(1)
 
       vi.useRealTimers()
+    })
+
+    it('cleans up uploaded module storage when module_assets insert fails', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const mock = createMockSupabase({
+        moduleAssetInsertError: { message: 'module asset insert failed' },
+      })
+      const moduleAssetFiles = new Map<number, RbxAssetFile[]>()
+      moduleAssetFiles.set(0, [createAssetFile('bg.webp')])
+
+      const parseResult = createMinimalParseResult({
+        manifest: {
+          modules: [
+            {
+              enabled: true,
+              priority: 0,
+              module: {
+                name: 'BG Module',
+                description: null,
+                lorebook: [],
+                regex: [],
+                hide_icon: false,
+                assets: [
+                  {
+                    file_name: 'bg.webp',
+                    content_type: 'image/webp',
+                    display_name: 'Background',
+                    display_order: 0,
+                    metadata: {},
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        moduleAssets: moduleAssetFiles,
+      })
+
+      const result = await importRbx({
+        userId: 'user-123',
+        parseResult,
+        supabaseClient: mock.client,
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.stats?.moduleAssetsUploaded).toBe(0)
+      expect(mock.calls.storageRemovals).toHaveLength(1)
+      expect(mock.calls.storageRemovals[0].bucket).toBe('module-assets')
+      expect(mock.calls.storageRemovals[0].paths).toHaveLength(1)
+      expect(mock.calls.storageRemovals[0].paths[0]).toMatch(/^user-123\/mod-test-0\/.+\.webp$/)
+      errorSpy.mockRestore()
     })
 
     it('does not persist legacy triggers and toggle_definitions', async () => {
@@ -1260,6 +1343,9 @@ describe('importRbx', () => {
         return originalFrom(table)
       })
 
+      const moduleAssetFiles = new Map<number, RbxAssetFile[]>()
+      moduleAssetFiles.set(0, [createAssetFile('bg.webp')])
+
       const parseResult = createMinimalParseResult({
         manifest: {
           modules: [
@@ -1272,7 +1358,15 @@ describe('importRbx', () => {
                 lorebook: [],
                 regex: [],
                 hide_icon: false,
-                assets: [],
+                assets: [
+                  {
+                    file_name: 'bg.webp',
+                    content_type: 'image/webp',
+                    display_name: 'Background',
+                    display_order: 0,
+                    metadata: {},
+                  },
+                ],
               },
             },
             {
@@ -1289,6 +1383,7 @@ describe('importRbx', () => {
             },
           ],
         },
+        moduleAssets: moduleAssetFiles,
       })
 
       const result = await importRbx({
@@ -1303,6 +1398,12 @@ describe('importRbx', () => {
       // First module was created and should be rolled back
       expect(mock.calls.moduleDeletes).toHaveLength(1)
       expect(mock.calls.moduleDeletes[0]).toMatch(/^mod-test-/)
+      const moduleCleanupCall = mock.calls.storageRemovals.find(
+        (call) => call.bucket === 'module-assets',
+      )
+      expect(moduleCleanupCall).toBeDefined()
+      expect(moduleCleanupCall?.paths).toHaveLength(1)
+      expect(moduleCleanupCall?.paths[0]).toMatch(/^user-123\/mod-test-0\/.+\.webp$/)
       errorSpy.mockRestore()
     })
   })

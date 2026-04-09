@@ -24,6 +24,7 @@ import type {
   ModuleAssetInsert,
   ModuleInsert,
 } from '@/types/database.types'
+import { removeStorageObjects } from '@/lib/assets/storage-cleanup'
 import { sanitizeStorageKey } from './storage-key'
 import { formatSuuImportValidationIssue, validateSuuImportMetadata } from './suu-import-validation'
 
@@ -133,6 +134,7 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
 
   let characterId: string | undefined
   const createdModuleIds: string[] = [] // Track for rollback
+  let uploadedCharacterAssetPaths: string[] = []
 
   try {
     // ── Step 1: Create character ──
@@ -169,6 +171,7 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
       manifest.assets,
       characterAssets,
     )
+    uploadedCharacterAssetPaths = uploaded.map((asset) => asset.storagePath)
 
     // ── Step 3: Build file_name → asset_id / URL maps ──
     const fileNameToAssetId = new Map<string, string>()
@@ -298,9 +301,22 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
     }
   } catch (error) {
     // Rollback: delete character (CASCADE deletes character_assets and character_modules links)
+    let characterDeleted = false
     if (characterId) {
       console.error('[RBX Importer] Rolling back character creation:', characterId)
-      await supabase.from('characters').delete().eq('id', characterId)
+      const { error: deleteCharacterError } = await supabase
+        .from('characters')
+        .delete()
+        .eq('id', characterId)
+      characterDeleted = !deleteCharacterError
+    }
+
+    if (characterDeleted && uploadedCharacterAssetPaths.length > 0 && characterId) {
+      await removeStorageObjects(supabase, 'character-assets', uploadedCharacterAssetPaths, {
+        entityId: characterId,
+        entityType: 'import',
+        operation: 'rollbackImport',
+      })
     }
 
     // Rollback: delete orphaned modules (character CASCADE only removes the link, not the module itself)

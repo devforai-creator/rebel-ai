@@ -74,6 +74,7 @@ function createMockSupabase(config?: {
     characterModuleLinks: [] as Array<Record<string, unknown>>,
     moduleDeletes: [] as string[],
     storageUploads: [] as Array<{ bucket: string; path: string; data: unknown }>,
+    storageRemovals: [] as Array<{ bucket: string; paths: string[] }>,
     moduleAssetInserts: [] as Array<Record<string, unknown>>,
   }
 
@@ -189,6 +190,10 @@ function createMockSupabase(config?: {
             return Promise.resolve({ error: config.storageUploadError })
           }
           return Promise.resolve({ data: { path }, error: null })
+        }),
+        remove: vi.fn((paths: string[]) => {
+          calls.storageRemovals.push({ bucket, paths })
+          return Promise.resolve({ data: [], error: null })
         }),
         getPublicUrl: vi.fn((path: string) => ({
           data: { publicUrl: `https://storage.example.com/${path}` },
@@ -617,6 +622,7 @@ describe('importRbx', () => {
           }
           return Promise.resolve({ data: { path }, error: null })
         }),
+        remove: originalStorageFrom(bucket).remove,
         getPublicUrl: originalStorageFrom(bucket).getPublicUrl,
       }))
 
@@ -1143,7 +1149,22 @@ describe('importRbx', () => {
       const mock = createMockSupabase({
         characterUpdateError: { message: 'Connection lost' },
       })
-      const parseResult = createMinimalParseResult()
+      const parseResult = createMinimalParseResult({
+        manifest: {
+          assets: [
+            {
+              file_name: 'icon.png',
+              asset_type: 'icon',
+              content_type: 'image/png',
+              display_name: null,
+              canonical_name: null,
+              display_order: 0,
+              metadata: { aliases: [] },
+            },
+          ],
+        },
+        characterAssets: [createAssetFile('icon.png')],
+      })
 
       const result = await importRbx({
         userId: 'user-123',
@@ -1154,6 +1175,9 @@ describe('importRbx', () => {
       expect(result.success).toBe(false)
       expect(result.error).toContain('Connection lost')
       expect(mock.calls.characterDeletes).toContain('char-test-123')
+      expect(mock.calls.storageRemovals).toHaveLength(1)
+      expect(mock.calls.storageRemovals[0].bucket).toBe('character-assets')
+      expect(mock.calls.storageRemovals[0].paths).toHaveLength(1)
       errorSpy.mockRestore()
     })
 

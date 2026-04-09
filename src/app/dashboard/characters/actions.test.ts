@@ -52,6 +52,7 @@ type CharactersSupabaseOptions = {
   createCharacterId?: string
   characters?: CharacterRow[]
   characterModules?: CharacterModuleRow[]
+  characterAssetPaths?: Array<{ character_id: string; storage_path: string }>
 }
 
 type MutationCall = {
@@ -168,11 +169,13 @@ function buildSupabase(options: CharactersSupabaseOptions = {}) {
       },
     ],
     characterModules: options.characterModules?.map((row) => ({ ...row })) ?? [],
+    characterAssets: options.characterAssetPaths?.map((row) => ({ ...row })) ?? [],
     characterInsertPayloads: [] as Array<Record<string, unknown>>,
     characterUpdateCalls: [] as MutationCall[],
     characterDeleteCalls: [] as MutationCall[],
     characterModuleInsertPayloads: [] as CharacterModuleRow[][],
     characterModuleDeleteCalls: [] as MutationCall[],
+    storageRemoveCalls: [] as Array<{ bucket: string; paths: string[] }>,
     rpcCalls: [] as RpcCall[],
   }
 
@@ -275,6 +278,19 @@ function buildSupabase(options: CharactersSupabaseOptions = {}) {
         }
       }
 
+      if (table === 'character_assets') {
+        return {
+          select() {
+            return createThenableQuery((filters) => ({
+              data: state.characterAssets
+                .filter((row) => matchesFilters(row, filters))
+                .map((row) => ({ storage_path: row.storage_path })),
+              error: null,
+            }))
+          },
+        }
+      }
+
       throw new Error(`Unexpected table: ${table}`)
     },
     rpc(name: string, params?: Record<string, unknown>) {
@@ -289,6 +305,16 @@ function buildSupabase(options: CharactersSupabaseOptions = {}) {
       }
 
       return Promise.resolve({ data: 0, error: null })
+    },
+    storage: {
+      from(bucket: string) {
+        return {
+          remove(paths: string[]) {
+            state.storageRemoveCalls.push({ bucket, paths })
+            return Promise.resolve({ data: [], error: null })
+          },
+        }
+      },
     },
   }
 }
@@ -764,6 +790,10 @@ describe('character actions template syntax handling', () => {
       characterModules: [
         { character_id: 'char-1', module_id: 'old-mod', enabled: true, priority: 1 },
       ],
+      characterAssetPaths: [
+        { character_id: 'char-1', storage_path: 'user-1/char-1/asset-a.webp' },
+        { character_id: 'char-1', storage_path: 'user-1/char-1/asset-b.png' },
+      ],
     })
     createClientMock.mockResolvedValue(supabase)
     const { deleteCharacter } = await import('./actions')
@@ -786,6 +816,12 @@ describe('character actions template syntax handling', () => {
           module_ids: ['old-mod'],
           requester: 'user-1',
         },
+      },
+    ])
+    expect(supabase.state.storageRemoveCalls).toEqual([
+      {
+        bucket: 'character-assets',
+        paths: ['user-1/char-1/asset-a.webp', 'user-1/char-1/asset-b.png'],
       },
     ])
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/characters')

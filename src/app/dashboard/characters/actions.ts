@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
+import { listCharacterAssetStoragePaths, removeStorageObjects } from '@/lib/assets/storage-cleanup'
 import { getFormDataErrorMessage, safeParseFormData } from '@/lib/form-data'
 import { cleanupOrphanedModules, listCharacterModuleIds } from '@/lib/modules/orphan-cleanup'
 import { validateModuleOwnership } from '@/lib/modules/ownership'
@@ -238,6 +239,16 @@ export async function deleteCharacter(id: string) {
     })
     return []
   })
+  const characterAssetPaths = await listCharacterAssetStoragePaths(supabase, id).catch(
+    (error: Error) => {
+      console.error('[Character] Failed to load asset paths before delete', {
+        characterId: id,
+        userId: user.id,
+        error: error.message,
+      })
+      return []
+    },
+  )
 
   const { error } = await supabase.from('characters').delete().eq('id', id).eq('user_id', user.id)
 
@@ -255,6 +266,11 @@ export async function deleteCharacter(id: string) {
     action: 'deleteCharacter',
     characterId: id,
     userId: user.id,
+  })
+  await removeStorageObjects(supabase, 'character-assets', characterAssetPaths, {
+    entityId: id,
+    entityType: 'character',
+    operation: 'deleteCharacter',
   })
 
   revalidatePath('/dashboard/characters')

@@ -48,6 +48,7 @@ supabase/.temp/
 .codex
 .codex/
 .tmp/
+/.husky/_/
 
 # local dev scripts (not tracked)
 scripts/skill-pkg/

@@ -7,8 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "prepare": "husky",
     "db:schema": "bash scripts/build-hosted-schema.sh",
     "db:schema:check": "bash scripts/build-hosted-schema.sh --check",
     "db:types": "supabase db push --local --yes && supabase gen types --local --schema public > src/types/database.generated.ts",
@@ -59,6 +62,8 @@
     "eslint": "^9",
     "eslint-config-next": "^15.5.14",
     "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "postcss": "^8.5.8",
     "prettier": "^3.7.4",
     "server-only": "^0.0.1",
@@ -66,6 +71,9 @@
     "tsx": "^4.20.6",
     "typescript": "^5",
     "vitest": "^4.0.4"
+  },
+  "lint-staged": {
+    "*": "prettier --write --ignore-unknown"
   },
   "overrides": {
     "parse5": "7.1.2",

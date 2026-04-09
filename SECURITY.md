@@ -58,6 +58,7 @@ Older versions may contain known vulnerabilities that will not be patched retroa
 - RebelAI's native format is RBX.
 - RBX excludes script execution by design.
 - Character imports run through a staged background pipeline with ownership checks, queue limits, and archive-size guardrails.
+- RBX packages reference assets by filename only. Import rewrites bundled asset binaries into RebelAI-managed storage, and runtime UI cards resolve `@assets/...` through host-generated asset mappings rather than author-supplied remote URLs.
 - Legacy storage/table names may remain in the implementation, but they are internal details and not part of the public product identity.
 
 ### Frontend execution surface

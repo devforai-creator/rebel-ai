@@ -319,16 +319,20 @@ Images in `ui_card` use `@assets/filename.png` paths:
 { "type": "Image", "src": "@assets/npc_bartender.png" }
 ```
 
-The runtime resolves `@assets/` paths by matching against the `.rbx` manifest's `assets[]` entries by `file_name`. External URLs (`https://`, `http://`, `data:`) are forbidden.
+The runtime resolves `@assets/` paths by matching against the `.rbx` manifest's `assets[]` entries by `file_name`. External URLs (`https://`, `http://`, `data:`) are forbidden in card-authored payloads.
+
+In RebelAI, the `.rbx` package remains portable by carrying only filenames and bundled binaries. The importer uploads those binaries to host-controlled storage and records the resulting runtime asset locations. Card authors do not supply final remote image URLs, and the active runtime resolves `@assets/...` through host-generated mappings.
 
 ### Security Model
 
 The Safe UGC UI card format provides **structural security** — the format itself cannot express dangerous constructs:
 
 - **No XSS** — no `<script>`, no event handlers, no `javascript:` URIs (not in the grammar)
-- **No data exfiltration** — no `url()`, no external resource loading (images must use `@assets/`)
+- **No card-authored external resource loading** — no `url()`, and no author-controlled remote image URLs (images must use `@assets/`)
 - **No UI hijacking** — no `position: fixed/sticky`, `z-index` capped at 0-100
 - **No CSS injection** — no `calc()`, `var()`, `expression()` in style values
+
+For RebelAI specifically, final image fetch origins are a host boundary rather than a card boundary: imported asset binaries are re-hosted through RebelAI-managed storage, and the runtime only injects those host-generated URLs into the SUU `assets` map.
 
 > **Runtime integration status**: `ui_card` is already wired into the RebelAI runtime and renders through `@safe-ugc-ui/react`. The remaining gap is **import-time** validation with `@safe-ugc-ui/validator` inside the RBX import path. See §9 Runtime Status.
 

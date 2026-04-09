@@ -116,4 +116,49 @@ describe('persistStreamedAssistantMessage', () => {
 
     expect(deleteAssistantMessage).toHaveBeenCalledWith('assistant-1')
   })
+
+  it('returns an empty result when the stream yields no chunks', async () => {
+    const insertAssistantMessage = vi.fn(async () => 'assistant-1')
+    const updateAssistantMessage = vi.fn(async () => undefined)
+    const deleteAssistantMessage = vi.fn(async () => undefined)
+
+    const result = await persistStreamedAssistantMessage({
+      textStream: [],
+      updateIntervalMs: 0,
+      now: () => 0,
+      insertAssistantMessage,
+      updateAssistantMessage,
+      deleteAssistantMessage,
+    })
+
+    expect(result).toEqual({
+      fullText: '',
+      assistantMessageId: null,
+      messageInsertDuration: null,
+    })
+    expect(insertAssistantMessage).not.toHaveBeenCalled()
+    expect(updateAssistantMessage).not.toHaveBeenCalled()
+    expect(deleteAssistantMessage).not.toHaveBeenCalled()
+  })
+
+  it('normalizes non-Error update failures before rethrowing', async () => {
+    const insertAssistantMessage = vi.fn(async () => 'assistant-1')
+    const updateAssistantMessage = vi.fn(async () => {
+      throw 'plain failure'
+    })
+    const deleteAssistantMessage = vi.fn(async () => undefined)
+
+    await expect(
+      persistStreamedAssistantMessage({
+        textStream: ['a', 'b'],
+        updateIntervalMs: 0,
+        now: () => 0,
+        insertAssistantMessage,
+        updateAssistantMessage,
+        deleteAssistantMessage,
+      }),
+    ).rejects.toThrow('plain failure')
+
+    expect(deleteAssistantMessage).toHaveBeenCalledWith('assistant-1')
+  })
 })

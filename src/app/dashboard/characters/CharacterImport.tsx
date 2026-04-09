@@ -17,6 +17,7 @@ type ImportStats = {
   modulesCreated?: number
   lorebookEntries?: number
   moduleAssetsUploaded?: number
+  validationWarnings?: string[]
 }
 
 const statusCopy: Record<JobStatus, string> = {
@@ -329,6 +330,19 @@ export default function CharacterImport() {
               </ul>
             </div>
           )}
+
+        {importStats?.validationWarnings && importStats.validationWarnings.length > 0 && (
+          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-200 px-4 py-3 rounded-lg text-sm space-y-1">
+            <p className="font-medium">Imported with SUU compatibility warnings.</p>
+            <ul className="list-disc ml-5 text-xs space-y-0.5">
+              {importStats.validationWarnings.slice(0, 5).map((warning, index) => (
+                <li key={`${warning}-${index}`} className="break-words">
+                  {warning}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div
           onClick={handleBrowseClick}

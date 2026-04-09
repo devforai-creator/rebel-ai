@@ -230,5 +230,6 @@ export interface RbxImportResult {
     modulesCreated: number
     lorebookEntries: number
     moduleAssetsUploaded: number
+    validationWarnings?: string[]
   }
 }

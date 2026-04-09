@@ -366,6 +366,59 @@ describe('importRbx', () => {
 
       expect(mock.calls.characterInserts[0].visibility).toBe('draft')
     })
+
+    it('records SUU compatibility warnings but proceeds with import', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const mock = createMockSupabase()
+      const parseResult = createMinimalParseResult({
+        manifest: {
+          character: {
+            name: 'Warning Card',
+            description: null,
+            system_prompt: 'Test',
+            greeting_message: null,
+            visibility: 'private',
+            metadata: {
+              type: 'character' as const,
+              post_history_instructions: null,
+              alternate_greetings: [],
+              ui_card: {
+                meta: { name: 'legacy', version: '1.0.0' },
+                views: {
+                  Main: {
+                    type: 'UnknownThing',
+                  },
+                },
+              },
+              ui_cards: {},
+              background_html: null,
+              default_variables: {},
+              character_list: [],
+              image_commands: {},
+              image_display: null,
+            },
+          },
+        },
+      })
+
+      const result = await importRbx({
+        userId: 'user-123',
+        parseResult,
+        supabaseClient: mock.client,
+      })
+
+      expect(result.success).toBe(true)
+      expect(result.stats?.validationWarnings).toHaveLength(1)
+      expect(result.stats?.validationWarnings?.[0]).toContain(
+        'character.metadata.ui_card.views.Main',
+      )
+      expect(mock.calls.characterInserts).toHaveLength(1)
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('SUU validation warning(s); import will continue'),
+        expect.arrayContaining([expect.stringContaining('[SCHEMA_ERROR]')]),
+      )
+      warnSpy.mockRestore()
+    })
   })
 
   // --------------------------------------------------------------------------
@@ -1019,6 +1072,54 @@ describe('importRbx', () => {
   // --------------------------------------------------------------------------
 
   describe('rollback on failure', () => {
+    it('rejects unsafe SUU content before creating a character', async () => {
+      const mock = createMockSupabase()
+      const parseResult = createMinimalParseResult({
+        manifest: {
+          character: {
+            name: 'Unsafe Card',
+            description: null,
+            system_prompt: 'Test',
+            greeting_message: null,
+            visibility: 'private',
+            metadata: {
+              type: 'character' as const,
+              post_history_instructions: null,
+              alternate_greetings: [],
+              ui_card: {
+                meta: { name: 'remote-image', version: '1.0.0' },
+                views: {
+                  Main: {
+                    type: 'Image',
+                    src: 'https://evil.test/x.png',
+                    alt: 'Remote image',
+                  },
+                },
+              },
+              ui_cards: {},
+              background_html: null,
+              default_variables: {},
+              character_list: [],
+              image_commands: {},
+              image_display: null,
+            },
+          },
+        },
+      })
+
+      const result = await importRbx({
+        userId: 'user-123',
+        parseResult,
+        supabaseClient: mock.client,
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Unsafe SUU content detected in RBX import')
+      expect(result.error).toContain('[EXTERNAL_URL]')
+      expect(mock.calls.characterInserts).toHaveLength(0)
+      expect(mock.calls.characterDeletes).toHaveLength(0)
+    })
+
     it('returns error without rollback when character creation fails', async () => {
       const mock = createMockSupabase({
         characterInsertError: { message: 'Unique constraint violated' },

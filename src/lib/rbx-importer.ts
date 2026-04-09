@@ -25,6 +25,7 @@ import type {
   ModuleInsert,
 } from '@/types/database.types'
 import { sanitizeStorageKey } from './storage-key'
+import { formatSuuImportValidationIssue, validateSuuImportMetadata } from './suu-import-validation'
 
 // ============================================================================
 // Constants
@@ -96,9 +97,31 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
   const { userId, parseResult } = options
   const supabase = options.supabaseClient as unknown as ImportRbxSupabaseClient
   const { manifest, characterAssets, moduleAssets, missingAssets } = parseResult
+  const suuValidation = validateSuuImportMetadata(manifest.character.metadata)
+  const validationWarnings = suuValidation.warnings.map(formatSuuImportValidationIssue)
 
   // Use manifest visibility unless caller overrides
   const visibility = options.visibility ?? manifest.character.visibility ?? 'private'
+
+  if (suuValidation.errors.length > 0) {
+    const formattedErrors = suuValidation.errors.map(formatSuuImportValidationIssue)
+    return {
+      success: false,
+      error:
+        'Unsafe SUU content detected in RBX import:\n' +
+        formattedErrors
+          .slice(0, 5)
+          .map((issue) => `  - ${issue}`)
+          .join('\n'),
+    }
+  }
+
+  if (validationWarnings.length > 0) {
+    console.warn(
+      `[RBX Importer] ${validationWarnings.length} SUU validation warning(s); import will continue:`,
+      validationWarnings.slice(0, 10),
+    )
+  }
 
   // Warn about missing assets (parser already collected them)
   if (missingAssets.length > 0) {
@@ -270,6 +293,7 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
         modulesCreated: manifest.modules.length,
         lorebookEntries: totalLorebookEntries,
         moduleAssetsUploaded: totalModuleAssetsUploaded,
+        ...(validationWarnings.length > 0 ? { validationWarnings } : {}),
       },
     }
   } catch (error) {

@@ -107,18 +107,26 @@ function createAdminSupabase(
   options: {
     createSecretError?: RpcError | null
     deleteSecretError?: RpcError | null
+    deleteApiKeyError?: RpcError | null
   } = {},
 ) {
   return {
     rpc: vi.fn(
       async (
-        fn: 'create_secret' | 'delete_secret',
+        fn: 'create_secret' | 'delete_secret' | 'delete_api_key',
         args: Record<string, unknown>,
       ): Promise<{ data: string | null; error: RpcError | null }> => {
         if (fn === 'create_secret') {
           return {
             data: typeof args.secret_name === 'string' ? args.secret_name : 'secret-name',
             error: options.createSecretError ?? null,
+          }
+        }
+
+        if (fn === 'delete_api_key') {
+          return {
+            data: null,
+            error: options.deleteApiKeyError ?? null,
           }
         }
 
@@ -306,5 +314,77 @@ describe('api key actions', () => {
       requester: 'user-1',
     })
     dateNowSpy.mockRestore()
+  })
+
+  it('returns login required when deleting an API key while unauthenticated', async () => {
+    const adminSupabase = createAdminSupabase()
+    createAdminClientMock.mockReturnValue(adminSupabase)
+    createClientMock.mockResolvedValue(buildSupabase({ user: null }))
+    const { deleteApiKey } = await import('./actions')
+
+    const result = await deleteApiKey('key-1')
+
+    expect(result).toEqual({
+      error: '로그인이 필요합니다',
+    })
+    expect(adminSupabase.rpc).not.toHaveBeenCalled()
+  })
+
+  it('deletes an API key through the transactional RPC boundary', async () => {
+    const adminSupabase = createAdminSupabase()
+    createAdminClientMock.mockReturnValue(adminSupabase)
+    createClientMock.mockResolvedValue(buildSupabase())
+    const { deleteApiKey } = await import('./actions')
+
+    const result = await deleteApiKey('key-1')
+
+    expect(result).toEqual({ success: true })
+    expect(adminSupabase.rpc).toHaveBeenCalledWith('delete_api_key', {
+      api_key_id: 'key-1',
+      requester: 'user-1',
+    })
+    expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/api-keys')
+  })
+
+  it('returns not found when the transactional delete reports a missing key', async () => {
+    const adminSupabase = createAdminSupabase({
+      deleteApiKeyError: {
+        message: 'API key not found',
+        code: 'P0002',
+      },
+    })
+    createAdminClientMock.mockReturnValue(adminSupabase)
+    createClientMock.mockResolvedValue(buildSupabase())
+    const { deleteApiKey } = await import('./actions')
+
+    const result = await deleteApiKey('missing-key')
+
+    expect(result).toEqual({
+      error: 'API 키를 찾을 수 없습니다',
+    })
+    expect(revalidatePathMock).not.toHaveBeenCalled()
+  })
+
+  it('returns a generic error when the transactional delete fails', async () => {
+    const adminSupabase = createAdminSupabase({
+      deleteApiKeyError: {
+        message: 'vault unavailable',
+        code: 'XX000',
+      },
+    })
+    createAdminClientMock.mockReturnValue(adminSupabase)
+    createClientMock.mockResolvedValue(buildSupabase())
+    const { deleteApiKey } = await import('./actions')
+
+    const result = await deleteApiKey('key-1')
+
+    expect(result).toEqual({
+      error: 'API 키 삭제 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+    })
+    expect(consoleErrorSpy).toHaveBeenCalledWith('[API Keys] delete_api_key failed', {
+      code: 'XX000',
+      message: 'vault unavailable',
+    })
+    expect(revalidatePathMock).not.toHaveBeenCalled()
   })
 })

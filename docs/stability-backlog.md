@@ -1,6 +1,6 @@
 # Stability Backlog
 
-Updated: 2026-04-09
+Updated: 2026-04-11
 
 This document turns the recent repo-wide review into execution batches.
 
@@ -65,7 +65,11 @@ Current status as of 2026-04-10:
 
 - `deleteAccount` now treats `admin.deleteUser` as the deletion boundary, and only runs Vault secret cleanup after that succeeds
 - `deleteAccount` now preloads and removes `character-assets`, `module-assets`, and `charx-uploads` storage paths after account deletion, with partial-failure regression coverage in [src/app/dashboard/account/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/actions.test.ts)
-- `deleteApiKey` mixed-failure handling is still the remaining item in this backlog slice
+
+Current status as of 2026-04-11:
+
+- `deleteApiKey` now runs through a single `delete_api_key` database function that clears the voyage RAG reference, deletes the `api_keys` row, and removes the Vault secret inside one transaction boundary
+- regression coverage for `deleteApiKey` now lives in [src/app/dashboard/api-keys/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/actions.test.ts)
 
 ### P0-2. Internal Secret Handling at Request Time
 

@@ -587,6 +587,54 @@ export type Database = {
           },
         ]
       }
+      chat_turns: {
+        Row: {
+          active_assistant_message_id: string | null
+          chat_id: string
+          created_at: string
+          id: string
+          turn_index: number
+          updated_at: string
+          user_id: string
+          user_message_id: string | null
+        }
+        Insert: {
+          active_assistant_message_id?: string | null
+          chat_id: string
+          created_at?: string
+          id?: string
+          turn_index: number
+          updated_at?: string
+          user_id: string
+          user_message_id?: string | null
+        }
+        Update: {
+          active_assistant_message_id?: string | null
+          chat_id?: string
+          created_at?: string
+          id?: string
+          turn_index?: number
+          updated_at?: string
+          user_id?: string
+          user_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'chat_turns_chat_id_fkey'
+            columns: ['chat_id']
+            isOneToOne: false
+            referencedRelation: 'chats'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'chat_turns_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       chat_usage_events: {
         Row: {
           api_key_id: string | null
@@ -665,54 +713,6 @@ export type Database = {
           },
           {
             foreignKeyName: 'chat_usage_events_user_id_fkey'
-            columns: ['user_id']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-        ]
-      }
-      chat_turns: {
-        Row: {
-          active_assistant_message_id: string | null
-          chat_id: string
-          created_at: string
-          id: string
-          turn_index: number
-          updated_at: string
-          user_id: string
-          user_message_id: string | null
-        }
-        Insert: {
-          active_assistant_message_id?: string | null
-          chat_id: string
-          created_at?: string
-          id?: string
-          turn_index: number
-          updated_at?: string
-          user_id: string
-          user_message_id?: string | null
-        }
-        Update: {
-          active_assistant_message_id?: string | null
-          chat_id?: string
-          created_at?: string
-          id?: string
-          turn_index?: number
-          updated_at?: string
-          user_id?: string
-          user_message_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'chat_turns_chat_id_fkey'
-            columns: ['chat_id']
-            isOneToOne: false
-            referencedRelation: 'chats'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'chat_turns_user_id_fkey'
             columns: ['user_id']
             isOneToOne: false
             referencedRelation: 'profiles'
@@ -1437,16 +1437,20 @@ export type Database = {
             }
             Returns: string
           }
+      delete_api_key: {
+        Args: { api_key_id: string; requester?: string }
+        Returns: undefined
+      }
+      delete_orphaned_modules: {
+        Args: { module_ids: string[]; requester?: string }
+        Returns: number
+      }
       delete_secret:
         | { Args: { secret_name: string }; Returns: undefined }
         | {
             Args: { requester?: string; secret_name: string }
             Returns: undefined
           }
-      delete_orphaned_modules: {
-        Args: { module_ids: string[]; requester?: string | null }
-        Returns: number
-      }
       get_character_asset_url: { Args: { asset_id: string }; Returns: string }
       get_character_assets: {
         Args: { p_character_id: string }

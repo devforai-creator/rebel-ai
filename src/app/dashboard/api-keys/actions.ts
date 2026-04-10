@@ -10,7 +10,7 @@ import type { ApiServiceTier, Database, Provider, ReasoningEffort } from '@/type
 import { MAX_API_KEY_LENGTH, PROVIDER_RULES } from './providerRules'
 
 type VaultRpcError = { message: string; code?: string | null; details?: string | null }
-type VaultRpcClient = {
+type ApiKeyRpcClient = {
   rpc(
     fn: 'create_secret',
     args: Database['public']['Functions']['create_secret']['Args'],
@@ -25,11 +25,21 @@ type VaultRpcClient = {
     data: Database['public']['Functions']['delete_secret']['Returns'] | null
     error: VaultRpcError | null
   }>
+  rpc(
+    fn: 'delete_api_key',
+    args: Database['public']['Functions']['delete_api_key']['Args'],
+  ): Promise<{
+    data: Database['public']['Functions']['delete_api_key']['Returns'] | null
+    error: VaultRpcError | null
+  }>
 }
 
-const adminSupabase = createAdminClient() as unknown as VaultRpcClient
 const allowedServiceTiers: ApiServiceTier[] = ['standard', 'flex', 'priority', 'batch']
 const allowedReasoningEfforts: ReasoningEffort[] = ['none', 'low', 'medium', 'high']
+
+function createApiKeyRpcClient(): ApiKeyRpcClient {
+  return createAdminClient() as unknown as ApiKeyRpcClient
+}
 
 const apiKeyFormSchema = z.object({
   provider: z.string().refine((value) => PROVIDERS.includes(value as Provider), {
@@ -84,6 +94,7 @@ export async function createApiKey(
   formData: FormData,
 ): Promise<ApiKeyFormState> {
   const supabase = await createClient()
+  const adminSupabase = createApiKeyRpcClient()
 
   // 현재 사용자 확인
   const {
@@ -210,6 +221,7 @@ export async function createApiKey(
 
 export async function deleteApiKey(id: string) {
   const supabase = await createClient()
+  const adminSupabase = createApiKeyRpcClient()
 
   const {
     data: { user },
@@ -219,68 +231,25 @@ export async function deleteApiKey(id: string) {
     return { error: '로그인이 필요합니다' }
   }
 
-  const { data: apiKeyRecord, error: fetchError } = await supabase
-    .from('api_keys')
-    .select('vault_secret_name')
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .single()
-
-  if (fetchError || !apiKeyRecord) {
-    return { error: 'API 키를 찾을 수 없습니다' }
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('voyage_embedding_api_key_id')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError) {
-    console.error('[API Keys] Failed to check profile before deletion:', profileError)
-    return { error: '프로필 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.' }
-  }
-
-  if (profile?.voyage_embedding_api_key_id === id) {
-    const { error: profileUpdateError } = await supabase
-      .from('profiles')
-      .update({
-        voyage_embedding_api_key_id: null,
-        enable_episodic_rag: false,
-      })
-      .eq('id', user.id)
-
-    if (profileUpdateError) {
-      console.error('[API Keys] Failed to clear RAG settings before deletion:', profileUpdateError)
-      return { error: 'RAG 설정을 해제하지 못했습니다. 잠시 후 다시 시도해주세요.' }
-    }
-  }
-
-  // Vault에서 먼저 삭제 (RLS가 소유권 확인)
-  const { error: vaultError } = await adminSupabase.rpc('delete_secret', {
-    secret_name: apiKeyRecord.vault_secret_name,
+  const { error: deleteError } = await adminSupabase.rpc('delete_api_key', {
+    api_key_id: id,
     requester: user.id,
   })
 
-  if (vaultError) {
-    console.error('[API Keys] delete_secret failed', {
-      code:
-        vaultError && typeof vaultError === 'object' && 'code' in vaultError
-          ? ((vaultError as { code?: string | null }).code ?? null)
-          : null,
-    })
+  if (deleteError) {
+    const normalizedMessage = deleteError.message?.toLowerCase() ?? ''
 
-    if (vaultError.message?.toLowerCase().includes('secret not found')) {
-      return {
-        error: 'Vault에서 해당 시크릿을 찾을 수 없습니다. 이미 삭제된 키일 수 있습니다.',
-      }
+    if (normalizedMessage.includes('api key not found')) {
+      return { error: 'API 키를 찾을 수 없습니다' }
     }
-  }
 
-  // DB에서 삭제
-  const { error } = await supabase.from('api_keys').delete().eq('id', id).eq('user_id', user.id)
-
-  if (error) {
+    console.error('[API Keys] delete_api_key failed', {
+      code:
+        deleteError && typeof deleteError === 'object' && 'code' in deleteError
+          ? ((deleteError as { code?: string | null }).code ?? null)
+          : null,
+      message: deleteError.message,
+    })
     return {
       error: 'API 키 삭제 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
     }

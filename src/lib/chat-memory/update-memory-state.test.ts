@@ -44,6 +44,27 @@ vi.mock('@/lib/chat-summaries/db-helpers', () => ({
 }))
 
 vi.mock('@/lib/chat-summaries/formatters', () => ({
+  areChunksSequential: (chunks: Array<{ start_seq: number; end_seq: number }>) =>
+    chunks.every(
+      (chunk, index) => index === 0 || chunk.start_seq === chunks[index - 1].end_seq + 1,
+    ),
+  calculateChunkBoundaries: (totalMessages: number, previousEnd: number, chunkSize = 10) => {
+    const latestChunkEnd = totalMessages - chunkSize
+    if (latestChunkEnd < chunkSize || latestChunkEnd <= previousEnd) {
+      return []
+    }
+
+    const boundaries: Array<{ start: number; end: number }> = []
+    let nextChunkEnd = Math.max(previousEnd + chunkSize, chunkSize)
+    while (nextChunkEnd <= latestChunkEnd) {
+      boundaries.push({
+        start: nextChunkEnd - chunkSize + 1,
+        end: nextChunkEnd,
+      })
+      nextChunkEnd += chunkSize
+    }
+    return boundaries
+  },
   formatFacts: (...args: unknown[]) => hoistedMocks.formatFactsMock(...args),
   formatSummarySegments: (...args: unknown[]) => hoistedMocks.formatSummarySegmentsMock(...args),
 }))
@@ -66,7 +87,7 @@ vi.mock('@/lib/chat/turns', () => ({
     hoistedMocks.loadProjectedConversationMessagesMock(...args),
 }))
 
-import { buildMemoryPlan, updateMemoryState } from './index'
+import { buildMemoryPlan, hasMemoryUpdateWork, updateMemoryState } from './index'
 
 function createMemorySupabaseStub(options?: {
   profiles?: Array<{
@@ -341,6 +362,58 @@ describe('chat memory orchestration', () => {
         modelName: 'gpt-4o-mini',
       }),
     )
+  })
+
+  it('detects when summary_window has no sealed summary work pending', async () => {
+    hoistedMocks.getMessageCountMock.mockResolvedValue(19)
+    hoistedMocks.getLastSummaryEndMock.mockResolvedValue(0)
+
+    const result = await hasMemoryUpdateWork({
+      supabase: createMemorySupabaseStub(),
+      chatId: 'chat-1',
+      modelConfig: {
+        memory: {
+          mode: 'summary_window',
+        },
+      },
+    })
+
+    expect(result).toBe(false)
+  })
+
+  it('detects when summary_window reaches the next chunk boundary', async () => {
+    hoistedMocks.getMessageCountMock.mockResolvedValue(20)
+    hoistedMocks.getLastSummaryEndMock.mockResolvedValue(0)
+
+    const result = await hasMemoryUpdateWork({
+      supabase: createMemorySupabaseStub(),
+      chatId: 'chat-1',
+      modelConfig: {
+        memory: {
+          mode: 'summary_window',
+        },
+      },
+    })
+
+    expect(result).toBe(true)
+  })
+
+  it('treats explicit regeneration ranges as summary work', async () => {
+    const result = await hasMemoryUpdateWork({
+      supabase: createMemorySupabaseStub(),
+      chatId: 'chat-1',
+      regenerate: {
+        factRanges: [{ startSeq: 1, endSeq: 10 }],
+      },
+      modelConfig: {
+        memory: {
+          mode: 'summary_window',
+        },
+      },
+    })
+
+    expect(result).toBe(true)
+    expect(hoistedMocks.getMessageCountMock).not.toHaveBeenCalled()
   })
 
   it('warns and stops when prefix_live_blocks config cannot seal any messages', async () => {

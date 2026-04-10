@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { updateMemoryState } from '@/lib/chat-memory'
+import { hasMemoryUpdateWork, updateMemoryState } from '@/lib/chat-memory'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
 import type { ApiServiceTier, Database } from '@/types/database.types'
 import { buildLanguageModel } from '@/lib/llm/model-factory'
@@ -142,6 +142,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    const modelConfig = normalizeChatModelConfig(chat.model_config)
+    const hasWork = await hasMemoryUpdateWork({
+      supabase,
+      chatId,
+      regenerate: normalizedRegenerate,
+      modelConfig,
+    })
+
+    if (!hasWork) {
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        message: 'No summary generation work pending',
+      })
+    }
+
     // 4. Retrieve and decrypt API key (server-side only)
     type ApiKeyRow = {
       id: string
@@ -241,7 +257,7 @@ export async function POST(request: NextRequest) {
         provider: resolvedProvider,
         modelName: resolvedModelName,
         regenerate: normalizedRegenerate,
-        modelConfig: normalizeChatModelConfig(chat.model_config),
+        modelConfig,
       })
     } catch (error) {
       console.error('[Summaries API] Summary generation failed:', error)

@@ -28,6 +28,7 @@ const validBody = {
 
 let currentSupabase: ReturnType<typeof createSupabaseMock> | null = null
 const updateMemoryStateMock = vi.fn()
+const hasMemoryUpdateWorkMock = vi.fn()
 
 const googleModelFactoryMock = vi.fn((modelName: string) => ({ provider: 'google', modelName }))
 const openAIModelFactoryMock = vi.fn((modelName: string) => ({ provider: 'openai', modelName }))
@@ -48,6 +49,7 @@ const createAnthropicMock = vi.fn()
 const createDeepSeekMock = vi.fn()
 
 vi.mock('@/lib/chat-memory', () => ({
+  hasMemoryUpdateWork: (...args: unknown[]) => hasMemoryUpdateWorkMock(...args),
   updateMemoryState: (...args: unknown[]) => updateMemoryStateMock(...args),
 }))
 
@@ -181,6 +183,8 @@ describe('POST /api/summaries/generate', () => {
 
     updateMemoryStateMock.mockReset()
     updateMemoryStateMock.mockResolvedValue(undefined)
+    hasMemoryUpdateWorkMock.mockReset()
+    hasMemoryUpdateWorkMock.mockResolvedValue(true)
 
     googleModelFactoryMock.mockReset()
     openAIModelFactoryMock.mockReset()
@@ -369,6 +373,12 @@ describe('POST /api/summaries/generate', () => {
         modelName: 'gpt-4o-mini',
       }),
     )
+    expect(hasMemoryUpdateWorkMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatId: 'chat-1',
+        modelConfig: {},
+      }),
+    )
     expect(currentSupabase?.rpcCalls).toContainEqual({
       name: 'get_decrypted_secret',
       args: expect.objectContaining({
@@ -376,6 +386,23 @@ describe('POST /api/summaries/generate', () => {
         requester: 'user-1',
       }),
     })
+  })
+
+  it('skips API key decryption and model creation when no summary work is pending', async () => {
+    currentSupabase = createSupabaseMock({})
+    hasMemoryUpdateWorkMock.mockResolvedValueOnce(false)
+    const { POST } = await import('./route')
+
+    const response = await POST(buildRequest(validBody, 'Bearer summary-secret'))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      skipped: true,
+    })
+    expect(currentSupabase?.rpcCalls).toEqual([])
+    expect(createOpenAIWithServiceTierMock).not.toHaveBeenCalled()
+    expect(updateMemoryStateMock).not.toHaveBeenCalled()
   })
 
   it('uses anthropic provider model creation', async () => {

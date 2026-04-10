@@ -11,6 +11,7 @@ const nextConfig = {
     middlewareClientMaxBodySize: '100mb', // For API routes
   },
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',

@@ -2,16 +2,24 @@ import type { ChatModelConfig } from '@/lib/chat/model-config'
 import { resolveChatMemoryConfig } from '@/lib/chat/model-config'
 import { buildContext } from '@/lib/chat-summaries'
 import {
+  CHUNK_SIZE,
   DEFAULT_CHUNK_SUMMARY_PROMPT,
   DEFAULT_FACT_EXTRACTION_PROMPT,
   DEFAULT_META_SUMMARY_PROMPT,
+  SUMMARY_GROUP_SIZE,
   SUMMARY_LEVEL_CHUNK,
+  SUMMARY_LEVEL_META,
   SUMMARY_LEVEL_SUPER_META,
 } from '@/lib/chat-summaries/config'
 import { createChunkFacts, createChunkSummary } from '@/lib/chat-summaries/chunk-summarizer'
 import { filterRedundantChunks } from '@/lib/chat-summaries/context-builder'
 import { getLastSummaryEnd, getMessageCount } from '@/lib/chat-summaries/db-helpers'
-import { formatFacts, formatSummarySegments } from '@/lib/chat-summaries/formatters'
+import {
+  areChunksSequential,
+  calculateChunkBoundaries,
+  formatFacts,
+  formatSummarySegments,
+} from '@/lib/chat-summaries/formatters'
 import { processMetaSummaries } from '@/lib/chat-summaries/meta-summarizer'
 import { processRegenerationRequests } from '@/lib/chat-summaries/regeneration'
 import { updateSummaries } from '@/lib/chat-summaries/index'
@@ -19,6 +27,7 @@ import { loadProjectedConversationMessages } from '@/lib/chat/turns'
 import type {
   BuildContextOptions,
   RagResultInfo,
+  RegenerateConfig,
   SanitizedMessage,
   ServerSupabaseClient,
   SummaryRange,
@@ -48,6 +57,13 @@ type BuildMemoryPlanOptions = BuildContextOptions & {
 }
 
 type UpdateMemoryStateOptions = UpdateSummariesOptions & {
+  modelConfig?: ChatModelConfig | null
+}
+
+type HasMemoryUpdateWorkOptions = {
+  supabase: ServerSupabaseClient
+  chatId: string
+  regenerate?: RegenerateConfig
   modelConfig?: ChatModelConfig | null
 }
 
@@ -269,6 +285,41 @@ export async function updateMemoryState({
   })
 }
 
+export async function hasMemoryUpdateWork({
+  supabase,
+  chatId,
+  regenerate,
+  modelConfig,
+}: HasMemoryUpdateWorkOptions): Promise<boolean> {
+  if (hasRegenerationWork(regenerate)) {
+    return true
+  }
+
+  const memory = resolveChatMemoryConfig(modelConfig)
+  const totalMessages = await getMessageCount(supabase, chatId)
+  if (totalMessages === null) {
+    return false
+  }
+
+  const lastProcessedChunkEnd = await getLastSummaryEnd(supabase, chatId, SUMMARY_LEVEL_CHUNK)
+  const previousEnd = lastProcessedChunkEnd ?? 0
+  const hasChunkWork =
+    memory.mode === 'summary_window'
+      ? calculateChunkBoundaries(totalMessages, previousEnd, CHUNK_SIZE).length > 0
+      : calculatePrefixLiveBlockBoundaries(
+          totalMessages,
+          previousEnd,
+          memory.sealEveryMessages - memory.retainTailMessages,
+          memory.retainTailMessages,
+        ).length > 0
+
+  if (hasChunkWork) {
+    return true
+  }
+
+  return hasPendingMetaSummaryWork(supabase, chatId)
+}
+
 async function buildSummaryWindowPlan({
   supabase,
   chatId,
@@ -485,6 +536,39 @@ async function loadSummaryPromptConfig(
     metaPrompt: profile?.meta_summary_prompt || DEFAULT_META_SUMMARY_PROMPT,
     factPrompt: profile?.fact_extraction_prompt || DEFAULT_FACT_EXTRACTION_PROMPT,
   }
+}
+
+function hasRegenerationWork(regenerate?: RegenerateConfig): boolean {
+  const rangeCount =
+    (regenerate?.chunkRanges?.length ?? 0) +
+    (regenerate?.factRanges?.length ?? 0) +
+    (regenerate?.metaRanges?.length ?? 0)
+
+  return rangeCount > 0
+}
+
+async function hasPendingMetaSummaryWork(
+  supabase: ServerSupabaseClient,
+  chatId: string,
+): Promise<boolean> {
+  const lastMetaEnd = (await getLastSummaryEnd(supabase, chatId, SUMMARY_LEVEL_META)) ?? 0
+
+  const { data: candidateChunks, error: chunkError } = await supabase
+    .from('chat_summaries')
+    .select<'id, start_seq, end_seq, summary'>('id, start_seq, end_seq, summary')
+    .eq('chat_id', chatId)
+    .eq('level', SUMMARY_LEVEL_CHUNK)
+    .gt('start_seq', lastMetaEnd)
+    .order('start_seq', { ascending: true })
+    .limit(SUMMARY_GROUP_SIZE)
+
+  if (chunkError) {
+    console.error('[chat-memory] Failed to inspect pending meta summary work:', chunkError.message)
+    return false
+  }
+
+  const chunkRows = (candidateChunks ?? []) as Array<Pick<ChatSummary, 'start_seq' | 'end_seq'>>
+  return chunkRows.length >= SUMMARY_GROUP_SIZE && areChunksSequential(chunkRows)
 }
 
 export type { SummaryRange }

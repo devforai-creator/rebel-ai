@@ -247,6 +247,7 @@ describe('processChatJobs', () => {
 
   afterEach(() => {
     vi.resetModules()
+    vi.unstubAllEnvs()
   })
 
   it('returns zero processed when no pending jobs exist', async () => {
@@ -593,6 +594,90 @@ describe('processChatJobs', () => {
         external_provider_submitted_at: '2026-04-10T00:00:00Z',
       }),
     )
+  })
+
+  it('uses the configured Anthropic cache TTL for batch explicit cache blocks', async () => {
+    vi.stubEnv('ANTHROPIC_PROMPT_CACHE_TTL', '1h')
+
+    const supabase = createChatJobRunnerSupabaseMock({
+      apiKey: {
+        id: 'key-1',
+        user_id: 'user-1',
+        is_active: true,
+        provider: 'anthropic',
+        model_preference: 'claude-opus-4-5',
+        vault_secret_name: 'vault-key',
+        service_tier: 'standard',
+      },
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    decryptSecretMock.mockResolvedValue('sk-ant-test')
+    parseChatJobPayloadMock.mockReturnValue(
+      buildValidPayload({
+        requestId: 'req-anthropic-batch-cache-ttl',
+        provider: 'anthropic',
+        modelName: 'claude-opus-4-5',
+        deliveryMode: 'anthropic_batch',
+      }),
+    )
+    buildMemoryPlanMock.mockResolvedValueOnce({
+      mode: 'summary_window',
+      promptBlocks: [
+        {
+          role: 'system',
+          content: 'STATIC',
+          cachePreference: 'prefer-cache',
+          stability: 'static',
+        },
+        {
+          role: 'system',
+          content: 'DYNAMIC',
+          cachePreference: 'avoid-cache',
+          stability: 'live',
+        },
+        {
+          role: 'user',
+          content: 'Hello',
+          cachePreference: 'prefer-cache',
+          stability: 'live',
+        },
+      ],
+      fallbackSystemPrompt: 'STATIC\nDYNAMIC',
+      fallbackMessages: [{ role: 'user', content: 'Hello' }],
+      staticSystemPrompt: 'STATIC',
+      dynamicContext: 'DYNAMIC',
+      ragInfo: null,
+    })
+    claimPendingJobMock.mockResolvedValueOnce({
+      id: 'job-anthropic-batch-cache-ttl',
+      payload: { ok: true },
+    })
+    claimPendingJobMock.mockResolvedValueOnce(null)
+
+    const { processChatJobs } = await import('./service')
+
+    const result = await processChatJobs(1)
+
+    const call = createAnthropicMessageBatchMock.mock.calls[0]?.[0] as
+      | {
+          params?: {
+            cache_control?: { type: 'ephemeral'; ttl?: '5m' | '1h' }
+            system?: Array<{ cache_control?: { type: 'ephemeral'; ttl?: '5m' | '1h' } }>
+          }
+        }
+      | undefined
+
+    expect(result.results[0]).toMatchObject({
+      jobId: 'job-anthropic-batch-cache-ttl',
+      status: 'processing',
+    })
+    expect(call?.params?.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' })
+    expect(call?.params?.system?.[0]?.cache_control).toEqual({
+      type: 'ephemeral',
+      ttl: '1h',
+    })
   })
 
   it('polls completed Anthropic Batch jobs and records batch-priced usage', async () => {

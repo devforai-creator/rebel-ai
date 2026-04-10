@@ -951,6 +951,10 @@ function buildAnthropicBatchRequest({
     throw new Error('Anthropic Batch can only submit Anthropic payloads')
   }
 
+  const cacheControl = extractAnthropicRequestCacheControl(streamPayloadPlan)
+  const systemCacheControl: NonNullable<AnthropicTextBlock['cache_control']> = cacheControl ?? {
+    type: 'ephemeral',
+  }
   const systemBlocks = streamPayloadPlan.actualPayload.systemMessages.map<AnthropicTextBlock>(
     (message) => {
       const block: AnthropicTextBlock = {
@@ -959,14 +963,13 @@ function buildAnthropicBatchRequest({
       }
 
       if (message.cached) {
-        block.cache_control = { type: 'ephemeral' }
+        block.cache_control = systemCacheControl
       }
 
       return block
     },
   )
 
-  const cacheControl = extractAnthropicRequestCacheControl(streamPayloadPlan)
   const params: AnthropicBatchMessageParams = {
     model: modelName,
     max_tokens: ANTHROPIC_BATCH_MAX_TOKENS,

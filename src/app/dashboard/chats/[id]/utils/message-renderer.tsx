@@ -465,7 +465,6 @@ function renderContentWithEmotionImages(
     const renderTarget = resolveEmotionRenderTarget({
       rawTag: emotionName,
       characterAssets,
-      assetUrlMap,
       imageCommandUrlMap,
       storageBaseUrl,
     })

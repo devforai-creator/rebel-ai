@@ -163,8 +163,7 @@ export function computeClientRenderDiagnostics(
       : []
   const hasStrictResolvers =
     (imageCommandUrlMap && Object.keys(imageCommandUrlMap).length > 0) ||
-    (characterAssets && characterAssets.length > 0) ||
-    !!assetUrlMap
+    (characterAssets && characterAssets.length > 0)
   const storageBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const unresolvedImageTags =
     hasStrictResolvers && imageTags.length > 0
@@ -259,10 +258,6 @@ function resolveImageTagForDiagnostics(
     if (resolved) {
       return true
     }
-  }
-
-  if (assetUrlMap) {
-    return Boolean(resolveAssetUrl(name, assetUrlMap))
   }
 
   return false

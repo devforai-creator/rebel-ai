@@ -66,4 +66,24 @@ describe('validateSuuImportMetadata', () => {
       'character.metadata.ui_card.views.Main.src',
     )
   })
+
+  it('rejects data URLs in imported SUU cards', () => {
+    const result = validateSuuImportMetadata({
+      ui_card: {
+        meta: { name: 'embedded-image', version: '1.0.0' },
+        views: {
+          Main: {
+            type: 'Image',
+            src: 'data:image/png;base64,abc123',
+          },
+        },
+      },
+      ui_cards: {},
+      image_display: null,
+    })
+
+    expect(result.warnings).toEqual([])
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].code).toBe('EXTERNAL_URL')
+  })
 })

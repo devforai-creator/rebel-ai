@@ -552,7 +552,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
     })
   })
 
-  it('logs global variable failures and falls back to legacy module asset URLs and default regex fields', async () => {
+  it('logs global variable failures while omitting unsafe legacy module asset URLs', async () => {
     buildSupabase({
       user: { id: 'user-1' },
       characterAssetsRows: [],
@@ -601,8 +601,8 @@ describe('GET /api/chats/[chatId]/assets', () => {
       message: 'globals failed',
     })
     expect(body.globalVariables).toEqual({})
-    expect(body.assetUrlMap['legacy pose.png']).toBe('https://example.com/legacy-pose.png')
-    expect(body.assetUrlMap['legacy pose']).toBe('https://example.com/legacy-pose.png')
+    expect(body.assetUrlMap['legacy pose.png']).toBeUndefined()
+    expect(body.assetUrlMap['legacy pose']).toBeUndefined()
     expect(body.moduleAssetSummary).toEqual([
       {
         moduleId: 'module-1',
@@ -733,7 +733,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
     )
   })
 
-  it('logs module asset retry exhaustion and still serves legacy module fallback data', async () => {
+  it('logs module asset retry exhaustion without serving unsafe legacy fallback data', async () => {
     vi.useFakeTimers()
     buildSupabase({
       user: { id: 'user-1' },
@@ -775,7 +775,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
         error: 'temporary unavailable',
       },
     )
-    expect(body.assetUrlMap['retry-fallback.webp']).toBe('data:image/webp;base64,abc')
+    expect(body.assetUrlMap['retry-fallback.webp']).toBeUndefined()
     expect(body.moduleAssetSummary).toEqual([
       {
         moduleId: 'module-1',

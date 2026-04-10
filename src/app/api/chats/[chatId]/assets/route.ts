@@ -395,30 +395,14 @@ async function fetchModuleData(
     const moduleId = modules.id ?? cm.module_id
     const moduleAssetNames = moduleId ? (moduleAssetsByModuleId[moduleId] ?? []) : []
 
-    // Extract asset names from module (legacy fallback)
+    // Extract asset names from legacy modules for summary/reporting only.
+    // Runtime asset delivery now comes exclusively from stored module_assets rows.
     const fallbackAssetNames: string[] = []
     if (modules.assets && Array.isArray(modules.assets)) {
       for (const asset of modules.assets) {
         if (Array.isArray(asset) && asset.length > 0) {
           const assetName = String(asset[0])
           fallbackAssetNames.push(assetName)
-
-          if (asset.length > 1 && asset[1]) {
-            const dataUrl = String(asset[1])
-            if (dataUrl.startsWith('data:') || dataUrl.startsWith('http')) {
-              if (!moduleAssetUrls[assetName]) {
-                moduleAssetUrls[assetName] = dataUrl
-              }
-              const withoutExt = assetName.replace(/\.(webp|png|jpg|jpeg|gif|avif)$/i, '')
-              if (withoutExt !== assetName && !moduleAssetUrls[withoutExt]) {
-                moduleAssetUrls[withoutExt] = dataUrl
-              }
-              const normalized = assetName.toLowerCase().replace(/[\s-]+/g, '_')
-              if (normalized !== assetName && !moduleAssetUrls[normalized]) {
-                moduleAssetUrls[normalized] = dataUrl
-              }
-            }
-          }
         } else if (typeof asset === 'string') {
           fallbackAssetNames.push(asset)
         }

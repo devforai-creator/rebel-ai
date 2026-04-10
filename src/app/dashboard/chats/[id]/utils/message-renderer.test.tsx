@@ -188,6 +188,28 @@ describe('renderMessageContent', () => {
       const html = renderToStaticMarkup(<>{node}</>)
       expect(html).toContain('![unknown_emotion](asset:unknown_emotion)')
     })
+
+    it('does not resolve plain emotion tags through generic assetUrlMap fallback', () => {
+      const content = '<img="legacy pose.png">'
+      const node = renderMessageContent(
+        content,
+        [
+          {
+            id: 'asset-1',
+            file_name: 'hero_happy.png',
+            storage_path: 'char-1/hero_happy.png',
+            metadata: null,
+          },
+        ],
+        {
+          'legacy pose.png': 'https://example.com/legacy-pose.png',
+        },
+      )
+      const html = renderToStaticMarkup(<>{node}</>)
+
+      expect(html).not.toContain('https://example.com/legacy-pose.png')
+      expect(html).toContain('![legacy pose.png](asset:legacy pose.png)')
+    })
   })
 
   describe('no assets or imageCommands', () => {
@@ -737,6 +759,47 @@ describe('renderMessageContent with inline ui_card', () => {
       const html = renderToStaticMarkup(result as React.ReactElement)
       expect(html).not.toContain('data-testid="ugc-renderer"')
       expect(html).toContain('wave.png')
+    })
+
+    it('does not feed inline cards from generic assetUrlMap when the server omitted unsafe legacy URLs', () => {
+      const inlineCard = {
+        meta: { name: 'legacy-assets', version: '1.0.0' },
+        state: {},
+        assets: {
+          portrait: '@assets/legacy pose.png',
+        },
+        views: { Main: { type: 'Column', children: [] } },
+      }
+      const regex = [
+        {
+          type: 'extract' as const,
+          comment: 'legacy assets',
+          in: '\\[LegacyAsset\\]',
+          out: '',
+          ableFlag: true,
+          bindings: {},
+        },
+      ]
+
+      const node = renderMessageContent(
+        '[LegacyAsset]',
+        [],
+        {},
+        undefined,
+        regex,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        inlineCard,
+      )
+
+      const html = renderToStaticMarkup(<>{node}</>)
+      expect(html).toContain('data-testid="ugc-renderer"')
+      expect(html).toContain('data-assets="{}"')
+      expect(html).not.toContain('legacy-pose.png')
     })
   })
 })

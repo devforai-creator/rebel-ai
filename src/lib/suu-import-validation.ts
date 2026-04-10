@@ -1,5 +1,6 @@
 import { CARD_JSON_MAX_BYTES } from '@safe-ugc-ui/types'
 import { loadCard, type ValidationError, type ValidationErrorCode } from '@safe-ugc-ui/validator'
+import { isUnsafeImportedAssetUrl } from '@/lib/asset-url-safety'
 import type { RbxCharacterMetadata } from '@/types/rbx.types'
 
 const MAX_GENERIC_JSON_DEPTH = 48
@@ -168,7 +169,7 @@ function validateStableSafety(
     if (SRC_FIELD_NAMES.has(key) && typeof child === 'string') {
       const normalized = child.trim()
 
-      if (/^(?:https?:|data:|javascript:)/i.test(normalized)) {
+      if (isUnsafeImportedAssetUrl(normalized)) {
         pushIssue(buckets, {
           severity: 'error',
           code: 'EXTERNAL_URL',

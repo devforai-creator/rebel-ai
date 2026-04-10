@@ -124,6 +124,37 @@ describe('computeClientRenderDiagnostics', () => {
       },
     ])
   })
+
+  it('does not treat generic assetUrlMap fallback as a strict image resolver', () => {
+    const result = computeClientRenderDiagnostics(
+      '<img="legacy pose.png">',
+      undefined,
+      {
+        'legacy pose.png': 'https://example.com/legacy-pose.png',
+      },
+      400,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [
+        {
+          id: 'asset-1',
+          file_name: 'hero_happy.png',
+          storage_path: 'assets/hero_happy.png',
+          metadata: null,
+        },
+      ],
+    )
+
+    expect(result.unresolvedImageTags).toEqual([
+      {
+        original: '![legacy pose.png](asset:legacy pose.png)',
+        extractedName: 'legacy pose.png',
+      },
+    ])
+    expect(result.unresolvedImageTagsRaw).toEqual([])
+  })
 })
 
 describe('normalizeFullwidthChars', () => {

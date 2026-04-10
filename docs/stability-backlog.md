@@ -113,6 +113,12 @@ Done when:
 - tests no longer lock in raw external/data URL passthrough
 - the runtime safety rule matches the import-time safety rule
 
+Current status as of 2026-04-11:
+
+- [src/app/api/chats/[chatId]/assets/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chats/[chatId]/assets/route.ts) no longer injects raw legacy module asset URLs into `assetUrlMap`; only stored asset rows are exposed at runtime
+- [src/app/dashboard/chats/[id]/utils/message-renderer.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/message-renderer.tsx) and its diagnostics now stop treating generic `assetUrlMap` entries as a plain emotion-tag resolver
+- regression coverage in [src/app/api/chats/[chatId]/assets/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chats/[chatId]/assets/route.test.ts), [src/app/dashboard/chats/[id]/utils/message-renderer.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/message-renderer.test.tsx), and [src/lib/suu-import-validation.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/suu-import-validation.test.ts) now locks out raw external/data asset passthrough
+
 ## P1
 
 ### P1-1. Chat Turn Concurrency and Queue Entry Robustness

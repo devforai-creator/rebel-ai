@@ -239,6 +239,38 @@ describe('Model Registry', () => {
     })
   })
 
+  describe('GLM 5.1 registration', () => {
+    it('is found by exact OpenRouter ID', () => {
+      const model = findModelDefinition({ modelName: 'z-ai/glm-5.1' })
+
+      expect(model).not.toBeNull()
+      expect(model?.id).toBe('z-ai/glm-5.1')
+      expect(model?.provider).toBe('openrouter')
+    })
+
+    it('has correct OpenRouter pricing', () => {
+      const tiers = getModelPricingTiers({
+        provider: 'openrouter',
+        modelName: 'z-ai/glm-5.1',
+      })
+
+      expect(tiers).not.toBeNull()
+      expect(tiers![0].rates.input).toBe(1.26)
+      expect(tiers![0].rates.output).toBe(3.96)
+    })
+
+    it('appears first in the OpenRouter UI model list', () => {
+      const ids = listUiModelIdsByProvider('openrouter')
+
+      expect(ids[0]).toBe('z-ai/glm-5.1')
+      expect(ids).toContain('z-ai/glm-5')
+    })
+
+    it('keeps the existing OpenRouter provider default', () => {
+      expect(getDefaultModelForProvider('openrouter')).toBe('z-ai/glm-5')
+    })
+  })
+
   describe('registry integrity', () => {
     it('all models have required fields', () => {
       for (const model of MODEL_REGISTRY) {

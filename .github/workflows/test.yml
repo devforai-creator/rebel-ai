@@ -35,6 +35,9 @@ jobs:
       - name: Check formatting
         run: npm run format:check
 
+      - name: Run typecheck
+        run: npm run typecheck
+
       - name: Run unit and integration tests with coverage
         shell: bash
         run: |

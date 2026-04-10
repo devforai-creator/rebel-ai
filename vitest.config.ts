@@ -6,6 +6,16 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     pool: 'threads',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'json'],
+      thresholds: {
+        statements: 85,
+        branches: 75,
+        functions: 90,
+        lines: 85,
+      },
+    },
   },
   resolve: {
     alias: {

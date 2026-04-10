@@ -2,7 +2,6 @@
 // This file should be required before any other imports via --require flag
 
 const Module = require('module')
-const path = require('path')
 
 const originalRequire = Module.prototype.require
 

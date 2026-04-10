@@ -94,7 +94,7 @@ RebelAI is centered on **RBX + SUU**. Compatibility helpers remain only for migr
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20.x
 - Supabase account ([supabase.com](https://supabase.com))
 - API key from Google AI / OpenAI / Anthropic / DeepSeek / OpenRouter
 
@@ -115,6 +115,8 @@ cp .env.example .env.local
 # 4. Start development server
 npm run dev
 ```
+
+This repository targets Node 20 locally and in CI. If you use `nvm`, `fnm`, or Volta, pin your shell to Node 20 before installing dependencies.
 
 **Detailed setup guide:** See [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) for database configuration.
 

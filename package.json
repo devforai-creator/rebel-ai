@@ -2,11 +2,14 @@
   "name": "rebel-ai",
   "version": "0.0.0-dev",
   "private": true,
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint src",
+    "lint": "eslint src tests scripts",
     "typecheck": "tsc --noEmit",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test",
     "format": "prettier --write .",

@@ -7,4 +7,12 @@ const __dirname = path.dirname(__filename)
 
 const compat = new FlatCompat({ baseDirectory: __dirname })
 
-export default [...compat.extends('next/core-web-vitals', 'next/typescript', 'prettier')]
+export default [
+  ...compat.extends('next/core-web-vitals', 'next/typescript', 'prettier'),
+  {
+    files: ['scripts/**/*.js', 'scripts/**/*.cjs'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+]

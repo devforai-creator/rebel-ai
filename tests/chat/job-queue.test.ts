@@ -52,7 +52,7 @@ function createSupabaseClientMock(builders: QueryBuilder[]) {
   })
 
   return {
-    client: { from: fromMock } as unknown as SupabaseClient<any>,
+    client: { from: fromMock } as unknown as SupabaseClient,
     fromMock,
   }
 }

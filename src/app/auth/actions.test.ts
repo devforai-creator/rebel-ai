@@ -18,6 +18,7 @@ vi.mock('next/cache', () => ({
 
 type AuthSupabaseOptions = {
   signInError?: { message: string } | null
+  signOutError?: { message: string } | null
 }
 
 function buildLoginFormData(overrides?: {
@@ -43,17 +44,20 @@ function buildSupabase(options: AuthSupabaseOptions = {}) {
   return {
     auth: {
       signInWithPassword: vi.fn().mockResolvedValue({ error: options.signInError ?? null }),
-      signOut: vi.fn().mockResolvedValue({ error: null }),
+      signOut: vi.fn().mockResolvedValue({ error: options.signOutError ?? null }),
     },
   }
 }
 
 describe('auth actions', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     vi.resetModules()
     createClientMock.mockReset()
     redirectMock.mockReset()
     revalidatePathMock.mockReset()
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterAll(() => {
@@ -71,6 +75,19 @@ describe('auth actions', () => {
     )
 
     expect(result).toEqual({ error: 'Email is required.' })
+  })
+
+  it('returns a validation error when password is missing', async () => {
+    createClientMock.mockResolvedValue(buildSupabase())
+    const { login } = await import('./actions')
+
+    const result = await login(
+      buildLoginFormData({
+        omitPassword: true,
+      }),
+    )
+
+    expect(result).toEqual({ error: 'Password is required.' })
   })
 
   it('returns the auth provider error when sign-in fails', async () => {
@@ -103,5 +120,48 @@ describe('auth actions', () => {
     })
     expect(revalidatePathMock).toHaveBeenCalledWith('/', 'layout')
     expect(redirectMock).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('returns the blocked-signup message without touching Supabase', async () => {
+    const { signup } = await import('./actions')
+
+    const result = await signup(new FormData())
+
+    expect(result).toEqual({
+      error: '현재 신규 가입이 중단되었습니다. 기존 사용자는 계속 이용 가능합니다.',
+    })
+    expect(createClientMock).not.toHaveBeenCalled()
+    expect(revalidatePathMock).not.toHaveBeenCalled()
+    expect(redirectMock).not.toHaveBeenCalled()
+  })
+
+  it('signs out, revalidates, and redirects on logout success', async () => {
+    const supabase = buildSupabase()
+    createClientMock.mockResolvedValue(supabase)
+    const { logout } = await import('./actions')
+
+    const result = await logout()
+
+    expect(result).toBeUndefined()
+    expect(supabase.auth.signOut).toHaveBeenCalledTimes(1)
+    expect(revalidatePathMock).toHaveBeenCalledWith('/', 'layout')
+    expect(redirectMock).toHaveBeenCalledWith('/auth/login')
+    expect(consoleErrorSpy).not.toHaveBeenCalled()
+  })
+
+  it('still redirects on logout failure after logging the error', async () => {
+    const supabase = buildSupabase({
+      signOutError: { message: 'session revoke failed' },
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { logout } = await import('./actions')
+
+    const result = await logout()
+
+    expect(result).toBeUndefined()
+    expect(supabase.auth.signOut).toHaveBeenCalledTimes(1)
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Logout error:', 'session revoke failed')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/', 'layout')
+    expect(redirectMock).toHaveBeenCalledWith('/auth/login')
   })
 })

@@ -319,6 +319,13 @@ Done when:
 
 - auth action coverage reflects the full current surface
 
+Current status as of 2026-04-11:
+
+- [src/app/auth/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/auth/actions.test.ts) now covers the currently shipped auth surface instead of focusing mostly on login
+- login validation coverage now includes the missing-password branch alongside missing-email and provider-error cases
+- blocked signup behavior is now locked with an explicit regression test so future changes do not silently reopen registration
+- logout coverage now asserts both the normal sign-out redirect path and the current “log error but still redirect” behavior when `supabase.auth.signOut()` fails
+
 ## Recommended Execution Order
 
 1. P0-1 Destructive Action Consistency

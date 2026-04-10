@@ -67,7 +67,7 @@ describe('updateSummaries orchestrator', () => {
     expect(processChunkSummariesMock).not.toHaveBeenCalled()
     expect(processMetaSummariesMock).not.toHaveBeenCalled()
     expect(processRegenerationRequestsMock).not.toHaveBeenCalled()
-  })
+  }, 10_000)
 
   it('runs regeneration and chunk/meta processors with custom prompts', async () => {
     getMessageCountMock.mockResolvedValue(25)

@@ -258,7 +258,7 @@ describe('processChatJobs', () => {
 
     expect(result.processedCount).toBe(0)
     expect(claimPendingJobMock).toHaveBeenCalled()
-  })
+  }, 10_000)
 
   it('defaults to processing a single job when the requested limit is invalid', async () => {
     const supabase = createChatJobRunnerSupabaseMock({

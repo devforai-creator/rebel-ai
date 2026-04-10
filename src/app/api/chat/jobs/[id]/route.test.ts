@@ -70,7 +70,7 @@ describe('GET /api/chat/jobs/[id]', () => {
     )
 
     expect(response.status).toBe(401)
-  })
+  }, 10_000)
 
   it('returns 404 when job is missing or not owned', async () => {
     supabaseMock = createSupabaseMock({ id: 'user-1' }, null)

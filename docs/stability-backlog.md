@@ -266,6 +266,13 @@ Done when:
 - write, projection, and import concerns are separated
 - tests align with the split boundaries
 
+Current status as of 2026-04-11:
+
+- [src/lib/chat/turns.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/turns.ts) is now a thin public facade that re-exports the existing chat-turn API instead of keeping all responsibilities in one file
+- write-path logic now lives in [src/lib/chat/turn-write.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/turn-write.ts), turn graph construction in [src/lib/chat/turn-graph.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/turn-graph.ts), and projection/query logic in [src/lib/chat/turn-projection.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/turn-projection.ts) plus [src/lib/chat/turn-projection-query.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/turn-projection-query.ts)
+- shared turn-facing types now live in [src/lib/chat/turn-types.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/turn-types.ts) so callers can keep the same `@/lib/chat/turns` entrypoint without introducing cross-module cycles
+- existing regression coverage in [src/lib/chat/turns.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/turns.test.ts), [src/app/api/chat/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.test.ts), [src/app/api/internal/chat-job-runner/service.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/service.test.ts), and [src/lib/chat-summaries/db-helpers.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat-summaries/db-helpers.test.ts) still passes against the split modules
+
 ### P2-2. Decompose Core Orchestrators
 
 Scope:

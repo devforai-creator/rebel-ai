@@ -304,6 +304,12 @@ Done when:
 
 - repeated action skeletons are extracted into shared helpers or smaller focused functions
 
+Current status as of 2026-04-11:
+
+- [src/app/dashboard/account/actions.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/actions.ts) now extracts the repeated account-action skeleton into focused helpers for authenticated account context loading, selected API-key validation, profile updates, and account-page revalidation
+- `updateRagSettings`, `updateSummaryModelPreference`, `updateReprocessSettings`, and `updateTranslationModelPreference` now share the same auth/parse/optional-key-validation/update flow instead of each re-implementing it inline
+- [src/app/dashboard/account/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/actions.test.ts) still passes against the extracted helpers, covering the existing normalization, validation, password, and destructive-delete behaviors
+
 ### P2-4. Secondary Test Gaps
 
 Scope:

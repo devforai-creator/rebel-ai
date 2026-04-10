@@ -152,6 +152,106 @@ type DeleteAccountStorageRow = {
 
 type DeleteAccountStorageSupabase = Awaited<ReturnType<typeof createClient>>
 type DeleteAccountAdminSupabase = ReturnType<typeof createAdminClient>
+type AccountActionSupabase = Awaited<ReturnType<typeof createClient>>
+type AccountActionFailureResult = { error: string; success: false }
+type BasicAccountActionResult =
+  | { success: true; error?: undefined }
+  | { error: string; success?: false }
+
+function revalidateAccountSettingsPage() {
+  revalidatePath('/dashboard/account')
+}
+
+async function createAuthenticatedAccountContext<TResult extends { error: string }>(
+  failureResult: TResult,
+): Promise<
+  | {
+      supabase: AccountActionSupabase
+      userId: string
+    }
+  | TResult
+> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return failureResult
+  }
+
+  return {
+    supabase,
+    userId: user.id,
+  }
+}
+
+async function validateSelectedApiKey({
+  supabase,
+  userId,
+  apiKeyId,
+  missingMessage,
+  providerMismatchMessage,
+  inactiveMessage,
+  lookupMode = 'maybeSingle',
+  isProviderAllowed,
+}: {
+  supabase: Pick<AccountActionSupabase, 'from'>
+  userId: string
+  apiKeyId: string | null
+  missingMessage: string
+  providerMismatchMessage: string
+  inactiveMessage: string
+  lookupMode?: 'single' | 'maybeSingle'
+  isProviderAllowed: (provider: string) => boolean
+}): Promise<AccountActionFailureResult | null> {
+  if (!apiKeyId) {
+    return null
+  }
+
+  const query = supabase
+    .from('api_keys')
+    .select('id, provider, is_active')
+    .eq('id', apiKeyId)
+    .eq('user_id', userId)
+
+  const { data: apiKey, error: keyError } =
+    lookupMode === 'single' ? await query.single() : await query.maybeSingle()
+
+  if (keyError || !apiKey) {
+    return { error: missingMessage, success: false }
+  }
+
+  if (!isProviderAllowed(apiKey.provider)) {
+    return { error: providerMismatchMessage, success: false }
+  }
+
+  if (!apiKey.is_active) {
+    return { error: inactiveMessage, success: false }
+  }
+
+  return null
+}
+
+async function updateProfileForUser({
+  supabase,
+  userId,
+  updates,
+  logLabel,
+}: {
+  supabase: Pick<AccountActionSupabase, 'from'>
+  userId: string
+  updates: Partial<Profile>
+  logLabel: string
+}) {
+  const { error } = await supabase.from('profiles').update(updates).eq('id', userId)
+
+  if (error) {
+    console.error(logLabel, error)
+  }
+
+  return error
+}
 
 async function listCharacterAssetStoragePathsForUser(
   supabase: Pick<DeleteAccountStorageSupabase, 'from'>,
@@ -259,32 +359,30 @@ export async function updateSummaryPrompts(
   chunkPrompt: string | null,
   metaPrompt: string | null,
   factPrompt: string | null,
-) {
-  const supabase = await createClient()
+): Promise<BasicAccountActionResult> {
+  const context = await createAuthenticatedAccountContext({ error: 'Unauthorized' })
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: 'Unauthorized' }
+  if ('error' in context) {
+    return context
   }
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({
+  const { supabase, userId } = context
+  const error = await updateProfileForUser({
+    supabase,
+    userId,
+    updates: {
       chunk_summary_prompt: chunkPrompt,
       meta_summary_prompt: metaPrompt,
       fact_extraction_prompt: factPrompt,
-    })
-    .eq('id', user.id)
+    },
+    logLabel: '[Account] Failed to update summary prompts:',
+  })
 
   if (error) {
-    console.error('[Account] Failed to update summary prompts:', error)
     return { error: 'Failed to update summary prompts' }
   }
 
-  revalidatePath('/dashboard/account')
+  revalidateAccountSettingsPage()
   return { success: true }
 }
 
@@ -297,16 +395,16 @@ export async function updateRagSettings(
   _prevState: RagSettingsState,
   formData: FormData,
 ): Promise<RagSettingsState> {
-  const supabase = await createClient()
+  const context = await createAuthenticatedAccountContext({
+    error: 'Login required.',
+    success: false,
+  })
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: 'Login required.', success: false }
+  if ('error' in context) {
+    return context
   }
 
+  const { supabase, userId } = context
   const parsedForm = parseAccountFormData(
     formData,
     ragSettingsFormSchema,
@@ -325,23 +423,19 @@ export async function updateRagSettings(
       return { error: 'Please select a Voyage Embeddings key.', success: false }
     }
 
-    const { data: key, error: keyError } = await supabase
-      .from('api_keys')
-      .select('id, provider, is_active')
-      .eq('id', selectedKeyId)
-      .eq('user_id', user.id)
-      .single()
+    const keyValidation = await validateSelectedApiKey({
+      supabase,
+      userId,
+      apiKeyId: selectedKeyId,
+      missingMessage: 'Could not find the selected Voyage key.',
+      providerMismatchMessage: 'Only Voyage Embeddings keys can be used.',
+      inactiveMessage: 'Inactive API keys cannot be used.',
+      lookupMode: 'single',
+      isProviderAllowed: (provider) => provider === 'voyage_embeddings',
+    })
 
-    if (keyError || !key) {
-      return { error: 'Could not find the selected Voyage key.', success: false }
-    }
-
-    if (key.provider !== 'voyage_embeddings') {
-      return { error: 'Only Voyage Embeddings keys can be used.', success: false }
-    }
-
-    if (!key.is_active) {
-      return { error: 'Inactive API keys cannot be used.', success: false }
+    if (keyValidation) {
+      return keyValidation
     }
   }
 
@@ -350,14 +444,18 @@ export async function updateRagSettings(
     voyage_embedding_api_key_id: selectedKeyId,
   }
 
-  const { error } = await supabase.from('profiles').update(updates).eq('id', user.id)
+  const error = await updateProfileForUser({
+    supabase,
+    userId,
+    updates,
+    logLabel: '[Account] Failed to update RAG settings:',
+  })
 
   if (error) {
-    console.error('[Account] Failed to update RAG settings:', error)
     return { error: 'An error occurred while saving settings.', success: false }
   }
 
-  revalidatePath('/dashboard/account')
+  revalidateAccountSettingsPage()
   return { error: null, success: true }
 }
 
@@ -370,16 +468,16 @@ export async function updateSummaryModelPreference(
   _prevState: SummaryModelPreferenceState,
   formData: FormData,
 ): Promise<SummaryModelPreferenceState> {
-  const supabase = await createClient()
+  const context = await createAuthenticatedAccountContext({
+    error: 'Login required.',
+    success: false,
+  })
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: 'Login required.', success: false }
+  if ('error' in context) {
+    return context
   }
 
+  const { supabase, userId } = context
   const parsedForm = parseAccountFormData(
     formData,
     summaryModelPreferenceFormSchema,
@@ -392,38 +490,32 @@ export async function updateSummaryModelPreference(
 
   const summaryKeyId = parsedForm.data.summary_key_id
 
-  if (summaryKeyId) {
-    const { data: apiKey, error: keyError } = await supabase
-      .from('api_keys')
-      .select('id, provider, is_active')
-      .eq('id', summaryKeyId)
-      .eq('user_id', user.id)
-      .maybeSingle()
+  const keyValidation = await validateSelectedApiKey({
+    supabase,
+    userId,
+    apiKeyId: summaryKeyId,
+    missingMessage: 'Could not find the selected API key.',
+    providerMismatchMessage: 'Only LLM provider keys can be selected.',
+    inactiveMessage: 'Inactive API keys cannot be used.',
+    isProviderAllowed: isLLMProvider,
+  })
 
-    if (keyError || !apiKey) {
-      return { error: 'Could not find the selected API key.', success: false }
-    }
-
-    if (!isLLMProvider(apiKey.provider)) {
-      return { error: 'Only LLM provider keys can be selected.', success: false }
-    }
-
-    if (!apiKey.is_active) {
-      return { error: 'Inactive API keys cannot be used.', success: false }
-    }
+  if (keyValidation) {
+    return keyValidation
   }
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({ summary_api_key_id: summaryKeyId })
-    .eq('id', user.id)
+  const error = await updateProfileForUser({
+    supabase,
+    userId,
+    updates: { summary_api_key_id: summaryKeyId },
+    logLabel: '[Account] Failed to update summary model preference:',
+  })
 
   if (error) {
-    console.error('[Account] Failed to update summary model preference:', error)
     return { error: 'An error occurred while saving settings.', success: false }
   }
 
-  revalidatePath('/dashboard/account')
+  revalidateAccountSettingsPage()
   return { error: null, success: true }
 }
 
@@ -436,16 +528,16 @@ export async function updateReprocessSettings(
   _prevState: ReprocessSettingsState,
   formData: FormData,
 ): Promise<ReprocessSettingsState> {
-  const supabase = await createClient()
+  const context = await createAuthenticatedAccountContext({
+    error: 'Login required.',
+    success: false,
+  })
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: 'Login required.', success: false }
+  if ('error' in context) {
+    return context
   }
 
+  const { supabase, userId } = context
   const parsedForm = parseAccountFormData(
     formData,
     reprocessSettingsFormSchema,
@@ -459,41 +551,35 @@ export async function updateReprocessSettings(
   const reprocessPrompt = parsedForm.data.reprocess_prompt
   const reprocessKeyId = parsedForm.data.reprocess_key_id
 
-  if (reprocessKeyId) {
-    const { data: apiKey, error: keyError } = await supabase
-      .from('api_keys')
-      .select('id, provider, is_active')
-      .eq('id', reprocessKeyId)
-      .eq('user_id', user.id)
-      .maybeSingle()
+  const keyValidation = await validateSelectedApiKey({
+    supabase,
+    userId,
+    apiKeyId: reprocessKeyId,
+    missingMessage: 'Could not find the selected API key.',
+    providerMismatchMessage: 'Only LLM provider keys can be selected.',
+    inactiveMessage: 'Inactive API keys cannot be used.',
+    isProviderAllowed: isLLMProvider,
+  })
 
-    if (keyError || !apiKey) {
-      return { error: 'Could not find the selected API key.', success: false }
-    }
-
-    if (!isLLMProvider(apiKey.provider)) {
-      return { error: 'Only LLM provider keys can be selected.', success: false }
-    }
-
-    if (!apiKey.is_active) {
-      return { error: 'Inactive API keys cannot be used.', success: false }
-    }
+  if (keyValidation) {
+    return keyValidation
   }
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({
+  const error = await updateProfileForUser({
+    supabase,
+    userId,
+    updates: {
       reprocess_prompt: reprocessPrompt,
       reprocess_api_key_id: reprocessKeyId,
-    })
-    .eq('id', user.id)
+    },
+    logLabel: '[Account] Failed to update reprocess settings:',
+  })
 
   if (error) {
-    console.error('[Account] Failed to update reprocess settings:', error)
     return { error: 'An error occurred while saving settings.', success: false }
   }
 
-  revalidatePath('/dashboard/account')
+  revalidateAccountSettingsPage()
   return { error: null, success: true }
 }
 
@@ -506,16 +592,16 @@ export async function updateTranslationModelPreference(
   _prevState: TranslationModelPreferenceState,
   formData: FormData,
 ): Promise<TranslationModelPreferenceState> {
-  const supabase = await createClient()
+  const context = await createAuthenticatedAccountContext({
+    error: 'Login required.',
+    success: false,
+  })
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: 'Login required.', success: false }
+  if ('error' in context) {
+    return context
   }
 
+  const { supabase, userId } = context
   const parsedForm = parseAccountFormData(
     formData,
     translationModelPreferenceFormSchema,
@@ -528,54 +614,45 @@ export async function updateTranslationModelPreference(
 
   const translationKeyId = parsedForm.data.translation_key_id
 
-  if (translationKeyId) {
-    const { data: apiKey, error: keyError } = await supabase
-      .from('api_keys')
-      .select('id, provider, is_active')
-      .eq('id', translationKeyId)
-      .eq('user_id', user.id)
-      .maybeSingle()
+  const keyValidation = await validateSelectedApiKey({
+    supabase,
+    userId,
+    apiKeyId: translationKeyId,
+    missingMessage: 'Could not find the selected API key.',
+    providerMismatchMessage: 'Only LLM provider keys can be selected.',
+    inactiveMessage: 'Inactive API keys cannot be used.',
+    isProviderAllowed: isLLMProvider,
+  })
 
-    if (keyError || !apiKey) {
-      return { error: 'Could not find the selected API key.', success: false }
-    }
-
-    if (!isLLMProvider(apiKey.provider)) {
-      return { error: 'Only LLM provider keys can be selected.', success: false }
-    }
-
-    if (!apiKey.is_active) {
-      return { error: 'Inactive API keys cannot be used.', success: false }
-    }
+  if (keyValidation) {
+    return keyValidation
   }
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({
+  const error = await updateProfileForUser({
+    supabase,
+    userId,
+    updates: {
       translation_api_key_id: translationKeyId,
-    })
-    .eq('id', user.id)
+    },
+    logLabel: '[Account] Failed to update translation model preference:',
+  })
 
   if (error) {
-    console.error('[Account] Failed to update translation model preference:', error)
     return { error: 'An error occurred while saving settings.', success: false }
   }
 
-  revalidatePath('/dashboard/account')
+  revalidateAccountSettingsPage()
   return { error: null, success: true }
 }
 
-export async function changePassword(formData: FormData) {
-  const supabase = await createClient()
+export async function changePassword(formData: FormData): Promise<BasicAccountActionResult> {
+  const context = await createAuthenticatedAccountContext({ error: 'Login required.' })
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: 'Login required.' }
+  if ('error' in context) {
+    return context
   }
 
+  const { supabase } = context
   const parsedForm = parsePasswordFormData(formData)
 
   if ('error' in parsedForm) {

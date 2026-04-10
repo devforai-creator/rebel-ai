@@ -138,6 +138,12 @@ Done when:
 - turn creation handles concurrent writes predictably
 - tests cover concurrent or duplicate-admission edge cases
 
+Current status as of 2026-04-11:
+
+- [src/lib/chat/turns.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/turns.ts) now retries transient `chat_turns(chat_id, turn_index)` races and promotes sustained collisions to a handled conflict instead of a generic 500
+- [src/app/api/chat/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.ts) now maps sustained chat-turn admission conflicts to `409` with the existing active-response conflict message
+- regression coverage for transient retries and sustained conflicts now lives in [src/lib/chat/turns.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/turns.test.ts) and [src/app/api/chat/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.test.ts)
+
 ### P1-2. Background Trigger Assertions
 
 Scope:

@@ -66,8 +66,29 @@ export type ProjectedChatWindow = {
   nextCursor: number | null
 }
 
+const CHAT_TURN_INSERT_MAX_ATTEMPTS = 3
+const CHAT_TURN_INDEX_UNIQUE_CONSTRAINT = 'chat_turns_chat_id_turn_index_key'
+
 export const PROJECTED_CHAT_MESSAGE_COLUMNS =
   'id, role, content, chat_id, user_id, sequence, model_used, prompt_tokens, completion_tokens, latency_ms, error_code, debug_info, content_en, created_at, turn_id, variant_index, supersedes_message_id, message_status'
+
+type TurnInsertError = {
+  code?: string | null
+  message?: string | null
+} | null
+
+export class ConcurrentChatTurnConflictError extends Error {
+  constructor() {
+    super('Concurrent chat turn creation conflict')
+    this.name = 'ConcurrentChatTurnConflictError'
+  }
+}
+
+function isChatTurnIndexConflict(error: TurnInsertError): boolean {
+  return (
+    error?.code === '23505' && error.message?.includes(CHAT_TURN_INDEX_UNIQUE_CONSTRAINT) === true
+  )
+}
 
 export function buildTurnGraphForMessages({
   chatId,
@@ -200,39 +221,51 @@ export async function createChatTurn({
   userMessageId?: string | null
   activeAssistantMessageId?: string | null
 }): Promise<{ turnId: string; turnIndex: number }> {
-  const latestTurnResult = await supabase
-    .from('chat_turns')
-    .select('turn_index')
-    .eq('chat_id', chatId)
-    .order('turn_index', { ascending: false })
-    .limit(1)
-    .maybeSingle<TurnSequenceRow>()
+  for (let attempt = 0; attempt < CHAT_TURN_INSERT_MAX_ATTEMPTS; attempt += 1) {
+    const latestTurnResult = await supabase
+      .from('chat_turns')
+      .select('turn_index')
+      .eq('chat_id', chatId)
+      .order('turn_index', { ascending: false })
+      .limit(1)
+      .maybeSingle<TurnSequenceRow>()
 
-  if (latestTurnResult.error && latestTurnResult.error.message !== 'No rows found') {
-    throw new Error(`Failed to load latest chat turn: ${latestTurnResult.error.message}`)
-  }
+    if (latestTurnResult.error && latestTurnResult.error.message !== 'No rows found') {
+      throw new Error(`Failed to load latest chat turn: ${latestTurnResult.error.message}`)
+    }
 
-  const nextTurnIndex = (latestTurnResult.data?.turn_index ?? 0) + 1
-  const turnInsert: ChatTurnInsert = {
-    id: turnId,
-    chat_id: chatId,
-    user_id: userId,
-    turn_index: nextTurnIndex,
-    user_message_id: userMessageId,
-    active_assistant_message_id: activeAssistantMessageId,
-  }
+    const nextTurnIndex = (latestTurnResult.data?.turn_index ?? 0) + 1
+    const turnInsert: ChatTurnInsert = {
+      id: turnId,
+      chat_id: chatId,
+      user_id: userId,
+      turn_index: nextTurnIndex,
+      user_message_id: userMessageId,
+      active_assistant_message_id: activeAssistantMessageId,
+    }
 
-  const { error } = await supabase
-    .from('chat_turns')
-    .insert(turnInsert)
-    .select('id')
-    .single<{ id: string }>()
+    const { error } = await supabase
+      .from('chat_turns')
+      .insert(turnInsert)
+      .select('id')
+      .single<{ id: string }>()
 
-  if (error) {
+    if (!error) {
+      return { turnId, turnIndex: nextTurnIndex }
+    }
+
+    if (isChatTurnIndexConflict(error)) {
+      if (attempt === CHAT_TURN_INSERT_MAX_ATTEMPTS - 1) {
+        throw new ConcurrentChatTurnConflictError()
+      }
+
+      continue
+    }
+
     throw new Error(`Failed to create chat turn: ${error.message}`)
   }
 
-  return { turnId, turnIndex: nextTurnIndex }
+  throw new ConcurrentChatTurnConflictError()
 }
 
 export async function loadGenerationTranscript({

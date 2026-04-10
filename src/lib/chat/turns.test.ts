@@ -6,6 +6,7 @@ import {
   MESSAGE_STATUS_SUPERSEDED,
 } from './message-status'
 import {
+  ConcurrentChatTurnConflictError,
   buildTurnGraphForMessages,
   countProjectedConversationMessages,
   countProjectedChatMessages,
@@ -459,6 +460,145 @@ describe('createChatTurn', () => {
         userId: 'user-1',
       }),
     ).rejects.toThrow('Failed to load latest chat turn: db down')
+  })
+
+  it('retries a transient turn-index race and uses the next available index', async () => {
+    let latestTurnReads = 0
+    let insertAttempts = 0
+    const insertedTurns: Array<Record<string, unknown>> = []
+
+    const supabase = {
+      from(table: string) {
+        expect(table).toBe('chat_turns')
+        return {
+          select() {
+            return this
+          },
+          eq() {
+            return this
+          },
+          order() {
+            return this
+          },
+          limit() {
+            return this
+          },
+          maybeSingle: async () => {
+            latestTurnReads += 1
+
+            if (latestTurnReads === 1) {
+              return {
+                data: null,
+                error: { code: 'PGRST116', message: 'No rows found' },
+              }
+            }
+
+            return {
+              data: { turn_index: 1 },
+              error: null,
+            }
+          },
+          insert(payload: Record<string, unknown>) {
+            return {
+              select() {
+                return {
+                  single: async () => {
+                    insertAttempts += 1
+
+                    if (insertAttempts === 1) {
+                      return {
+                        data: null,
+                        error: {
+                          code: '23505',
+                          message:
+                            'duplicate key value violates unique constraint "chat_turns_chat_id_turn_index_key"',
+                        },
+                      }
+                    }
+
+                    insertedTurns.push(payload)
+                    return {
+                      data: { id: payload.id },
+                      error: null,
+                    }
+                  },
+                }
+              },
+            }
+          },
+        }
+      },
+    }
+
+    const result = await createChatTurn({
+      supabase: supabase as unknown as SupabaseClientType,
+      chatId,
+      userId: 'user-1',
+      turnId: 'turn-race',
+      userMessageId: 'user-race',
+    })
+
+    expect(result).toEqual({ turnId: 'turn-race', turnIndex: 2 })
+    expect(insertAttempts).toBe(2)
+    expect(insertedTurns).toContainEqual(
+      expect.objectContaining({
+        id: 'turn-race',
+        chat_id: chatId,
+        user_id: 'user-1',
+        turn_index: 2,
+        user_message_id: 'user-race',
+      }),
+    )
+  })
+
+  it('throws a conflict error when turn-index races keep colliding', async () => {
+    const supabase = {
+      from(table: string) {
+        expect(table).toBe('chat_turns')
+        return {
+          select() {
+            return this
+          },
+          eq() {
+            return this
+          },
+          order() {
+            return this
+          },
+          limit() {
+            return this
+          },
+          maybeSingle: async () => ({
+            data: { turn_index: 3 },
+            error: null,
+          }),
+          insert() {
+            return {
+              select() {
+                return {
+                  single: async () => ({
+                    data: null,
+                    error: {
+                      code: '23505',
+                      message:
+                        'duplicate key value violates unique constraint "chat_turns_chat_id_turn_index_key"',
+                    },
+                  }),
+                }
+              },
+            }
+          },
+        }
+      },
+    }
+
+    await expect(
+      createChatTurn({
+        supabase: supabase as unknown as SupabaseClientType,
+        chatId,
+        userId: 'user-1',
+      }),
+    ).rejects.toBeInstanceOf(ConcurrentChatTurnConflictError)
   })
 })
 

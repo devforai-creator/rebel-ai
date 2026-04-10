@@ -2026,6 +2026,34 @@ describe('POST /api/chat', () => {
     expect(supabase.chatTurns).toHaveLength(0)
   })
 
+  it('returns 409 when chat turn admission keeps colliding on turn_index', async () => {
+    const supabase = createSupabaseMock(
+      buildDefaultAuthenticatedFixture({
+        chatTurnInsertError: {
+          code: '23505',
+          message:
+            'duplicate key value violates unique constraint "chat_turns_chat_id_turn_index_key"',
+        },
+      }),
+    )
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        messages: [{ role: 'user', content: 'collide please' }],
+      }),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(409)
+    expect(await response.text()).toBe('This chat already has a pending or in-progress response.')
+    expect(supabase.messages).toHaveLength(0)
+    expect(supabase.chatTurns).toHaveLength(0)
+  })
+
   it('rolls back the chat turn when saving the user message fails', async () => {
     const supabase = createSupabaseMock(
       buildDefaultAuthenticatedFixture({

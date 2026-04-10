@@ -28,7 +28,7 @@ import {
 } from '@/lib/chat/delivery-mode'
 import { MESSAGE_STATUS_COMPLETED } from '@/lib/chat/message-status'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
-import { createChatTurn } from '@/lib/chat/turns'
+import { ConcurrentChatTurnConflictError, createChatTurn } from '@/lib/chat/turns'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
 import { after } from 'next/server'
 import { z } from 'zod'
@@ -335,6 +335,14 @@ export async function POST(req: Request) {
           userMessageId: insertedUserMessageId,
         })
       } catch (turnError) {
+        if (turnError instanceof ConcurrentChatTurnConflictError) {
+          console.warn('[Chat API] Concurrent chat turn admission conflict', {
+            chatId,
+            requestId,
+          })
+          return new Response(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, { status: 409 })
+        }
+
         console.error('[Chat API] Failed to create chat turn', {
           chatId,
           requestId,

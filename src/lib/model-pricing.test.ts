@@ -168,6 +168,23 @@ describe('estimateUsageCost', () => {
       expect(result!.cachedInputCost).toBeCloseTo(0.0024, 6)
       expect(result!.completionCost).toBeCloseTo(0.0075, 6)
     })
+
+    it('should apply 0.5x multiplier for Anthropic batch jobs', () => {
+      const params: UsageCostParams = {
+        provider: 'anthropic',
+        modelName: 'claude-opus-4-6',
+        promptTokens: 10000,
+        completionTokens: 1000,
+        cachedInputTokens: 0,
+        serviceTier: 'batch',
+      }
+      const result = estimateUsageCost(params)
+      expect(result).not.toBeNull()
+
+      // Opus 4.6 batch: standard $5/M input and $25/M output at 50%.
+      expect(result!.promptCost).toBeCloseTo(0.025, 6)
+      expect(result!.completionCost).toBeCloseTo(0.0125, 6)
+    })
   })
 
   describe('OpenAI models', () => {

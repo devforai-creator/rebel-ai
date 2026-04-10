@@ -16,10 +16,13 @@ interface TokenStatsPanelProps {
   secondaryApiKeyId: string
   alternateModelsEnabled: boolean
   memoryMode: ChatMemoryMode
+  anthropicBatchModeEnabled: boolean
+  anthropicBatchModeAvailable: boolean
   onSelectApiKey: (id: string) => void
   onSelectSecondaryApiKey: (id: string) => void
   onToggleAlternateModels: () => void
   onSelectMemoryMode: (mode: ChatMemoryMode) => void
+  onToggleAnthropicBatchMode: () => void
   latestUsage: LatestMessageTokenStats | null
   statsExpanded: boolean
   onToggleStats: () => void
@@ -35,10 +38,13 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
   secondaryApiKeyId,
   alternateModelsEnabled,
   memoryMode,
+  anthropicBatchModeEnabled,
+  anthropicBatchModeAvailable,
   onSelectApiKey,
   onSelectSecondaryApiKey,
   onToggleAlternateModels,
   onSelectMemoryMode,
+  onToggleAnthropicBatchMode,
   latestUsage,
   statsExpanded,
   onToggleStats,
@@ -83,6 +89,22 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                 className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
               />
               교대 모드
+            </label>
+            <label
+              className={`flex items-center gap-2 text-xs ${
+                anthropicBatchModeAvailable
+                  ? 'text-gray-600 dark:text-gray-400'
+                  : 'text-gray-400 dark:text-gray-500'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={anthropicBatchModeEnabled}
+                onChange={onToggleAnthropicBatchMode}
+                disabled={!anthropicBatchModeAvailable}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+              />
+              Claude Batch
             </label>
             {isDeveloper && developerMode && (
               <button
@@ -148,6 +170,23 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                     className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                   />
                   교대
+                </label>
+                <label
+                  className={`flex items-center gap-2 text-xs whitespace-nowrap ${
+                    anthropicBatchModeAvailable
+                      ? 'text-gray-600 dark:text-gray-400'
+                      : 'text-gray-400 dark:text-gray-500'
+                  }`}
+                  title="Anthropic Opus 4.5/4.6 only. Sends through Message Batches without streaming."
+                >
+                  <input
+                    type="checkbox"
+                    checked={anthropicBatchModeEnabled}
+                    onChange={onToggleAnthropicBatchMode}
+                    disabled={!anthropicBatchModeAvailable}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+                  />
+                  Batch
                 </label>
                 <select
                   value={memoryMode}

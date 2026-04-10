@@ -1,12 +1,13 @@
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/database.types'
+import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from './delivery-mode'
 
 export type RawChatJobRecord = { id: string; payload: unknown }
 type ChatJobQueueSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'from'>
 type ChatGenerationJobRow = Database['public']['Tables']['chat_generation_jobs']['Row']
 type ChatGenerationJobUpdate = Database['public']['Tables']['chat_generation_jobs']['Update']
 type PendingJobRow = Pick<ChatGenerationJobRow, 'id' | 'payload' | 'status'>
-type StuckJobRow = Pick<ChatGenerationJobRow, 'id' | 'chat_id' | 'created_at'>
+type StuckJobRow = Pick<ChatGenerationJobRow, 'id' | 'chat_id' | 'created_at' | 'delivery_mode'>
 
 const FALLBACK_TIMEOUT_MS = 10 * 60 * 1000
 
@@ -63,8 +64,9 @@ export async function resetStuckProcessingJobs(
   // 1. Find stuck jobs (need chat_id and created_at for cleanup)
   const { data: stuckJobRows, error: fetchError } = await supabase
     .from('chat_generation_jobs')
-    .select<'id, chat_id, created_at'>('id, chat_id, created_at')
+    .select<'id, chat_id, created_at, delivery_mode'>('id, chat_id, created_at, delivery_mode')
     .eq('status', 'processing')
+    .neq('delivery_mode', CHAT_DELIVERY_MODE_ANTHROPIC_BATCH)
     .lt('updated_at', cutoffIso)
 
   if (fetchError) {

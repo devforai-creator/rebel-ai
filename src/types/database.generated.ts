@@ -452,7 +452,14 @@ export type Database = {
         Row: {
           chat_id: string
           created_at: string
+          delivery_mode: string
           error: string | null
+          external_provider_job_id: string | null
+          external_provider_last_checked_at: string | null
+          external_provider_metadata: Json | null
+          external_provider_result_url: string | null
+          external_provider_status: string | null
+          external_provider_submitted_at: string | null
           id: string
           payload: Json
           status: string
@@ -462,7 +469,14 @@ export type Database = {
         Insert: {
           chat_id: string
           created_at?: string
+          delivery_mode?: string
           error?: string | null
+          external_provider_job_id?: string | null
+          external_provider_last_checked_at?: string | null
+          external_provider_metadata?: Json | null
+          external_provider_result_url?: string | null
+          external_provider_status?: string | null
+          external_provider_submitted_at?: string | null
           id?: string
           payload: Json
           status: string
@@ -472,7 +486,14 @@ export type Database = {
         Update: {
           chat_id?: string
           created_at?: string
+          delivery_mode?: string
           error?: string | null
+          external_provider_job_id?: string | null
+          external_provider_last_checked_at?: string | null
+          external_provider_metadata?: Json | null
+          external_provider_result_url?: string | null
+          external_provider_status?: string | null
+          external_provider_submitted_at?: string | null
           id?: string
           payload?: Json
           status?: string

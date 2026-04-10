@@ -103,6 +103,7 @@ interface ChatJobRow {
   chat_id: string
   user_id: string
   status: string
+  delivery_mode?: string
   payload: unknown
 }
 
@@ -1382,6 +1383,7 @@ describe('POST /api/chat', () => {
       chat_id: 'chat-1',
       user_id: 'user-1',
       status: 'pending',
+      delivery_mode: 'streaming',
     })
     const payload = supabase.chatJobs[0].payload as Record<string, unknown>
     expect(payload).toMatchObject({
@@ -1390,8 +1392,71 @@ describe('POST /api/chat', () => {
       apiKeyId: 'api-key-1',
       provider: 'google',
       modelName: 'gemini-2.5-flash',
+      deliveryMode: 'streaming',
       isRegeneration: false,
     })
+  })
+
+  it('enqueues Anthropic Batch mode for supported Opus keys', async () => {
+    const supabase = createSupabaseMock(
+      buildDefaultAuthenticatedFixture({
+        apiKeys: [
+          {
+            id: 'api-key-1',
+            user_id: 'user-1',
+            provider: 'anthropic',
+            is_active: true,
+            vault_secret_name: 'secret-key',
+            model_preference: 'claude-opus-4-5',
+          },
+        ],
+      }),
+    )
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        deliveryMode: 'anthropic_batch',
+        messages: [{ role: 'user', content: 'batch please' }],
+      }),
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(202)
+    expect(supabase.chatJobs).toHaveLength(1)
+    expect(supabase.chatJobs[0]).toMatchObject({
+      status: 'pending',
+      delivery_mode: 'anthropic_batch',
+    })
+    expect(supabase.chatJobs[0].payload).toMatchObject({
+      provider: 'anthropic',
+      modelName: 'claude-opus-4-5',
+      deliveryMode: 'anthropic_batch',
+    })
+  })
+
+  it('rejects Anthropic Batch mode for unsupported keys', async () => {
+    const supabase = createSupabaseMock(buildDefaultAuthenticatedFixture())
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        deliveryMode: 'anthropic_batch',
+        messages: [{ role: 'user', content: 'batch please' }],
+      }),
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(400)
+    expect(await response.text()).toBe(
+      'Claude Batch mode is only supported for Anthropic Opus 4.5/4.6',
+    )
+    expect(supabase.messages).toHaveLength(0)
+    expect(supabase.chatJobs).toHaveLength(0)
   })
 
   it('returns 409 when the chat already has an active generation job', async () => {

@@ -35,6 +35,11 @@ import {
   normalizeChatModelConfig,
   type ChatMemoryMode,
 } from '@/lib/chat/model-config'
+import {
+  CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
+  CHAT_DELIVERY_MODE_STREAMING,
+  isAnthropicBatchChatSupported,
+} from '@/lib/chat/delivery-mode'
 
 // Default empty asset data
 const EMPTY_ASSET_DATA: ChatAssetData = {
@@ -147,6 +152,7 @@ export default function ChatInterface({
 
   const [selectedApiKeyId, setSelectedApiKeyId] = useState(initialPrimaryApiKeyId)
   const [secondaryApiKeyId, setSecondaryApiKeyId] = useState(initialSecondaryApiKeyId)
+  const [anthropicBatchModeEnabled, setAnthropicBatchModeEnabled] = useState(false)
   const [alternateModelsEnabled, setAlternateModelsEnabled] = useState(() => {
     const enabled = normalizedModelConfig.alternateModels?.enabled ?? false
     const hasPair =
@@ -166,6 +172,26 @@ export default function ChatInterface({
       normalizedModelConfig.memory?.retainTailMessages ??
       DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
   }))
+  const selectedApiKey = useMemo(
+    () => apiKeys.find((key) => key.id === selectedApiKeyId) ?? null,
+    [apiKeys, selectedApiKeyId],
+  )
+  const anthropicBatchModeAvailable =
+    !alternateModelsEnabled &&
+    isAnthropicBatchChatSupported({
+      provider: selectedApiKey?.provider,
+      modelName: selectedApiKey?.model_preference,
+    })
+  const deliveryMode =
+    anthropicBatchModeEnabled && anthropicBatchModeAvailable
+      ? CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
+      : CHAT_DELIVERY_MODE_STREAMING
+
+  useEffect(() => {
+    if (!anthropicBatchModeAvailable && anthropicBatchModeEnabled) {
+      setAnthropicBatchModeEnabled(false)
+    }
+  }, [anthropicBatchModeAvailable, anthropicBatchModeEnabled])
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -295,6 +321,14 @@ export default function ChatInterface({
     [alternateModelsEnabled, persistModelConfig, secondaryApiKeyId, selectedApiKeyId],
   )
 
+  const handleToggleAnthropicBatchMode = useCallback(() => {
+    if (!anthropicBatchModeAvailable && !anthropicBatchModeEnabled) {
+      toast.error('Claude Batch 모드는 Anthropic Opus 4.5/4.6 키에서만 사용할 수 있습니다.')
+      return
+    }
+    setAnthropicBatchModeEnabled((current) => !current)
+  }, [anthropicBatchModeAvailable, anthropicBatchModeEnabled])
+
   // Toggle developer mode
   const toggleDeveloperMode = useCallback(() => {
     const newValue = !developerMode
@@ -388,6 +422,7 @@ export default function ChatInterface({
     initialMessages,
     historyMessages,
     selectedApiKeyId,
+    deliveryMode,
     alternateModels: {
       enabled: alternateModelsEnabled,
       primaryApiKeyId: selectedApiKeyId || null,
@@ -786,10 +821,13 @@ export default function ChatInterface({
         secondaryApiKeyId={secondaryApiKeyId}
         alternateModelsEnabled={alternateModelsEnabled}
         memoryMode={memoryMode}
+        anthropicBatchModeEnabled={anthropicBatchModeEnabled && anthropicBatchModeAvailable}
+        anthropicBatchModeAvailable={anthropicBatchModeAvailable}
         onSelectApiKey={handleSelectPrimaryApiKey}
         onSelectSecondaryApiKey={handleSelectSecondaryApiKey}
         onToggleAlternateModels={handleToggleAlternateModels}
         onSelectMemoryMode={handleSelectMemoryMode}
+        onToggleAnthropicBatchMode={handleToggleAnthropicBatchMode}
         latestUsage={latestUsage}
         statsExpanded={statsExpanded}
         onToggleStats={() => setStatsExpanded(!statsExpanded)}

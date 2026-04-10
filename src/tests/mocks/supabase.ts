@@ -691,6 +691,7 @@ type ChatJobRunnerOptions = {
   character?: Record<string, unknown>
   personas?: Array<Record<string, unknown>>
   rpc?: Record<string, (params?: unknown) => unknown>
+  initialJobs?: Array<Record<string, unknown>>
   initialMessages?: Array<Record<string, unknown>>
   initialTurns?: Array<Record<string, unknown>>
 }
@@ -735,6 +736,7 @@ export function createChatJobRunnerSupabaseMock(
       },
     ],
     rpc = {},
+    initialJobs = [],
     initialMessages = [],
     initialTurns = [],
   } = options
@@ -747,11 +749,10 @@ export function createChatJobRunnerSupabaseMock(
     rpc,
     tables: {
       chat_generation_jobs: {
-        rows: [],
+        rows: [...initialJobs],
         onUpdate: ({ payload, state }) => {
           const target = (state.updates ??= []) as Array<Record<string, unknown>>
           target.push(payload ?? {})
-          return false
         },
       },
       api_keys: {

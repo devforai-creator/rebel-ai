@@ -12,6 +12,18 @@ const triggerSummaryGenerationMock = vi.fn()
 const resolveGoogleCacheDecisionMock = vi.fn()
 const isGoogleExplicitCacheEnabledMock = vi.fn()
 const createGoogleCacheMock = vi.fn()
+const createAnthropicMessageBatchMock = vi.fn()
+const retrieveAnthropicMessageBatchMock = vi.fn()
+const retrieveAnthropicBatchResultMock = vi.fn()
+const extractTextFromAnthropicBatchMessageMock = vi.fn((message: { content?: unknown[] }) =>
+  (message.content ?? [])
+    .map((part) =>
+      part && typeof part === 'object' && 'text' in part && typeof part.text === 'string'
+        ? part.text
+        : '',
+    )
+    .join(''),
+)
 const createAdminClientMock = vi.fn(() => createChatJobRunnerSupabaseMock())
 
 vi.mock('@/lib/supabase/admin', () => ({
@@ -72,6 +84,13 @@ vi.mock('@/lib/llm/google-cache', () => ({
   createGoogleCache: (...args: unknown[]) => createGoogleCacheMock(...args),
   resolveGoogleCacheDecision: (...args: unknown[]) => resolveGoogleCacheDecisionMock(...args),
   isGoogleExplicitCacheEnabled: (...args: unknown[]) => isGoogleExplicitCacheEnabledMock(...args),
+}))
+vi.mock('@/lib/llm/anthropic-batch', () => ({
+  createAnthropicMessageBatch: (...args: unknown[]) => createAnthropicMessageBatchMock(...args),
+  retrieveAnthropicMessageBatch: (...args: unknown[]) => retrieveAnthropicMessageBatchMock(...args),
+  retrieveAnthropicBatchResult: (...args: unknown[]) => retrieveAnthropicBatchResultMock(...args),
+  extractTextFromAnthropicBatchMessage: (message: { content?: unknown[] }) =>
+    extractTextFromAnthropicBatchMessageMock(message),
 }))
 vi.mock('@/lib/chat/bilingual-context', () => ({
   applyBilingualContext: vi.fn(async ({ messages }) => messages),
@@ -161,6 +180,10 @@ describe('processChatJobs', () => {
     resolveGoogleCacheDecisionMock.mockReset()
     isGoogleExplicitCacheEnabledMock.mockReset()
     createGoogleCacheMock.mockReset()
+    createAnthropicMessageBatchMock.mockReset()
+    retrieveAnthropicMessageBatchMock.mockReset()
+    retrieveAnthropicBatchResultMock.mockReset()
+    extractTextFromAnthropicBatchMessageMock.mockClear()
     createAdminClientMock.mockReset()
     createAdminClientMock.mockImplementation(() =>
       createChatJobRunnerSupabaseMock({
@@ -198,6 +221,27 @@ describe('processChatJobs', () => {
     resolveGoogleCacheDecisionMock.mockReturnValue({ enabled: false, minTokens: null })
     isGoogleExplicitCacheEnabledMock.mockReturnValue(true)
     createGoogleCacheMock.mockResolvedValue({ success: false, error: 'cache disabled' })
+    createAnthropicMessageBatchMock.mockResolvedValue({
+      id: 'batch-1',
+      type: 'message_batch',
+      processing_status: 'in_progress',
+      created_at: '2026-04-10T00:00:00Z',
+      ended_at: null,
+      expires_at: '2026-04-11T00:00:00Z',
+      cancel_initiated_at: null,
+      results_url: null,
+    })
+    retrieveAnthropicMessageBatchMock.mockResolvedValue({
+      id: 'batch-1',
+      type: 'message_batch',
+      processing_status: 'in_progress',
+      created_at: '2026-04-10T00:00:00Z',
+      ended_at: null,
+      expires_at: '2026-04-11T00:00:00Z',
+      cancel_initiated_at: null,
+      results_url: null,
+    })
+    retrieveAnthropicBatchResultMock.mockResolvedValue(null)
     loadGenerationTranscriptMock.mockResolvedValue([{ role: 'user', content: 'Hello' }])
   })
 
@@ -491,6 +535,191 @@ describe('processChatJobs', () => {
         userId: 'user-1',
       }),
     )
+  })
+
+  it('submits Anthropic Batch jobs without calling the streaming API', async () => {
+    const supabase = createChatJobRunnerSupabaseMock({
+      apiKey: {
+        id: 'key-1',
+        user_id: 'user-1',
+        is_active: true,
+        provider: 'anthropic',
+        model_preference: 'claude-opus-4-5',
+        vault_secret_name: 'vault-key',
+        service_tier: 'standard',
+      },
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    decryptSecretMock.mockResolvedValue('sk-ant-test')
+    parseChatJobPayloadMock.mockReturnValue(
+      buildValidPayload({
+        requestId: 'req-anthropic-batch',
+        provider: 'anthropic',
+        modelName: 'claude-opus-4-5',
+        deliveryMode: 'anthropic_batch',
+      }),
+    )
+    claimPendingJobMock.mockResolvedValueOnce({
+      id: 'job-anthropic-batch',
+      payload: { ok: true },
+    })
+    claimPendingJobMock.mockResolvedValueOnce(null)
+
+    const { processChatJobs } = await import('./service')
+
+    const result = await processChatJobs(1)
+
+    expect(result.results[0]).toMatchObject({
+      jobId: 'job-anthropic-batch',
+      status: 'processing',
+    })
+    expect(streamTextMock).not.toHaveBeenCalled()
+    expect(createAnthropicMessageBatchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: 'sk-ant-test',
+        customId: 'job-job-anthropic-batch',
+        params: expect.objectContaining({
+          model: 'claude-opus-4-5',
+          messages: [{ role: 'user', content: 'Hello' }],
+        }),
+      }),
+    )
+    expect(supabase.updates).toContainEqual(
+      expect.objectContaining({
+        external_provider_job_id: 'batch-1',
+        external_provider_status: 'in_progress',
+        external_provider_submitted_at: '2026-04-10T00:00:00Z',
+      }),
+    )
+  })
+
+  it('polls completed Anthropic Batch jobs and records batch-priced usage', async () => {
+    const batchPayload = buildValidPayload({
+      requestId: 'req-batch-complete',
+      provider: 'anthropic',
+      modelName: 'claude-opus-4-5',
+      deliveryMode: 'anthropic_batch',
+    })
+    const batchMetadata = {
+      customId: 'job-complete-batch',
+      submittedRequest: {
+        model: 'claude-opus-4-5',
+        max_tokens: 8192,
+        messages: [{ role: 'user', content: 'Hello' }],
+      },
+      debug: {
+        requestId: 'req-batch-complete',
+        finalSystemPrompt: 'system prompt',
+        recentMessages: [{ role: 'user', content: 'Hello' }],
+        anthropicConversationMessages: null,
+        anthropicPlaceholderAdded: false,
+        promptCache: null,
+        totalInputTokens: 10,
+        anthropicCache: null,
+        staticPromptTokens: 10,
+        dynamicContext: null,
+        dynamicContextTokens: 0,
+        ragInfo: null,
+        actualPayload: null,
+        sanitizedMessageCount: 1,
+        bilingualEnabled: false,
+      },
+    }
+    const supabase = createChatJobRunnerSupabaseMock({
+      apiKey: {
+        id: 'key-1',
+        user_id: 'user-1',
+        is_active: true,
+        provider: 'anthropic',
+        model_preference: 'claude-opus-4-5',
+        vault_secret_name: 'vault-key',
+        service_tier: 'standard',
+      },
+      initialJobs: [
+        {
+          id: 'job-complete-batch',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          status: 'processing',
+          payload: batchPayload,
+          delivery_mode: 'anthropic_batch',
+          external_provider_job_id: 'batch-1',
+          external_provider_status: 'in_progress',
+          external_provider_last_checked_at: '2026-04-10T00:00:00Z',
+          external_provider_result_url: null,
+          external_provider_metadata: batchMetadata,
+        },
+      ],
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+    decryptSecretMock.mockResolvedValue('sk-ant-test')
+    parseChatJobPayloadMock.mockReturnValue(batchPayload)
+    retrieveAnthropicMessageBatchMock.mockResolvedValueOnce({
+      id: 'batch-1',
+      type: 'message_batch',
+      processing_status: 'ended',
+      created_at: '2026-04-10T00:00:00Z',
+      ended_at: '2026-04-10T00:01:00Z',
+      expires_at: '2026-04-11T00:00:00Z',
+      cancel_initiated_at: null,
+      results_url: 'https://api.anthropic.com/v1/messages/batches/batch-1/results',
+    })
+    retrieveAnthropicBatchResultMock.mockResolvedValueOnce({
+      custom_id: 'job-complete-batch',
+      result: {
+        type: 'succeeded',
+        message: {
+          id: 'msg-batch',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-opus-4-5',
+          content: [{ type: 'text', text: 'batch answer' }],
+          stop_reason: 'end_turn',
+          stop_sequence: null,
+          usage: {
+            input_tokens: 100,
+            output_tokens: 20,
+            cache_read_input_tokens: 10,
+          },
+        },
+      },
+    })
+    claimPendingJobMock.mockResolvedValueOnce(null)
+
+    const { processChatJobs } = await import('./service')
+    const result = await processChatJobs(1)
+
+    expect(result.results[0]).toMatchObject({
+      jobId: 'job-complete-batch',
+      status: 'success',
+    })
+    expect(retrieveAnthropicMessageBatchMock).toHaveBeenCalledWith({
+      apiKey: 'sk-ant-test',
+      batchId: 'batch-1',
+    })
+    expect(retrieveAnthropicBatchResultMock).toHaveBeenCalledWith({
+      apiKey: 'sk-ant-test',
+      resultsUrl: 'https://api.anthropic.com/v1/messages/batches/batch-1/results',
+      customId: 'job-complete-batch',
+    })
+    expect(supabase.messages).toContainEqual(
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'batch answer',
+        prompt_tokens: 100,
+        completion_tokens: 20,
+      }),
+    )
+    expect(supabase.usageEvents[0]).toMatchObject({
+      request_id: 'req-batch-complete',
+      prompt_tokens: 100,
+      completion_tokens: 20,
+      total_tokens: 120,
+    })
+    expect(Number(supabase.usageEvents[0].total_cost_usd)).toBeGreaterThan(0)
   })
 
   it('uses google explicit cache strategy when cache creation succeeds', async () => {

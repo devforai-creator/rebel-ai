@@ -12,6 +12,7 @@ type QueryBuilder = {
   update: ReturnType<typeof vi.fn>
   delete: ReturnType<typeof vi.fn>
   eq: ReturnType<typeof vi.fn>
+  neq: ReturnType<typeof vi.fn>
   lt: ReturnType<typeof vi.fn>
   gte: ReturnType<typeof vi.fn>
   in: ReturnType<typeof vi.fn>
@@ -26,6 +27,7 @@ function createQueryBuilder(): QueryBuilder {
 
   builder.select = vi.fn(() => builder)
   builder.eq = vi.fn(() => builder)
+  builder.neq = vi.fn(() => builder)
   builder.order = vi.fn(() => builder)
   builder.limit = vi.fn(() => builder)
   builder.update = vi.fn(() => builder)
@@ -174,8 +176,9 @@ describe('resetStuckProcessingJobs', () => {
 
     expect(errorCount).toBe(2)
     // Verify select query
-    expect(selectBuilder.select).toHaveBeenCalledWith('id, chat_id, created_at')
+    expect(selectBuilder.select).toHaveBeenCalledWith('id, chat_id, created_at, delivery_mode')
     expect(selectBuilder.eq).toHaveBeenCalledWith('status', 'processing')
+    expect(selectBuilder.neq).toHaveBeenCalledWith('delivery_mode', 'anthropic_batch')
     expect(selectBuilder.lt).toHaveBeenCalledWith('updated_at', expectedCutoff)
     // Verify update query marks as error
     expect(updateBuilder.update).toHaveBeenCalledWith({

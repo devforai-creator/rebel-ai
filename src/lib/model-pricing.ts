@@ -58,6 +58,9 @@ function getServiceTierMultiplier(provider: Provider, serviceTier?: ApiServiceTi
   if (provider === 'openai' && serviceTier === 'flex') {
     return 0.5
   }
+  if (provider === 'anthropic' && serviceTier === 'batch') {
+    return 0.5
+  }
   return 1
 }
 

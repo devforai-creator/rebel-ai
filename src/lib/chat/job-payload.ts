@@ -1,5 +1,10 @@
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import type { Json, Provider } from '@/types/database.types'
+import {
+  CHAT_DELIVERY_MODE_STREAMING,
+  isChatDeliveryMode,
+  type ChatDeliveryMode,
+} from './delivery-mode'
 
 export const CHAT_JOB_PAYLOAD_VERSION = 1 as const
 
@@ -14,6 +19,7 @@ export interface ChatGenerationJobPayload {
   apiKeyId: string
   provider: Provider
   modelName: string
+  deliveryMode: ChatDeliveryMode
   sanitizedMessages: SanitizedMessage[]
   isRegeneration: boolean
   regenerateAssistantMessageId: string | null
@@ -65,6 +71,9 @@ export function parseChatJobPayload(payload: unknown): ChatGenerationJobPayload 
     apiKeyId: candidate.apiKeyId,
     provider: candidate.provider,
     modelName: candidate.modelName,
+    deliveryMode: isChatDeliveryMode(candidate.deliveryMode)
+      ? candidate.deliveryMode
+      : CHAT_DELIVERY_MODE_STREAMING,
     sanitizedMessages: candidate.sanitizedMessages.map((message) => ({
       role: message.role,
       content: message.content,

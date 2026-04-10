@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from '@/lib/chat/delivery-mode'
+import { resolveInternalApiOrigin } from '@/lib/internal-api-origin'
+import { pollAnthropicBatchJobForUser } from '@/app/api/internal/chat-job-runner/service'
 
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 export const revalidate = 0
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -23,7 +26,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
     const { data: job, error } = await supabase
       .from('chat_generation_jobs')
-      .select('id, chat_id, status, error, created_at, updated_at')
+      .select('id, chat_id, status, error, delivery_mode, created_at, updated_at')
       .eq('id', jobId)
       .eq('user_id', user.id)
       .single()
@@ -32,13 +35,31 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
 
+    if (job.delivery_mode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH && job.status === 'processing') {
+      await pollAnthropicBatchJobForUser({
+        jobId,
+        userId: user.id,
+        origin: resolveInternalApiOrigin(),
+      })
+    }
+
+    const { data: refreshedJob } = await supabase
+      .from('chat_generation_jobs')
+      .select('id, chat_id, status, error, delivery_mode, created_at, updated_at')
+      .eq('id', jobId)
+      .eq('user_id', user.id)
+      .single()
+
+    const responseJob = refreshedJob ?? job
+
     return NextResponse.json({
-      id: job.id,
-      chatId: job.chat_id,
-      status: job.status,
-      error: job.error,
-      createdAt: job.created_at,
-      updatedAt: job.updated_at,
+      id: responseJob.id,
+      chatId: responseJob.chat_id,
+      status: responseJob.status,
+      error: responseJob.error,
+      deliveryMode: responseJob.delivery_mode,
+      createdAt: responseJob.created_at,
+      updatedAt: responseJob.updated_at,
     })
   } catch (error) {
     console.error('[Chat Jobs API] Failed to load job status', error)

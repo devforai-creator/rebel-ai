@@ -6,6 +6,7 @@ import {
   serializeChatJobPayload,
   type ChatGenerationJobPayload,
 } from './job-payload'
+import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH, CHAT_DELIVERY_MODE_STREAMING } from './delivery-mode'
 
 const basePayload: ChatGenerationJobPayload = {
   version: CHAT_JOB_PAYLOAD_VERSION,
@@ -16,6 +17,7 @@ const basePayload: ChatGenerationJobPayload = {
   apiKeyId: 'key-1',
   provider: 'openai',
   modelName: 'gpt-4o-mini',
+  deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
   sanitizedMessages: [
     { role: 'user', content: 'Hello' },
     { role: 'assistant', content: 'Hi!' },
@@ -97,5 +99,23 @@ describe('chat job payload parsing', () => {
     expect(parsed?.sanitizedMessages).toEqual([
       { role: 'user', content: 'Hello', messageId: 'msg-1' },
     ])
+  })
+
+  it('defaults older payloads to streaming delivery mode', () => {
+    const { deliveryMode, ...legacyPayload } = basePayload
+    expect(deliveryMode).toBe(CHAT_DELIVERY_MODE_STREAMING)
+
+    const parsed = parseChatJobPayload(legacyPayload)
+
+    expect(parsed?.deliveryMode).toBe(CHAT_DELIVERY_MODE_STREAMING)
+  })
+
+  it('retains Anthropic Batch delivery mode', () => {
+    const parsed = parseChatJobPayload({
+      ...basePayload,
+      deliveryMode: CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
+    })
+
+    expect(parsed?.deliveryMode).toBe(CHAT_DELIVERY_MODE_ANTHROPIC_BATCH)
   })
 })

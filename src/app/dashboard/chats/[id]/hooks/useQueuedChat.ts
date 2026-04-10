@@ -3,6 +3,11 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { toast } from 'sonner'
 import type { Message } from '@/types/database.types'
 import type { AlternateModelsConfig } from '@/lib/chat/model-config'
+import {
+  CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
+  CHAT_DELIVERY_MODE_STREAMING,
+  type ChatDeliveryMode,
+} from '@/lib/chat/delivery-mode'
 import type { AssistantStreamBroadcastPayload } from '@/lib/chat/assistant-stream'
 import {
   DisplayMessage,
@@ -22,6 +27,7 @@ export interface UseQueuedChatParams {
   initialMessages: Message[]
   historyMessages: Message[]
   selectedApiKeyId: string
+  deliveryMode?: ChatDeliveryMode
   alternateModels?: AlternateModelsConfig | null
   fetchLatestUsage: () => Promise<void>
   debugInfoMap: React.MutableRefObject<Map<string, DebugInfo>>
@@ -49,6 +55,7 @@ export function useQueuedChat({
   initialMessages,
   historyMessages,
   selectedApiKeyId,
+  deliveryMode = CHAT_DELIVERY_MODE_STREAMING,
   alternateModels,
   fetchLatestUsage,
   debugInfoMap,
@@ -113,17 +120,21 @@ export function useQueuedChat({
 
   const startStreamingDraft = useCallback(
     (jobId: string, regenerateAssistantMessageId: string | null) => {
+      const isBatchMode = deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
       setStreamingDraft({
         id: `stream-${jobId}`,
         jobId,
         role: 'assistant',
-        content: '',
+        content: isBatchMode
+          ? 'Claude Batch 처리 중입니다. 이 모드는 스트리밍 없이 완료 후 한 번에 표시됩니다.'
+          : '',
         created_at: new Date().toISOString(),
         streaming: true,
         replaceMessageId: regenerateAssistantMessageId,
+        deliveryMode,
       })
     },
-    [],
+    [deliveryMode],
   )
 
   const clearPendingJob = useCallback(() => {
@@ -220,21 +231,31 @@ export function useQueuedChat({
           },
           onSlowProgress: (elapsedMs) => {
             const seconds = Math.round(elapsedMs / 1000)
-            toast.info(`Response is taking longer than usual (${seconds}s). Still waiting...`, {
-              duration: 8000,
-            })
+            const message =
+              deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
+                ? `Claude Batch is still processing (${seconds}s). It will appear here when finished.`
+                : `Response is taking longer than usual (${seconds}s). Still waiting...`
+            toast.info(message, { duration: 8000 })
           },
           now: () => Date.now(),
           sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
         },
-        DEFAULT_JOB_POLLER_CONFIG,
+        deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
+          ? {
+              timeoutMs: 25 * 60 * 60 * 1000,
+              initialDelayMs: 3000,
+              maxDelayMs: 60_000,
+              backoffMultiplier: 1.4,
+              slowProgressThresholdMs: 30_000,
+            }
+          : DEFAULT_JOB_POLLER_CONFIG,
       )
 
       if (result.outcome !== 'success') {
         throw result.error
       }
     },
-    [appendAssistantMessage, clearPendingJob, fetchLatestUsage],
+    [appendAssistantMessage, clearPendingJob, deliveryMode, fetchLatestUsage],
   )
 
   const handleRealtimeMessageChange = useCallback(
@@ -335,6 +356,7 @@ export function useQueuedChat({
             chatId,
             apiKeyId: resolvedApiKeyId,
             messages: messagesPayload,
+            deliveryMode,
             isRegeneration,
             regenerateAssistantMessageId,
           }),
@@ -378,6 +400,7 @@ export function useQueuedChat({
     [
       chatId,
       clearPendingJob,
+      deliveryMode,
       pollJobStatus,
       resolveNextApiKeyId,
       startStreamingDraft,

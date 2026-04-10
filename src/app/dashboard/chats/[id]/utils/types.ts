@@ -1,5 +1,6 @@
 import type { Message, ApiKey } from '@/types/database.types'
 import type { ChatModelConfig } from '@/lib/chat/model-config'
+import type { ChatDeliveryMode } from '@/lib/chat/delivery-mode'
 
 /**
  * Display-optimized message type for UI rendering
@@ -17,6 +18,7 @@ export type DisplayMessage = {
   debug_info?: unknown
   temp?: boolean
   streaming?: boolean
+  deliveryMode?: ChatDeliveryMode
 }
 
 export type StreamingAssistantDraft = DisplayMessage & {

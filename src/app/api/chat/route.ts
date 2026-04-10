@@ -20,6 +20,12 @@ import {
 } from '@/lib/queue/admission'
 import { isLLMProvider } from '@/lib/api-keys/provider-utils'
 import { getDefaultModelForProvider } from '@/lib/llm/default-model'
+import {
+  CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
+  CHAT_DELIVERY_MODE_STREAMING,
+  isAnthropicBatchChatSupported,
+  isChatDeliveryMode,
+} from '@/lib/chat/delivery-mode'
 import { MESSAGE_STATUS_COMPLETED } from '@/lib/chat/message-status'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
 import { createChatTurn } from '@/lib/chat/turns'
@@ -47,6 +53,7 @@ const chatRequestSchema = z
     messages: z.array(z.unknown()).optional().nullable(),
     chatId: z.unknown().optional(),
     apiKeyId: z.unknown().optional(),
+    deliveryMode: z.unknown().optional(),
     isRegeneration: z.unknown().optional(),
     regenerateAssistantMessageId: z.unknown().optional(),
   })
@@ -122,6 +129,7 @@ export async function POST(req: Request) {
       messages,
       chatId,
       apiKeyId,
+      deliveryMode: rawDeliveryMode,
       isRegeneration: rawIsRegeneration,
       regenerateAssistantMessageId: rawRegenerateAssistantMessageId,
     } = parsed.data
@@ -292,6 +300,18 @@ export async function POST(req: Request) {
 
     const provider = apiKeyData.provider
     const modelName = apiKeyData.model_preference || getDefaultModelForProvider(provider)
+    const deliveryMode = isChatDeliveryMode(rawDeliveryMode)
+      ? rawDeliveryMode
+      : CHAT_DELIVERY_MODE_STREAMING
+
+    if (
+      deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH &&
+      !isAnthropicBatchChatSupported({ provider, modelName })
+    ) {
+      return new Response('Claude Batch mode is only supported for Anthropic Opus 4.5/4.6', {
+        status: 400,
+      })
+    }
 
     let insertedUserMessageId: string | null = null
     let insertedTurnId: string | null = targetTurnId
@@ -361,6 +381,7 @@ export async function POST(req: Request) {
       apiKeyId,
       provider,
       modelName,
+      deliveryMode,
       sanitizedMessages,
       isRegeneration,
       regenerateAssistantMessageId,
@@ -372,6 +393,7 @@ export async function POST(req: Request) {
         chat_id: chatId,
         user_id: user.id,
         status: 'pending',
+        delivery_mode: deliveryMode,
         payload: serializeChatJobPayload(jobPayload),
       })
       .select('id')

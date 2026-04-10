@@ -154,6 +154,11 @@ Done when:
 - tests assert trigger invocation
 - tests assert the expected internal URL and auth headers for the runner trigger
 
+Current status as of 2026-04-11:
+
+- [src/app/api/chat/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.test.ts) now asserts that successful user-message requests dispatch [triggerMessageTranslation](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/translation-trigger.ts) with the persisted message ID and requester user ID
+- the same test file now asserts `/api/internal/chat-job-runner/trigger` is called with the resolved internal origin, bearer auth header, and deployment-bypass header when configured
+
 ### P1-3. RBX Import Orphan Cleanup
 
 Scope:

@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { buildClientIdentifier } from '@/lib/chat/rate-limiter'
+import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
 import { getDefaultModelForProvider } from '@/lib/llm/default-model'
 
 const ORIGINAL_ENV = { ...process.env }
@@ -46,6 +47,8 @@ vi.mock('next/server', async () => {
 vi.stubGlobal('fetch', fetchMock)
 
 import { POST } from './route'
+
+const triggerMessageTranslationMock = vi.mocked(triggerMessageTranslation)
 
 interface ApiKeyRow {
   id: string
@@ -787,6 +790,18 @@ function createSupabaseMock(fixture: SupabaseFixture): SupabaseRouteMock & {
   }
 }
 
+function getFetchUrl(input: Parameters<FetchMock>[0]): URL {
+  if (typeof input === 'string' || input instanceof URL) {
+    return new URL(input.toString())
+  }
+
+  return new URL(input.url)
+}
+
+function findFetchCallByPathname(pathname: string): Parameters<FetchMock> | undefined {
+  return fetchMock.mock.calls.find(([input]) => getFetchUrl(input).pathname === pathname)
+}
+
 function buildDefaultAuthenticatedFixture(
   overrides: Partial<SupabaseFixture> = {},
 ): SupabaseFixture {
@@ -830,6 +845,7 @@ describe('POST /api/chat', () => {
     process.env.CHAT_ADMIN_SECRET = 'test-chat-admin-secret'
     createClientMock.mockReset()
     fetchMock.mockClear()
+    triggerMessageTranslationMock.mockClear()
     currentAdminMock = null
     adminRpcCalls = []
     global.fetch = fetchMock as typeof global.fetch
@@ -1395,6 +1411,41 @@ describe('POST /api/chat', () => {
       deliveryMode: 'streaming',
       isRegeneration: false,
     })
+    expect(triggerMessageTranslationMock).toHaveBeenCalledWith(supabase.messages[0].id, 'user-1')
+  })
+
+  it('dispatches the chat job runner trigger with the expected internal URL and auth headers', async () => {
+    process.env.INTERNAL_API_ORIGIN = 'https://internal.example.com'
+    process.env.VERCEL_AUTOMATION_BYPASS_SECRET = 'vercel-bypass-secret'
+
+    createSupabaseMock(buildDefaultAuthenticatedFixture())
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        messages: [{ role: 'user', content: 'trigger the runner' }],
+      }),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(202)
+
+    const runnerTriggerCall = findFetchCallByPathname('/api/internal/chat-job-runner/trigger')
+
+    expect(runnerTriggerCall).toBeDefined()
+
+    const [input, init] = runnerTriggerCall!
+    const headers = new Headers(init?.headers)
+
+    expect(getFetchUrl(input).toString()).toBe(
+      'https://internal.example.com/api/internal/chat-job-runner/trigger',
+    )
+    expect(init?.method).toBe('GET')
+    expect(headers.get('authorization')).toBe('Bearer test-chat-admin-secret')
+    expect(headers.get('x-vercel-protection-bypass')).toBe('vercel-bypass-secret')
   })
 
   it('enqueues Anthropic Batch mode for supported Opus keys', async () => {

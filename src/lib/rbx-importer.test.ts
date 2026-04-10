@@ -63,6 +63,7 @@ function createMockSupabase(config?: {
   moduleInsertError?: { message: string }
   characterModuleLinkError?: { message: string }
   storageUploadError?: { message: string; status?: number; statusCode?: number }
+  storageRemoveError?: { message: string }
   moduleAssetInsertError?: { message: string }
 }) {
   const calls = {
@@ -193,7 +194,7 @@ function createMockSupabase(config?: {
         }),
         remove: vi.fn((paths: string[]) => {
           calls.storageRemovals.push({ bucket, paths })
-          return Promise.resolve({ data: [], error: null })
+          return Promise.resolve({ data: [], error: config?.storageRemoveError ?? null })
         }),
         getPublicUrl: vi.fn((path: string) => ({
           data: { publicUrl: `https://storage.example.com/${path}` },
@@ -524,6 +525,39 @@ describe('importRbx', () => {
       expect(mock.calls.storageRemovals[0].bucket).toBe('character-assets')
       expect(mock.calls.storageRemovals[0].paths).toHaveLength(1)
       expect(mock.calls.storageRemovals[0].paths[0]).toMatch(/^user-123\/char-test-123\/.+\.png$/)
+    })
+
+    it('fails the import when cleanup of an orphaned character upload also fails', async () => {
+      const mock = createMockSupabase({
+        assetInsertError: { message: 'DB insert failed' },
+        storageRemoveError: { message: 'storage remove failed' },
+      })
+      const parseResult = createMinimalParseResult({
+        manifest: {
+          assets: [
+            {
+              file_name: 'a.png',
+              asset_type: 'character_image',
+              content_type: 'image/png',
+              display_name: null,
+              canonical_name: null,
+              display_order: 0,
+              metadata: { aliases: [] },
+            },
+          ],
+        },
+        characterAssets: [createAssetFile('a.png')],
+      })
+
+      const result = await importRbx({
+        userId: 'user-123',
+        parseResult,
+        supabaseClient: mock.client,
+      })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Failed to remove storage objects: storage remove failed')
+      expect(mock.calls.storageRemovals).toHaveLength(1)
     })
 
     it('counts missing asset files as failed and records fileName', async () => {

@@ -61,6 +61,7 @@ type CharactersSupabaseOptions = {
   characterAssetPaths?: Array<{ character_id: string; storage_path: string }>
   moduleAssetPaths?: Array<{ module_id: string; storage_path: string }>
   deletedOrphanedModuleIds?: string[]
+  storageRemoveError?: DbError | null
 }
 
 type MutationCall = {
@@ -365,7 +366,7 @@ function buildSupabase(options: CharactersSupabaseOptions = {}) {
         return {
           remove(paths: string[]) {
             state.storageRemoveCalls.push({ bucket, paths })
-            return Promise.resolve({ data: [], error: null })
+            return Promise.resolve({ data: [], error: options.storageRemoveError ?? null })
           },
         }
       },
@@ -922,5 +923,37 @@ describe('character actions template syntax handling', () => {
     ])
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/characters')
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/modules')
+  })
+
+  it('returns success with a warning when character asset cleanup fails after delete', async () => {
+    const supabase = buildSupabase({
+      characterAssetPaths: [{ character_id: 'char-1', storage_path: 'user-1/char-1/asset-a.webp' }],
+      storageRemoveError: { message: 'storage remove failed' },
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { deleteCharacter } = await import('./actions')
+
+    const result = await deleteCharacter('char-1')
+
+    expect(result).toEqual({
+      success: true,
+      warning:
+        'Character deleted, but some asset cleanup failed. The storage janitor can remove leftovers.',
+    })
+    expect(supabase.state.characterDeleteCalls).toEqual([
+      {
+        filters: [
+          ['id', 'char-1'],
+          ['user_id', 'user-1'],
+        ],
+      },
+    ])
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[Character] Character deleted but storage cleanup failed',
+      expect.objectContaining({
+        characterId: 'char-1',
+        userId: 'user-1',
+      }),
+    )
   })
 })

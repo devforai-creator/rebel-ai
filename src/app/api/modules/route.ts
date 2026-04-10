@@ -110,15 +110,28 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to delete module' }, { status: 500 })
     }
 
-    await removeStorageObjects(supabase, 'module-assets', moduleAssetPaths, {
-      entityId: moduleId,
-      entityType: 'module',
-      operation: 'deleteModule',
-    })
+    let warning: string | undefined
+
+    try {
+      await removeStorageObjects(supabase, 'module-assets', moduleAssetPaths, {
+        entityId: moduleId,
+        entityType: 'module',
+        operation: 'deleteModule',
+      })
+    } catch (error) {
+      console.error('[Modules API] Module deleted but storage cleanup failed:', {
+        moduleId,
+        userId: user.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      warning =
+        'Module deleted, but some asset cleanup failed. The storage janitor can remove leftovers.'
+    }
 
     return NextResponse.json({
       success: true,
       message: 'Module deleted successfully',
+      ...(warning ? { warning } : {}),
     })
   } catch (error) {
     console.error('[Modules API] Unexpected error:', error)

@@ -24,7 +24,7 @@ import type {
   ModuleAssetInsert,
   ModuleInsert,
 } from '@/types/database.types'
-import { removeStorageObjects } from '@/lib/assets/storage-cleanup'
+import { StorageCleanupError, removeStorageObjects } from '@/lib/assets/storage-cleanup'
 import { sanitizeStorageKey } from './storage-key'
 import { formatSuuImportValidationIssue, validateSuuImportMetadata } from './suu-import-validation'
 
@@ -322,11 +322,21 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
     }
 
     if (characterDeleted && uploadedCharacterAssetPaths.length > 0 && characterId) {
-      await removeStorageObjects(supabase, 'character-assets', uploadedCharacterAssetPaths, {
-        entityId: characterId,
-        entityType: 'import',
-        operation: 'rollbackImport',
-      })
+      try {
+        await removeStorageObjects(supabase, 'character-assets', uploadedCharacterAssetPaths, {
+          entityId: characterId,
+          entityType: 'import',
+          operation: 'rollbackImport',
+        })
+      } catch (rollbackCleanupError) {
+        console.error('[RBX Importer] Failed to remove character-assets during rollback', {
+          characterId,
+          error:
+            rollbackCleanupError instanceof Error
+              ? rollbackCleanupError.message
+              : String(rollbackCleanupError),
+        })
+      }
     }
 
     // Rollback: delete orphaned modules (character CASCADE only removes the link, not the module itself)
@@ -339,11 +349,21 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
         .eq('id', createdModule.id)
 
       if (!deleteModuleError && createdModule.uploadedAssetPaths.length > 0) {
-        await removeStorageObjects(supabase, 'module-assets', createdModule.uploadedAssetPaths, {
-          entityId: createdModule.id,
-          entityType: 'module',
-          operation: 'rollbackImport',
-        })
+        try {
+          await removeStorageObjects(supabase, 'module-assets', createdModule.uploadedAssetPaths, {
+            entityId: createdModule.id,
+            entityType: 'module',
+            operation: 'rollbackImport',
+          })
+        } catch (rollbackCleanupError) {
+          console.error('[RBX Importer] Failed to remove module-assets during rollback', {
+            moduleId: createdModule.id,
+            error:
+              rollbackCleanupError instanceof Error
+                ? rollbackCleanupError.message
+                : String(rollbackCleanupError),
+          })
+        }
       }
     }
 
@@ -374,6 +394,7 @@ async function uploadCharacterAssets(
   let avatarUrl: string | null = null
   let failedAssets = 0
   const failedAssetSamples: AssetFailureSample[] = []
+  let fatalCleanupError: StorageCleanupError | null = null
 
   // Build file lookup: fileName → Uint8Array
   const fileMap = new Map<string, Uint8Array>()
@@ -475,6 +496,9 @@ async function uploadCharacterAssets(
       if (result.status === 'fulfilled') {
         uploaded.push(result.value)
       } else {
+        if (!fatalCleanupError && result.reason instanceof StorageCleanupError) {
+          fatalCleanupError = result.reason
+        }
         failedAssets++
         if (failedAssetSamples.length < MAX_FAILED_ASSET_SAMPLES) {
           const reason =
@@ -491,6 +515,10 @@ async function uploadCharacterAssets(
     if (chunks.indexOf(chunk) < chunks.length - 1) {
       await delay(ASSET_UPLOAD_CHUNK_DELAY_MS)
     }
+  }
+
+  if (fatalCleanupError) {
+    throw fatalCleanupError
   }
 
   return { uploaded, avatarUrl, failedAssets, failedAssetSamples }
@@ -566,6 +594,10 @@ async function uploadModuleAssets(
         throw error
       }
     } catch (error) {
+      if (error instanceof StorageCleanupError) {
+        throw error
+      }
+
       console.error(
         `[RBX Importer] Failed to upload module asset ${asset.file_name}:`,
         error instanceof Error ? error.message : error,

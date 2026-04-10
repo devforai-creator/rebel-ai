@@ -11,6 +11,31 @@ type StorageCleanupContext = {
   operation: string
 }
 
+export class StorageCleanupError extends Error {
+  readonly bucket: string
+  readonly pathCount: number
+  readonly entityId: string
+  readonly entityType: StorageCleanupContext['entityType']
+  readonly operation: string
+
+  constructor(
+    message: string,
+    options: {
+      bucket: string
+      pathCount: number
+      context: StorageCleanupContext
+    },
+  ) {
+    super(message)
+    this.name = 'StorageCleanupError'
+    this.bucket = options.bucket
+    this.pathCount = options.pathCount
+    this.entityId = options.context.entityId
+    this.entityType = options.context.entityType
+    this.operation = options.context.operation
+  }
+}
+
 export async function listCharacterAssetStoragePaths(
   supabase: Pick<SupabaseClient<Database>, 'from'>,
   characterId: string,
@@ -82,7 +107,11 @@ export async function removeStorageObjects(
         pathCount: chunk.length,
         error: error.message,
       })
-      return
+      throw new StorageCleanupError(`Failed to remove storage objects: ${error.message}`, {
+        bucket,
+        pathCount: chunk.length,
+        context,
+      })
     }
   }
 }

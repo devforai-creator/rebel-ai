@@ -198,10 +198,18 @@ Current status as of 2026-04-10:
 - direct module deletion now removes `module-assets` storage paths in [src/app/api/modules/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/modules/route.ts), with regression coverage in [src/app/api/modules/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/modules/route.test.ts)
 - orphaned-module cleanup triggered from character update/delete now removes `module-assets` storage only for modules actually deleted, with regression coverage in [src/app/dashboard/characters/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/actions.test.ts)
 
+Current status as of 2026-04-11:
+
+- linked production dry-runs on 2026-04-11 found `0` `module-assets` orphans in both the recent-window scan and full scan, and `0` `character-assets` orphans older than `1 day`
+- the same full `character-assets` dry-run found `1` recent orphan created at `2026-04-10T15:09:26Z`, so the leak is greatly reduced but not yet fully eliminated
+- [src/lib/assets/storage-cleanup.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/assets/storage-cleanup.ts) no longer swallows storage remove failures silently; callers now get a `StorageCleanupError`
+- irreversible delete flows now surface cleanup problems explicitly instead of reporting a clean success on silent storage remove failures, with coverage in [src/app/dashboard/characters/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/actions.test.ts), [src/app/dashboard/account/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/actions.test.ts), and [src/app/api/modules/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/modules/route.test.ts)
+- RBX import cleanup now treats failed removal of an uploaded orphan candidate as a fatal import failure instead of silently downgrading it to a counted asset miss, with coverage in [src/lib/rbx-importer.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/rbx-importer.test.ts)
+
 Next session start here:
 
-- run a fresh recent-orphan scan against linked production focused on assets created after the 2026-04-10 sweep to confirm the leak has stopped
-- wire the deployed scheduler to hit `/api/internal/storage-janitor` daily if it is not already configured
+- trace the remaining recent `character-assets` orphan against the exact delete path or import run that created it, then decide whether a follow-up fix belongs in character deletion, import rollback, or both
+- wire the deployed scheduler to hit `/api/internal/storage-janitor` daily if it is not already configured, or add persistent janitor run telemetry if scheduler access stays outside the repo
 
 ### P1-4. CI Guardrail Tightening
 

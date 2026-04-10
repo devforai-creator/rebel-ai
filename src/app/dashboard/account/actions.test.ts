@@ -56,6 +56,7 @@ type AccountDeleteSupabaseOptions = {
 type AccountDeleteAdminOptions = {
   deleteUserError?: DbError | null
   deleteSecretErrors?: Record<string, DbError | null>
+  storageRemoveErrors?: Record<string, DbError | null>
 }
 
 function buildFormData(entries: Record<string, string | undefined>) {
@@ -349,7 +350,7 @@ function buildDeleteAccountAdmin(options: AccountDeleteAdminOptions = {}) {
         remove: vi.fn(async (paths: string[]) => {
           state.events.push(`remove:${bucket}`)
           state.storageRemoveCalls.push({ bucket, paths })
-          return { data: [], error: null }
+          return { data: [], error: options.storageRemoveErrors?.[bucket] ?? null }
         }),
       })),
     },
@@ -579,5 +580,45 @@ describe('account actions', () => {
     ])
     expect(admin.state.deleteSecretCalls).toEqual(['secret-1', 'secret-2'])
     expect(supabase.auth.signOut).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns success with a warning when post-delete storage cleanup fails', async () => {
+    const supabase = buildDeleteAccountSupabase({
+      apiKeys: [{ vault_secret_name: 'secret-1' }],
+      characterAssetPaths: ['user-1/char-1/a.webp'],
+      moduleAssetPaths: ['user-1/mod-1/module.webp'],
+      importUploadPaths: ['user-1/imports/a.rbx'],
+    })
+    const admin = buildDeleteAccountAdmin({
+      storageRemoveErrors: {
+        'character-assets': { message: 'storage remove failed' },
+      },
+    })
+    createClientMock.mockResolvedValue(supabase)
+    createAdminClientMock.mockReturnValue(admin)
+    const { deleteAccount } = await import('./actions')
+
+    const result = await deleteAccount()
+
+    expect(result).toEqual({
+      success: true,
+      warning:
+        'Account deleted, but some storage cleanup failed. The storage janitor can remove leftovers.',
+    })
+    expect(admin.state.events).toEqual([
+      'deleteUser:user-1',
+      'remove:character-assets',
+      'remove:module-assets',
+      'remove:charx-uploads',
+      'delete_secret:secret-1',
+    ])
+    expect(supabase.auth.signOut).toHaveBeenCalledTimes(1)
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[Account] Account deleted but storage cleanup failed',
+      expect.objectContaining({
+        userId: 'user-1',
+        bucket: 'character-assets',
+      }),
+    )
   })
 })

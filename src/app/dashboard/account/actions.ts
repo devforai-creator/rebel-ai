@@ -104,21 +104,30 @@ export async function deleteAccount() {
     return { error: 'An error occurred while deleting account. Please try again later.' }
   }
 
-  await removeStorageObjects(admin, 'character-assets', characterAssetPaths, {
-    entityId: user.id,
-    entityType: 'user',
-    operation: 'deleteAccount',
-  })
-  await removeStorageObjects(admin, 'module-assets', moduleAssetPaths, {
-    entityId: user.id,
-    entityType: 'user',
-    operation: 'deleteAccount',
-  })
-  await removeStorageObjects(admin, IMPORT_UPLOAD_BUCKET, importUploadPaths, {
-    entityId: user.id,
-    entityType: 'user',
-    operation: 'deleteAccount',
-  })
+  let warning: string | undefined
+
+  for (const [bucket, paths] of [
+    ['character-assets', characterAssetPaths],
+    ['module-assets', moduleAssetPaths],
+    [IMPORT_UPLOAD_BUCKET, importUploadPaths],
+  ] as const) {
+    try {
+      await removeStorageObjects(admin, bucket, paths, {
+        entityId: user.id,
+        entityType: 'user',
+        operation: 'deleteAccount',
+      })
+    } catch (error) {
+      console.error('[Account] Account deleted but storage cleanup failed', {
+        userId: user.id,
+        bucket,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      warning =
+        'Account deleted, but some storage cleanup failed. The storage janitor can remove leftovers.'
+    }
+  }
+
   await deleteVaultSecretsAfterAccountDeletion(admin, user.id, secretNames)
 
   const { error: signOutError } = await supabase.auth.signOut()
@@ -130,7 +139,7 @@ export async function deleteAccount() {
     })
   }
 
-  return { success: true }
+  return warning ? { success: true, warning } : { success: true }
 }
 
 type DeleteAccountApiKeyRow = {

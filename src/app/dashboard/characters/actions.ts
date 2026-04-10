@@ -267,15 +267,28 @@ export async function deleteCharacter(id: string) {
     characterId: id,
     userId: user.id,
   })
-  await removeStorageObjects(supabase, 'character-assets', characterAssetPaths, {
-    entityId: id,
-    entityType: 'character',
-    operation: 'deleteCharacter',
-  })
+
+  let warning: string | undefined
+
+  try {
+    await removeStorageObjects(supabase, 'character-assets', characterAssetPaths, {
+      entityId: id,
+      entityType: 'character',
+      operation: 'deleteCharacter',
+    })
+  } catch (error) {
+    console.error('[Character] Character deleted but storage cleanup failed', {
+      characterId: id,
+      userId: user.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    warning =
+      'Character deleted, but some asset cleanup failed. The storage janitor can remove leftovers.'
+  }
 
   revalidatePath('/dashboard/characters')
   revalidatePath('/dashboard/modules')
-  return { success: true }
+  return warning ? { success: true, warning } : { success: true }
 }
 
 function parseModuleIds(raw: string | null): string[] {

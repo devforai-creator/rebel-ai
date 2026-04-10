@@ -77,11 +77,21 @@ export async function cleanupOrphanedModules(
     .filter((moduleId) => !remainingModuleIds.has(moduleId))
     .flatMap((moduleId) => storagePathsByModuleId.get(moduleId) ?? [])
 
-  await removeStorageObjects(supabase, 'module-assets', deletedStoragePaths, {
-    entityId: context.characterId,
-    entityType: 'character',
-    operation: `cleanupOrphanedModules:${context.action}`,
-  })
+  try {
+    await removeStorageObjects(supabase, 'module-assets', deletedStoragePaths, {
+      entityId: context.characterId,
+      entityType: 'character',
+      operation: `cleanupOrphanedModules:${context.action}`,
+    })
+  } catch (error) {
+    console.error('[Modules] Failed to remove module-assets after orphan cleanup', {
+      action: context.action,
+      characterId: context.characterId,
+      userId: context.userId,
+      moduleIds: uniqueIds,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 
   return deletedCount
 }

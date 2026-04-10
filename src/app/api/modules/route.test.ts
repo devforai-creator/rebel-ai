@@ -12,6 +12,7 @@ function buildSupabase(options: {
   user: { id: string } | null
   modules?: Array<Record<string, unknown>>
   moduleAssets?: Array<Record<string, unknown>>
+  storageRemoveError?: { message: string } | null
 }) {
   const supabase = createSupabaseMock({
     tables: {
@@ -41,7 +42,7 @@ function buildSupabase(options: {
               paths: string[]
             }>
           ).push({ bucket, paths })
-          return Promise.resolve({ data: [], error: null })
+          return Promise.resolve({ data: [], error: options.storageRemoveError ?? null })
         }),
       })),
     },
@@ -217,6 +218,45 @@ describe('/api/modules', () => {
           paths: ['user-1/mod-1/bg.webp', 'user-1/mod-1/pose.png'],
         },
       ])
+    })
+
+    it('returns success with a warning when module asset cleanup fails after delete', async () => {
+      const supabase = buildSupabase({
+        user: { id: 'user-1' },
+        modules: [{ id: 'mod-1', user_id: 'user-1' }],
+        moduleAssets: [
+          {
+            id: 'asset-1',
+            module_id: 'mod-1',
+            user_id: 'user-1',
+            storage_path: 'user-1/mod-1/bg.webp',
+          },
+        ],
+        storageRemoveError: { message: 'storage remove failed' },
+      })
+      createClientMock.mockResolvedValue(supabase)
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const { DELETE } = await import('./route')
+
+      const response = await DELETE(
+        new NextRequest('http://localhost/api/modules?id=mod-1', { method: 'DELETE' }),
+      )
+      const body = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(body).toMatchObject({
+        success: true,
+        warning:
+          'Module deleted, but some asset cleanup failed. The storage janitor can remove leftovers.',
+      })
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[Modules API] Module deleted but storage cleanup failed:',
+        expect.objectContaining({
+          moduleId: 'mod-1',
+          userId: 'user-1',
+        }),
+      )
+      consoleSpy.mockRestore()
     })
 
     it('returns 500 when delete fails', async () => {

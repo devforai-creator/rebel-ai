@@ -88,6 +88,11 @@ Done when:
 - internal secret reads happen at request time, not module init time
 - tests cover missing secret and changed secret behavior where practical
 
+Current status as of 2026-04-11:
+
+- [src/app/api/internal/import-job-timeout/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/import-job-timeout/route.ts) now reads `CHAT_ADMIN_SECRET` at request time, with rotation coverage in [src/app/api/internal/import-job-timeout/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/import-job-timeout/route.test.ts)
+- [src/app/api/characters/import/jobs/[id]/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/characters/import/jobs/[id]/route.ts) now reads `CHAT_ADMIN_SECRET` at timeout-dispatch time, with missing-secret and rotated-secret coverage in [src/app/api/characters/import/jobs/[id]/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/characters/import/jobs/[id]/route.test.ts)
+
 ### P0-3. Legacy Asset Safety Rollback
 
 Scope:

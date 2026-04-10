@@ -3,7 +3,10 @@ import { createClient } from '@/lib/supabase/server'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
 
 const STALE_JOB_TIMEOUT_MS = 15 * 60 * 1000
-const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET
+
+function getChatAdminSecret(): string | null {
+  return process.env.CHAT_ADMIN_SECRET ?? null
+}
 
 type RouteParams = {
   params: Promise<{
@@ -83,7 +86,9 @@ async function markJobAsTimedOut(params: {
   userId: string
   errorMessage: string
 }): Promise<{ status: string; error_message: string; completed_at: string } | null> {
-  if (!CHAT_ADMIN_SECRET) {
+  const chatAdminSecret = getChatAdminSecret()
+
+  if (!chatAdminSecret) {
     console.warn(
       '[Character Import][jobs] CHAT_ADMIN_SECRET not configured, cannot mark job timeout',
     )
@@ -94,7 +99,7 @@ async function markJobAsTimedOut(params: {
     const endpoint = buildInternalApiUrl('/api/internal/import-job-timeout')
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${CHAT_ADMIN_SECRET}`,
+      Authorization: `Bearer ${chatAdminSecret}`,
     }
 
     if (process.env.VERCEL_AUTOMATION_BYPASS_SECRET) {

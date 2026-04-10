@@ -132,6 +132,20 @@ describe('POST /api/internal/import-job-timeout', () => {
     expect(response.status).toBe(401)
   })
 
+  it('reads CHAT_ADMIN_SECRET at request time so rotated secrets take effect without reimport', async () => {
+    process.env.CHAT_ADMIN_SECRET = 'old-secret'
+    const { POST } = await import('./route')
+
+    process.env.CHAT_ADMIN_SECRET = 'new-secret'
+
+    const staleSecretResponse = await POST(buildRequest({}, 'Bearer old-secret'))
+    expect(staleSecretResponse.status).toBe(401)
+
+    const rotatedSecretResponse = await POST(buildRequest({}, 'Bearer new-secret'))
+    expect(rotatedSecretResponse.status).toBe(400)
+    expect(await rotatedSecretResponse.json()).toEqual({ error: 'Invalid request body' })
+  })
+
   it('returns 400 for invalid request body', async () => {
     process.env.CHAT_ADMIN_SECRET = 'admin-secret'
     const { POST } = await import('./route')

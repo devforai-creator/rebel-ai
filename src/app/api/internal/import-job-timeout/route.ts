@@ -3,8 +3,11 @@ import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/database.types'
 
-const CHAT_ADMIN_SECRET = process.env.CHAT_ADMIN_SECRET
 const IMPORT_JOB_TIMEOUT_DEBUG_ENABLED = process.env.IMPORT_JOB_TIMEOUT_DEBUG === 'true'
+
+function getChatAdminSecret(): string | null {
+  return process.env.CHAT_ADMIN_SECRET ?? null
+}
 
 function logImportJobTimeoutDebug(...args: unknown[]): void {
   if (IMPORT_JOB_TIMEOUT_DEBUG_ENABLED) {
@@ -40,7 +43,8 @@ export const runtime = 'nodejs'
 export async function POST(request: NextRequest) {
   // Verify admin secret
   const authHeader = request.headers.get('Authorization')
-  if (!CHAT_ADMIN_SECRET || authHeader !== `Bearer ${CHAT_ADMIN_SECRET}`) {
+  const chatAdminSecret = getChatAdminSecret()
+  if (!chatAdminSecret || authHeader !== `Bearer ${chatAdminSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

@@ -5680,3 +5680,4 @@ $$;
 
 revoke all on function public.delete_api_key(uuid, uuid) from public, anon;
 grant execute on function public.delete_api_key(uuid, uuid) to authenticated, service_role;
+

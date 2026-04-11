@@ -48,18 +48,20 @@ describe('first-class-smoke-check', () => {
     expect(passive.map((check) => check.key)).toEqual([
       'health',
       'triage',
-      'storage-janitor-dry-run',
+      'storage-janitor-dry-run-dispatch',
     ])
     expect(active.map((check) => check.key)).toEqual([
       'health',
       'triage',
-      'storage-janitor-dry-run',
+      'storage-janitor-dry-run-dispatch',
       'chat-runner',
       'character-import-runner',
     ])
+    expect(passive[2].url.toString()).toContain('/api/internal/storage-janitor?')
+    expect(passive[2].url.searchParams.get('dryRun')).toBe('1')
   })
 
-  it('marks degraded health and triage as warnings and preserves dry-run janitor success', async () => {
+  it('marks degraded health and triage as warnings and preserves janitor dispatch success', async () => {
     const checks = createCheckDefinitions({
       origin: 'https://example.com',
       adminSecret: 'secret',
@@ -91,12 +93,10 @@ describe('first-class-smoke-check', () => {
         recentFailedJobs: [{ id: 'job-1' }],
       },
       {
-        ok: true,
+        triggered: true,
         mode: 'dry-run',
-        results: {
-          characterAssets: { orphanCount: 0 },
-          moduleAssets: { orphanCount: 1 },
-        },
+        olderThanDays: 1,
+        maxDelete: 10,
       },
     ]
 
@@ -104,7 +104,7 @@ describe('first-class-smoke-check', () => {
       const body = responseBodies.shift()
       return {
         ok: body?.status !== 'degraded',
-        status: body?.status === 'degraded' ? 503 : 200,
+        status: body?.status === 'degraded' ? 503 : body?.triggered ? 202 : 200,
         text: async () => JSON.stringify(body),
       }
     })

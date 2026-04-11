@@ -63,7 +63,7 @@ Origin resolution order:
 
 - `GET /api/internal/health`
 - `GET /api/internal/triage`
-- `POST /api/internal/storage-janitor` with `{"execute":false,"olderThanDays":1,"maxDelete":10,"sampleSize":5}`
+- `GET /api/internal/storage-janitor?dryRun=1&olderThanDays=1&maxDelete=10`
 
 Interpretation:
 
@@ -72,6 +72,8 @@ Interpretation:
 - `FAIL`: auth, transport, or response-contract failure
 
 The script exits non-zero on either `WARN` or `FAIL`. That is intentional. A degraded system is still a failed smoke check.
+
+The passive janitor probe checks that dry-run dispatch is accepted quickly. It does not wait for a full storage scan to finish.
 
 ## Active Runner Probe
 
@@ -90,6 +92,16 @@ It is useful after:
 - changing runner deployment assumptions
 
 Do not treat it as read-only. If there is pending chat or import work, it may process it.
+
+If you want a full synchronous janitor dry-run instead of a fast dispatch check, call the runner directly yourself:
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer ${CHAT_ADMIN_SECRET}" \
+  -H "Content-Type: application/json" \
+  -d '{"execute":false,"olderThanDays":1,"maxDelete":10,"sampleSize":5}' \
+  https://your-app.example.com/api/internal/storage-janitor
+```
 
 ## Local Verification Flow
 

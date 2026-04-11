@@ -70,6 +70,10 @@ function createCheckDefinitions({ origin, adminSecret, activeRunners }) {
   const baseHeaders = {
     Authorization: `Bearer ${adminSecret}`,
   }
+  const storageJanitorDispatchUrl = new URL('/api/internal/storage-janitor', origin)
+  storageJanitorDispatchUrl.searchParams.set('dryRun', '1')
+  storageJanitorDispatchUrl.searchParams.set('olderThanDays', '1')
+  storageJanitorDispatchUrl.searchParams.set('maxDelete', '10')
 
   const checks = [
     {
@@ -167,24 +171,15 @@ function createCheckDefinitions({ origin, adminSecret, activeRunners }) {
       },
     },
     {
-      key: 'storage-janitor-dry-run',
-      label: 'storage janitor dry-run',
-      url: new URL('/api/internal/storage-janitor', origin),
+      key: 'storage-janitor-dry-run-dispatch',
+      label: 'storage janitor dry-run dispatch',
+      url: storageJanitorDispatchUrl,
       init: {
-        method: 'POST',
-        headers: {
-          ...baseHeaders,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          execute: false,
-          olderThanDays: 1,
-          maxDelete: 10,
-          sampleSize: 5,
-        }),
+        method: 'GET',
+        headers: baseHeaders,
       },
       evaluate(response, body) {
-        if (!response.ok) {
+        if (response.status !== 202) {
           return {
             status: 'fail',
             summary: `unexpected HTTP ${response.status}`,
@@ -192,7 +187,12 @@ function createCheckDefinitions({ origin, adminSecret, activeRunners }) {
           }
         }
 
-        if (!body || typeof body !== 'object' || body.ok !== true || body.mode !== 'dry-run') {
+        if (
+          !body ||
+          typeof body !== 'object' ||
+          body.triggered !== true ||
+          body.mode !== 'dry-run'
+        ) {
           return {
             status: 'fail',
             summary: 'unexpected janitor response',
@@ -202,10 +202,11 @@ function createCheckDefinitions({ origin, adminSecret, activeRunners }) {
 
         return {
           status: 'pass',
-          summary: 'janitor dry-run ok',
+          summary: 'janitor dry-run dispatch accepted',
           details: {
-            characterAssetOrphans: body.results?.characterAssets?.orphanCount ?? null,
-            moduleAssetOrphans: body.results?.moduleAssets?.orphanCount ?? null,
+            mode: body.mode ?? null,
+            olderThanDays: body.olderThanDays ?? null,
+            maxDelete: body.maxDelete ?? null,
           },
         }
       },

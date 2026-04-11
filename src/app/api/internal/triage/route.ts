@@ -16,6 +16,7 @@ export const revalidate = 0
 export const maxDuration = 60
 
 const FAILED_JOB_LIMIT = 10
+const RECENT_FAILED_JOB_WINDOW_HOURS = 72
 
 export async function GET(req: NextRequest) {
   const adminSecret = process.env.CHAT_ADMIN_SECRET
@@ -31,6 +32,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const admin = createAdminClient()
+    const failedJobsCutoffIso = new Date(
+      Date.now() - RECENT_FAILED_JOB_WINDOW_HOURS * 60 * 60 * 1000,
+    ).toISOString()
     const [healthSnapshot, failedJobsResult] = await Promise.all([
       loadTriageHealthSnapshot(),
       admin
@@ -39,6 +43,7 @@ export async function GET(req: NextRequest) {
           'id, chat_id, status, error, delivery_mode, lifecycle_stage, failure_stage, created_at, updated_at',
         )
         .eq('status', 'error')
+        .gte('updated_at', failedJobsCutoffIso)
         .order('updated_at', { ascending: false })
         .limit(FAILED_JOB_LIMIT),
     ])
@@ -73,6 +78,7 @@ export async function GET(req: NextRequest) {
           : ('ok' as const),
       timestamp: new Date().toISOString(),
       healthSource: healthSnapshot.source,
+      failedJobWindowHours: RECENT_FAILED_JOB_WINDOW_HOURS,
       degradedServices,
       recentFailedJobs: failedJobs,
     }

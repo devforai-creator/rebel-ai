@@ -154,6 +154,7 @@ Done when:
 Current status as of 2026-04-11:
 
 - [src/app/api/internal/triage/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/triage/route.ts) now exposes a single internal JSON snapshot for degraded services plus recent failed chat jobs
+- the triage snapshot now defaults to a recent failure window so stale historical job errors do not dominate the operator signal
 - this is still an API surface, not yet a dashboard/operator page
 
 ### P1-2. Freeze Removal Candidates More Aggressively

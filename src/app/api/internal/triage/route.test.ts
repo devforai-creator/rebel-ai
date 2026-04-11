@@ -75,24 +75,38 @@ function createHealthyStats(label: string) {
   }
 }
 
+type ChatGenerationJobsTableMock = {
+  select: () => {
+    eq: () => {
+      gte: ReturnType<typeof vi.fn>
+    }
+  }
+  gteMock: ReturnType<typeof vi.fn>
+}
+
 function createChatGenerationJobsTable({
   rows = [],
   error = null,
 }: {
   rows?: Array<Record<string, unknown>>
   error?: { message: string } | null
-}) {
+}): ChatGenerationJobsTableMock {
+  const gteMock = vi.fn(() => ({
+    order: () => ({
+      limit: async () => ({
+        data: rows,
+        error,
+      }),
+    }),
+  }))
+
   return {
     select: () => ({
       eq: () => ({
-        order: () => ({
-          limit: async () => ({
-            data: rows,
-            error,
-          }),
-        }),
+        gte: gteMock,
       }),
     }),
+    gteMock,
   }
 }
 
@@ -134,10 +148,11 @@ describe('GET /api/internal/triage', () => {
   })
 
   it('returns a degraded triage snapshot with recent failed jobs and degraded services', async () => {
+    let gteMock: ReturnType<typeof vi.fn> | null = null
     createAdminClientMock.mockReturnValue({
       from: (table: string) => {
         expect(table).toBe('chat_generation_jobs')
-        return createChatGenerationJobsTable({
+        const jobsTable = createChatGenerationJobsTable({
           rows: [
             {
               id: 'job-1',
@@ -152,6 +167,8 @@ describe('GET /api/internal/triage', () => {
             },
           ],
         })
+        gteMock = jobsTable.gteMock
+        return jobsTable
       },
     })
 
@@ -180,6 +197,7 @@ describe('GET /api/internal/triage', () => {
     expect(body).toMatchObject({
       status: 'degraded',
       healthSource: 'durable',
+      failedJobWindowHours: 72,
       degradedServices: [
         {
           label: 'chat-job-runner-trigger',
@@ -200,6 +218,10 @@ describe('GET /api/internal/triage', () => {
         },
       ],
     })
+    if (!gteMock) {
+      throw new Error('Expected gte mock to be captured')
+    }
+    expect(gteMock).toHaveBeenCalledWith('updated_at', expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/))
   })
 
   it('falls back to in-memory health stats when durable stats are unavailable', async () => {

@@ -19,15 +19,33 @@ function restoreEnv() {
 const hoistedMocks = vi.hoisted(() => {
   const createClientMock = vi.fn()
   const fetchMock = vi.fn()
-  return { createClientMock, fetchMock }
+  const createAdminClientMock = vi.fn(() => ({}))
+  const persistChatJobLifecycleStageMock = vi.fn()
+  return {
+    createClientMock,
+    fetchMock,
+    createAdminClientMock,
+    persistChatJobLifecycleStageMock,
+  }
 })
 
 const createClientMock = hoistedMocks.createClientMock
 type FetchMock = ReturnType<typeof vi.fn<typeof globalThis.fetch>>
 const fetchMock = hoistedMocks.fetchMock as FetchMock
+const createAdminClientMock = hoistedMocks.createAdminClientMock
+const persistChatJobLifecycleStageMock = hoistedMocks.persistChatJobLifecycleStageMock
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: () => createClientMock(),
+}))
+
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: () => createAdminClientMock(),
+}))
+
+vi.mock('@/lib/chat/job-lifecycle-store', () => ({
+  persistChatJobLifecycleStage: (...args: Parameters<typeof persistChatJobLifecycleStageMock>) =>
+    persistChatJobLifecycleStageMock(...args),
 }))
 
 vi.mock('@/lib/chat/translation-trigger', () => ({
@@ -107,6 +125,8 @@ interface ChatJobRow {
   user_id: string
   status: string
   delivery_mode?: string
+  lifecycle_stage?: string
+  failure_stage?: string | null
   payload: unknown
 }
 
@@ -853,6 +873,11 @@ function findFetchCallByPathname(pathname: string): Parameters<FetchMock> | unde
   return fetchMock.mock.calls.find(([input]) => getFetchUrl(input).pathname === pathname)
 }
 
+async function flushMicrotasks() {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 function buildDefaultAuthenticatedFixture(
   overrides: Partial<SupabaseFixture> = {},
 ): SupabaseFixture {
@@ -895,7 +920,10 @@ describe('POST /api/chat', () => {
     restoreEnv()
     process.env.CHAT_ADMIN_SECRET = 'test-chat-admin-secret'
     createClientMock.mockReset()
+    createAdminClientMock.mockReset()
+    createAdminClientMock.mockReturnValue({})
     fetchMock.mockClear()
+    persistChatJobLifecycleStageMock.mockReset()
     triggerMessageTranslationMock.mockClear()
     currentAdminMock = null
     adminRpcCalls = []
@@ -1438,6 +1466,8 @@ describe('POST /api/chat', () => {
       user_id: 'user-1',
       status: 'pending',
       delivery_mode: 'streaming',
+      lifecycle_stage: 'queued',
+      failure_stage: null,
     })
     const payload = supabase.chatJobs[0].payload as Record<string, unknown>
     expect(payload).toMatchObject({
@@ -1450,6 +1480,20 @@ describe('POST /api/chat', () => {
       isRegeneration: false,
     })
     expect(triggerMessageTranslationMock).toHaveBeenCalledWith(supabase.messages[0].id, 'user-1')
+    expect(persistChatJobLifecycleStageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: body.jobId,
+        stage: 'dispatching_runner_trigger',
+        additionalUpdate: { failure_stage: null },
+      }),
+    )
+    expect(persistChatJobLifecycleStageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: body.jobId,
+        stage: 'trigger_dispatched',
+        additionalUpdate: { failure_stage: null },
+      }),
+    )
   })
 
   it('dispatches the chat job runner trigger with the expected internal URL and auth headers', async () => {
@@ -1470,6 +1514,7 @@ describe('POST /api/chat', () => {
     const response = await POST(request)
 
     expect(response.status).toBe(202)
+    await flushMicrotasks()
 
     const runnerTriggerCall = findFetchCallByPathname('/api/internal/chat-job-runner/trigger')
 

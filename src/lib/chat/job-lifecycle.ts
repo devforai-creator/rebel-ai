@@ -1,4 +1,6 @@
 export const CHAT_JOB_LIFECYCLE_STAGE_QUEUED = 'queued'
+export const CHAT_JOB_LIFECYCLE_STAGE_DISPATCHING_RUNNER_TRIGGER = 'dispatching_runner_trigger'
+export const CHAT_JOB_LIFECYCLE_STAGE_TRIGGER_DISPATCHED = 'trigger_dispatched'
 export const CHAT_JOB_LIFECYCLE_STAGE_RUNNER_CLAIMED = 'runner_claimed'
 export const CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT = 'loading_context'
 export const CHAT_JOB_LIFECYCLE_STAGE_REQUESTING_PROVIDER = 'requesting_provider'
@@ -12,6 +14,8 @@ export const CHAT_JOB_LIFECYCLE_STAGE_TIMED_OUT = 'timed_out'
 
 export const CHAT_JOB_LIFECYCLE_STAGES = [
   CHAT_JOB_LIFECYCLE_STAGE_QUEUED,
+  CHAT_JOB_LIFECYCLE_STAGE_DISPATCHING_RUNNER_TRIGGER,
+  CHAT_JOB_LIFECYCLE_STAGE_TRIGGER_DISPATCHED,
   CHAT_JOB_LIFECYCLE_STAGE_RUNNER_CLAIMED,
   CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT,
   CHAT_JOB_LIFECYCLE_STAGE_REQUESTING_PROVIDER,
@@ -27,7 +31,9 @@ export const CHAT_JOB_LIFECYCLE_STAGES = [
 export type ChatJobLifecycleStage = (typeof CHAT_JOB_LIFECYCLE_STAGES)[number]
 
 const CHAT_JOB_LIFECYCLE_STAGE_LABELS: Record<ChatJobLifecycleStage, string> = {
-  queued: 'queue admission',
+  queued: 'queue insert',
+  dispatching_runner_trigger: 'runner trigger dispatch',
+  trigger_dispatched: 'runner trigger handoff',
   runner_claimed: 'runner pickup',
   loading_context: 'context loading',
   requesting_provider: 'provider request',

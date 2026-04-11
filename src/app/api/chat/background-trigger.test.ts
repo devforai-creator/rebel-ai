@@ -18,12 +18,16 @@ const hoistedMocks = vi.hoisted(() => {
   )
   const recordChatRunnerTriggerSuccessMock = vi.fn()
   const recordChatRunnerTriggerFailureMock = vi.fn()
+  const createAdminClientMock = vi.fn(() => ({}))
+  const persistChatJobLifecycleStageMock = vi.fn()
 
   return {
     afterMock,
     buildInternalApiUrlMock,
     recordChatRunnerTriggerSuccessMock,
     recordChatRunnerTriggerFailureMock,
+    createAdminClientMock,
+    persistChatJobLifecycleStageMock,
   }
 })
 
@@ -31,6 +35,8 @@ const afterMock = hoistedMocks.afterMock
 const buildInternalApiUrlMock = hoistedMocks.buildInternalApiUrlMock
 const recordChatRunnerTriggerSuccessMock = hoistedMocks.recordChatRunnerTriggerSuccessMock
 const recordChatRunnerTriggerFailureMock = hoistedMocks.recordChatRunnerTriggerFailureMock
+const createAdminClientMock = hoistedMocks.createAdminClientMock
+const persistChatJobLifecycleStageMock = hoistedMocks.persistChatJobLifecycleStageMock
 
 async function flushBackgroundTask() {
   await afterMock.mock.results.at(-1)?.value
@@ -54,6 +60,15 @@ vi.mock('@/lib/chat/runner-trigger-monitor', () => ({
   ) => recordChatRunnerTriggerFailureMock(...args),
 }))
 
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: () => createAdminClientMock(),
+}))
+
+vi.mock('@/lib/chat/job-lifecycle-store', () => ({
+  persistChatJobLifecycleStage: (...args: Parameters<typeof persistChatJobLifecycleStageMock>) =>
+    persistChatJobLifecycleStageMock(...args),
+}))
+
 import { scheduleChatJobRunnerTrigger } from './background-trigger'
 
 describe('scheduleChatJobRunnerTrigger', () => {
@@ -69,6 +84,9 @@ describe('scheduleChatJobRunnerTrigger', () => {
     })
     recordChatRunnerTriggerSuccessMock.mockClear()
     recordChatRunnerTriggerFailureMock.mockClear()
+    createAdminClientMock.mockReset()
+    createAdminClientMock.mockReturnValue({})
+    persistChatJobLifecycleStageMock.mockReset()
     fetchMock.mockReset()
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ triggered: true }), {
@@ -112,6 +130,22 @@ describe('scheduleChatJobRunnerTrigger', () => {
         status: 202,
       }),
     )
+    expect(persistChatJobLifecycleStageMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        jobId: 'job-1',
+        stage: 'dispatching_runner_trigger',
+        additionalUpdate: { failure_stage: null },
+      }),
+    )
+    expect(persistChatJobLifecycleStageMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        jobId: 'job-1',
+        stage: 'trigger_dispatched',
+        additionalUpdate: { failure_stage: null },
+      }),
+    )
     expect(recordChatRunnerTriggerFailureMock).not.toHaveBeenCalled()
   })
 
@@ -127,6 +161,13 @@ describe('scheduleChatJobRunnerTrigger', () => {
 
     expect(afterMock).not.toHaveBeenCalled()
     expect(fetchMock).not.toHaveBeenCalled()
+    expect(persistChatJobLifecycleStageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 'job-1',
+        stage: 'dispatching_runner_trigger',
+        additionalUpdate: { failure_stage: 'dispatching_runner_trigger' },
+      }),
+    )
     expect(recordChatRunnerTriggerFailureMock).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'CHAT_ADMIN_SECRET is not configured',
@@ -163,6 +204,22 @@ describe('scheduleChatJobRunnerTrigger', () => {
     await flushBackgroundTask()
 
     expect(fetchMock).not.toHaveBeenCalled()
+    expect(persistChatJobLifecycleStageMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        jobId: 'job-1',
+        stage: 'dispatching_runner_trigger',
+        additionalUpdate: { failure_stage: null },
+      }),
+    )
+    expect(persistChatJobLifecycleStageMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        jobId: 'job-1',
+        stage: 'dispatching_runner_trigger',
+        additionalUpdate: { failure_stage: 'dispatching_runner_trigger' },
+      }),
+    )
     expect(recordChatRunnerTriggerFailureMock).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'bad internal origin',
@@ -197,6 +254,22 @@ describe('scheduleChatJobRunnerTrigger', () => {
 
     await flushBackgroundTask()
 
+    expect(persistChatJobLifecycleStageMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        jobId: 'job-1',
+        stage: 'dispatching_runner_trigger',
+        additionalUpdate: { failure_stage: null },
+      }),
+    )
+    expect(persistChatJobLifecycleStageMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        jobId: 'job-1',
+        stage: 'dispatching_runner_trigger',
+        additionalUpdate: { failure_stage: 'dispatching_runner_trigger' },
+      }),
+    )
     expect(recordChatRunnerTriggerFailureMock).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'Job runner trigger responded with status 503: runner down',
@@ -233,6 +306,22 @@ describe('scheduleChatJobRunnerTrigger', () => {
 
     await flushBackgroundTask()
 
+    expect(persistChatJobLifecycleStageMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        jobId: 'job-1',
+        stage: 'dispatching_runner_trigger',
+        additionalUpdate: { failure_stage: null },
+      }),
+    )
+    expect(persistChatJobLifecycleStageMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        jobId: 'job-1',
+        stage: 'dispatching_runner_trigger',
+        additionalUpdate: { failure_stage: 'dispatching_runner_trigger' },
+      }),
+    )
     expect(recordChatRunnerTriggerFailureMock).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'network down',

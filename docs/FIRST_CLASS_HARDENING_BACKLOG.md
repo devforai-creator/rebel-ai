@@ -79,6 +79,7 @@ Current status as of 2026-04-11:
 - [72_chat_job_lifecycle_stage.sql](../supabase/migrations/72_chat_job_lifecycle_stage.sql) added `lifecycle_stage` and `failure_stage`
 - [src/app/api/internal/chat-job-runner/service.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/service.ts) and [src/app/api/internal/chat-job-runner/anthropic-batch-orchestrator.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/anthropic-batch-orchestrator.ts) now persist runner-side stages
 - [src/app/api/chat/jobs/[id]/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/jobs/[id]/route.ts) now returns those fields
+- [src/app/api/chat/background-trigger.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/background-trigger.ts) now persists `dispatching_runner_trigger` and `trigger_dispatched`, so queued jobs that fail before runner pickup are no longer indistinguishable from healthy handoff
 
 ### P0-2. Make the Low-Cost Profile Reproducible End-to-End
 

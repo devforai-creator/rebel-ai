@@ -93,6 +93,23 @@ describe('pollJobStatus', () => {
         error: expect.objectContaining({ message: 'Failed to generate response.' }),
       })
     })
+
+    it('formats trigger dispatch failures with the new lifecycle label', async () => {
+      vi.mocked(mockDeps.fetchJobStatus).mockResolvedValue({
+        status: 'error',
+        error: 'Runner trigger failed',
+        failureStage: 'dispatching_runner_trigger',
+      })
+
+      const result = await pollJobStatus('job-123', mockDeps, SHORT_CONFIG)
+
+      expect(result).toEqual({
+        outcome: 'error',
+        error: expect.objectContaining({
+          message: 'Failed during runner trigger dispatch: Runner trigger failed',
+        }),
+      })
+    })
   })
 
   describe('timeout', () => {

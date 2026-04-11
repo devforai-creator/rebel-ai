@@ -1,4 +1,5 @@
 import { createTriggerTracker } from '@/lib/monitoring/trigger-tracker'
+import { persistServiceHealthRecord } from '@/lib/monitoring/service-health-store'
 
 type TriggerArgs = {
   origin: string
@@ -19,7 +20,16 @@ export type TriggerResult = {
   attempts?: number
 }
 
-const summaryTriggerTracker = createTriggerTracker('summary-generation')
+const summaryTriggerTracker = createTriggerTracker('summary-generation', {
+  onRecord(record) {
+    return persistServiceHealthRecord({
+      label: record.snapshot.label,
+      wasSuccess: record.wasSuccess,
+      errorMessage: record.errorMessage,
+      metadata: record.metadata,
+    })
+  },
+})
 
 function resolveMaxAttempts(): number {
   const raw = Number(process.env.SUMMARY_TRIGGER_MAX_ATTEMPTS ?? '2')
@@ -64,7 +74,7 @@ export async function triggerSummaryGeneration(
   const summarySecret = process.env.SUMMARY_GENERATION_SECRET
   if (!summarySecret) {
     console.error('[Chat Job Runner] SUMMARY_GENERATION_SECRET not configured')
-    summaryTriggerTracker.recordFailure('missing summary secret')
+    await summaryTriggerTracker.recordFailure('missing summary secret')
     return { success: false, error: 'SUMMARY_GENERATION_SECRET not configured' }
   }
 
@@ -89,7 +99,7 @@ export async function triggerSummaryGeneration(
       })
 
       if (response.ok) {
-        summaryTriggerTracker.recordSuccess({
+        await summaryTriggerTracker.recordSuccess({
           attempt,
           status: response.status,
         })
@@ -99,7 +109,7 @@ export async function triggerSummaryGeneration(
       const text = await response.text()
       lastError = `HTTP ${response.status}: ${text.slice(0, 200)}`
       console.error('[Chat Job Runner] Summary generation trigger failed', response.status, text)
-      summaryTriggerTracker.recordFailure(
+      await summaryTriggerTracker.recordFailure(
         new Error(`Summary trigger responded with ${response.status}`),
         {
           attempt,
@@ -116,7 +126,7 @@ export async function triggerSummaryGeneration(
     } catch (error) {
       lastError = error instanceof Error ? error.message : 'Network error'
       console.error('[Chat Job Runner] Failed to trigger summary generation', error)
-      summaryTriggerTracker.recordFailure(error, { attempt })
+      await summaryTriggerTracker.recordFailure(error, { attempt })
       if (attempt < maxAttempts) {
         await delay(retryDelay)
         continue

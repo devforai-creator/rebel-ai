@@ -31,6 +31,8 @@ function buildRequest(authHeader?: string) {
 beforeEach(() => {
   __resetChatRunnerTriggerStatsForTest()
   __resetSummaryTriggerStatsForTest()
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY
   process.env.CHAT_ADMIN_SECRET = 'admin-secret'
   process.env.SUMMARY_GENERATION_SECRET = 'summary-secret'
 })
@@ -52,7 +54,7 @@ describe('internal health endpoint', () => {
   })
 
   it('reports degraded status when triggers are failing', async () => {
-    recordChatRunnerTriggerFailure(new Error('cron never reached'), { attempt: 1 })
+    await recordChatRunnerTriggerFailure(new Error('cron never reached'), { attempt: 1 })
 
     await triggerSummaryGeneration(summaryArgs, {
       fetchImpl: async () => {
@@ -65,6 +67,7 @@ describe('internal health endpoint', () => {
 
     expect(response.status).toBe(503)
     expect(body.status).toBe('degraded')
+    expect(body.healthSource).toBe('memory-fallback')
     expect(body.services.chatRunnerTrigger.status).toBe('degraded')
     expect(body.services.summaryTrigger.status).toBe('degraded')
   })

@@ -28,7 +28,7 @@ async function broadcastAssistantStreamEvent({
 
   if (typeof (supabase as { channel?: unknown }).channel !== 'function') {
     const error = new Error('Supabase admin client does not expose channel()')
-    recordAssistantStreamBroadcastFailure(error, {
+    await recordAssistantStreamBroadcastFailure(error, {
       ...metadata,
       stage: 'missing-channel-api',
     })
@@ -48,7 +48,7 @@ async function broadcastAssistantStreamEvent({
 
     if (status !== 'ok') {
       const error = new Error(`Assistant stream broadcast returned status ${status}`)
-      recordAssistantStreamBroadcastFailure(error, {
+      await recordAssistantStreamBroadcastFailure(error, {
         ...metadata,
         stage: 'send',
         status,
@@ -60,13 +60,13 @@ async function broadcastAssistantStreamEvent({
       return
     }
 
-    recordAssistantStreamBroadcastSuccess({
+    await recordAssistantStreamBroadcastSuccess({
       ...metadata,
       stage: 'send',
       status,
     })
   } catch (error) {
-    recordAssistantStreamBroadcastFailure(error, {
+    await recordAssistantStreamBroadcastFailure(error, {
       ...metadata,
       stage: 'send',
     })

@@ -1336,6 +1336,45 @@ export type Database = {
           },
         ]
       }
+      service_health_status: {
+        Row: {
+          consecutive_failures: number
+          created_at: string
+          last_error_message: string | null
+          last_failure_at: string | null
+          last_metadata: Json | null
+          last_success_at: string | null
+          service_label: string
+          total_failures: number
+          total_successes: number
+          updated_at: string
+        }
+        Insert: {
+          consecutive_failures?: number
+          created_at?: string
+          last_error_message?: string | null
+          last_failure_at?: string | null
+          last_metadata?: Json | null
+          last_success_at?: string | null
+          service_label: string
+          total_failures?: number
+          total_successes?: number
+          updated_at?: string
+        }
+        Update: {
+          consecutive_failures?: number
+          created_at?: string
+          last_error_message?: string | null
+          last_failure_at?: string | null
+          last_metadata?: Json | null
+          last_success_at?: string | null
+          service_label?: string
+          total_failures?: number
+          total_successes?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_feedback: {
         Row: {
           created_at: string
@@ -1505,6 +1544,15 @@ export type Database = {
           similarity: number
           start_seq: number
         }[]
+      }
+      record_service_health_status: {
+        Args: {
+          p_error_message?: string
+          p_metadata?: Json
+          p_service_label: string
+          p_was_success: boolean
+        }
+        Returns: undefined
       }
     }
     Enums: {

@@ -30,6 +30,8 @@ function buildRequest(auth?: string) {
 describe('GET /api/internal/health', () => {
   beforeEach(() => {
     restoreEnv()
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY
     __resetAssistantStreamBroadcastStatsForTest()
     __resetChatRunnerTriggerStatsForTest()
     __resetSummaryTriggerStatsForTest()
@@ -59,7 +61,7 @@ describe('GET /api/internal/health', () => {
 
   it('returns assistant stream stats when services are healthy', async () => {
     process.env.CHAT_ADMIN_SECRET = 'test-secret'
-    recordAssistantStreamBroadcastSuccess({
+    await recordAssistantStreamBroadcastSuccess({
       chatId: 'chat-1',
       jobId: 'job-1',
       kind: 'snapshot',
@@ -72,6 +74,7 @@ describe('GET /api/internal/health', () => {
 
     expect(response.status).toBe(200)
     expect(body.status).toBe('ok')
+    expect(body.healthSource).toBe('memory-fallback')
     expect(body.services.assistantStreamBroadcast).toMatchObject({
       label: 'assistant-stream-broadcast',
       status: 'ok',
@@ -90,7 +93,7 @@ describe('GET /api/internal/health', () => {
 
   it('returns degraded when assistant stream broadcasts are failing', async () => {
     process.env.CHAT_ADMIN_SECRET = 'test-secret'
-    recordAssistantStreamBroadcastFailure(new Error('socket down'), {
+    await recordAssistantStreamBroadcastFailure(new Error('socket down'), {
       chatId: 'chat-1',
       jobId: 'job-1',
       kind: 'error',

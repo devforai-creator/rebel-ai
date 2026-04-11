@@ -21,7 +21,7 @@ export function scheduleChatJobRunnerTrigger({
 
   if (!adminSecret) {
     const error = new Error('CHAT_ADMIN_SECRET is not configured')
-    recordChatRunnerTriggerFailure(error, {
+    void recordChatRunnerTriggerFailure(error, {
       ...baseMetadata,
       stage: 'schedule',
     })
@@ -35,7 +35,7 @@ export function scheduleChatJobRunnerTrigger({
     try {
       triggerUrl = buildInternalApiUrl('/api/internal/chat-job-runner/trigger').toString()
     } catch (error) {
-      recordChatRunnerTriggerFailure(error, {
+      await recordChatRunnerTriggerFailure(error, {
         ...baseMetadata,
         stage: 'resolve-trigger-url',
       })
@@ -69,7 +69,7 @@ export function scheduleChatJobRunnerTrigger({
         const error = new Error(
           `Job runner trigger responded with status ${response.status}: ${text || 'Unknown error'}`,
         )
-        recordChatRunnerTriggerFailure(error, {
+        await recordChatRunnerTriggerFailure(error, {
           ...baseMetadata,
           triggerUrl,
           status: response.status,
@@ -83,13 +83,13 @@ export function scheduleChatJobRunnerTrigger({
         return
       }
 
-      recordChatRunnerTriggerSuccess({
+      await recordChatRunnerTriggerSuccess({
         ...baseMetadata,
         triggerUrl,
         status: response.status,
       })
     } catch (error) {
-      recordChatRunnerTriggerFailure(error, {
+      await recordChatRunnerTriggerFailure(error, {
         ...baseMetadata,
         triggerUrl,
         stage: 'fetch-trigger',

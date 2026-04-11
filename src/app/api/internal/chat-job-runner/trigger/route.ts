@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
         const error = new Error(
           `Runner dispatch failed (${response.status}): ${text || 'Unknown error'}`,
         )
-        recordChatRunnerTriggerFailure(error, { attempt: 1, status: response.status })
+        await recordChatRunnerTriggerFailure(error, { attempt: 1, status: response.status })
         console.error('[Chat Job Runner Trigger] Runner dispatch failed', {
           status: response.status,
           body: text,
@@ -71,9 +71,13 @@ export async function GET(req: NextRequest) {
         return
       }
 
-      recordChatRunnerTriggerSuccess({ attempt: 1, status: response.status, processedCount: null })
+      await recordChatRunnerTriggerSuccess({
+        attempt: 1,
+        status: response.status,
+        processedCount: null,
+      })
     } catch (error) {
-      recordChatRunnerTriggerFailure(error, { attempt: 1 })
+      await recordChatRunnerTriggerFailure(error, { attempt: 1 })
       console.error('[Chat Job Runner Trigger] Failed to invoke runner', error)
     } finally {
       clearTimeout(timer)

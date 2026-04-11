@@ -16,6 +16,10 @@ This repo is TypeScript-first and formatted by Prettier: 2-space indentation, no
 
 Vitest runs in a Node environment with globals enabled. Keep fast unit tests next to the module they exercise, and use `tests/` for broader auth, queue, and security scenarios. Use `*.integration.test.ts` for integration-style cases. When changing API routes, queue runners, RBX import logic, or Supabase policies, add or update tests in the same change.
 
+## Operational Verification
+
+For changes that touch internal routes, queue runners, trigger wiring, janitors, deployment assumptions, or environment-variable contracts, run `npm run ops:smoke` against the active deployment before closing the task. If the change intentionally affects runner execution paths, prefer `npm run ops:smoke:active`. Purely documentation-only changes and purely presentational UI changes can skip the smoke check.
+
 ## Commit & Pull Request Guidelines
 
 Recent history favors short imperative commit subjects such as `Fix ...`, `Switch ...`, and `Revert ...`; an occasional conventional prefix like `fix:` is also acceptable. Keep commits focused and mention migration or environment-variable impact when needed. PRs should include a summary, linked issue if applicable, test evidence, and screenshots or GIFs for dashboard/UI changes. Call out any required updates to `.env.local`, Vercel settings, or Supabase configuration.

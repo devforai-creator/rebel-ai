@@ -4,6 +4,7 @@ import type { TriggerStats } from '@/lib/monitoring/trigger-tracker'
 
 export const SERVICE_HEALTH_LABELS = [
   'assistant-stream-broadcast',
+  'chat-job-lifecycle-persistence',
   'chat-job-runner-trigger',
   'summary-generation',
 ] as const

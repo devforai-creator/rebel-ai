@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getAssistantStreamBroadcastStats } from '@/lib/chat/assistant-stream-monitor'
+import { getChatJobLifecyclePersistenceStats } from '@/lib/chat/job-lifecycle-store'
+import { getChatRunnerTriggerStats } from '@/lib/chat/runner-trigger-monitor'
+import { getSummaryTriggerStats } from '@/lib/chat/summary-trigger'
+import { getMessageTranslationTriggerStats } from '@/lib/chat/translation-trigger-monitor'
+import {
+  deriveAggregateSignalStatus,
+  getExperimentalSignalStatus,
+  getServiceSignalStatus,
+} from '@/lib/monitoring/service-signal-policy'
 import {
   createDefaultTriggerStats,
   loadDurableServiceHealthStats,
   SERVICE_HEALTH_LABELS,
   type ServiceHealthLabel,
 } from '@/lib/monitoring/service-health-store'
-import { getAssistantStreamBroadcastStats } from '@/lib/chat/assistant-stream-monitor'
-import { getChatRunnerTriggerStats } from '@/lib/chat/runner-trigger-monitor'
-import { getSummaryTriggerStats } from '@/lib/chat/summary-trigger'
 import type { TriggerStats } from '@/lib/monitoring/trigger-tracker'
 
 export const runtime = 'nodejs'
@@ -68,23 +75,29 @@ export async function GET(req: NextRequest) {
     }))
 
     const degradedServices = healthSnapshot.services.filter(
-      (service) => service.consecutiveFailures > 0,
+      (service) => service.status === 'degraded',
     )
+    const warningServices = healthSnapshot.services.filter((service) => service.status === 'warn')
+    const translationSignal = decorateExperimentalSignalStats(getMessageTranslationTriggerStats())
 
     const body = {
-      status:
-        degradedServices.length > 0 || failedJobs.length > 0
-          ? ('degraded' as const)
-          : ('ok' as const),
+      status: deriveAggregateSignalStatus([
+        degradedServices.length > 0 || failedJobs.length > 0 ? 'degraded' : 'ok',
+        warningServices.length > 0 || translationSignal.status === 'warn' ? 'warn' : 'ok',
+      ]),
       timestamp: new Date().toISOString(),
       healthSource: healthSnapshot.source,
+      warningServices,
       failedJobWindowHours: RECENT_FAILED_JOB_WINDOW_HOURS,
       degradedServices,
+      experimentalSignals: {
+        translationTrigger: translationSignal,
+      },
       recentFailedJobs: failedJobs,
     }
 
     return NextResponse.json(body, {
-      status: body.status === 'ok' ? 200 : 503,
+      status: body.status === 'degraded' ? 503 : 200,
       headers: {
         'Cache-Control': 'no-store',
       },
@@ -100,6 +113,7 @@ export async function GET(req: NextRequest) {
 async function loadTriageHealthSnapshot() {
   const fallbackStats = new Map<ServiceHealthLabel, TriggerStats>([
     ['assistant-stream-broadcast', getAssistantStreamBroadcastStats()],
+    ['chat-job-lifecycle-persistence', getChatJobLifecyclePersistenceStats()],
     ['chat-job-runner-trigger', getChatRunnerTriggerStats()],
     ['summary-generation', getSummaryTriggerStats()],
   ])
@@ -132,7 +146,21 @@ async function loadTriageHealthSnapshot() {
 function decorateServiceStats(stats: TriggerStats) {
   return {
     label: stats.label,
-    status: stats.consecutiveFailures > 0 ? ('degraded' as const) : ('ok' as const),
+    status: getServiceSignalStatus(stats),
+    totalSuccesses: stats.totalSuccesses,
+    totalFailures: stats.totalFailures,
+    consecutiveFailures: stats.consecutiveFailures,
+    lastSuccessAt: stats.lastSuccessAt,
+    lastFailureAt: stats.lastFailureAt,
+    lastErrorMessage: stats.lastErrorMessage,
+    lastMetadata: stats.lastMetadata,
+  }
+}
+
+function decorateExperimentalSignalStats(stats: TriggerStats) {
+  return {
+    label: stats.label,
+    status: getExperimentalSignalStatus(stats),
     totalSuccesses: stats.totalSuccesses,
     totalFailures: stats.totalFailures,
     consecutiveFailures: stats.consecutiveFailures,

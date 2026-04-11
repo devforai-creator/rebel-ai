@@ -5,6 +5,7 @@ import {
   recordAssistantStreamBroadcastFailure,
   recordAssistantStreamBroadcastSuccess,
 } from '@/lib/chat/assistant-stream-monitor'
+import { __resetChatJobLifecyclePersistenceStatsForTest } from '@/lib/chat/job-lifecycle-store'
 import { __resetChatRunnerTriggerStatsForTest } from '@/lib/chat/runner-trigger-monitor'
 import { __resetSummaryTriggerStatsForTest } from '@/lib/chat/summary-trigger'
 import { GET } from './route'
@@ -33,6 +34,7 @@ describe('GET /api/internal/health', () => {
     delete process.env.NEXT_PUBLIC_SUPABASE_URL
     delete process.env.SUPABASE_SERVICE_ROLE_KEY
     __resetAssistantStreamBroadcastStatsForTest()
+    __resetChatJobLifecyclePersistenceStatsForTest()
     __resetChatRunnerTriggerStatsForTest()
     __resetSummaryTriggerStatsForTest()
   })

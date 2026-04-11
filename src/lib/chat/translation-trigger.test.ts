@@ -13,6 +13,10 @@ vi.mock('@/lib/internal-api-origin', () => ({
 vi.stubGlobal('fetch', hoistedMocks.fetchMock)
 
 import { triggerMessageTranslation } from './translation-trigger'
+import {
+  __resetMessageTranslationTriggerStatsForTest,
+  getMessageTranslationTriggerStats,
+} from './translation-trigger-monitor'
 
 describe('triggerMessageTranslation', () => {
   const originalEnv = process.env.CHAT_ADMIN_SECRET
@@ -20,7 +24,8 @@ describe('triggerMessageTranslation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     hoistedMocks.resolveOriginMock.mockReturnValue('http://localhost:3000')
-    hoistedMocks.fetchMock.mockResolvedValue({ ok: true })
+    hoistedMocks.fetchMock.mockResolvedValue({ ok: true, status: 202 })
+    __resetMessageTranslationTriggerStatsForTest()
   })
 
   afterEach(() => {
@@ -57,6 +62,16 @@ describe('triggerMessageTranslation', () => {
     triggerMessageTranslation('msg-123', 'user-456')
 
     expect(hoistedMocks.fetchMock).not.toHaveBeenCalled()
+    expect(getMessageTranslationTriggerStats()).toMatchObject({
+      totalFailures: 1,
+      consecutiveFailures: 1,
+      lastErrorMessage: 'missing chat admin secret',
+      lastMetadata: {
+        messageId: 'msg-123',
+        userId: 'user-456',
+        stage: 'schedule',
+      },
+    })
   })
 
   it('uses resolved origin from resolveInternalApiOrigin', () => {
@@ -84,6 +99,15 @@ describe('triggerMessageTranslation', () => {
     await new Promise((resolve) => setTimeout(resolve, 10))
 
     expect(hoistedMocks.fetchMock).toHaveBeenCalled()
+    expect(getMessageTranslationTriggerStats()).toMatchObject({
+      totalFailures: 1,
+      consecutiveFailures: 1,
+      lastMetadata: {
+        messageId: 'msg-1',
+        userId: 'user-1',
+        stage: 'dispatch',
+      },
+    })
   })
 
   it('includes Authorization header with Bearer token', () => {
@@ -93,5 +117,47 @@ describe('triggerMessageTranslation', () => {
 
     const callArgs = hoistedMocks.fetchMock.mock.calls[0]
     expect(callArgs[1].headers.Authorization).toBe('Bearer my-super-secret')
+  })
+
+  it('records a success when the trigger responds with ok', async () => {
+    process.env.CHAT_ADMIN_SECRET = 'test-secret'
+
+    triggerMessageTranslation('msg-1', 'user-1')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(getMessageTranslationTriggerStats()).toMatchObject({
+      totalSuccesses: 1,
+      consecutiveFailures: 0,
+      lastMetadata: {
+        messageId: 'msg-1',
+        userId: 'user-1',
+        status: 202,
+      },
+    })
+  })
+
+  it('records a warning signal when the trigger responds with a non-ok status', async () => {
+    process.env.CHAT_ADMIN_SECRET = 'test-secret'
+    hoistedMocks.fetchMock.mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => 'translator down',
+    })
+
+    triggerMessageTranslation('msg-1', 'user-1')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(getMessageTranslationTriggerStats()).toMatchObject({
+      totalFailures: 1,
+      consecutiveFailures: 1,
+      lastErrorMessage: 'Translation trigger responded with 503',
+      lastMetadata: {
+        messageId: 'msg-1',
+        userId: 'user-1',
+        stage: 'dispatch',
+        status: 503,
+        body: 'translator down',
+      },
+    })
   })
 })

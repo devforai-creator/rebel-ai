@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAssistantStreamBroadcastStats } from '@/lib/chat/assistant-stream-monitor'
+import { getChatJobLifecyclePersistenceStats } from '@/lib/chat/job-lifecycle-store'
 import { getChatRunnerTriggerStats } from '@/lib/chat/runner-trigger-monitor'
 import { getSummaryTriggerStats } from '@/lib/chat/summary-trigger'
+import {
+  deriveAggregateSignalStatus,
+  getServiceSignalStatus,
+  type ServiceSignalStatus,
+} from '@/lib/monitoring/service-signal-policy'
 import type { TriggerStats } from '@/lib/monitoring/trigger-tracker'
 import { loadDurableServiceHealthStats } from '@/lib/monitoring/service-health-store'
 
@@ -23,6 +29,7 @@ export async function GET(req: NextRequest) {
 
   const fallbackStats = {
     assistantStreamBroadcast: getAssistantStreamBroadcastStats(),
+    chatJobLifecyclePersistence: getChatJobLifecyclePersistenceStats(),
     chatRunnerTrigger: getChatRunnerTriggerStats(),
     summaryTrigger: getSummaryTriggerStats(),
   }
@@ -36,7 +43,7 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json(responseBody, {
-    status: responseBody.status === 'ok' ? 200 : 503,
+    status: responseBody.status === 'degraded' ? 503 : 200,
     headers: {
       'Cache-Control': 'no-store',
     },
@@ -57,6 +64,9 @@ async function resolveHealthServices(fallbackStats: HealthServiceMap) {
       services: {
         assistantStreamBroadcast:
           durableStats.get('assistant-stream-broadcast') ?? fallbackStats.assistantStreamBroadcast,
+        chatJobLifecyclePersistence:
+          durableStats.get('chat-job-lifecycle-persistence') ??
+          fallbackStats.chatJobLifecyclePersistence,
         chatRunnerTrigger:
           durableStats.get('chat-job-runner-trigger') ?? fallbackStats.chatRunnerTrigger,
         summaryTrigger: durableStats.get('summary-generation') ?? fallbackStats.summaryTrigger,
@@ -84,25 +94,26 @@ type ServiceStats = {
 
 type HealthServiceMap = {
   assistantStreamBroadcast: TriggerStats
+  chatJobLifecyclePersistence: TriggerStats
   chatRunnerTrigger: TriggerStats
   summaryTrigger: TriggerStats
 }
 
-function deriveStatus(statsList: Array<ServiceStats>): 'ok' | 'degraded' {
-  const hasConsecutiveFailures = statsList.some((stats) => stats.consecutiveFailures > 0)
-  return hasConsecutiveFailures ? 'degraded' : 'ok'
+function deriveStatus(statsList: Array<ServiceStats>): ServiceSignalStatus {
+  return deriveAggregateSignalStatus(statsList.map((stats) => getServiceSignalStatus(stats)))
 }
 
 function decorateServiceStats(stats: ServiceStats) {
   return {
     ...stats,
-    status: stats.consecutiveFailures > 0 ? 'degraded' : 'ok',
+    status: getServiceSignalStatus(stats),
   }
 }
 
 function decorateServiceMap(services: HealthServiceMap) {
   return {
     assistantStreamBroadcast: decorateServiceStats(services.assistantStreamBroadcast),
+    chatJobLifecyclePersistence: decorateServiceStats(services.chatJobLifecyclePersistence),
     chatRunnerTrigger: decorateServiceStats(services.chatRunnerTrigger),
     summaryTrigger: decorateServiceStats(services.summaryTrigger),
   }

@@ -15,8 +15,10 @@ function restoreEnv() {
 const createAdminClientMock = vi.fn()
 const loadDurableServiceHealthStatsMock = vi.fn()
 const getAssistantStreamBroadcastStatsMock = vi.fn()
+const getChatJobLifecyclePersistenceStatsMock = vi.fn()
 const getChatRunnerTriggerStatsMock = vi.fn()
 const getSummaryTriggerStatsMock = vi.fn()
+const getMessageTranslationTriggerStatsMock = vi.fn()
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => createAdminClientMock(),
@@ -25,6 +27,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 vi.mock('@/lib/monitoring/service-health-store', () => ({
   SERVICE_HEALTH_LABELS: [
     'assistant-stream-broadcast',
+    'chat-job-lifecycle-persistence',
     'chat-job-runner-trigger',
     'summary-generation',
   ],
@@ -45,12 +48,20 @@ vi.mock('@/lib/chat/assistant-stream-monitor', () => ({
   getAssistantStreamBroadcastStats: () => getAssistantStreamBroadcastStatsMock(),
 }))
 
+vi.mock('@/lib/chat/job-lifecycle-store', () => ({
+  getChatJobLifecyclePersistenceStats: () => getChatJobLifecyclePersistenceStatsMock(),
+}))
+
 vi.mock('@/lib/chat/runner-trigger-monitor', () => ({
   getChatRunnerTriggerStats: () => getChatRunnerTriggerStatsMock(),
 }))
 
 vi.mock('@/lib/chat/summary-trigger', () => ({
   getSummaryTriggerStats: () => getSummaryTriggerStatsMock(),
+}))
+
+vi.mock('@/lib/chat/translation-trigger-monitor', () => ({
+  getMessageTranslationTriggerStats: () => getMessageTranslationTriggerStatsMock(),
 }))
 
 import { GET } from './route'
@@ -117,14 +128,22 @@ describe('GET /api/internal/triage', () => {
     createAdminClientMock.mockReset()
     loadDurableServiceHealthStatsMock.mockReset()
     getAssistantStreamBroadcastStatsMock.mockReset()
+    getChatJobLifecyclePersistenceStatsMock.mockReset()
     getChatRunnerTriggerStatsMock.mockReset()
     getSummaryTriggerStatsMock.mockReset()
+    getMessageTranslationTriggerStatsMock.mockReset()
 
     getAssistantStreamBroadcastStatsMock.mockReturnValue(
       createHealthyStats('assistant-stream-broadcast'),
     )
+    getChatJobLifecyclePersistenceStatsMock.mockReturnValue(
+      createHealthyStats('chat-job-lifecycle-persistence'),
+    )
     getChatRunnerTriggerStatsMock.mockReturnValue(createHealthyStats('chat-job-runner-trigger'))
     getSummaryTriggerStatsMock.mockReturnValue(createHealthyStats('summary-generation'))
+    getMessageTranslationTriggerStatsMock.mockReturnValue(
+      createHealthyStats('message-translation-trigger'),
+    )
   })
 
   afterAll(() => {
@@ -198,6 +217,7 @@ describe('GET /api/internal/triage', () => {
       status: 'degraded',
       healthSource: 'durable',
       failedJobWindowHours: 72,
+      warningServices: [],
       degradedServices: [
         {
           label: 'chat-job-runner-trigger',
@@ -217,6 +237,12 @@ describe('GET /api/internal/triage', () => {
           failureStage: 'requesting_provider',
         },
       ],
+      experimentalSignals: {
+        translationTrigger: {
+          label: 'message-translation-trigger',
+          status: 'ok',
+        },
+      },
     })
     if (!gteMock) {
       throw new Error('Expected gte mock to be captured')
@@ -243,6 +269,7 @@ describe('GET /api/internal/triage', () => {
 
     expect(response.status).toBe(503)
     expect(body.healthSource).toBe('memory-fallback')
+    expect(body.warningServices).toEqual([])
     expect(body.degradedServices).toEqual([
       expect.objectContaining({
         label: 'assistant-stream-broadcast',
@@ -251,6 +278,65 @@ describe('GET /api/internal/triage', () => {
         lastErrorMessage: 'socket down',
       }),
     ])
+  })
+
+  it('returns warn when only summary fallback has a single consecutive failure', async () => {
+    createAdminClientMock.mockReturnValue({
+      from: () => createChatGenerationJobsTable({ rows: [] }),
+    })
+
+    getSummaryTriggerStatsMock.mockReturnValue({
+      ...createHealthyStats('summary-generation'),
+      totalFailures: 1,
+      consecutiveFailures: 1,
+      lastFailureAt: '2026-04-11T10:02:00.000Z',
+      lastErrorMessage: 'summary trigger timeout',
+    })
+
+    const response = await GET(buildRequest('Bearer admin-secret'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.status).toBe('warn')
+    expect(body.degradedServices).toEqual([])
+    expect(body.warningServices).toEqual([
+      expect.objectContaining({
+        label: 'summary-generation',
+        status: 'warn',
+        consecutiveFailures: 1,
+        lastErrorMessage: 'summary trigger timeout',
+      }),
+    ])
+  })
+
+  it('returns warn when only the experimental translation trigger is failing', async () => {
+    createAdminClientMock.mockReturnValue({
+      from: () => createChatGenerationJobsTable({ rows: [] }),
+    })
+
+    getMessageTranslationTriggerStatsMock.mockReturnValue({
+      ...createHealthyStats('message-translation-trigger'),
+      totalFailures: 1,
+      consecutiveFailures: 1,
+      lastFailureAt: '2026-04-11T10:02:00.000Z',
+      lastErrorMessage: 'translator down',
+      lastMetadata: { stage: 'dispatch' },
+    })
+
+    const response = await GET(buildRequest('Bearer admin-secret'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.status).toBe('warn')
+    expect(body.degradedServices).toEqual([])
+    expect(body.warningServices).toEqual([])
+    expect(body.experimentalSignals.translationTrigger).toMatchObject({
+      label: 'message-translation-trigger',
+      status: 'warn',
+      consecutiveFailures: 1,
+      lastErrorMessage: 'translator down',
+      lastMetadata: { stage: 'dispatch' },
+    })
   })
 
   it('returns 500 when failed job lookup fails', async () => {

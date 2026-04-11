@@ -153,6 +153,13 @@ Done when:
 - translation failures are at least observable in lightweight monitoring or triage, but do not count as supported-core health regressions by default
 - stage persistence failures that affect the supported core still leave durable operator-visible state
 
+Current status as of 2026-04-12:
+
+- [summary-generation](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/summary-trigger.ts) remains a durable service-health signal, but [service-signal-policy.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/monitoring/service-signal-policy.ts) now treats a single consecutive summary failure as `warn` and only escalates to `degraded` on repeated failures
+- [translation-trigger.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/translation-trigger.ts) now records lightweight experimental trigger stats through [translation-trigger-monitor.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/translation-trigger-monitor.ts) for missing-secret, non-OK, fetch-failure, and success cases without promoting translation into the supported-core health contract
+- [job-lifecycle-store.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/job-lifecycle-store.ts) now records durable success/failure telemetry for lifecycle-stage persistence under `chat-job-lifecycle-persistence`, so stage-write failures are operator-visible instead of log-only
+- [health/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/health/route.ts) and [triage/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/triage/route.ts) now distinguish `warn` from `degraded`, and triage exposes experimental translation signals separately from supported-core services
+
 ## P1
 
 ### P1-1. Make the Runtime and Dependency Contract Mechanical

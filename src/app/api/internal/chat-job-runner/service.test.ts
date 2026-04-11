@@ -168,6 +168,69 @@ async function flushSummaryBackgroundTask() {
   await Promise.resolve()
 }
 
+type RecordedFilter = {
+  field: string
+  value: unknown
+}
+
+type MockError = {
+  message: string
+  code?: string | null
+}
+
+function matchesFilters(filters: RecordedFilter[], expected: RecordedFilter[]) {
+  return expected.every(({ field, value }) =>
+    filters.some((filter) => filter.field === field && filter.value === value),
+  )
+}
+
+function wrapMutationBuilder(
+  builder: {
+    eq: (field: string, value: unknown) => unknown
+    then: (...args: unknown[]) => Promise<unknown>
+  },
+  shouldFail: (filters: RecordedFilter[]) => boolean,
+  error: MockError,
+) {
+  const filters: RecordedFilter[] = []
+
+  const wrapped = {
+    eq(field: string, value: unknown) {
+      filters.push({ field, value })
+      builder.eq(field, value)
+      return wrapped
+    },
+    then<TResult1 = { error: null }, TResult2 = never>(
+      onfulfilled?:
+        | ((value: { error: MockError | null }) => TResult1 | PromiseLike<TResult1>)
+        | null,
+      onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    ) {
+      if (shouldFail(filters)) {
+        return Promise.resolve({ error }).then(onfulfilled, onrejected)
+      }
+
+      return builder.then(onfulfilled, onrejected)
+    },
+  }
+
+  return wrapped
+}
+
+function withFromOverride<T extends { from: (table: string) => unknown }>(
+  supabase: T,
+  override: (table: string, handler: Record<string, unknown>) => Record<string, unknown> | null,
+): T {
+  const originalFrom = supabase.from.bind(supabase)
+
+  ;(supabase as T).from = ((table: string) => {
+    const handler = originalFrom(table) as Record<string, unknown>
+    return override(table, handler) ?? handler
+  }) as T['from']
+
+  return supabase
+}
+
 describe('processChatJobs', () => {
   beforeEach(() => {
     claimPendingJobMock.mockReset()
@@ -356,6 +419,85 @@ describe('processChatJobs', () => {
     expect(streamTextMock).not.toHaveBeenCalled()
   })
 
+  it('surfaces job error status persistence failures instead of swallowing them', async () => {
+    let attempts = 0
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      const supabase = withFromOverride(
+        createChatJobRunnerSupabaseMock({
+          apiKey: {
+            id: 'key-1',
+            user_id: 'other-user',
+            is_active: true,
+            provider: 'openai',
+            model_preference: 'gpt-4o-mini',
+            vault_secret_name: 'vault-key',
+            service_tier: 'standard',
+          },
+          rpc: { get_decrypted_secret: () => decryptSecretMock() },
+        }),
+        (table, handler) => {
+          if (table !== 'chat_generation_jobs') {
+            return null
+          }
+
+          return {
+            ...handler,
+            update: (payload: Record<string, unknown>) => {
+              const baseBuilder = (
+                handler.update as (payload: Record<string, unknown>) => {
+                  eq: (field: string, value: unknown) => unknown
+                  then: (...args: unknown[]) => Promise<unknown>
+                }
+              )(payload)
+
+              if (payload.status !== 'error') {
+                return baseBuilder
+              }
+
+              return wrapMutationBuilder(
+                baseBuilder,
+                (filters) => {
+                  if (matchesFilters(filters, [{ field: 'id', value: 'job-api-key-missing' }])) {
+                    attempts += 1
+                    return true
+                  }
+
+                  return false
+                },
+                { message: 'job update failed', code: 'XX001' },
+              )
+            },
+          }
+        },
+      )
+      createAdminClientMock.mockReturnValue(supabase)
+
+      parseChatJobPayloadMock.mockReturnValue(buildValidPayload())
+      claimPendingJobMock.mockResolvedValueOnce({
+        id: 'job-api-key-missing',
+        payload: { ok: true },
+      })
+      claimPendingJobMock.mockResolvedValueOnce(null)
+
+      const { processChatJobs } = await import('./service')
+      const result = await processChatJobs(1)
+
+      expect(result.results[0]).toMatchObject({
+        jobId: 'job-api-key-missing',
+        status: 'error',
+      })
+      expect(result.results[0].error).toContain('Failed to persist chat job error status')
+      expect(result.results[0].error).toContain('Original job error: API key not found or inactive')
+      expect(attempts).toBe(3)
+    } finally {
+      warnSpy.mockRestore()
+      errorSpy.mockRestore()
+    }
+  })
+
   it('marks job as error when chat ownership lookup fails', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       chat: {
@@ -536,6 +678,81 @@ describe('processChatJobs', () => {
         userId: 'user-1',
       }),
     )
+  })
+
+  it('surfaces success status persistence failures after generating a response', async () => {
+    let attempts = 0
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      const supabase = withFromOverride(
+        createChatJobRunnerSupabaseMock({
+          rpc: { get_decrypted_secret: () => decryptSecretMock() },
+        }),
+        (table, handler) => {
+          if (table !== 'chat_generation_jobs') {
+            return null
+          }
+
+          return {
+            ...handler,
+            update: (payload: Record<string, unknown>) => {
+              const baseBuilder = (
+                handler.update as (payload: Record<string, unknown>) => {
+                  eq: (field: string, value: unknown) => unknown
+                  then: (...args: unknown[]) => Promise<unknown>
+                }
+              )(payload)
+
+              if (payload.status !== 'success') {
+                return baseBuilder
+              }
+
+              return wrapMutationBuilder(
+                baseBuilder,
+                (filters) => {
+                  if (matchesFilters(filters, [{ field: 'id', value: 'job-1' }])) {
+                    attempts += 1
+                    return true
+                  }
+
+                  return false
+                },
+                { message: 'job update failed', code: '40001' },
+              )
+            },
+          }
+        },
+      )
+      createAdminClientMock.mockReturnValue(supabase)
+
+      decryptSecretMock.mockResolvedValue('sk-test')
+      parseChatJobPayloadMock.mockReturnValue(buildValidPayload())
+      streamTextMock.mockResolvedValue({
+        textStream: ['hello world'],
+        finishReason: Promise.resolve('stop'),
+        providerMetadata: Promise.resolve({}),
+        usage: Promise.resolve({ inputTokens: 10, outputTokens: 20, totalTokens: 30 }),
+      })
+      claimPendingJobMock.mockResolvedValueOnce({
+        id: 'job-1',
+        payload: { ok: true },
+      })
+      claimPendingJobMock.mockResolvedValueOnce(null)
+
+      const { processChatJobs } = await import('./service')
+      const result = await processChatJobs(1)
+
+      expect(result.results[0]).toMatchObject({ jobId: 'job-1', status: 'error' })
+      expect(result.results[0].error).toContain('Failed to persist chat job success status')
+      expect(attempts).toBe(3)
+      expect(supabase.messages.length).toBeGreaterThan(0)
+      expect(supabase.usageEvents).toHaveLength(1)
+    } finally {
+      warnSpy.mockRestore()
+      errorSpy.mockRestore()
+    }
   })
 
   it('submits Anthropic Batch jobs without calling the streaming API', async () => {

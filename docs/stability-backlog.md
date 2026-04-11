@@ -119,6 +119,32 @@ Current status as of 2026-04-11:
 - [src/app/dashboard/chats/[id]/utils/message-renderer.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/message-renderer.tsx) and its diagnostics now stop treating generic `assetUrlMap` entries as a plain emotion-tag resolver
 - regression coverage in [src/app/api/chats/[chatId]/assets/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chats/[chatId]/assets/route.test.ts), [src/app/dashboard/chats/[id]/utils/message-renderer.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/message-renderer.test.tsx), and [src/lib/suu-import-validation.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/suu-import-validation.test.ts) now locks out raw external/data asset passthrough
 
+### P0-4. Chat Job Runner State Integrity
+
+Scope:
+
+- [src/app/api/internal/chat-job-runner/service.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/service.ts)
+- [src/app/api/internal/chat-job-runner/post-generation-pipeline.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/post-generation-pipeline.ts)
+- matching tests in [src/app/api/internal/chat-job-runner/service.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/service.test.ts) and [src/app/api/internal/chat-job-runner/post-generation-pipeline.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/post-generation-pipeline.test.ts)
+
+Why:
+
+- the runner currently trusts several DB writes that can fail after the main chat work already happened
+- silent failures here can leave jobs stuck in `processing` or drop usage metadata without any operator signal
+
+Done when:
+
+- `chat_generation_jobs` success and error transitions are checked explicitly and retried before giving up
+- failure to persist a terminal job state is surfaced in runner results and logs instead of being swallowed
+- post-generation `api_keys.last_used_at` and `chat_usage_events` writes are checked and logged when they fail
+- regression tests cover both status-transition persistence failures and post-generation metadata write failures
+
+Current status as of 2026-04-11:
+
+- [src/app/api/internal/chat-job-runner/service.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/service.ts) now retries terminal job status updates, and surfaces persistence failures explicitly instead of treating them as successful completion
+- [src/app/api/internal/chat-job-runner/post-generation-pipeline.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/post-generation-pipeline.ts) now logs failed `api_keys.last_used_at` and `chat_usage_events` writes so the runner no longer loses those signals silently
+- regression coverage now lives in [src/app/api/internal/chat-job-runner/service.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/service.test.ts) and [src/app/api/internal/chat-job-runner/post-generation-pipeline.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/post-generation-pipeline.test.ts)
+
 ## P1
 
 ### P1-1. Chat Turn Concurrency and Queue Entry Robustness

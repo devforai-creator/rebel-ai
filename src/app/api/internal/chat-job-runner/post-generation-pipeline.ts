@@ -91,6 +91,30 @@ function logPostGenerationDebug(...args: unknown[]): void {
   }
 }
 
+function logPostGenerationPersistenceWarning({
+  action,
+  chatId,
+  userId,
+  apiKeyId,
+  requestId,
+  error,
+}: {
+  action: string
+  chatId: string
+  userId: string
+  apiKeyId: string
+  requestId: string
+  error: string
+}) {
+  console.warn(action, {
+    chatId,
+    userId,
+    apiKeyId,
+    requestId,
+    error,
+  })
+}
+
 function scheduleSummaryGeneration({
   supabase,
   chatId,
@@ -399,10 +423,21 @@ export async function runPostGenerationPipeline({
   }
 
   const apiKeyUpdate: ApiKeyUpdate = { last_used_at: new Date().toISOString() }
-  await supabase
+  const { error: apiKeyUpdateError } = await supabase
     .from('api_keys')
     .update(apiKeyUpdate as never)
     .eq('id', apiKeyId)
+
+  if (apiKeyUpdateError) {
+    logPostGenerationPersistenceWarning({
+      action: '[Chat Job Runner] Failed to update api key last_used_at',
+      chatId,
+      userId,
+      apiKeyId,
+      requestId,
+      error: apiKeyUpdateError.message,
+    })
+  }
 
   const usageEventInsertStart = now()
   const usageEvent = buildChatUsageEvent({
@@ -415,8 +450,21 @@ export async function runPostGenerationPipeline({
     usageCost,
     requestId,
   })
-  await supabase.from('chat_usage_events').insert(usageEvent as never)
+  const { error: usageEventInsertError } = await supabase
+    .from('chat_usage_events')
+    .insert(usageEvent as never)
   const usageEventInsertDurationMs = now() - usageEventInsertStart
+
+  if (usageEventInsertError) {
+    logPostGenerationPersistenceWarning({
+      action: '[Chat Job Runner] Failed to insert chat usage event',
+      chatId,
+      userId,
+      apiKeyId,
+      requestId,
+      error: usageEventInsertError.message,
+    })
+  }
 
   // Summary generation is best-effort and should not block the chat worker.
   scheduleSummaryGeneration({

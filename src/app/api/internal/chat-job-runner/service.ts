@@ -39,6 +39,7 @@ import { decryptSecret } from './vault'
 
 const MAX_TOTAL_INPUT_TOKENS = 150_000
 const CHAT_JOB_RUNNER_DEBUG_ENABLED = process.env.CHAT_JOB_RUNNER_DEBUG === 'true'
+const CHAT_JOB_STATUS_UPDATE_MAX_ATTEMPTS = 3
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type ChatGenerationJobUpdate = Database['public']['Tables']['chat_generation_jobs']['Update']
 type RunnerApiKeyRow = Pick<ApiKey, 'vault_secret_name' | 'service_tier' | 'reasoning_effort'>
@@ -55,6 +56,57 @@ function logChatJobRunnerDebug(...args: unknown[]): void {
   if (CHAT_JOB_RUNNER_DEBUG_ENABLED) {
     console.debug(...args)
   }
+}
+
+class ChatJobStatusUpdateError extends Error {
+  targetStatus: 'success' | 'error'
+
+  constructor(targetStatus: 'success' | 'error', attempts: number, message: string) {
+    super(
+      `Failed to persist chat job ${targetStatus} status after ${attempts} attempts: ${message}`,
+    )
+    this.name = 'ChatJobStatusUpdateError'
+    this.targetStatus = targetStatus
+  }
+}
+
+async function persistTerminalJobStatus({
+  supabase,
+  jobId,
+  update,
+  targetStatus,
+}: {
+  supabase: AdminSupabaseClient
+  jobId: string
+  update: ChatGenerationJobUpdate
+  targetStatus: 'success' | 'error'
+}): Promise<void> {
+  let lastError: { message: string } | null = null
+
+  for (let attempt = 1; attempt <= CHAT_JOB_STATUS_UPDATE_MAX_ATTEMPTS; attempt += 1) {
+    const { error } = await supabase
+      .from('chat_generation_jobs')
+      .update(update as never)
+      .eq('id', jobId)
+
+    if (!error) {
+      return
+    }
+
+    lastError = error
+    console.warn('[Chat Job Runner] Failed to persist job status', {
+      jobId,
+      status: targetStatus,
+      attempt,
+      error: error.message,
+    })
+  }
+
+  throw new ChatJobStatusUpdateError(
+    targetStatus,
+    CHAT_JOB_STATUS_UPDATE_MAX_ATTEMPTS,
+    lastError?.message ?? 'Unknown database error',
+  )
 }
 
 async function collectTextFromStreamWithSnapshots({
@@ -223,15 +275,32 @@ async function processJob({
   const payload = parseChatJobPayload(rawPayload)
 
   if (!payload) {
+    const invalidPayloadMessage = 'Invalid job payload'
     const invalidPayloadUpdate: ChatGenerationJobUpdate = {
       status: 'error',
-      error: 'Invalid job payload',
+      error: invalidPayloadMessage,
     }
-    await supabase
-      .from('chat_generation_jobs')
-      .update(invalidPayloadUpdate as never)
-      .eq('id', jobId)
-    return { jobId, status: 'error', error: 'Invalid job payload' }
+
+    try {
+      await persistTerminalJobStatus({
+        supabase,
+        jobId,
+        update: invalidPayloadUpdate,
+        targetStatus: 'error',
+      })
+    } catch (statusError) {
+      console.error('[Chat Job Runner] Failed to persist invalid job payload status', {
+        jobId,
+        error: statusError,
+      })
+      return {
+        jobId,
+        status: 'error',
+        error: statusError instanceof Error ? statusError.message : invalidPayloadMessage,
+      }
+    }
+
+    return { jobId, status: 'error', error: invalidPayloadMessage }
   }
 
   try {
@@ -242,19 +311,48 @@ async function processJob({
     }
 
     const successUpdate: ChatGenerationJobUpdate = { status: 'success', error: null }
-    await supabase
-      .from('chat_generation_jobs')
-      .update(successUpdate as never)
-      .eq('id', jobId)
+    await persistTerminalJobStatus({
+      supabase,
+      jobId,
+      update: successUpdate,
+      targetStatus: 'success',
+    })
 
     return { jobId, status: 'success' }
   } catch (error) {
+    if (error instanceof ChatJobStatusUpdateError && error.targetStatus === 'success') {
+      console.error('[Chat Job Runner] Job completed but final status update failed', {
+        jobId,
+        error,
+      })
+      return { jobId, status: 'error', error: error.message }
+    }
+
     const message = error instanceof Error ? error.message : 'Unknown job failure'
     const errorUpdate: ChatGenerationJobUpdate = { status: 'error', error: message }
-    await supabase
-      .from('chat_generation_jobs')
-      .update(errorUpdate as never)
-      .eq('id', jobId)
+
+    try {
+      await persistTerminalJobStatus({
+        supabase,
+        jobId,
+        update: errorUpdate,
+        targetStatus: 'error',
+      })
+    } catch (statusError) {
+      console.error('[Chat Job Runner] Failed to persist job error status', {
+        jobId,
+        error: statusError,
+        originalError: error,
+      })
+      return {
+        jobId,
+        status: 'error',
+        error:
+          statusError instanceof Error
+            ? `${statusError.message}. Original job error: ${message}`
+            : message,
+      }
+    }
 
     console.error('[Chat Job Runner] Job failed', { jobId, error })
     return { jobId, status: 'error', error: message }

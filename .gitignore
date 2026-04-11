@@ -53,3 +53,6 @@ supabase/.temp/
 # local dev scripts (not tracked)
 scripts/skill-pkg/
 scripts/decoded-*.json
+
+# local audit artifacts
+/audit-report.html

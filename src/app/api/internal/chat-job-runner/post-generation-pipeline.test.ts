@@ -245,6 +245,119 @@ describe('runPostGenerationPipeline', () => {
     })
   })
 
+  it('logs and continues when post-generation metadata writes fail', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    try {
+      const supabase = withFromOverride(createChatJobRunnerSupabaseMock(), (table, handler) => {
+        if (table === 'api_keys') {
+          return {
+            ...handler,
+            update: (payload: Record<string, unknown>) =>
+              wrapMutationBuilder(
+                (
+                  handler.update as (payload: Record<string, unknown>) => {
+                    eq: (field: string, value: unknown) => unknown
+                    then: (...args: unknown[]) => Promise<unknown>
+                  }
+                )(payload),
+                () => true,
+                { message: 'api key update failed', code: 'XX001' },
+              ),
+          }
+        }
+
+        if (table === 'chat_usage_events') {
+          const failedInsertResult = {
+            data: [] as Array<Record<string, unknown>>,
+            error: { message: 'usage insert failed', code: 'XX002' },
+          }
+
+          return {
+            ...handler,
+            insert: () => ({
+              select: () => ({
+                single: async () => ({
+                  data: null,
+                  error: failedInsertResult.error,
+                }),
+              }),
+              then<TResult1 = typeof failedInsertResult, TResult2 = never>(
+                onfulfilled?:
+                  | ((value: typeof failedInsertResult) => TResult1 | PromiseLike<TResult1>)
+                  | null
+                  | undefined,
+                onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+              ) {
+                return Promise.resolve(failedInsertResult).then(onfulfilled, onrejected)
+              },
+            }),
+          }
+        }
+
+        return null
+      })
+
+      const triggerSummaryGenerationFn = vi.fn(async () => ({ success: true, attempts: 1 }))
+      const result = await runPostGenerationPipeline({
+        supabase: supabase as unknown as SupabaseClientType,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        apiKeyId: 'key-1',
+        provider: 'openai',
+        modelName: 'gpt-4o-mini',
+        origin: 'https://internal.example.com',
+        requestId: 'req-postgen-warn',
+        assistantText: 'final answer',
+        assistantMessageId: 'assistant-1',
+        turnId: null,
+        regenerateAssistantMessageId: null,
+        promptTokens: 11,
+        completionTokens: 22,
+        debugInfo: { requestId: 'req-postgen-warn' },
+        bilingualEnabled: false,
+        messageInsertDuration: 9,
+        usage: buildUsageMetrics(),
+        usageCost: null,
+        triggerMessageTranslationFn: vi.fn(),
+        resolveSummaryModelPreferenceFn: vi.fn(async () => null),
+        triggerSummaryGenerationFn,
+        now: () => 0,
+      })
+
+      expect(result).toMatchObject({
+        assistantMessageId: 'assistant-1',
+        messageInsertDuration: 9,
+        summaryTriggerDurationMs: 0,
+      })
+      expect(supabase.usageEvents).toHaveLength(0)
+      await flushSummaryBackgroundTask()
+      expect(triggerSummaryGenerationFn).toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[Chat Job Runner] Failed to update api key last_used_at',
+        expect.objectContaining({
+          chatId: 'chat-1',
+          userId: 'user-1',
+          apiKeyId: 'key-1',
+          requestId: 'req-postgen-warn',
+          error: 'api key update failed',
+        }),
+      )
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[Chat Job Runner] Failed to insert chat usage event',
+        expect.objectContaining({
+          chatId: 'chat-1',
+          userId: 'user-1',
+          apiKeyId: 'key-1',
+          requestId: 'req-postgen-warn',
+          error: 'usage insert failed',
+        }),
+      )
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
   it('creates a new assistant variant for regeneration and keeps the prior variant as superseded', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       initialTurns: [

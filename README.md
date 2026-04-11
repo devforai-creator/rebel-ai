@@ -196,6 +196,13 @@ The chat entry point (`/api/chat`) maintains a job queue in Node.js Runtime whil
 - **Health check**: Call `GET /api/internal/health` (requires `Authorization: Bearer ${CHAT_ADMIN_SECRET}` header) to inspect recent success/failure times and consecutive failure counts for runner/broadcast/summary services. The route prefers durable database-backed snapshots and returns `healthSource: durable` when that path is active, falling back to in-memory stats only when admin DB access is unavailable. If response `status` is `degraded`, one of the trigger, runner, broadcast, or summary stages has consecutive failures.
 - **Operator smoke checks**: Use `npm run ops:smoke` for the passive low-cost profile check, and `npm run ops:smoke:active` when you intentionally want to probe runner execution. See [`docs/FIRST_CLASS_SMOKE_CHECKS.md`](./docs/FIRST_CLASS_SMOKE_CHECKS.md).
 
+### Optional Deployment Env Profiles
+
+- [`env/profiles/caching.env.example`](./env/profiles/caching.env.example) groups the provider-specific cache toggles (`OPENAI_PROMPT_CACHE_*`, `ANTHROPIC_PROMPT_CACHE_*`, `GOOGLE_EXPLICIT_CACHE_ENABLED`) into one manual import template.
+- These files are reference templates only. Vercel does **not** auto-apply them from the repository.
+- Apply them manually in your deployment environment settings or via the Vercel CLI, then redeploy for the changes to take effect.
+- Keep user-level choices such as summary-dedicated model, translation model, and episodic RAG in account/profile settings rather than deployment env.
+
 ### Internal API origin resolution
 
 - Edge callsites (e.g., job status route, `chat-admin` rate limiter, summary trigger) use `resolveInternalApiOrigin()`/`buildInternalApiUrl()` from `src/lib/internal-api-origin.ts` to compute a trusted origin.

@@ -270,6 +270,7 @@ Current status as of 2026-04-11:
 
 - [.github/workflows/test.yml](/home/tmdduq96kr/projects/rebel-ai/.github/workflows/test.yml) now runs `npm run typecheck` explicitly in the main CI job before tests
 - [package.json](/home/tmdduq96kr/projects/rebel-ai/package.json) now lint-covers `src`, `tests`, and `scripts`, and declares a Node `20.x` engine contract
+- the unused direct dependency `fflate` has been removed from [package.json](/home/tmdduq96kr/projects/rebel-ai/package.json) and [package-lock.json](/home/tmdduq96kr/projects/rebel-ai/package-lock.json), reducing install surface without affecting the current TypeScript build
 - [eslint.config.mjs](/home/tmdduq96kr/projects/rebel-ai/eslint.config.mjs) now treats repository `scripts` as intentional CommonJS entrypoints instead of failing on `require()`
 - [vitest.config.ts](/home/tmdduq96kr/projects/rebel-ai/vitest.config.ts) now defines minimum global coverage thresholds for statements, branches, functions, and lines
 - [README.md](/home/tmdduq96kr/projects/rebel-ai/README.md) now aligns local setup guidance with the Node 20 CI/runtime contract

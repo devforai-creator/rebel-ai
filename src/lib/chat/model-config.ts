@@ -13,6 +13,7 @@ export type ChatMemoryConfig = {
 }
 
 export const DEFAULT_CHAT_MEMORY_MODE: ChatMemoryMode = 'summary_window'
+export const OPERATOR_DEFAULT_CHAT_MEMORY_MODE: ChatMemoryMode = 'prefix_live_blocks'
 export const DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES = 100
 export const DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES = 4
 
@@ -79,9 +80,12 @@ export function normalizeChatModelConfig(input: unknown): ChatModelConfig {
   return normalized
 }
 
-export function resolveChatMemoryConfig(input: unknown): Required<ChatMemoryConfig> {
+export function resolveChatMemoryConfig(
+  input: unknown,
+  options?: { defaultMode?: ChatMemoryMode },
+): Required<ChatMemoryConfig> {
   const normalized = normalizeChatModelConfig(input)
-  const mode = normalized.memory?.mode ?? DEFAULT_CHAT_MEMORY_MODE
+  const mode = normalized.memory?.mode ?? options?.defaultMode ?? DEFAULT_CHAT_MEMORY_MODE
   const sealEveryMessages =
     normalized.memory?.sealEveryMessages ?? DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES
   const retainTailMessages =
@@ -91,6 +95,22 @@ export function resolveChatMemoryConfig(input: unknown): Required<ChatMemoryConf
     mode,
     sealEveryMessages,
     retainTailMessages,
+  }
+}
+
+export function buildOperatorDefaultChatModelConfig(input: unknown): ChatModelConfig {
+  const normalized = normalizeChatModelConfig(input)
+  const memory = resolveChatMemoryConfig(normalized, {
+    defaultMode: OPERATOR_DEFAULT_CHAT_MEMORY_MODE,
+  })
+
+  return {
+    ...normalized,
+    memory: {
+      mode: memory.mode,
+      sealEveryMessages: memory.sealEveryMessages,
+      retainTailMessages: memory.retainTailMessages,
+    },
   }
 }
 

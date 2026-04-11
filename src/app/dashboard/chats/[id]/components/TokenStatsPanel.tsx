@@ -121,8 +121,12 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
             onChange={(e) => onSelectMemoryMode(e.target.value as ChatMemoryMode)}
             className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
           >
-            <option value="summary_window">메모리: 기본</option>
-            <option value="prefix_live_blocks">메모리: Prefix</option>
+            <option value="summary_window">
+              {isDeveloper ? '메모리: 안전 기본' : '메모리: 기본'}
+            </option>
+            <option value="prefix_live_blocks">
+              {isDeveloper ? '메모리: 운영 기본' : '메모리: Prefix'}
+            </option>
           </select>
           <select
             value={secondaryApiKeyId}
@@ -193,8 +197,12 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                   onChange={(e) => onSelectMemoryMode(e.target.value as ChatMemoryMode)}
                   className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white max-w-[180px]"
                 >
-                  <option value="summary_window">기본 메모리</option>
-                  <option value="prefix_live_blocks">Prefix 메모리</option>
+                  <option value="summary_window">
+                    {isDeveloper ? '안전 기본 메모리' : '기본 메모리'}
+                  </option>
+                  <option value="prefix_live_blocks">
+                    {isDeveloper ? '운영 기본 메모리' : 'Prefix 메모리'}
+                  </option>
                 </select>
                 <select
                   value={secondaryApiKeyId}

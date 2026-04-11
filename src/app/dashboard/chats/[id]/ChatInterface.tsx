@@ -30,9 +30,9 @@ import {
   type AssistantStreamBroadcastPayload,
 } from '@/lib/chat/assistant-stream'
 import {
-  DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
-  DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
+  buildOperatorDefaultChatModelConfig,
   normalizeChatModelConfig,
+  resolveChatMemoryConfig,
   type ChatMemoryMode,
 } from '@/lib/chat/model-config'
 import {
@@ -118,10 +118,37 @@ export default function ChatInterface({
     () => normalizeChatModelConfig(initialModelConfig),
     [initialModelConfig],
   )
+  const initialResolvedMemoryConfig = useMemo(
+    () =>
+      resolveChatMemoryConfig(normalizedModelConfig, {
+        defaultMode: isDeveloper ? 'prefix_live_blocks' : undefined,
+      }),
+    [isDeveloper, normalizedModelConfig],
+  )
+  const didPersistOperatorDefaultMemoryRef = useRef(false)
 
   useEffect(() => {
     runtimeVariablesRef.current = runtimeVariables
   }, [runtimeVariables])
+
+  useEffect(() => {
+    if (
+      !isDeveloper ||
+      normalizedModelConfig.memory ||
+      didPersistOperatorDefaultMemoryRef.current
+    ) {
+      return
+    }
+
+    didPersistOperatorDefaultMemoryRef.current = true
+    const operatorDefaultConfig = buildOperatorDefaultChatModelConfig(normalizedModelConfig)
+
+    void updateChatModelConfig(chatId, operatorDefaultConfig).then((result) => {
+      if (result?.error) {
+        toast.error(result.error)
+      }
+    })
+  }, [chatId, isDeveloper, normalizedModelConfig])
 
   const resolveValidApiKeyId = useCallback(
     (candidate?: string | null) => {
@@ -162,16 +189,10 @@ export default function ChatInterface({
       initialPrimaryApiKeyId !== initialSecondaryApiKeyId
     return enabled && hasPair
   })
-  const [memoryMode, setMemoryMode] = useState<ChatMemoryMode>(
-    normalizedModelConfig.memory?.mode ?? 'summary_window',
-  )
+  const [memoryMode, setMemoryMode] = useState<ChatMemoryMode>(initialResolvedMemoryConfig.mode)
   const [memorySettings] = useState(() => ({
-    sealEveryMessages:
-      normalizedModelConfig.memory?.sealEveryMessages ??
-      DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
-    retainTailMessages:
-      normalizedModelConfig.memory?.retainTailMessages ??
-      DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
+    sealEveryMessages: initialResolvedMemoryConfig.sealEveryMessages,
+    retainTailMessages: initialResolvedMemoryConfig.retainTailMessages,
   }))
   const selectedApiKey = useMemo(
     () => apiKeys.find((key) => key.id === selectedApiKeyId) ?? null,

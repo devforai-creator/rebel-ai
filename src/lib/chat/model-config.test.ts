@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
+  buildOperatorDefaultChatModelConfig,
   DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
   DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
+  OPERATOR_DEFAULT_CHAT_MEMORY_MODE,
   normalizeChatModelConfig,
   resolveChatMemoryConfig,
 } from './model-config'
@@ -114,6 +116,41 @@ describe('resolveChatMemoryConfig', () => {
       mode: 'prefix_live_blocks',
       sealEveryMessages: DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
       retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
+    })
+  })
+
+  it('supports an explicit operator default mode without changing the system fallback', () => {
+    expect(resolveChatMemoryConfig({}, { defaultMode: OPERATOR_DEFAULT_CHAT_MEMORY_MODE })).toEqual(
+      {
+        mode: 'prefix_live_blocks',
+        sealEveryMessages: DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
+        retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
+      },
+    )
+  })
+})
+
+describe('buildOperatorDefaultChatModelConfig', () => {
+  it('applies the operator default memory while preserving alternate-model settings', () => {
+    expect(
+      buildOperatorDefaultChatModelConfig({
+        alternateModels: {
+          enabled: false,
+          primaryApiKeyId: 'primary',
+          secondaryApiKeyId: 'secondary',
+        },
+      }),
+    ).toEqual({
+      alternateModels: {
+        enabled: false,
+        primaryApiKeyId: 'primary',
+        secondaryApiKeyId: 'secondary',
+      },
+      memory: {
+        mode: 'prefix_live_blocks',
+        sealEveryMessages: DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
+        retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
+      },
     })
   })
 })

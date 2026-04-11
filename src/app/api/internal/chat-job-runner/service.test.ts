@@ -1142,6 +1142,13 @@ describe('processChatJobs', () => {
       status: 'error',
     })
     expect(result.results[0].error).toContain('The assistant returned an empty response')
+    expect(supabase.updates).toContainEqual(
+      expect.objectContaining({
+        status: 'error',
+        lifecycle_stage: 'empty_response',
+        failure_stage: 'empty_response',
+      }),
+    )
     expect(supabase.messages).toHaveLength(0)
   })
 
@@ -1285,6 +1292,13 @@ describe('processChatJobs', () => {
     })
     expect(result.results[0].error).toContain('OpenAI is currently rate limiting requests')
     expect(result.results[0].error).not.toContain('empty response')
+    expect(supabase.updates).toContainEqual(
+      expect.objectContaining({
+        status: 'error',
+        lifecycle_stage: 'provider_stream_error',
+        failure_stage: 'provider_stream_error',
+      }),
+    )
     expect(supabase.messages).toHaveLength(0)
   })
 
@@ -1424,6 +1438,13 @@ describe('processChatJobs', () => {
     expect(result.results[0].error).toContain(
       'Failed to update assistant message content: update failed',
     )
+    expect(supabase.updates).toContainEqual(
+      expect.objectContaining({
+        status: 'error',
+        lifecycle_stage: 'persisting_response',
+        failure_stage: 'persisting_response',
+      }),
+    )
     expect(supabase.messages).toHaveLength(0)
   })
 
@@ -1458,6 +1479,13 @@ describe('processChatJobs', () => {
       status: 'error',
     })
     expect(result.results[0].error).toContain('stream exploded')
+    expect(supabase.updates).toContainEqual(
+      expect.objectContaining({
+        status: 'error',
+        lifecycle_stage: 'provider_stream_error',
+        failure_stage: 'provider_stream_error',
+      }),
+    )
     expect(supabase.messages).toHaveLength(0)
   })
 
@@ -1491,6 +1519,62 @@ describe('processChatJobs', () => {
       status: 'error',
     })
     expect(result.results[0].error).toContain('The assistant returned an empty response')
+    expect(supabase.updates).toContainEqual(
+      expect.objectContaining({
+        status: 'error',
+        lifecycle_stage: 'empty_response',
+        failure_stage: 'empty_response',
+      }),
+    )
+    expect(supabase.messages).toHaveLength(0)
+  })
+
+  it('marks blocked empty Gemini responses as content-filtered failures', async () => {
+    const supabase = createChatJobRunnerSupabaseMock({
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    decryptSecretMock.mockResolvedValue('sk-test')
+    parseChatJobPayloadMock.mockReturnValue(
+      buildValidPayload({
+        requestId: 'req-gemini-filtered-empty',
+        provider: 'google',
+        modelName: 'gemini-1.5',
+      }),
+    )
+    streamTextMock.mockResolvedValue({
+      textStream: [],
+      finishReason: Promise.resolve('content-filter'),
+      providerMetadata: Promise.resolve({
+        google: {
+          finishReason: 'SAFETY',
+          safetyRatings: [{ category: 'HARM_CATEGORY_DANGEROUS_CONTENT' }],
+        },
+      }),
+      usage: Promise.resolve({ inputTokens: 10, outputTokens: 0, totalTokens: 10 }),
+    })
+    claimPendingJobMock.mockResolvedValueOnce({
+      id: 'job-gemini-filtered-empty',
+      payload: { ok: true },
+    })
+    claimPendingJobMock.mockResolvedValueOnce(null)
+
+    const { processChatJobs } = await import('./service')
+    const result = await processChatJobs(1)
+
+    expect(result.results[0]).toMatchObject({
+      jobId: 'job-gemini-filtered-empty',
+      status: 'error',
+    })
+    expect(result.results[0].error).toContain('Blocked by Google Gemini content filter')
+    expect(supabase.updates).toContainEqual(
+      expect.objectContaining({
+        status: 'error',
+        lifecycle_stage: 'content_filtered',
+        failure_stage: 'content_filtered',
+      }),
+    )
     expect(supabase.messages).toHaveLength(0)
   })
 

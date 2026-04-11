@@ -80,6 +80,7 @@ Current status as of 2026-04-11:
 - [src/app/api/internal/chat-job-runner/service.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/service.ts) and [src/app/api/internal/chat-job-runner/anthropic-batch-orchestrator.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/anthropic-batch-orchestrator.ts) now persist runner-side stages
 - [src/app/api/chat/jobs/[id]/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/jobs/[id]/route.ts) now returns those fields
 - [src/app/api/chat/background-trigger.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/background-trigger.ts) now persists `dispatching_runner_trigger` and `trigger_dispatched`, so queued jobs that fail before runner pickup are no longer indistinguishable from healthy handoff
+- empty-streaming failures are now split between `provider_stream_error`, `empty_response`, `content_filtered`, and `persisting_response`, so the first-class streaming path no longer collapses those cases into a generic `streaming_response` failure bucket
 
 ### P0-2. Make the Low-Cost Profile Reproducible End-to-End
 

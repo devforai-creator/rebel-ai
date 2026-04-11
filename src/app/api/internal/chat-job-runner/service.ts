@@ -26,9 +26,13 @@ import { buildLorebookDynamicContext } from '@/lib/lorebook/runtime'
 import { loadGenerationTranscript } from '@/lib/chat/turns'
 import {
   CHAT_JOB_LIFECYCLE_STAGE_COMPLETED,
+  CHAT_JOB_LIFECYCLE_STAGE_CONTENT_FILTERED,
+  CHAT_JOB_LIFECYCLE_STAGE_EMPTY_RESPONSE,
   CHAT_JOB_LIFECYCLE_STAGE_INVALID_PAYLOAD,
   CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT,
   CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING,
+  CHAT_JOB_LIFECYCLE_STAGE_PERSISTING_RESPONSE,
+  CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
   CHAT_JOB_LIFECYCLE_STAGE_REQUESTING_PROVIDER,
   CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE,
   type ChatJobLifecycleStage,
@@ -201,10 +205,33 @@ async function collectTextFromStreamWithSnapshots({
     }
   }
 
-  if (stream.fullStream) {
-    for await (const part of stream.fullStream) {
-      if (part.type === 'text-delta' && typeof part.text === 'string') {
-        fullText += part.text
+  try {
+    if (stream.fullStream) {
+      for await (const part of stream.fullStream) {
+        if (part.type === 'text-delta' && typeof part.text === 'string') {
+          fullText += part.text
+
+          const currentTime = now()
+          if (currentTime - lastBroadcastAt >= updateIntervalMs) {
+            sendSnapshot(fullText)
+            lastBroadcastAt = currentTime
+          }
+        }
+
+        if (part.type === 'error') {
+          const normalizedError = normalizeProviderError({
+            provider,
+            error: part.error,
+          })
+          throw new ChatJobExecutionError(
+            normalizedError.userMessage,
+            CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
+          )
+        }
+      }
+    } else {
+      for await (const chunk of stream.textStream) {
+        fullText += chunk
 
         const currentTime = now()
         if (currentTime - lastBroadcastAt >= updateIntervalMs) {
@@ -212,25 +239,20 @@ async function collectTextFromStreamWithSnapshots({
           lastBroadcastAt = currentTime
         }
       }
-
-      if (part.type === 'error') {
-        const normalizedError = normalizeProviderError({
-          provider,
-          error: part.error,
-        })
-        throw new Error(normalizedError.userMessage)
-      }
     }
-  } else {
-    for await (const chunk of stream.textStream) {
-      fullText += chunk
-
-      const currentTime = now()
-      if (currentTime - lastBroadcastAt >= updateIntervalMs) {
-        sendSnapshot(fullText)
-        lastBroadcastAt = currentTime
-      }
+  } catch (error) {
+    if (error instanceof ChatJobExecutionError) {
+      throw error
     }
+
+    const normalizedError = normalizeProviderError({
+      provider,
+      error,
+    })
+    throw new ChatJobExecutionError(
+      normalizedError.userMessage,
+      CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
+    )
   }
 
   if (fullText) {
@@ -822,14 +844,21 @@ async function executeJob({
         regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
       })
     } catch (error) {
+      const streamError =
+        error instanceof ChatJobExecutionError
+          ? error
+          : new ChatJobExecutionError(
+              error instanceof Error ? error.message : String(error),
+              CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
+            )
       await broadcastAssistantStreamError({
         supabase,
         chatId,
         jobId,
-        error: error instanceof Error ? error.message : String(error),
+        error: streamError.message,
         regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
       })
-      throw error
+      throw streamError
     }
     let assistantMessageId: string | null = null
     let messageInsertDuration: number | null = null
@@ -868,15 +897,24 @@ async function executeJob({
     const assistantText = fullText.trim()
 
     if (!assistantText) {
-      const filteredMessage =
-        finishReason === 'error'
-          ? 'The provider returned an error before producing text. Please try again later.'
-          : contentFilterInfo.blocked
-            ? 'Blocked by Google Gemini content filter. Please disable safe mode or refine your input and try again.'
-            : 'The assistant returned an empty response. Please try again later.'
+      if (contentFilterInfo.blocked) {
+        throw new ChatJobExecutionError(
+          'Blocked by Google Gemini content filter. Please disable safe mode or refine your input and try again.',
+          CHAT_JOB_LIFECYCLE_STAGE_CONTENT_FILTERED,
+        )
+      }
 
-      // Error is stored in chat_jobs.error and shown via toast popup
-      throw new Error(filteredMessage)
+      if (finishReason === 'error') {
+        throw new ChatJobExecutionError(
+          'The provider returned an error before producing text. Please try again later.',
+          CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
+        )
+      }
+
+      throw new ChatJobExecutionError(
+        'The assistant returned an empty response. Please try again later.',
+        CHAT_JOB_LIFECYCLE_STAGE_EMPTY_RESPONSE,
+      )
     }
 
     const usage = await stream.usage
@@ -937,6 +975,7 @@ async function executeJob({
     })
 
     await markStage(CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING)
+    currentStage = CHAT_JOB_LIFECYCLE_STAGE_PERSISTING_RESPONSE
     const postGenerationResult = await runPostGenerationPipeline({
       supabase,
       chatId,
@@ -984,6 +1023,10 @@ async function executeJob({
 
     return { status: 'success' }
   } catch (error) {
+    if (error instanceof ChatJobExecutionError) {
+      throw error
+    }
+
     const message = error instanceof Error ? error.message : 'Unknown job failure'
     throw new ChatJobExecutionError(message, currentStage)
   }

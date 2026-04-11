@@ -7,7 +7,11 @@ export const CHAT_JOB_LIFECYCLE_STAGE_REQUESTING_PROVIDER = 'requesting_provider
 export const CHAT_JOB_LIFECYCLE_STAGE_WAITING_PROVIDER_BATCH = 'waiting_provider_batch'
 export const CHAT_JOB_LIFECYCLE_STAGE_POLLING_PROVIDER_BATCH = 'polling_provider_batch'
 export const CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE = 'streaming_response'
+export const CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR = 'provider_stream_error'
+export const CHAT_JOB_LIFECYCLE_STAGE_EMPTY_RESPONSE = 'empty_response'
+export const CHAT_JOB_LIFECYCLE_STAGE_CONTENT_FILTERED = 'content_filtered'
 export const CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING = 'post_processing'
+export const CHAT_JOB_LIFECYCLE_STAGE_PERSISTING_RESPONSE = 'persisting_response'
 export const CHAT_JOB_LIFECYCLE_STAGE_COMPLETED = 'completed'
 export const CHAT_JOB_LIFECYCLE_STAGE_INVALID_PAYLOAD = 'invalid_payload'
 export const CHAT_JOB_LIFECYCLE_STAGE_TIMED_OUT = 'timed_out'
@@ -22,7 +26,11 @@ export const CHAT_JOB_LIFECYCLE_STAGES = [
   CHAT_JOB_LIFECYCLE_STAGE_WAITING_PROVIDER_BATCH,
   CHAT_JOB_LIFECYCLE_STAGE_POLLING_PROVIDER_BATCH,
   CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE,
+  CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
+  CHAT_JOB_LIFECYCLE_STAGE_EMPTY_RESPONSE,
+  CHAT_JOB_LIFECYCLE_STAGE_CONTENT_FILTERED,
   CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING,
+  CHAT_JOB_LIFECYCLE_STAGE_PERSISTING_RESPONSE,
   CHAT_JOB_LIFECYCLE_STAGE_COMPLETED,
   CHAT_JOB_LIFECYCLE_STAGE_INVALID_PAYLOAD,
   CHAT_JOB_LIFECYCLE_STAGE_TIMED_OUT,
@@ -40,7 +48,11 @@ const CHAT_JOB_LIFECYCLE_STAGE_LABELS: Record<ChatJobLifecycleStage, string> = {
   waiting_provider_batch: 'provider batch wait',
   polling_provider_batch: 'provider batch poll',
   streaming_response: 'response streaming',
+  provider_stream_error: 'provider stream handling',
+  empty_response: 'empty provider response',
+  content_filtered: 'content filtering',
   post_processing: 'post-processing',
+  persisting_response: 'assistant response persistence',
   completed: 'completion',
   invalid_payload: 'payload validation',
   timed_out: 'processing timeout',

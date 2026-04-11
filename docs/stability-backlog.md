@@ -234,6 +234,7 @@ Current status as of 2026-04-11:
 
 - linked production dry-runs on 2026-04-11 found `0` `module-assets` orphans in both the recent-window scan and full scan, and `0` `character-assets` orphans older than `1 day`
 - the same full `character-assets` dry-run found `1` recent orphan created at `2026-04-10T15:09:26Z`, so the leak is greatly reduced but not yet fully eliminated
+- [src/app/api/internal/storage-janitor/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/storage-janitor/route.ts) now logs accepted dispatches plus per-bucket orphan/deletion summaries for both synchronous and background janitor runs, so scheduled cleanup leaves persistent telemetry even when scheduler access sits outside the repo
 - [src/lib/assets/storage-cleanup.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/assets/storage-cleanup.ts) no longer swallows storage remove failures silently; callers now get a `StorageCleanupError`
 - irreversible delete flows now surface cleanup problems explicitly instead of reporting a clean success on silent storage remove failures, with coverage in [src/app/dashboard/characters/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/actions.test.ts), [src/app/dashboard/account/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/actions.test.ts), and [src/app/api/modules/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/modules/route.test.ts)
 - RBX import cleanup now treats failed removal of an uploaded orphan candidate as a fatal import failure instead of silently downgrading it to a counted asset miss, with coverage in [src/lib/rbx-importer.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/rbx-importer.test.ts)
@@ -241,7 +242,7 @@ Current status as of 2026-04-11:
 Next session start here:
 
 - trace the remaining recent `character-assets` orphan against the exact delete path or import run that created it, then decide whether a follow-up fix belongs in character deletion, import rollback, or both
-- wire the deployed scheduler to hit `/api/internal/storage-janitor` daily if it is not already configured, or add persistent janitor run telemetry if scheduler access stays outside the repo
+- confirm the deployed scheduler is actually hitting `/api/internal/storage-janitor` daily, then review the new janitor telemetry after another day or two of signals
 
 ### P1-4. CI Guardrail Tightening
 

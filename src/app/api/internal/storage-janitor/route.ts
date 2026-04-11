@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse, after } from 'next/server'
-import { runStorageJanitor } from '@/lib/assets/orphaned-storage-janitor'
+import {
+  runStorageJanitor,
+  type StorageJanitorSummary,
+} from '@/lib/assets/orphaned-storage-janitor'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -63,12 +66,25 @@ export async function GET(req: NextRequest) {
       if (!response.ok) {
         const text = await response.text()
         console.error('[Storage Janitor Trigger] Runner dispatch failed', {
+          endpoint: endpoint.toString(),
+          ...buildRunOptionsMetadata(options),
           status: response.status,
           body: text,
         })
+        return
       }
+
+      console.info('[Storage Janitor Trigger] Runner dispatch accepted', {
+        endpoint: endpoint.toString(),
+        ...buildRunOptionsMetadata(options),
+        status: response.status,
+      })
     } catch (error) {
-      console.error('[Storage Janitor Trigger] Failed to invoke runner', error)
+      console.error('[Storage Janitor Trigger] Failed to invoke runner', {
+        endpoint: endpoint.toString(),
+        ...buildRunOptionsMetadata(options),
+        error: error instanceof Error ? error.message : String(error),
+      })
     } finally {
       clearTimeout(timer)
     }
@@ -107,11 +123,23 @@ export async function POST(req: NextRequest) {
   const options = resolveJanitorOptionsFromBody(body)
 
   if (body.dispatch === true) {
+    console.info(
+      '[Storage Janitor Runner] Background dispatch accepted',
+      buildRunOptionsMetadata(options),
+    )
+
     after(async () => {
       try {
-        await runAllStorageJanitors(options)
+        const results = await runAllStorageJanitors(options)
+        console.info(
+          '[Storage Janitor Runner] Completed background run',
+          buildRunCompletionMetadata(options, results),
+        )
       } catch (error) {
-        console.error('[Storage Janitor Runner] Background dispatch failed', error)
+        console.error('[Storage Janitor Runner] Background dispatch failed', {
+          ...buildRunOptionsMetadata(options),
+          error: error instanceof Error ? error.message : String(error),
+        })
       }
     })
 
@@ -125,21 +153,33 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const results = await runAllStorageJanitors(options)
+  try {
+    const results = await runAllStorageJanitors(options)
+    console.info(
+      '[Storage Janitor Runner] Completed synchronous run',
+      buildRunCompletionMetadata(options, results),
+    )
 
-  return NextResponse.json(
-    {
-      ok: true,
-      timestamp: Date.now(),
-      mode: options.execute ? 'execute' : 'dry-run',
-      olderThanDays: options.olderThanDays,
-      maxDelete: options.maxDelete,
-      results,
-    },
-    {
-      headers: { 'Cache-Control': 'no-store' },
-    },
-  )
+    return NextResponse.json(
+      {
+        ok: true,
+        timestamp: Date.now(),
+        mode: options.execute ? 'execute' : 'dry-run',
+        olderThanDays: options.olderThanDays,
+        maxDelete: options.maxDelete,
+        results,
+      },
+      {
+        headers: { 'Cache-Control': 'no-store' },
+      },
+    )
+  } catch (error) {
+    console.error('[Storage Janitor Runner] Synchronous run failed', {
+      ...buildRunOptionsMetadata(options),
+      error: error instanceof Error ? error.message : String(error),
+    })
+    throw error
+  }
 }
 
 async function runAllStorageJanitors(options: {
@@ -172,6 +212,54 @@ async function runAllStorageJanitors(options: {
   return {
     characterAssets,
     moduleAssets,
+  }
+}
+
+function buildRunOptionsMetadata(options: {
+  execute: boolean
+  olderThanDays: number
+  maxDelete: number
+  sampleSize?: number
+}) {
+  return {
+    mode: options.execute ? 'execute' : 'dry-run',
+    olderThanDays: options.olderThanDays,
+    maxDelete: options.maxDelete,
+    sampleSize: options.sampleSize ?? null,
+  }
+}
+
+function buildRunCompletionMetadata(
+  options: {
+    execute: boolean
+    olderThanDays: number
+    maxDelete: number
+    sampleSize?: number
+  },
+  results: Awaited<ReturnType<typeof runAllStorageJanitors>>,
+) {
+  return {
+    ...buildRunOptionsMetadata(options),
+    summary: summarizeRunResults(results),
+  }
+}
+
+function summarizeRunResults(results: Awaited<ReturnType<typeof runAllStorageJanitors>>) {
+  return {
+    characterAssets: summarizeBucketResult(results.characterAssets),
+    moduleAssets: summarizeBucketResult(results.moduleAssets),
+    totalOrphans: results.characterAssets.orphanCount + results.moduleAssets.orphanCount,
+    totalDeleted: results.characterAssets.deletedCount + results.moduleAssets.deletedCount,
+  }
+}
+
+function summarizeBucketResult(result: StorageJanitorSummary) {
+  return {
+    objectsScanned: result.objectsScanned,
+    orphanCount: result.orphanCount,
+    deletedCount: result.deletedCount,
+    reachedDeleteLimit: result.reachedDeleteLimit,
+    sample: result.sample,
   }
 }
 

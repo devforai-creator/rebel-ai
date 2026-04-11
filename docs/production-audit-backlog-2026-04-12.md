@@ -279,6 +279,14 @@ Done when:
 - account settings areas are split into smaller action modules or shared helpers with stable input contracts
 - tests stay aligned with each extracted boundary
 
+Current status as of 2026-04-12:
+
+- [actions.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/actions.ts) now acts as a thin server-action shell that preserves the existing `./actions` import surface for dashboard forms while delegating shared auth/form/profile helpers to [account-action-helpers.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/account-action-helpers.ts)
+- settings-oriented actions now live in [account-settings-actions.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/account-settings-actions.ts), which groups RAG, summary model, reprocess, translation model, and summary prompt updates by contract instead of leaving them interleaved with unrelated account deletion/password logic
+- security and deletion actions now live in [account-security-actions.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/account-security-actions.ts), which isolates password updates and account-deletion cleanup flow from the settings action family without changing the public import path used by the UI
+- [actions.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/actions.ts) is down to `65` lines from its previous `720`, so the account action surface now behaves like an export shell rather than a monolithic implementation file
+- regression coverage stayed anchored to the public surface via [actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/actions.test.ts), while the account forms that import `./actions` continue to pass their existing component tests unchanged
+
 ### P2-3. Prune Over-Specified Comments and Dead Compatibility Fragments
 
 Scope:

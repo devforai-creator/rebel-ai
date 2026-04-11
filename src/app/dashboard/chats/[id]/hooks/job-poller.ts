@@ -3,10 +3,13 @@
  * Extracted for testability with dependency injection
  */
 
+import { formatChatJobFailureMessage } from '@/lib/chat/job-lifecycle'
+
 export interface JobPollerDeps {
   fetchJobStatus: (jobId: string) => Promise<{
     status: 'pending' | 'processing' | 'success' | 'error'
     error?: string | null
+    failureStage?: string | null
   } | null>
   onSuccess: () => Promise<void>
   onError: (error: Error) => void
@@ -84,7 +87,12 @@ export async function pollJobStatus(
       }
 
       if (job.status === 'error') {
-        const jobError = new Error(job.error || 'Failed to generate response.')
+        const jobError = new Error(
+          formatChatJobFailureMessage({
+            error: job.error,
+            failureStage: job.failureStage,
+          }),
+        )
         deps.onError(jobError)
         return { outcome: 'error', error: jobError }
       }

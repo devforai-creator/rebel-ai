@@ -5,6 +5,15 @@ import { resolveAnthropicCacheDecision, resolvePromptCacheDecision } from '@/lib
 import { estimateUsageCost } from '@/lib/model-pricing'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from '@/lib/chat/delivery-mode'
 import {
+  CHAT_JOB_LIFECYCLE_STAGE_COMPLETED,
+  CHAT_JOB_LIFECYCLE_STAGE_INVALID_PAYLOAD,
+  CHAT_JOB_LIFECYCLE_STAGE_POLLING_PROVIDER_BATCH,
+  CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING,
+  CHAT_JOB_LIFECYCLE_STAGE_WAITING_PROVIDER_BATCH,
+  type ChatJobLifecycleStage,
+} from '@/lib/chat/job-lifecycle'
+import { persistChatJobLifecycleStage } from '@/lib/chat/job-lifecycle-store'
+import {
   createAnthropicMessageBatch,
   extractTextFromAnthropicBatchMessage,
   retrieveAnthropicBatchResult,
@@ -100,6 +109,8 @@ export async function submitAnthropicBatchJob({
     debug,
   }
   const batchUpdate: ChatGenerationJobUpdate = {
+    lifecycle_stage: CHAT_JOB_LIFECYCLE_STAGE_WAITING_PROVIDER_BATCH,
+    failure_stage: null,
     external_provider_job_id: batch.id,
     external_provider_status: batch.processing_status,
     external_provider_submitted_at: batch.created_at,
@@ -287,18 +298,37 @@ async function pollAnthropicBatchJob({
 }): Promise<{ jobId: string; status: string; error?: string }> {
   const payload = parseChatJobPayload(job.payload)
   if (!payload) {
-    await markBatchJobError({ supabase, jobId: job.id, error: 'Invalid job payload' })
+    await markBatchJobError({
+      supabase,
+      jobId: job.id,
+      error: 'Invalid job payload',
+      failureStage: CHAT_JOB_LIFECYCLE_STAGE_INVALID_PAYLOAD,
+    })
     return { jobId: job.id, status: 'error', error: 'Invalid job payload' }
   }
 
   const metadata = parseAnthropicBatchMetadata(job.external_provider_metadata)
   if (!metadata) {
     const error = 'Anthropic batch metadata is missing or invalid'
-    await markBatchJobError({ supabase, jobId: job.id, error })
+    await markBatchJobError({
+      supabase,
+      jobId: job.id,
+      error,
+      failureStage: CHAT_JOB_LIFECYCLE_STAGE_POLLING_PROVIDER_BATCH,
+    })
     return { jobId: job.id, status: 'error', error }
   }
 
+  let currentStage: ChatJobLifecycleStage = CHAT_JOB_LIFECYCLE_STAGE_POLLING_PROVIDER_BATCH
+
   try {
+    await persistChatJobLifecycleStage({
+      supabase,
+      jobId: job.id,
+      stage: CHAT_JOB_LIFECYCLE_STAGE_POLLING_PROVIDER_BATCH,
+      additionalUpdate: { failure_stage: null },
+    })
+
     const { apiKey } = await loadBatchApiKey({
       supabase,
       apiKeyId: payload.apiKeyId,
@@ -390,6 +420,14 @@ async function pollAnthropicBatchJob({
       usage: usageMetrics,
     })
 
+    currentStage = CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING
+    await persistChatJobLifecycleStage({
+      supabase,
+      jobId: job.id,
+      stage: CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING,
+      additionalUpdate: { failure_stage: null },
+    })
+
     await runPostGenerationPipeline({
       supabase,
       chatId: payload.chatId,
@@ -416,6 +454,8 @@ async function pollAnthropicBatchJob({
     const successUpdate: ChatGenerationJobUpdate = {
       status: 'success',
       error: null,
+      lifecycle_stage: CHAT_JOB_LIFECYCLE_STAGE_COMPLETED,
+      failure_stage: null,
       external_provider_status: batch.processing_status,
       external_provider_result_url: batch.results_url,
       external_provider_last_checked_at: new Date().toISOString(),
@@ -428,7 +468,12 @@ async function pollAnthropicBatchJob({
     return { jobId: job.id, status: 'success' }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    await markBatchJobError({ supabase, jobId: job.id, error: message })
+    await markBatchJobError({
+      supabase,
+      jobId: job.id,
+      error: message,
+      failureStage: currentStage,
+    })
     return { jobId: job.id, status: 'error', error: message }
   }
 }
@@ -497,14 +542,18 @@ async function markBatchJobError({
   supabase,
   jobId,
   error,
+  failureStage,
 }: {
   supabase: AdminSupabaseClient
   jobId: string
   error: string
+  failureStage: ChatJobLifecycleStage
 }) {
   const errorUpdate: ChatGenerationJobUpdate = {
     status: 'error',
     error,
+    lifecycle_stage: failureStage,
+    failure_stage: failureStage,
     external_provider_last_checked_at: new Date().toISOString(),
   }
   await supabase

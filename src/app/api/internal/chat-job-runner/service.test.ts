@@ -386,6 +386,8 @@ describe('processChatJobs', () => {
     expect(supabase.updates).toContainEqual({
       status: 'error',
       error: 'Invalid job payload',
+      lifecycle_stage: 'invalid_payload',
+      failure_stage: 'invalid_payload',
     })
   })
 
@@ -806,6 +808,8 @@ describe('processChatJobs', () => {
     )
     expect(supabase.updates).toContainEqual(
       expect.objectContaining({
+        lifecycle_stage: 'waiting_provider_batch',
+        failure_stage: null,
         external_provider_job_id: 'batch-1',
         external_provider_status: 'in_progress',
         external_provider_submitted_at: '2026-04-10T00:00:00Z',

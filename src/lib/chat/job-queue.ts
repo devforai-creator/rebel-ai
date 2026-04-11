@@ -1,6 +1,10 @@
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/database.types'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from './delivery-mode'
+import {
+  CHAT_JOB_LIFECYCLE_STAGE_RUNNER_CLAIMED,
+  CHAT_JOB_LIFECYCLE_STAGE_TIMED_OUT,
+} from './job-lifecycle'
 
 export type RawChatJobRecord = { id: string; payload: unknown }
 type ChatJobQueueSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'from'>
@@ -35,7 +39,12 @@ export async function claimPendingJob(
     return null
   }
 
-  const claimUpdate: ChatGenerationJobUpdate = { status: 'processing' }
+  const claimUpdate: ChatGenerationJobUpdate = {
+    status: 'processing',
+    lifecycle_stage: CHAT_JOB_LIFECYCLE_STAGE_RUNNER_CLAIMED,
+    failure_stage: null,
+    error: null,
+  }
   const { data: claimedJob, error: claimError } = await supabase
     .from('chat_generation_jobs')
     .update(claimUpdate as never)
@@ -88,6 +97,8 @@ export async function resetStuckProcessingJobs(
   const timeoutUpdate: ChatGenerationJobUpdate = {
     status: 'error',
     error: 'Job timed out after processing for too long',
+    lifecycle_stage: CHAT_JOB_LIFECYCLE_STAGE_TIMED_OUT,
+    failure_stage: CHAT_JOB_LIFECYCLE_STAGE_TIMED_OUT,
   }
   const { data, error } = await supabase
     .from('chat_generation_jobs')

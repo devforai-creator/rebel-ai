@@ -9,6 +9,7 @@ import {
   rollbackPersistedChatTurn,
   rollbackPersistedUserMessage,
 } from './persistence-rollback'
+import { CHAT_JOB_LIFECYCLE_STAGE_QUEUED } from '@/lib/chat/job-lifecycle'
 
 type RouteSupabaseClient = Awaited<ReturnType<typeof createClient>>
 
@@ -181,6 +182,8 @@ export async function enqueueChatGenerationJob({
       chat_id: chatId,
       user_id: userId,
       status: 'pending',
+      lifecycle_stage: CHAT_JOB_LIFECYCLE_STAGE_QUEUED,
+      failure_stage: null,
       delivery_mode: payload.deliveryMode,
       payload: serializeChatJobPayload(payload),
     })

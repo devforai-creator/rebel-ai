@@ -7,6 +7,8 @@ type JobRow = {
   chat_id: string
   status: string
   error: string | null
+  lifecycle_stage: string
+  failure_stage: string | null
   created_at: string
   updated_at: string
 }
@@ -90,6 +92,8 @@ describe('GET /api/chat/jobs/[id]', () => {
       chat_id: 'chat-1',
       status: 'pending',
       error: null,
+      lifecycle_stage: 'queued',
+      failure_stage: null,
       created_at: '2025-01-01T00:00:00Z',
       updated_at: '2025-01-01T00:00:00Z',
     }
@@ -109,6 +113,8 @@ describe('GET /api/chat/jobs/[id]', () => {
       chatId: 'chat-1',
       status: 'pending',
       error: null,
+      lifecycleStage: 'queued',
+      failureStage: null,
     })
     expect(supabaseMock.eqCalls).toContainEqual(['id', 'job-3'])
     expect(supabaseMock.eqCalls).toContainEqual(['user_id', 'user-1'])

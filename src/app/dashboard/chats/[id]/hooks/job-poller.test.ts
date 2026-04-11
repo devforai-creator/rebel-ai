@@ -63,16 +63,19 @@ describe('pollJobStatus', () => {
       vi.mocked(mockDeps.fetchJobStatus).mockResolvedValue({
         status: 'error',
         error: 'LLM API error',
+        failureStage: 'requesting_provider',
       })
 
       const result = await pollJobStatus('job-123', mockDeps, SHORT_CONFIG)
 
       expect(result).toEqual({
         outcome: 'error',
-        error: expect.objectContaining({ message: 'LLM API error' }),
+        error: expect.objectContaining({
+          message: 'Failed during provider request: LLM API error',
+        }),
       })
       expect(mockDeps.onError).toHaveBeenCalledWith(
-        expect.objectContaining({ message: 'LLM API error' }),
+        expect.objectContaining({ message: 'Failed during provider request: LLM API error' }),
       )
       expect(mockDeps.onSuccess).not.toHaveBeenCalled()
     })

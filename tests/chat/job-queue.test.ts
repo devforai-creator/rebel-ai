@@ -97,7 +97,12 @@ describe('claimPendingJob', () => {
     expect(selectBuilder.select).toHaveBeenCalledWith('id, payload, status')
     expect(selectBuilder.eq).toHaveBeenCalledWith('status', 'pending')
     expect(selectBuilder.order).toHaveBeenCalledWith('created_at', { ascending: true })
-    expect(updateBuilder.update).toHaveBeenCalledWith({ status: 'processing' })
+    expect(updateBuilder.update).toHaveBeenCalledWith({
+      status: 'processing',
+      lifecycle_stage: 'runner_claimed',
+      failure_stage: null,
+      error: null,
+    })
     expect(updateBuilder.eq).toHaveBeenNthCalledWith(1, 'id', 'job-1')
     expect(updateBuilder.eq).toHaveBeenNthCalledWith(2, 'status', 'pending')
     expect(warnSpy).not.toHaveBeenCalled()
@@ -184,6 +189,8 @@ describe('resetStuckProcessingJobs', () => {
     expect(updateBuilder.update).toHaveBeenCalledWith({
       status: 'error',
       error: 'Job timed out after processing for too long',
+      lifecycle_stage: 'timed_out',
+      failure_stage: 'timed_out',
     })
     expect(updateBuilder.in).toHaveBeenCalledWith('id', ['job-1', 'job-2'])
     // Partial messages are now preserved (not deleted)

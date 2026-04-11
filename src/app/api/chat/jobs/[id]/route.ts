@@ -26,7 +26,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
     const { data: job, error } = await supabase
       .from('chat_generation_jobs')
-      .select('id, chat_id, status, error, delivery_mode, created_at, updated_at')
+      .select(
+        'id, chat_id, status, error, delivery_mode, lifecycle_stage, failure_stage, created_at, updated_at',
+      )
       .eq('id', jobId)
       .eq('user_id', user.id)
       .single()
@@ -45,7 +47,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
     const { data: refreshedJob } = await supabase
       .from('chat_generation_jobs')
-      .select('id, chat_id, status, error, delivery_mode, created_at, updated_at')
+      .select(
+        'id, chat_id, status, error, delivery_mode, lifecycle_stage, failure_stage, created_at, updated_at',
+      )
       .eq('id', jobId)
       .eq('user_id', user.id)
       .single()
@@ -58,6 +62,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
       status: responseJob.status,
       error: responseJob.error,
       deliveryMode: responseJob.delivery_mode,
+      lifecycleStage: responseJob.lifecycle_stage,
+      failureStage: responseJob.failure_stage,
       createdAt: responseJob.created_at,
       updatedAt: responseJob.updated_at,
     })

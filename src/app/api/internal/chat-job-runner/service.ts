@@ -24,6 +24,16 @@ import { normalizeProviderError } from '@/lib/llm/provider-error'
 import { resolveInvocationSamplingOptions } from '@/lib/llm/invocation-sampling'
 import { buildLorebookDynamicContext } from '@/lib/lorebook/runtime'
 import { loadGenerationTranscript } from '@/lib/chat/turns'
+import {
+  CHAT_JOB_LIFECYCLE_STAGE_COMPLETED,
+  CHAT_JOB_LIFECYCLE_STAGE_INVALID_PAYLOAD,
+  CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT,
+  CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING,
+  CHAT_JOB_LIFECYCLE_STAGE_REQUESTING_PROVIDER,
+  CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE,
+  type ChatJobLifecycleStage,
+} from '@/lib/chat/job-lifecycle'
+import { persistChatJobLifecycleStage } from '@/lib/chat/job-lifecycle-store'
 import { buildLanguageModel } from './model-factory'
 import { evaluateContentFilter } from './content-filter'
 import { buildSystemPrompt } from './system-prompt-builder'
@@ -67,6 +77,16 @@ class ChatJobStatusUpdateError extends Error {
     )
     this.name = 'ChatJobStatusUpdateError'
     this.targetStatus = targetStatus
+  }
+}
+
+class ChatJobExecutionError extends Error {
+  lifecycleStage: ChatJobLifecycleStage
+
+  constructor(message: string, lifecycleStage: ChatJobLifecycleStage) {
+    super(message)
+    this.name = 'ChatJobExecutionError'
+    this.lifecycleStage = lifecycleStage
   }
 }
 
@@ -279,6 +299,8 @@ async function processJob({
     const invalidPayloadUpdate: ChatGenerationJobUpdate = {
       status: 'error',
       error: invalidPayloadMessage,
+      lifecycle_stage: CHAT_JOB_LIFECYCLE_STAGE_INVALID_PAYLOAD,
+      failure_stage: CHAT_JOB_LIFECYCLE_STAGE_INVALID_PAYLOAD,
     }
 
     try {
@@ -310,7 +332,12 @@ async function processJob({
       return { jobId, status: 'processing' }
     }
 
-    const successUpdate: ChatGenerationJobUpdate = { status: 'success', error: null }
+    const successUpdate: ChatGenerationJobUpdate = {
+      status: 'success',
+      error: null,
+      lifecycle_stage: CHAT_JOB_LIFECYCLE_STAGE_COMPLETED,
+      failure_stage: null,
+    }
     await persistTerminalJobStatus({
       supabase,
       jobId,
@@ -329,7 +356,16 @@ async function processJob({
     }
 
     const message = error instanceof Error ? error.message : 'Unknown job failure'
-    const errorUpdate: ChatGenerationJobUpdate = { status: 'error', error: message }
+    const failureStage =
+      error instanceof ChatJobExecutionError
+        ? error.lifecycleStage
+        : CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT
+    const errorUpdate: ChatGenerationJobUpdate = {
+      status: 'error',
+      error: message,
+      lifecycle_stage: failureStage,
+      failure_stage: failureStage,
+    }
 
     try {
       await persistTerminalJobStatus({
@@ -385,548 +421,572 @@ async function executeJob({
     origin,
   })
 
-  const apiKeyQueryStart = performance.now()
-  const apiKeyQueryPromise = supabase
-    .from('api_keys')
-    .select<'vault_secret_name, service_tier, reasoning_effort'>(
-      'vault_secret_name, service_tier, reasoning_effort',
-    )
-    .eq('id', apiKeyId)
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .single<RunnerApiKeyRow>()
-    .then((result) => {
-      timings['1_api_key_query'] = performance.now() - apiKeyQueryStart
-      return result
+  let currentStage: ChatJobLifecycleStage = CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT
+  const markStage = async (stage: ChatJobLifecycleStage) => {
+    currentStage = stage
+    await persistChatJobLifecycleStage({
+      supabase,
+      jobId,
+      stage,
+      additionalUpdate: {
+        failure_stage: null,
+      },
     })
-
-  const chatQueryStart = performance.now()
-  const chatQueryPromise = supabase
-    .from('chats')
-    .select<'id, user_id, character_id, persona_id, custom_system_prompt, model_config'>(
-      'id, user_id, character_id, persona_id, custom_system_prompt, model_config',
-    )
-    .eq('id', chatId)
-    .eq('user_id', userId)
-    .single<RunnerChatRow>()
-    .then((result) => {
-      timings['2_chat_query'] = performance.now() - chatQueryStart
-      return result
-    })
-
-  const [{ data: apiKeyData, error: apiKeyError }, { data: chat, error: chatError }] =
-    await Promise.all([apiKeyQueryPromise, chatQueryPromise])
-
-  if (apiKeyError || !apiKeyData) {
-    throw new Error('API key not found or inactive')
-  }
-  if (chatError || !chat) {
-    throw new Error('Chat not found')
   }
 
-  const apiKeyDecryptStart = performance.now()
-  const apiKeyDecryptPromise = decryptSecret({
-    supabase,
-    secretName: apiKeyData.vault_secret_name,
-    requester: userId,
-  }).then((decrypted) => {
-    timings['3_api_key_decrypt'] = performance.now() - apiKeyDecryptStart
-    return decrypted
-  })
+  try {
+    await markStage(CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT)
 
-  const personaQueryStart = performance.now()
-  const personaPromise = chat.persona_id
-    ? supabase
-        .from('personas')
-        .select<'name, description'>('name, description')
-        .eq('id', chat.persona_id)
-        .eq('user_id', userId)
-        .single<RunnerPersonaRow>()
-        .then((result) => {
-          timings['4_persona_query'] = performance.now() - personaQueryStart
-          return result
-        })
-    : Promise.resolve({
-        data: null as { name: string; description: string | null } | null,
-        error: null,
-      }).then((result) => {
-        timings['4_persona_query'] = performance.now() - personaQueryStart
+    const apiKeyQueryStart = performance.now()
+    const apiKeyQueryPromise = supabase
+      .from('api_keys')
+      .select<'vault_secret_name, service_tier, reasoning_effort'>(
+        'vault_secret_name, service_tier, reasoning_effort',
+      )
+      .eq('id', apiKeyId)
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .single<RunnerApiKeyRow>()
+      .then((result) => {
+        timings['1_api_key_query'] = performance.now() - apiKeyQueryStart
         return result
       })
 
-  const characterQueryStart = performance.now()
-  const characterPromise = supabase
-    .from('characters')
-    .select(
-      `
+    const chatQueryStart = performance.now()
+    const chatQueryPromise = supabase
+      .from('chats')
+      .select<'id, user_id, character_id, persona_id, custom_system_prompt, model_config'>(
+        'id, user_id, character_id, persona_id, custom_system_prompt, model_config',
+      )
+      .eq('id', chatId)
+      .eq('user_id', userId)
+      .single<RunnerChatRow>()
+      .then((result) => {
+        timings['2_chat_query'] = performance.now() - chatQueryStart
+        return result
+      })
+
+    const [{ data: apiKeyData, error: apiKeyError }, { data: chat, error: chatError }] =
+      await Promise.all([apiKeyQueryPromise, chatQueryPromise])
+
+    if (apiKeyError || !apiKeyData) {
+      throw new Error('API key not found or inactive')
+    }
+    if (chatError || !chat) {
+      throw new Error('Chat not found')
+    }
+
+    const apiKeyDecryptStart = performance.now()
+    const apiKeyDecryptPromise = decryptSecret({
+      supabase,
+      secretName: apiKeyData.vault_secret_name,
+      requester: userId,
+    }).then((decrypted) => {
+      timings['3_api_key_decrypt'] = performance.now() - apiKeyDecryptStart
+      return decrypted
+    })
+
+    const personaQueryStart = performance.now()
+    const personaPromise = chat.persona_id
+      ? supabase
+          .from('personas')
+          .select<'name, description'>('name, description')
+          .eq('id', chat.persona_id)
+          .eq('user_id', userId)
+          .single<RunnerPersonaRow>()
+          .then((result) => {
+            timings['4_persona_query'] = performance.now() - personaQueryStart
+            return result
+          })
+      : Promise.resolve({
+          data: null as { name: string; description: string | null } | null,
+          error: null,
+        }).then((result) => {
+          timings['4_persona_query'] = performance.now() - personaQueryStart
+          return result
+        })
+
+    const characterQueryStart = performance.now()
+    const characterPromise = supabase
+      .from('characters')
+      .select(
+        `
       id,
       name,
       system_prompt,
       post_history_instructions:metadata->>post_history_instructions
     `,
-    )
-    .eq('id', chat.character_id)
-    .single<RunnerCharacterRow>()
-    .then((result) => {
-      timings['5_character_query'] = performance.now() - characterQueryStart
-      return result
-    })
-
-  const [decryptedApiKey, { data: personaData }, { data: character, error: characterError }] =
-    await Promise.all([apiKeyDecryptPromise, personaPromise, characterPromise])
-
-  let persona: { name: string; description: string | null } | null = null
-  if (personaData) {
-    persona = personaData
-  }
-
-  if (characterError || !character) {
-    throw new Error('Character not found')
-  }
-
-  const defaultSystemPrompt = getGlobalSystemPrompt()
-  const normalizedModelConfig = normalizeChatModelConfig(chat.model_config)
-  const generationTranscript = payload.turnId
-    ? await loadGenerationTranscript({
-        supabase,
-        chatId,
-        turnId: payload.turnId,
-        excludeAssistantForTurnId: payload.isRegeneration ? payload.turnId : null,
+      )
+      .eq('id', chat.character_id)
+      .single<RunnerCharacterRow>()
+      .then((result) => {
+        timings['5_character_query'] = performance.now() - characterQueryStart
+        return result
       })
-    : payload.sanitizedMessages
 
-  stepStart = performance.now()
-  const systemPrompt = await buildSystemPrompt({
-    character,
-    persona,
-    defaultSystemPrompt,
-    customSystemPrompt: chat.custom_system_prompt,
-  })
-  timings['6_build_system_prompt'] = performance.now() - stepStart
+    const [decryptedApiKey, { data: personaData }, { data: character, error: characterError }] =
+      await Promise.all([apiKeyDecryptPromise, personaPromise, characterPromise])
 
-  stepStart = performance.now()
-  const lorebookDynamicContext = await buildLorebookDynamicContext({
-    supabase,
-    chatId,
-    characterId: character.id,
-    chatHistory: generationTranscript,
-  })
-  timings['6b_build_lorebook_context'] = performance.now() - stepStart
+    let persona: { name: string; description: string | null } | null = null
+    if (personaData) {
+      persona = personaData
+    }
 
-  stepStart = performance.now()
-  const {
-    dynamicContext,
-    fallbackMessages: rawRecentMessages,
-    fallbackSystemPrompt,
-    promptBlocks,
-    staticSystemPrompt,
-    ragInfo,
-  } = await buildMemoryPlan({
-    supabase,
-    chatId,
-    sanitizedMessages: generationTranscript,
-    baseSystemPrompt: systemPrompt,
-    extraDynamicContext: lorebookDynamicContext ? [lorebookDynamicContext] : undefined,
-    modelConfig: normalizedModelConfig,
-  })
-  const finalSystemPrompt = fallbackSystemPrompt
-  timings['7_build_context'] = performance.now() - stepStart
+    if (characterError || !character) {
+      throw new Error('Character not found')
+    }
 
-  // Apply bilingual memory: use English translations for older messages to reduce token usage
-  // Recent 4 messages (2 turns) keep original Korean for style consistency
-  stepStart = performance.now()
-  const bilingualEnabled = await isBilingualEnabled(supabase, userId)
-  const bilingualMessages = bilingualEnabled
-    ? await applyBilingualContext({
-        supabase,
-        chatId,
-        messages: rawRecentMessages,
-        recentKoreanCount: 4, // 2 turns
-      })
-    : rawRecentMessages
-  timings['7b_bilingual_context'] = performance.now() - stepStart
-
-  const recentMessages = bilingualMessages
-
-  // For Anthropic caching: separate the static prompt from dynamic context.
-  // Static prompt = global/custom prompt + post-history + character + persona.
-  const systemPromptTokens = estimateTokens(finalSystemPrompt)
-  const messagesTokens = recentMessages.reduce((sum, msg) => sum + estimateTokens(msg.content), 0)
-
-  // For Anthropic, apply user-first guard to the current conversation messages.
-  // This is computed here for accurate token estimation
-  const { messages: anthropicConversationMessages, placeholderAdded: anthropicPlaceholderAdded } =
-    provider === 'anthropic'
-      ? ensureUserFirstForAnthropic(recentMessages)
-      : { messages: recentMessages, placeholderAdded: false }
-
-  const anthropicPlaceholderTokens = anthropicPlaceholderAdded ? estimateTokens('(continue)') : 0
-  const totalInputTokens = systemPromptTokens + messagesTokens + anthropicPlaceholderTokens
-
-  if (totalInputTokens > MAX_TOTAL_INPUT_TOKENS) {
-    throw new Error(`Input context too large (${totalInputTokens.toLocaleString()} tokens)`)
-  }
-
-  const chatCacheKeyOverride = provider === 'openai' ? `chat:${chatId}` : undefined
-
-  const promptCache = resolvePromptCacheDecision({
-    provider,
-    modelName,
-    systemPrompt: finalSystemPrompt,
-    messages: recentMessages,
-    totalInputTokens,
-    cacheKeyOverride: chatCacheKeyOverride,
-    retentionPreference: chatCacheKeyOverride ? '24h' : undefined,
-  })
-
-  // Anthropic-specific cache decision based on cached prefix tokens.
-  const staticPromptTokens = estimateTokens(staticSystemPrompt)
-  const anthropicCache =
-    provider === 'anthropic'
-      ? resolveAnthropicCacheDecision({
-          modelName,
+    const defaultSystemPrompt = getGlobalSystemPrompt()
+    const normalizedModelConfig = normalizeChatModelConfig(chat.model_config)
+    const generationTranscript = payload.turnId
+      ? await loadGenerationTranscript({
+          supabase,
+          chatId,
+          turnId: payload.turnId,
+          excludeAssistantForTurnId: payload.isRegeneration ? payload.turnId : null,
         })
-      : null
+      : payload.sanitizedMessages
 
-  // Google-specific cache decision
-  // Pre-create cache with system prompt + history (excluding last message)
-  // Then use cache ID for actual request with only the last message.
-  const allMessagesForGoogle = provider === 'google' ? recentMessages : []
-  const messagesToCacheForGoogle =
-    provider === 'google' && allMessagesForGoogle.length > 1
-      ? allMessagesForGoogle.slice(0, -1)
-      : []
-  const lastMessageForGoogle =
-    provider === 'google' && allMessagesForGoogle.length > 0
-      ? allMessagesForGoogle[allMessagesForGoogle.length - 1]
-      : null
-
-  const googleCacheDecision =
-    provider === 'google'
-      ? resolveGoogleCacheDecision({
-          modelName,
-          systemPrompt: finalSystemPrompt,
-          messagesToCache: messagesToCacheForGoogle,
-        })
-      : null
-
-  // Pre-create Google cache if enabled (controlled by GOOGLE_EXPLICIT_CACHE_ENABLED env var)
-  const googleExplicitCacheEnabled = isGoogleExplicitCacheEnabled()
-  let googleCacheResult: CreateGoogleCacheResult | null = null
-  if (
-    provider === 'google' &&
-    googleExplicitCacheEnabled &&
-    googleCacheDecision?.enabled &&
-    lastMessageForGoogle
-  ) {
     stepStart = performance.now()
-    googleCacheResult = await createGoogleCache({
-      apiKey: decryptedApiKey,
+    const systemPrompt = await buildSystemPrompt({
+      character,
+      persona,
+      defaultSystemPrompt,
+      customSystemPrompt: chat.custom_system_prompt,
+    })
+    timings['6_build_system_prompt'] = performance.now() - stepStart
+
+    stepStart = performance.now()
+    const lorebookDynamicContext = await buildLorebookDynamicContext({
+      supabase,
+      chatId,
+      characterId: character.id,
+      chatHistory: generationTranscript,
+    })
+    timings['6b_build_lorebook_context'] = performance.now() - stepStart
+
+    stepStart = performance.now()
+    const {
+      dynamicContext,
+      fallbackMessages: rawRecentMessages,
+      fallbackSystemPrompt,
+      promptBlocks,
+      staticSystemPrompt,
+      ragInfo,
+    } = await buildMemoryPlan({
+      supabase,
+      chatId,
+      sanitizedMessages: generationTranscript,
+      baseSystemPrompt: systemPrompt,
+      extraDynamicContext: lorebookDynamicContext ? [lorebookDynamicContext] : undefined,
+      modelConfig: normalizedModelConfig,
+    })
+    const finalSystemPrompt = fallbackSystemPrompt
+    timings['7_build_context'] = performance.now() - stepStart
+
+    // Apply bilingual memory: use English translations for older messages to reduce token usage
+    // Recent 4 messages (2 turns) keep original Korean for style consistency
+    stepStart = performance.now()
+    const bilingualEnabled = await isBilingualEnabled(supabase, userId)
+    const bilingualMessages = bilingualEnabled
+      ? await applyBilingualContext({
+          supabase,
+          chatId,
+          messages: rawRecentMessages,
+          recentKoreanCount: 4, // 2 turns
+        })
+      : rawRecentMessages
+    timings['7b_bilingual_context'] = performance.now() - stepStart
+
+    const recentMessages = bilingualMessages
+
+    // For Anthropic caching: separate the static prompt from dynamic context.
+    // Static prompt = global/custom prompt + post-history + character + persona.
+    const systemPromptTokens = estimateTokens(finalSystemPrompt)
+    const messagesTokens = recentMessages.reduce((sum, msg) => sum + estimateTokens(msg.content), 0)
+
+    // For Anthropic, apply user-first guard to the current conversation messages.
+    // This is computed here for accurate token estimation
+    const { messages: anthropicConversationMessages, placeholderAdded: anthropicPlaceholderAdded } =
+      provider === 'anthropic'
+        ? ensureUserFirstForAnthropic(recentMessages)
+        : { messages: recentMessages, placeholderAdded: false }
+
+    const anthropicPlaceholderTokens = anthropicPlaceholderAdded ? estimateTokens('(continue)') : 0
+    const totalInputTokens = systemPromptTokens + messagesTokens + anthropicPlaceholderTokens
+
+    if (totalInputTokens > MAX_TOTAL_INPUT_TOKENS) {
+      throw new Error(`Input context too large (${totalInputTokens.toLocaleString()} tokens)`)
+    }
+
+    const chatCacheKeyOverride = provider === 'openai' ? `chat:${chatId}` : undefined
+
+    const promptCache = resolvePromptCacheDecision({
+      provider,
       modelName,
       systemPrompt: finalSystemPrompt,
-      messagesToCache: messagesToCacheForGoogle,
-      ttlSeconds: 20, // Short TTL to minimize storage cost
-    })
-    timings['7c_google_cache_create'] = performance.now() - stepStart
-
-    if (googleCacheResult.success) {
-      logChatJobRunnerDebug('[Chat Job Runner] Google cache created', {
-        cacheName: googleCacheResult.cacheName,
-        cachedTokenCount: googleCacheResult.cachedTokenCount,
-        modelName,
-      })
-    } else {
-      console.warn(
-        '[Chat Job Runner] Google cache creation failed, falling back to normal request',
-        {
-          error: googleCacheResult.error,
-          code: googleCacheResult.code,
-          modelName,
-        },
-      )
-    }
-  }
-
-  const model = buildLanguageModel({
-    provider,
-    modelName,
-    apiKey: decryptedApiKey,
-    serviceTier: apiKeyData.service_tier ?? 'standard',
-  })
-
-  const providerOptions = getProviderOptions(provider, {
-    promptCacheKey: promptCache?.key,
-    promptCacheRetention: promptCache?.retention,
-    reasoningEffort: apiKeyData.reasoning_effort,
-  })
-  const samplingOptions = resolveInvocationSamplingOptions({
-    provider,
-    modelName,
-    reasoningEffort: apiKeyData.reasoning_effort,
-  })
-
-  stepStart = performance.now()
-  let stream
-
-  // Capture actual payload sent to LLM for debug_info (SSOT)
-  let actualPayload: ChatRunnerActualPayload | null = null
-
-  try {
-    const streamPayloadPlan = buildStreamPayloadPlan({
-      provider,
-      finalSystemPrompt,
-      staticSystemPrompt,
-      dynamicContext,
-      anthropicCache,
-      anthropicConversationMessages,
-      promptBlocks,
-      recentMessages,
-      googleCacheResult,
-      messagesToCacheForGoogle,
-      lastMessageForGoogle,
-      providerOptions,
+      messages: recentMessages,
+      totalInputTokens,
+      cacheKeyOverride: chatCacheKeyOverride,
+      retentionPreference: chatCacheKeyOverride ? '24h' : undefined,
     })
 
-    if (streamPayloadPlan.strategy === 'anthropic-split-system') {
-      if (anthropicPlaceholderAdded) {
-        logChatJobRunnerDebug(
-          '[Chat Job Runner] Added user placeholder for Anthropic user-first requirement',
-        )
-      }
+    // Anthropic-specific cache decision based on cached prefix tokens.
+    const staticPromptTokens = estimateTokens(staticSystemPrompt)
+    const anthropicCache =
+      provider === 'anthropic'
+        ? resolveAnthropicCacheDecision({
+            modelName,
+          })
+        : null
 
-      if (anthropicCache?.enabled) {
-        logChatJobRunnerDebug('[Chat Job Runner] Anthropic prompt caching enabled (automatic)', {
-          ttl: anthropicCache.ttl,
-          staticPromptTokens,
-          dynamicContextTokens: dynamicContext ? estimateTokens(dynamicContext) : 0,
-          hasDynamicContext: !!dynamicContext,
-        })
-      }
-    }
+    // Google-specific cache decision
+    // Pre-create cache with system prompt + history (excluding last message)
+    // Then use cache ID for actual request with only the last message.
+    const allMessagesForGoogle = provider === 'google' ? recentMessages : []
+    const messagesToCacheForGoogle =
+      provider === 'google' && allMessagesForGoogle.length > 1
+        ? allMessagesForGoogle.slice(0, -1)
+        : []
+    const lastMessageForGoogle =
+      provider === 'google' && allMessagesForGoogle.length > 0
+        ? allMessagesForGoogle[allMessagesForGoogle.length - 1]
+        : null
 
+    const googleCacheDecision =
+      provider === 'google'
+        ? resolveGoogleCacheDecision({
+            modelName,
+            systemPrompt: finalSystemPrompt,
+            messagesToCache: messagesToCacheForGoogle,
+          })
+        : null
+
+    // Pre-create Google cache if enabled (controlled by GOOGLE_EXPLICIT_CACHE_ENABLED env var)
+    const googleExplicitCacheEnabled = isGoogleExplicitCacheEnabled()
+    let googleCacheResult: CreateGoogleCacheResult | null = null
     if (
-      streamPayloadPlan.strategy === 'google-explicit-cache' &&
-      googleCacheResult?.success &&
+      provider === 'google' &&
+      googleExplicitCacheEnabled &&
+      googleCacheDecision?.enabled &&
       lastMessageForGoogle
     ) {
-      logChatJobRunnerDebug('[Chat Job Runner] Google explicit caching enabled', {
-        cacheName: googleCacheResult.cacheName,
-        cachedTokenCount: googleCacheResult.cachedTokenCount,
-        lastMessageRole: lastMessageForGoogle.role,
-      })
-    }
-
-    actualPayload = streamPayloadPlan.actualPayload
-
-    if (payload.deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH) {
-      await submitAnthropicBatchJob({
-        supabase,
-        jobId,
-        payload,
+      stepStart = performance.now()
+      googleCacheResult = await createGoogleCache({
         apiKey: decryptedApiKey,
-        streamPayloadPlan,
-        debug: {
-          requestId: payload.requestId,
-          finalSystemPrompt,
-          recentMessages,
-          anthropicConversationMessages,
-          anthropicPlaceholderAdded,
-          promptCache,
-          totalInputTokens,
-          anthropicCache,
-          staticPromptTokens,
-          dynamicContext,
-          dynamicContextTokens: dynamicContext ? estimateTokens(dynamicContext) : 0,
-          ragInfo,
-          actualPayload,
-          sanitizedMessageCount: generationTranscript.length,
-          bilingualEnabled,
-        },
+        modelName,
+        systemPrompt: finalSystemPrompt,
+        messagesToCache: messagesToCacheForGoogle,
+        ttlSeconds: 20, // Short TTL to minimize storage cost
       })
+      timings['7c_google_cache_create'] = performance.now() - stepStart
 
-      return { status: 'processing' }
+      if (googleCacheResult.success) {
+        logChatJobRunnerDebug('[Chat Job Runner] Google cache created', {
+          cacheName: googleCacheResult.cacheName,
+          cachedTokenCount: googleCacheResult.cachedTokenCount,
+          modelName,
+        })
+      } else {
+        console.warn(
+          '[Chat Job Runner] Google cache creation failed, falling back to normal request',
+          {
+            error: googleCacheResult.error,
+            code: googleCacheResult.code,
+            modelName,
+          },
+        )
+      }
     }
 
-    stream = await streamText({
-      model,
-      ...samplingOptions,
-      ...streamPayloadPlan.streamRequest,
-    })
-  } catch (error) {
-    const normalizedError = normalizeProviderError({ provider, error })
-    throw new Error(normalizedError.userMessage)
-  }
-
-  let fullText = ''
-  try {
-    fullText = await collectTextFromStreamWithSnapshots({
-      supabase,
-      chatId,
-      jobId,
-      stream,
+    const model = buildLanguageModel({
       provider,
-      regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
+      modelName,
+      apiKey: decryptedApiKey,
+      serviceTier: apiKeyData.service_tier ?? 'standard',
     })
-  } catch (error) {
-    await broadcastAssistantStreamError({
+
+    const providerOptions = getProviderOptions(provider, {
+      promptCacheKey: promptCache?.key,
+      promptCacheRetention: promptCache?.retention,
+      reasoningEffort: apiKeyData.reasoning_effort,
+    })
+    const samplingOptions = resolveInvocationSamplingOptions({
+      provider,
+      modelName,
+      reasoningEffort: apiKeyData.reasoning_effort,
+    })
+
+    await markStage(CHAT_JOB_LIFECYCLE_STAGE_REQUESTING_PROVIDER)
+    stepStart = performance.now()
+    let stream
+
+    // Capture actual payload sent to LLM for debug_info (SSOT)
+    let actualPayload: ChatRunnerActualPayload | null = null
+
+    try {
+      const streamPayloadPlan = buildStreamPayloadPlan({
+        provider,
+        finalSystemPrompt,
+        staticSystemPrompt,
+        dynamicContext,
+        anthropicCache,
+        anthropicConversationMessages,
+        promptBlocks,
+        recentMessages,
+        googleCacheResult,
+        messagesToCacheForGoogle,
+        lastMessageForGoogle,
+        providerOptions,
+      })
+
+      if (streamPayloadPlan.strategy === 'anthropic-split-system') {
+        if (anthropicPlaceholderAdded) {
+          logChatJobRunnerDebug(
+            '[Chat Job Runner] Added user placeholder for Anthropic user-first requirement',
+          )
+        }
+
+        if (anthropicCache?.enabled) {
+          logChatJobRunnerDebug('[Chat Job Runner] Anthropic prompt caching enabled (automatic)', {
+            ttl: anthropicCache.ttl,
+            staticPromptTokens,
+            dynamicContextTokens: dynamicContext ? estimateTokens(dynamicContext) : 0,
+            hasDynamicContext: !!dynamicContext,
+          })
+        }
+      }
+
+      if (
+        streamPayloadPlan.strategy === 'google-explicit-cache' &&
+        googleCacheResult?.success &&
+        lastMessageForGoogle
+      ) {
+        logChatJobRunnerDebug('[Chat Job Runner] Google explicit caching enabled', {
+          cacheName: googleCacheResult.cacheName,
+          cachedTokenCount: googleCacheResult.cachedTokenCount,
+          lastMessageRole: lastMessageForGoogle.role,
+        })
+      }
+
+      actualPayload = streamPayloadPlan.actualPayload
+
+      if (payload.deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH) {
+        await submitAnthropicBatchJob({
+          supabase,
+          jobId,
+          payload,
+          apiKey: decryptedApiKey,
+          streamPayloadPlan,
+          debug: {
+            requestId: payload.requestId,
+            finalSystemPrompt,
+            recentMessages,
+            anthropicConversationMessages,
+            anthropicPlaceholderAdded,
+            promptCache,
+            totalInputTokens,
+            anthropicCache,
+            staticPromptTokens,
+            dynamicContext,
+            dynamicContextTokens: dynamicContext ? estimateTokens(dynamicContext) : 0,
+            ragInfo,
+            actualPayload,
+            sanitizedMessageCount: generationTranscript.length,
+            bilingualEnabled,
+          },
+        })
+
+        return { status: 'processing' }
+      }
+
+      stream = await streamText({
+        model,
+        ...samplingOptions,
+        ...streamPayloadPlan.streamRequest,
+      })
+    } catch (error) {
+      const normalizedError = normalizeProviderError({ provider, error })
+      throw new Error(normalizedError.userMessage)
+    }
+
+    await markStage(CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE)
+    let fullText = ''
+    try {
+      fullText = await collectTextFromStreamWithSnapshots({
+        supabase,
+        chatId,
+        jobId,
+        stream,
+        provider,
+        regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
+      })
+    } catch (error) {
+      await broadcastAssistantStreamError({
+        supabase,
+        chatId,
+        jobId,
+        error: error instanceof Error ? error.message : String(error),
+        regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
+      })
+      throw error
+    }
+    let assistantMessageId: string | null = null
+    let messageInsertDuration: number | null = null
+
+    const finishReason = await stream.finishReason
+    const providerMetadata = await stream.providerMetadata
+    timings['8_llm_generation'] = performance.now() - stepStart
+
+    const anthropicProviderMetadata =
+      provider === 'anthropic' &&
+      providerMetadata?.anthropic &&
+      typeof providerMetadata.anthropic === 'object'
+        ? (providerMetadata.anthropic as Record<string, unknown>)
+        : null
+    const anthropicRawUsage = anthropicProviderMetadata?.usage as Record<string, number> | undefined
+    const anthropicCacheCreationInputTokens =
+      typeof anthropicProviderMetadata?.cacheCreationInputTokens === 'number'
+        ? anthropicProviderMetadata.cacheCreationInputTokens
+        : (anthropicRawUsage?.cache_creation_input_tokens ?? null)
+
+    // Log Anthropic cache metrics
+    if (anthropicRawUsage) {
+      logChatJobRunnerDebug('[Chat Job Runner] Anthropic cache metrics', {
+        cacheRead: anthropicRawUsage.cache_read_input_tokens ?? 0,
+        cacheCreation: anthropicCacheCreationInputTokens ?? 0,
+        uncached: anthropicRawUsage.input_tokens ?? 0,
+      })
+    }
+
+    const contentFilterInfo = evaluateContentFilter({
+      provider,
+      finishReason,
+      metadata: providerMetadata,
+    })
+
+    const assistantText = fullText.trim()
+
+    if (!assistantText) {
+      const filteredMessage =
+        finishReason === 'error'
+          ? 'The provider returned an error before producing text. Please try again later.'
+          : contentFilterInfo.blocked
+            ? 'Blocked by Google Gemini content filter. Please disable safe mode or refine your input and try again.'
+            : 'The assistant returned an empty response. Please try again later.'
+
+      // Error is stored in chat_jobs.error and shown via toast popup
+      throw new Error(filteredMessage)
+    }
+
+    const usage = await stream.usage
+    const promptTokens = usage?.inputTokens ?? null
+    const completionTokens = usage?.outputTokens ?? null
+    const totalTokens = usage?.totalTokens ?? null
+    const cachedInputTokens = usage?.cachedInputTokens ?? null
+    const reasoningTokens = usage?.reasoningTokens ?? null
+    const usageCost = estimateUsageCost({
+      provider,
+      modelName,
+      promptTokens: promptTokens ?? undefined,
+      completionTokens: completionTokens ?? undefined,
+      cachedInputTokens: cachedInputTokens ?? undefined,
+      reasoningTokens: reasoningTokens ?? undefined,
+      serviceTier: apiKeyData.service_tier,
+    })
+
+    // For Anthropic debug: show the actual conversation messages sent (with placeholder if added)
+    // For other providers: show injected blocks and messages separately
+    const debugConversationMessages =
+      provider === 'anthropic' ? anthropicConversationMessages : null
+    const usageMetrics = {
+      promptTokens,
+      completionTokens,
+      totalTokens,
+      cachedInputTokens,
+      reasoningTokens,
+    }
+
+    const debugInfo = buildChatDebugInfo({
+      requestId: payload.requestId,
+      finalSystemPrompt,
+      recentMessages,
+      anthropicConversationMessages: debugConversationMessages,
+      anthropicPlaceholderAdded,
+      promptCache,
+      totalInputTokens,
+      anthropicCache,
+      anthropicCacheCreationInputTokens,
+      anthropicCacheReadInputTokens: cachedInputTokens,
+      staticPromptTokens,
+      dynamicContext,
+      dynamicContextTokens: dynamicContext ? estimateTokens(dynamicContext) : 0,
+      googleExplicitCacheEnabled,
+      googleCacheResult,
+      googleCacheDecision,
+      rawResponse: fullText,
+      processedResponse: assistantText,
+      apiKeyId,
+      provider,
+      modelName,
+      finishReason,
+      usage: usageMetrics,
+      sanitizedMessageCount: generationTranscript.length,
+      ragInfo,
+      actualPayload,
+    })
+
+    await markStage(CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING)
+    const postGenerationResult = await runPostGenerationPipeline({
       supabase,
       chatId,
-      jobId,
-      error: error instanceof Error ? error.message : String(error),
+      userId,
+      apiKeyId,
+      provider,
+      modelName,
+      origin,
+      requestId: payload.requestId,
+      assistantText,
+      assistantMessageId,
+      turnId: payload.turnId,
       regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
+      promptTokens,
+      completionTokens,
+      debugInfo,
+      bilingualEnabled,
+      messageInsertDuration,
+      usage: usageMetrics,
+      usageCost,
+      triggerMessageTranslationFn: triggerMessageTranslation,
     })
-    throw error
-  }
-  let assistantMessageId: string | null = null
-  let messageInsertDuration: number | null = null
 
-  const finishReason = await stream.finishReason
-  const providerMetadata = await stream.providerMetadata
-  timings['8_llm_generation'] = performance.now() - stepStart
+    assistantMessageId = postGenerationResult.assistantMessageId
+    messageInsertDuration = postGenerationResult.messageInsertDuration
 
-  const anthropicProviderMetadata =
-    provider === 'anthropic' &&
-    providerMetadata?.anthropic &&
-    typeof providerMetadata.anthropic === 'object'
-      ? (providerMetadata.anthropic as Record<string, unknown>)
-      : null
-  const anthropicRawUsage = anthropicProviderMetadata?.usage as Record<string, number> | undefined
-  const anthropicCacheCreationInputTokens =
-    typeof anthropicProviderMetadata?.cacheCreationInputTokens === 'number'
-      ? anthropicProviderMetadata.cacheCreationInputTokens
-      : (anthropicRawUsage?.cache_creation_input_tokens ?? null)
+    if (messageInsertDuration !== null) {
+      timings['9_message_insert'] = messageInsertDuration
+    }
+    timings['10_usage_event_insert'] = postGenerationResult.usageEventInsertDurationMs
+    timings['11_summary_trigger'] = postGenerationResult.summaryTriggerDurationMs
 
-  // Log Anthropic cache metrics
-  if (anthropicRawUsage) {
-    logChatJobRunnerDebug('[Chat Job Runner] Anthropic cache metrics', {
-      cacheRead: anthropicRawUsage.cache_read_input_tokens ?? 0,
-      cacheCreation: anthropicCacheCreationInputTokens ?? 0,
-      uncached: anthropicRawUsage.input_tokens ?? 0,
+    const totalTime = performance.now() - startTime
+    timings['00_total'] = totalTime
+
+    logChatJobRunnerDebug('[Chat Job Runner] Performance timings (ms)', {
+      chatId,
+      requestId: payload.requestId,
+      timings: Object.fromEntries(
+        Object.entries(timings)
+          .map(([key, value]) => [key, Math.round(value)] as const)
+          .sort(([a], [b]) => a.localeCompare(b)),
+      ),
     })
+
+    return { status: 'success' }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown job failure'
+    throw new ChatJobExecutionError(message, currentStage)
   }
-
-  const contentFilterInfo = evaluateContentFilter({
-    provider,
-    finishReason,
-    metadata: providerMetadata,
-  })
-
-  const assistantText = fullText.trim()
-
-  if (!assistantText) {
-    const filteredMessage =
-      finishReason === 'error'
-        ? 'The provider returned an error before producing text. Please try again later.'
-        : contentFilterInfo.blocked
-          ? 'Blocked by Google Gemini content filter. Please disable safe mode or refine your input and try again.'
-          : 'The assistant returned an empty response. Please try again later.'
-
-    // Error is stored in chat_jobs.error and shown via toast popup
-    throw new Error(filteredMessage)
-  }
-
-  const usage = await stream.usage
-  const promptTokens = usage?.inputTokens ?? null
-  const completionTokens = usage?.outputTokens ?? null
-  const totalTokens = usage?.totalTokens ?? null
-  const cachedInputTokens = usage?.cachedInputTokens ?? null
-  const reasoningTokens = usage?.reasoningTokens ?? null
-  const usageCost = estimateUsageCost({
-    provider,
-    modelName,
-    promptTokens: promptTokens ?? undefined,
-    completionTokens: completionTokens ?? undefined,
-    cachedInputTokens: cachedInputTokens ?? undefined,
-    reasoningTokens: reasoningTokens ?? undefined,
-    serviceTier: apiKeyData.service_tier,
-  })
-
-  // For Anthropic debug: show the actual conversation messages sent (with placeholder if added)
-  // For other providers: show injected blocks and messages separately
-  const debugConversationMessages = provider === 'anthropic' ? anthropicConversationMessages : null
-  const usageMetrics = {
-    promptTokens,
-    completionTokens,
-    totalTokens,
-    cachedInputTokens,
-    reasoningTokens,
-  }
-
-  const debugInfo = buildChatDebugInfo({
-    requestId: payload.requestId,
-    finalSystemPrompt,
-    recentMessages,
-    anthropicConversationMessages: debugConversationMessages,
-    anthropicPlaceholderAdded,
-    promptCache,
-    totalInputTokens,
-    anthropicCache,
-    anthropicCacheCreationInputTokens,
-    anthropicCacheReadInputTokens: cachedInputTokens,
-    staticPromptTokens,
-    dynamicContext,
-    dynamicContextTokens: dynamicContext ? estimateTokens(dynamicContext) : 0,
-    googleExplicitCacheEnabled,
-    googleCacheResult,
-    googleCacheDecision,
-    rawResponse: fullText,
-    processedResponse: assistantText,
-    apiKeyId,
-    provider,
-    modelName,
-    finishReason,
-    usage: usageMetrics,
-    sanitizedMessageCount: generationTranscript.length,
-    ragInfo,
-    actualPayload,
-  })
-
-  const postGenerationResult = await runPostGenerationPipeline({
-    supabase,
-    chatId,
-    userId,
-    apiKeyId,
-    provider,
-    modelName,
-    origin,
-    requestId: payload.requestId,
-    assistantText,
-    assistantMessageId,
-    turnId: payload.turnId,
-    regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
-    promptTokens,
-    completionTokens,
-    debugInfo,
-    bilingualEnabled,
-    messageInsertDuration,
-    usage: usageMetrics,
-    usageCost,
-    triggerMessageTranslationFn: triggerMessageTranslation,
-  })
-
-  assistantMessageId = postGenerationResult.assistantMessageId
-  messageInsertDuration = postGenerationResult.messageInsertDuration
-
-  if (messageInsertDuration !== null) {
-    timings['9_message_insert'] = messageInsertDuration
-  }
-  timings['10_usage_event_insert'] = postGenerationResult.usageEventInsertDurationMs
-  timings['11_summary_trigger'] = postGenerationResult.summaryTriggerDurationMs
-
-  const totalTime = performance.now() - startTime
-  timings['00_total'] = totalTime
-
-  logChatJobRunnerDebug('[Chat Job Runner] Performance timings (ms)', {
-    chatId,
-    requestId: payload.requestId,
-    timings: Object.fromEntries(
-      Object.entries(timings)
-        .map(([key, value]) => [key, Math.round(value)] as const)
-        .sort(([a], [b]) => a.localeCompare(b)),
-    ),
-  })
-
-  return { status: 'success' }
 }
 
 function estimateTokens(text: string): number {

@@ -460,7 +460,9 @@ export type Database = {
           external_provider_result_url: string | null
           external_provider_status: string | null
           external_provider_submitted_at: string | null
+          failure_stage: string | null
           id: string
+          lifecycle_stage: string
           payload: Json
           status: string
           updated_at: string
@@ -477,7 +479,9 @@ export type Database = {
           external_provider_result_url?: string | null
           external_provider_status?: string | null
           external_provider_submitted_at?: string | null
+          failure_stage?: string | null
           id?: string
+          lifecycle_stage?: string
           payload: Json
           status: string
           updated_at?: string
@@ -494,7 +498,9 @@ export type Database = {
           external_provider_result_url?: string | null
           external_provider_status?: string | null
           external_provider_submitted_at?: string | null
+          failure_stage?: string | null
           id?: string
+          lifecycle_stage?: string
           payload?: Json
           status?: string
           updated_at?: string

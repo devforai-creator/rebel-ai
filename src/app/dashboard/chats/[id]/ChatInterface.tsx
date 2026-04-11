@@ -788,16 +788,23 @@ export default function ChatInterface({
         body: JSON.stringify({ messageId }),
       })
 
+      const isExperimental = response.headers.get('X-RebelAI-Support-Tier') === 'experimental'
+
       if (!response.ok) {
         const errorText = await response.text()
-        toast.error(errorText || 'Failed to reprocess message')
+        toast.error(
+          errorText ||
+            (isExperimental ? 'Experimental reprocess failed' : 'Failed to reprocess message'),
+        )
         return
       }
 
-      toast.success('Message reprocessed successfully')
+      toast.success(
+        isExperimental ? 'Experimental reprocess completed' : 'Message reprocessed successfully',
+      )
     } catch (error) {
       console.error('[Reprocess] Error:', error)
-      toast.error('Failed to reprocess message')
+      toast.error('Experimental reprocess failed')
     } finally {
       setReprocessingMessageId(null)
     }

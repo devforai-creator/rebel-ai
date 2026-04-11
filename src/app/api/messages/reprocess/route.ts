@@ -11,10 +11,32 @@ export const runtime = 'nodejs'
 export const maxDuration = 60
 
 const STREAM_UPDATE_INTERVAL_MS = 200
+const SUPPORT_TIER_HEADER = 'X-RebelAI-Support-Tier'
+const REPROCESS_SUPPORT_TIER = 'experimental'
 
 const reprocessRequestSchema = z.object({
   messageId: z.string().min(1),
 })
+
+function withSupportTierHeaders(headers?: HeadersInit) {
+  const nextHeaders = new Headers(headers)
+  nextHeaders.set(SUPPORT_TIER_HEADER, REPROCESS_SUPPORT_TIER)
+  return nextHeaders
+}
+
+function createReprocessTextResponse(body: string, init?: ResponseInit) {
+  return new Response(body, {
+    ...init,
+    headers: withSupportTierHeaders(init?.headers),
+  })
+}
+
+function createReprocessJsonResponse(body: unknown, init?: ResponseInit) {
+  return Response.json(body, {
+    ...init,
+    headers: withSupportTierHeaders(init?.headers),
+  })
+}
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -23,12 +45,12 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return new Response('Unauthorized', { status: 401 })
+    return createReprocessTextResponse('Unauthorized', { status: 401 })
   }
 
   const { allowed, retryAfter } = await checkUserRateLimit(user.id)
   if (!allowed) {
-    return new Response('Too many requests', {
+    return createReprocessTextResponse('Too many requests', {
       status: 429,
       headers: { 'Retry-After': String(retryAfter ?? 60) },
     })
@@ -36,7 +58,7 @@ export async function POST(request: Request) {
 
   const parsed = reprocessRequestSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
-    return new Response('Missing messageId', { status: 400 })
+    return createReprocessTextResponse('Missing messageId', { status: 400 })
   }
   const { messageId } = parsed.data
 
@@ -48,15 +70,17 @@ export async function POST(request: Request) {
     .single()
 
   if (messageError || !message) {
-    return new Response('Message not found', { status: 404 })
+    return createReprocessTextResponse('Message not found', { status: 404 })
   }
 
   if (message.user_id !== user.id) {
-    return new Response('Forbidden', { status: 403 })
+    return createReprocessTextResponse('Forbidden', { status: 403 })
   }
 
   if (message.role !== 'assistant') {
-    return new Response('Only assistant messages can be reprocessed', { status: 400 })
+    return createReprocessTextResponse('Only assistant messages can be reprocessed', {
+      status: 400,
+    })
   }
 
   // 2. Fetch user's reprocess settings from profiles
@@ -67,11 +91,11 @@ export async function POST(request: Request) {
     .single()
 
   if (profileError || !profile) {
-    return new Response('Profile not found', { status: 404 })
+    return createReprocessTextResponse('Profile not found', { status: 404 })
   }
 
   if (!profile.reprocess_prompt || !profile.reprocess_api_key_id) {
-    return new Response(
+    return createReprocessTextResponse(
       'Reprocess settings not configured. Please set prompt and API key in settings.',
       { status: 400 },
     )
@@ -87,7 +111,7 @@ export async function POST(request: Request) {
     .single()
 
   if (apiKeyError || !apiKeyData) {
-    return new Response('API key not found or inactive', { status: 400 })
+    return createReprocessTextResponse('API key not found or inactive', { status: 400 })
   }
 
   // 4. Decrypt API key from Vault (requires admin client)
@@ -100,7 +124,7 @@ export async function POST(request: Request) {
       requester: user.id,
     })
   } catch {
-    return new Response('Failed to decrypt API key', { status: 500 })
+    return createReprocessTextResponse('Failed to decrypt API key', { status: 500 })
   }
 
   // 5. Build language model
@@ -207,7 +231,7 @@ export async function POST(request: Request) {
 
     if (finalUpdateError) {
       console.error('[Reprocess] Final update failed:', finalUpdateError)
-      return new Response('Failed to save reprocessed message', { status: 500 })
+      return createReprocessTextResponse('Failed to save reprocessed message', { status: 500 })
     }
 
     // Update api_keys.last_used_at
@@ -216,10 +240,10 @@ export async function POST(request: Request) {
       .update({ last_used_at: new Date().toISOString() })
       .eq('id', apiKeyData.id)
 
-    return Response.json({ success: true, content: fullText })
+    return createReprocessJsonResponse({ success: true, content: fullText })
   } catch (error) {
     console.error('[Reprocess] Streaming failed:', error)
-    return new Response('Failed to reprocess message', { status: 500 })
+    return createReprocessTextResponse('Failed to reprocess message', { status: 500 })
   }
 }
 

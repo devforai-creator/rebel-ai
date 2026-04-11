@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useState } from 'react'
+import React, { useActionState, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { updateReprocessSettings, type ReprocessSettingsState } from './actions'
 
@@ -60,8 +60,8 @@ export default function ReprocessSettingsForm({ initialPrompt, initialKeyId, api
           rows={4}
         />
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          This prompt will be used as the system prompt when reprocessing messages. The original
-          message content will be sent as the user message.
+          Experimental option. This prompt is used only for the reprocess flow. The original message
+          content will be sent as the user message, outside the supported main chat queue.
         </p>
       </div>
 
@@ -84,7 +84,7 @@ export default function ReprocessSettingsForm({ initialPrompt, initialKeyId, api
           ))}
         </select>
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Select which API key and model to use for reprocessing messages.
+          Select which API key and model to use for this experimental rewrite path.
         </p>
       </div>
 

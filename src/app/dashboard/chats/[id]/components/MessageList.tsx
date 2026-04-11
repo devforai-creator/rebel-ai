@@ -306,7 +306,7 @@ export const ChatMessageRow = memo(function ChatMessageRow({
                 <button
                   onClick={() => onReprocess(message.id)}
                   className="text-xs text-gray-500 hover:text-orange-600 dark:text-gray-400 dark:hover:text-orange-400 transition-colors"
-                  title="Reprocess with custom prompt"
+                  title="Experimental reprocess with custom prompt"
                   disabled={isLoading || reprocessingMessageId !== null}
                 >
                   {isReprocessing ? 'Reprocessing...' : 'Reprocess'}

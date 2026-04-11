@@ -133,12 +133,18 @@ export default async function AccountPage() {
             </section>
 
             <section className="border-t border-gray-200 dark:border-gray-700 pt-8">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Message Reprocess
-              </h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Message Reprocess
+                </h2>
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                  Experimental
+                </span>
+              </div>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                 Configure a custom prompt and model for reprocessing assistant messages. Use this
-                for translation, style correction, or any text transformation.
+                for optional translation, style correction, or other text transformations. This does
+                not use the main queued chat contract and is not a supported core chat path.
               </p>
               <div className="mt-6">
                 <ReprocessSettingsForm

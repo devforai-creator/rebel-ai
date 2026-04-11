@@ -68,6 +68,11 @@ Done when:
 - first-class smoke checks map only to the supported core
 - each backlog item can say whether it hardens the supported core, protects a supported fallback, isolates an experimental path, or retires a removal candidate
 
+Current status as of 2026-04-12:
+
+- [OPERATING_PLAN.md](/home/tmdduq96kr/projects/rebel-ai/docs/OPERATING_PLAN.md) now includes a compact support matrix for supported core, supported fallback, experimental, and removal-candidate paths
+- the operating contract now explicitly distinguishes durable health for the supported core, durable triage for the maintained summary fallback, and lighter expectations for experimental paths like translation and reprocess
+
 ### P0-2. Isolate Message Reprocess as Experimental
 
 Scope:
@@ -88,6 +93,13 @@ Done when:
 - it is isolated enough that failures in this path do not weaken the supported core
 - if it is ever promoted later, promotion requires adopting the main queue/job lifecycle contract first
 - tests lock the chosen contract directly
+
+Current status as of 2026-04-12:
+
+- [route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/messages/reprocess/route.ts) now stamps every response with `X-RebelAI-Support-Tier: experimental`, so the API no longer looks like a silent first-class path
+- [page.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/page.tsx), [ReprocessSettingsForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/ReprocessSettingsForm.tsx), [ChatInterface.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatInterface.tsx), and [MessageList.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/MessageList.tsx) now label the feature as experimental in the operator and chat UI
+- regression coverage now locks the support-tier header and experimental copy in [route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/messages/reprocess/route.test.ts) and [ReprocessSettingsForm.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/ReprocessSettingsForm.test.tsx)
+- the path still bypasses the main queue/job lifecycle by design, so further work is only needed if we want stronger isolation or eventual removal, not because it still claims first-class support
 
 ### P0-3. Extract Legacy Compatibility and Treat It as a Removal Candidate
 

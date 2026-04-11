@@ -297,6 +297,7 @@ describe('POST /api/messages/reprocess', () => {
     )
 
     expect(response.status).toBe(401)
+    expect(response.headers.get('X-RebelAI-Support-Tier')).toBe('experimental')
     expect(await response.text()).toBe('Unauthorized')
     expect(hoistedMocks.checkUserRateLimitMock).not.toHaveBeenCalled()
   })
@@ -315,6 +316,7 @@ describe('POST /api/messages/reprocess', () => {
 
     expect(response.status).toBe(429)
     expect(response.headers.get('Retry-After')).toBe('25')
+    expect(response.headers.get('X-RebelAI-Support-Tier')).toBe('experimental')
     expect(await response.text()).toBe('Too many requests')
   })
 
@@ -514,6 +516,7 @@ describe('POST /api/messages/reprocess', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
+    expect(response.headers.get('X-RebelAI-Support-Tier')).toBe('experimental')
     expect(body).toEqual({ success: true, content: 'rewritten once' })
     expect(hoistedMocks.buildLanguageModelMock).toHaveBeenCalledWith({
       provider: 'openai',
@@ -630,6 +633,7 @@ describe('POST /api/messages/reprocess', () => {
     const response = await POST(buildRequest({ messageId: 'assistant-msg-1' }))
 
     expect(response.status).toBe(500)
+    expect(response.headers.get('X-RebelAI-Support-Tier')).toBe('experimental')
     expect(await response.text()).toBe('Failed to reprocess message')
   })
 

@@ -110,6 +110,7 @@ Evidence:
 
 - Chat runner and summary generation need durable health signals, not only in-process memory.
 - Failures must be visible from one place and attributable to a concrete stage.
+- Summary failures that affect the maintained default or system fallback should always leave durable triage evidence, even when they are not treated as full core-health outages.
 
 Evidence:
 
@@ -128,6 +129,17 @@ Evidence:
 - [GETTING_STARTED.md](./GETTING_STARTED.md)
 - [internal-api-origin.ts](../src/lib/internal-api-origin.ts)
 - [background-trigger.ts](../src/app/api/chat/background-trigger.ts)
+
+### 3.7 Support Matrix
+
+This is not a new product-tier system. It is a compact support matrix layered on top of the existing first-class / experimental / removal-candidate boundary model.
+
+| Path class                     | Examples                                                                                                                                                        | Support promise                                                                                        | Signal expectation                                                                                                          |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Supported core                 | `RBX + SUU`, authenticated chat request -> queue -> runner -> durable turn state, secret and admin boundaries                                                   | Actively maintained and part of the real first-class path                                              | Failures must show up in operator health and triage, and they should block release when unresolved                          |
+| Supported secondary / fallback | `summary_window`, summary generation that supports the maintained default or system fallback                                                                    | Maintained because it supports the active defaults, even if it is not always the main interactive path | Durable triage is required. Escalate to health degradation when repeated failures threaten the maintained fallback contract |
+| Experimental                   | Message reprocess, translation trigger, bilingual/context enhancements beyond the maintained defaults, provider-specific delivery modes beyond the default path | Allowed and useful, but not part of the day-to-day support promise                                     | Lightweight monitoring or triage is enough by default. Failures must not weaken the supported core                          |
+| Removal candidate              | Legacy asset/token compatibility and deprecated migration-only branches                                                                                         | No new product investment. Isolate first, then delete when safe                                        | Keep them out of the core path. Only add enough visibility to support migration and removal                                 |
 
 ## 4. Open Gates
 
@@ -214,7 +226,9 @@ These features are allowed, but they are not first-class. They should be opt-in,
 
 - R2 or any secondary asset/storage backend
 - Provider-specific delivery modes and optimizations beyond the default chat path
-- Summary/translation/bilingual context enhancements that are not required for successful baseline chat
+- Message reprocess/regeneration paths that do not use the supported main queue contract
+- Translation trigger and bilingual/context enhancements that are not required for successful baseline chat
+- Summary enhancements beyond the maintained `summary_window` default and system fallback
 - Multiple hosting profiles treated as equally supported day-to-day
 - Advanced operator convenience tools that do not change core user value
 
@@ -235,7 +249,7 @@ Rule:
 These paths should not receive new investment. Measure real usage, then delete if they are not earning their keep.
 
 - Commented-out signup remnants and related dead flow leftovers
-- Legacy compatibility branches that are no longer needed once RBX/SUU is the dominant path
+- Legacy asset/token compatibility branches that are no longer needed once RBX/SUU is the dominant path
 - Low-usage provider-specific branches that add more operational modes than user value
 - Admin/utility features that are rarely used and do not strengthen the core product
 

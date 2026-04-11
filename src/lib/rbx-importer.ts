@@ -13,31 +13,22 @@
  */
 
 import type { RbxParseResult, RbxImportResult } from '@/types/rbx.types'
-import type { RbxAssetFile } from '@/types/rbx.types'
-import type { createAdminClient } from '@/lib/supabase/admin'
 import type {
-  CharacterAssetInsert,
   CharacterInsert,
   CharacterModuleInsert,
   CharacterUpdate,
   Json,
-  ModuleAssetInsert,
   ModuleInsert,
 } from '@/types/database.types'
-import { StorageCleanupError, removeStorageObjects } from '@/lib/assets/storage-cleanup'
-import { sanitizeStorageKey } from './storage-key'
 import { formatSuuImportValidationIssue, validateSuuImportMetadata } from './suu-import-validation'
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-const STORAGE_UPLOAD_RETRY_ATTEMPTS = 4
-const STORAGE_UPLOAD_RETRY_BASE_DELAY_MS = 500
-const ASSET_UPLOAD_CONCURRENCY = 8
-const ASSET_UPLOAD_CHUNK_DELAY_MS = 50
-const MAX_FAILED_ASSET_SAMPLES = 20
-const MAX_FAILED_ASSET_REASON_LENGTH = 240
+import {
+  uploadCharacterAssets,
+  uploadModuleAssets,
+  type ImportRbxSupabaseClient,
+  type ImportRbxSupabaseLike,
+} from './rbx-import-assets'
+import { sanitizeMetadataForDb } from './rbx-import-helpers'
+import { rollbackImportFailure, type CreatedModule } from './rbx-import-rollback'
 
 // ============================================================================
 // Types
@@ -48,38 +39,6 @@ interface ImportRbxOptions {
   parseResult: RbxParseResult
   visibility?: 'private' | 'draft' | 'public'
   supabaseClient: ImportRbxSupabaseLike
-}
-
-interface UploadedAsset {
-  fileName: string // original file_name from manifest
-  assetId: string // character_assets.id (UUID)
-  storagePath: string
-  publicUrl: string
-}
-
-interface AssetFailureSample {
-  fileName: string
-  reason: string
-}
-
-interface CreatedModule {
-  id: string
-  uploadedAssetPaths: string[]
-}
-
-type ImportRbxSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'from' | 'storage'>
-type ImportRbxSupabaseLike = {
-  from: (table: string) => unknown
-  storage: {
-    from: (bucket: string) => {
-      upload: (
-        path: string,
-        file: Uint8Array,
-        options?: { contentType?: string; upsert?: boolean },
-      ) => PromiseLike<unknown>
-      getPublicUrl: (path: string) => { data: { publicUrl: string } }
-    }
-  }
 }
 
 // ============================================================================
@@ -310,62 +269,12 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
       },
     }
   } catch (error) {
-    // Rollback: delete character (CASCADE deletes character_assets and character_modules links)
-    let characterDeleted = false
-    if (characterId) {
-      console.error('[RBX Importer] Rolling back character creation:', characterId)
-      const { error: deleteCharacterError } = await supabase
-        .from('characters')
-        .delete()
-        .eq('id', characterId)
-      characterDeleted = !deleteCharacterError
-    }
-
-    if (characterDeleted && uploadedCharacterAssetPaths.length > 0 && characterId) {
-      try {
-        await removeStorageObjects(supabase, 'character-assets', uploadedCharacterAssetPaths, {
-          entityId: characterId,
-          entityType: 'import',
-          operation: 'rollbackImport',
-        })
-      } catch (rollbackCleanupError) {
-        console.error('[RBX Importer] Failed to remove character-assets during rollback', {
-          characterId,
-          error:
-            rollbackCleanupError instanceof Error
-              ? rollbackCleanupError.message
-              : String(rollbackCleanupError),
-        })
-      }
-    }
-
-    // Rollback: delete orphaned modules (character CASCADE only removes the link, not the module itself)
-    for (const createdModule of createdModules) {
-      console.error('[RBX Importer] Rolling back orphaned module:', createdModule.id)
-      // module_assets CASCADE-deletes when module is deleted
-      const { error: deleteModuleError } = await supabase
-        .from('modules')
-        .delete()
-        .eq('id', createdModule.id)
-
-      if (!deleteModuleError && createdModule.uploadedAssetPaths.length > 0) {
-        try {
-          await removeStorageObjects(supabase, 'module-assets', createdModule.uploadedAssetPaths, {
-            entityId: createdModule.id,
-            entityType: 'module',
-            operation: 'rollbackImport',
-          })
-        } catch (rollbackCleanupError) {
-          console.error('[RBX Importer] Failed to remove module-assets during rollback', {
-            moduleId: createdModule.id,
-            error:
-              rollbackCleanupError instanceof Error
-                ? rollbackCleanupError.message
-                : String(rollbackCleanupError),
-          })
-        }
-      }
-    }
+    await rollbackImportFailure({
+      supabase,
+      characterId,
+      createdModules,
+      uploadedCharacterAssetPaths,
+    })
 
     return {
       success: false,
@@ -375,318 +284,8 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
 }
 
 // ============================================================================
-// Asset Upload
-// ============================================================================
-
-async function uploadCharacterAssets(
-  supabase: ImportRbxSupabaseClient,
-  userId: string,
-  characterId: string,
-  manifestAssets: RbxParseResult['manifest']['assets'],
-  assetFiles: RbxAssetFile[],
-): Promise<{
-  uploaded: UploadedAsset[]
-  avatarUrl: string | null
-  failedAssets: number
-  failedAssetSamples: AssetFailureSample[]
-}> {
-  const uploaded: UploadedAsset[] = []
-  let avatarUrl: string | null = null
-  let failedAssets = 0
-  const failedAssetSamples: AssetFailureSample[] = []
-  let fatalCleanupError: StorageCleanupError | null = null
-
-  // Build file lookup: fileName → Uint8Array
-  const fileMap = new Map<string, Uint8Array>()
-  for (const file of assetFiles) {
-    fileMap.set(file.fileName, file.data)
-  }
-
-  // Process in chunks for concurrency control
-  const chunks: (typeof manifestAssets)[] = []
-  for (let i = 0; i < manifestAssets.length; i += ASSET_UPLOAD_CONCURRENCY) {
-    chunks.push(manifestAssets.slice(i, i + ASSET_UPLOAD_CONCURRENCY))
-  }
-
-  for (const chunk of chunks) {
-    const results = await Promise.allSettled(
-      chunk.map(async (asset) => {
-        const fileData = fileMap.get(asset.file_name)
-        if (!fileData) {
-          throw new Error(`File not found in ZIP: ${asset.file_name}`)
-        }
-
-        const sanitizedFileName = sanitizeStorageKey(asset.file_name)
-        const ext = sanitizedFileName.split('.').pop() || 'bin'
-        const uuid = crypto.randomUUID()
-        const storagePath = `${userId}/${characterId}/${uuid}.${ext}`
-        const contentType = asset.content_type || getContentType(asset.file_name)
-
-        // Upload to storage with retry
-        await uploadToStorageWithRetry(
-          supabase,
-          'character-assets',
-          storagePath,
-          fileData,
-          contentType,
-        )
-
-        let assetRecord: { id: string } | null = null
-
-        try {
-          // Insert character_assets record
-          const characterAssetInsert: CharacterAssetInsert = {
-            character_id: characterId,
-            user_id: userId,
-            asset_type: asset.asset_type,
-            file_name: sanitizedFileName,
-            storage_path: storagePath,
-            content_type: contentType,
-            file_size: fileData.length,
-            display_name: asset.display_name,
-            canonical_name: asset.canonical_name,
-            display_order: asset.display_order,
-            metadata: sanitizeMetadataForDb(asset.metadata as Record<string, unknown>),
-          }
-          const { data, error: dbError } = await supabase
-            .from('character_assets')
-            .insert(characterAssetInsert as never)
-            .select('id')
-            .single<{ id: string }>()
-
-          if (dbError || !data) {
-            throw new Error(
-              `DB insert failed for ${asset.file_name}: ${dbError?.message || 'Unknown error'}`,
-            )
-          }
-
-          assetRecord = data
-        } catch (error) {
-          await cleanupUploadedStoragePath(supabase, 'character-assets', storagePath, {
-            entityId: characterId,
-            entityType: 'import',
-            operation: 'cleanupFailedCharacterAssetInsert',
-          })
-          throw error
-        }
-
-        // Get public URL
-        const { data: urlData } = supabase.storage
-          .from('character-assets')
-          .getPublicUrl(storagePath)
-
-        const result: UploadedAsset = {
-          fileName: asset.file_name,
-          assetId: assetRecord.id,
-          storagePath,
-          publicUrl: urlData.publicUrl,
-        }
-
-        // Track avatar
-        if (asset.asset_type === 'icon') {
-          avatarUrl = urlData.publicUrl
-        }
-
-        return result
-      }),
-    )
-
-    for (let j = 0; j < results.length; j++) {
-      const result = results[j]
-      if (result.status === 'fulfilled') {
-        uploaded.push(result.value)
-      } else {
-        if (!fatalCleanupError && result.reason instanceof StorageCleanupError) {
-          fatalCleanupError = result.reason
-        }
-        failedAssets++
-        if (failedAssetSamples.length < MAX_FAILED_ASSET_SAMPLES) {
-          const reason =
-            result.reason instanceof Error ? result.reason.message : String(result.reason)
-          failedAssetSamples.push({
-            fileName: chunk[j].file_name,
-            reason: reason.slice(0, MAX_FAILED_ASSET_REASON_LENGTH),
-          })
-        }
-      }
-    }
-
-    // Delay between chunks to avoid rate limiting
-    if (chunks.indexOf(chunk) < chunks.length - 1) {
-      await delay(ASSET_UPLOAD_CHUNK_DELAY_MS)
-    }
-  }
-
-  if (fatalCleanupError) {
-    throw fatalCleanupError
-  }
-
-  return { uploaded, avatarUrl, failedAssets, failedAssetSamples }
-}
-
-async function uploadModuleAssets(
-  supabase: ImportRbxSupabaseClient,
-  userId: string,
-  moduleId: string,
-  manifestAssets: RbxParseResult['manifest']['modules'][0]['module']['assets'],
-  assetFiles: RbxAssetFile[],
-): Promise<{
-  uploadCount: number
-  uploadedStoragePaths: string[]
-}> {
-  const fileMap = new Map<string, Uint8Array>()
-  for (const file of assetFiles) {
-    fileMap.set(file.fileName, file.data)
-  }
-
-  let uploadCount = 0
-  const uploadedStoragePaths: string[] = []
-
-  for (const asset of manifestAssets) {
-    const fileData = fileMap.get(asset.file_name)
-    if (!fileData) {
-      console.warn(`[RBX Importer] Module asset file not found: ${asset.file_name}`)
-      continue
-    }
-
-    const sanitizedFileName = sanitizeStorageKey(asset.file_name)
-    const ext = sanitizedFileName.split('.').pop() || 'bin'
-    const uuid = crypto.randomUUID()
-    const storagePath = `${userId}/${moduleId}/${uuid}.${ext}`
-    const contentType = asset.content_type || getContentType(asset.file_name)
-
-    try {
-      await uploadToStorageWithRetry(supabase, 'module-assets', storagePath, fileData, contentType)
-
-      try {
-        const moduleAssetInsert: ModuleAssetInsert = {
-          user_id: userId,
-          module_id: moduleId,
-          file_name: sanitizedFileName,
-          storage_path: storagePath,
-          content_type: contentType,
-          file_size: fileData.length,
-          display_name: asset.display_name,
-          display_order: asset.display_order,
-          metadata: sanitizeMetadataForDb(asset.metadata as Record<string, unknown>),
-        }
-        const { error: dbError } = await supabase
-          .from('module_assets')
-          .insert(moduleAssetInsert as never)
-
-        if (dbError) {
-          await cleanupUploadedStoragePath(supabase, 'module-assets', storagePath, {
-            entityId: moduleId,
-            entityType: 'module',
-            operation: 'cleanupFailedModuleAssetInsert',
-          })
-          console.error(`[RBX Importer] Failed to create module_assets record: ${dbError.message}`)
-        } else {
-          uploadCount++
-          uploadedStoragePaths.push(storagePath)
-        }
-      } catch (error) {
-        await cleanupUploadedStoragePath(supabase, 'module-assets', storagePath, {
-          entityId: moduleId,
-          entityType: 'module',
-          operation: 'cleanupFailedModuleAssetInsert',
-        })
-        throw error
-      }
-    } catch (error) {
-      if (error instanceof StorageCleanupError) {
-        throw error
-      }
-
-      console.error(
-        `[RBX Importer] Failed to upload module asset ${asset.file_name}:`,
-        error instanceof Error ? error.message : error,
-      )
-    }
-  }
-
-  return {
-    uploadCount,
-    uploadedStoragePaths,
-  }
-}
-
-// ============================================================================
-// Storage Utilities
-// ============================================================================
-
-async function uploadToStorageWithRetry(
-  supabase: ImportRbxSupabaseClient,
-  bucket: string,
-  path: string,
-  file: Uint8Array,
-  contentType: string,
-): Promise<void> {
-  let lastError: unknown = null
-
-  for (let attempt = 1; attempt <= STORAGE_UPLOAD_RETRY_ATTEMPTS; attempt++) {
-    const { error } = await supabase.storage
-      .from(bucket)
-      .upload(path, file, { contentType, upsert: false })
-
-    if (!error) return
-
-    lastError = error
-    const statusCode = getErrorStatusCode(error)
-    const isRetryable =
-      (statusCode !== null && statusCode >= 500) ||
-      /network|timeout|timed out/i.test(getErrorMessage(error))
-
-    if (!isRetryable || attempt >= STORAGE_UPLOAD_RETRY_ATTEMPTS) {
-      throw error
-    }
-
-    const backoffMs = STORAGE_UPLOAD_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1)
-    console.warn(
-      `[RBX Importer] Storage upload retry ${attempt}/${STORAGE_UPLOAD_RETRY_ATTEMPTS} in ${backoffMs}ms`,
-      { bucket, path },
-    )
-    await delay(backoffMs)
-  }
-
-  if (lastError) throw lastError
-}
-
-async function cleanupUploadedStoragePath(
-  supabase: ImportRbxSupabaseClient,
-  bucket: string,
-  storagePath: string,
-  context: {
-    entityId: string
-    entityType: 'character' | 'import' | 'module'
-    operation: string
-  },
-): Promise<void> {
-  await removeStorageObjects(supabase, bucket, [storagePath], context)
-}
-
-// ============================================================================
 // Helpers
 // ============================================================================
-
-function getContentType(fileName: string): string {
-  const ext = fileName.split('.').pop()?.toLowerCase()
-  switch (ext) {
-    case 'png':
-      return 'image/png'
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg'
-    case 'webp':
-      return 'image/webp'
-    case 'gif':
-      return 'image/gif'
-    case 'avif':
-      return 'image/avif'
-    default:
-      return 'application/octet-stream'
-  }
-}
 
 function buildCharacterMetadataForImport(
   metadata: RbxParseResult['manifest']['character']['metadata'],
@@ -705,34 +304,4 @@ function buildCharacterMetadataForImport(
   delete result.emotion_images
 
   return result
-}
-
-function sanitizeMetadataForDb(metadata: Record<string, unknown>): Json {
-  const jsonString = JSON.stringify(metadata)
-  const sanitized = jsonString.replace(/\\u0000/g, '')
-  return JSON.parse(sanitized) as Json
-}
-
-function getErrorStatusCode(error: unknown): number | null {
-  if (!error || typeof error !== 'object') return null
-  const status = (error as { status?: unknown }).status
-  if (typeof status === 'number') return status
-  const statusCode = (error as { statusCode?: unknown }).statusCode
-  if (typeof statusCode === 'number') return statusCode
-  return null
-}
-
-function getErrorMessage(error: unknown): string {
-  if (!error) return ''
-  if (typeof error === 'string') return error
-  if (error instanceof Error) return error.message
-  if (typeof error === 'object') {
-    const msg = (error as { message?: unknown }).message
-    if (typeof msg === 'string') return msg
-  }
-  return ''
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }

@@ -290,6 +290,14 @@ Done when:
 - policy, persistence, queue, and provider logic have narrower module boundaries
 - change impact is smaller and easier to test per boundary
 
+Current status as of 2026-04-11:
+
+- [src/app/api/internal/chat-job-runner/service.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/service.ts) no longer keeps Anthropic batch submission/polling and Vault decryption inline; those concerns now live in [anthropic-batch-orchestrator.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/anthropic-batch-orchestrator.ts) and [vault.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/vault.ts)
+- the existing service entrypoints still expose the same behavior and [src/app/api/chat/jobs/[id]/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/jobs/[id]/route.ts) can continue importing `pollAnthropicBatchJobForUser` through the old service entrypoint
+- regression coverage in [src/app/api/internal/chat-job-runner/service.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/service.test.ts) and [src/app/api/chat/jobs/[id]/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/jobs/[id]/route.test.ts) still passes against the extracted batch runner slice
+- [src/app/api/chat/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.ts) now delegates request-size/client-identifier logic to [request-metadata.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/request-metadata.ts), rollback cleanup to [persistence-rollback.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/persistence-rollback.ts), user-turn/job persistence to [job-persistence.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/job-persistence.ts), and runner triggering to [background-trigger.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/background-trigger.ts), reducing route-local side-effect helpers without changing the request contract
+- [src/lib/rbx-importer.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/rbx-importer.ts) now keeps import policy in one place while delegating storage retry/upload bookkeeping to [rbx-import-assets.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/rbx-import-assets.ts), rollback cleanup to [rbx-import-rollback.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/rbx-import-rollback.ts), and shared JSON/content-type helpers to [rbx-import-helpers.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/rbx-import-helpers.ts); [rbx-importer.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/rbx-importer.test.ts) still passes against the extracted seams
+
 ### P2-3. Remove Repeated Action Flows
 
 Scope:

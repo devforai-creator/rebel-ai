@@ -1,22 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
-import {
-  CHAT_JOB_PAYLOAD_VERSION,
-  type ChatGenerationJobPayload,
-  serializeChatJobPayload,
-} from '@/lib/chat/job-payload'
-import {
-  checkUserRateLimit,
-  checkAnonRateLimit,
-  buildClientIdentifier,
-} from '@/lib/chat/rate-limiter'
+import { CHAT_JOB_PAYLOAD_VERSION, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
+import { checkUserRateLimit, checkAnonRateLimit } from '@/lib/chat/rate-limiter'
 import {
   ACTIVE_CHAT_JOB_CONFLICT_MESSAGE,
   ACTIVE_QUEUE_JOB_STATUSES,
   MAX_ACTIVE_CHAT_JOBS_PER_USER,
   buildActiveChatJobLimitMessage,
-  isChatJobUserLimitViolation,
-  isUniqueViolation,
 } from '@/lib/queue/admission'
 import { isLLMProvider } from '@/lib/api-keys/provider-utils'
 import { getDefaultModelForProvider } from '@/lib/llm/default-model'
@@ -26,12 +16,11 @@ import {
   isAnthropicBatchChatSupported,
   isChatDeliveryMode,
 } from '@/lib/chat/delivery-mode'
-import { MESSAGE_STATUS_COMPLETED } from '@/lib/chat/message-status'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
-import { ConcurrentChatTurnConflictError, createChatTurn } from '@/lib/chat/turns'
-import { buildInternalApiUrl } from '@/lib/internal-api-origin'
-import { after } from 'next/server'
 import { z } from 'zod'
+import { scheduleChatJobRunnerTrigger } from './background-trigger'
+import { enqueueChatGenerationJob, persistUserTurn } from './job-persistence'
+import { extractClientIdentifier, parseDeclaredContentLength } from './request-metadata'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60 // 60 second timeout
@@ -323,61 +312,24 @@ export async function POST(req: Request) {
         return new Response('Invalid user message', { status: 400 })
       }
 
-      insertedUserMessageId = crypto.randomUUID()
-      insertedTurnId = crypto.randomUUID()
+      const persistResult = await persistUserTurn({
+        supabase,
+        chatId,
+        userId: user.id,
+        requestId,
+        content: userMessage.content,
+      })
 
-      try {
-        await createChatTurn({
-          supabase,
-          chatId,
-          userId: user.id,
-          turnId: insertedTurnId,
-          userMessageId: insertedUserMessageId,
-        })
-      } catch (turnError) {
-        if (turnError instanceof ConcurrentChatTurnConflictError) {
-          console.warn('[Chat API] Concurrent chat turn admission conflict', {
-            chatId,
-            requestId,
-          })
-          return new Response(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, { status: 409 })
-        }
-
-        console.error('[Chat API] Failed to create chat turn', {
-          chatId,
-          requestId,
-          error: turnError instanceof Error ? turnError.message : String(turnError),
-        })
-        return new Response('Failed to create chat turn', { status: 500 })
+      if (persistResult.status === 'conflict') {
+        return new Response(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, { status: 409 })
       }
 
-      const { data: insertedMessage, error: insertUserError } = await supabase
-        .from('messages')
-        .insert({
-          id: insertedUserMessageId,
-          chat_id: chatId,
-          role: 'user',
-          content: userMessage.content,
-          turn_id: insertedTurnId,
-          user_id: user.id,
-          message_status: MESSAGE_STATUS_COMPLETED,
-        })
-        .select('id')
-        .single()
-
-      if (insertUserError || !insertedMessage) {
-        if (insertedTurnId) {
-          await rollbackPersistedChatTurn(supabase, insertedTurnId, chatId, requestId)
-        }
-        console.error('[Chat API] Failed to persist user message', {
-          chatId,
-          requestId,
-          error: insertUserError?.message,
-        })
-        return new Response('Failed to save user message', { status: 500 })
+      if (persistResult.status === 'error') {
+        return new Response(persistResult.responseMessage, { status: 500 })
       }
 
-      insertedUserMessageId = insertedMessage.id
+      insertedUserMessageId = persistResult.userMessageId
+      insertedTurnId = persistResult.turnId
     }
 
     const jobPayload: ChatGenerationJobPayload = {
@@ -395,97 +347,45 @@ export async function POST(req: Request) {
       regenerateAssistantMessageId,
     }
 
-    const { data: job, error: jobError } = await supabase
-      .from('chat_generation_jobs')
-      .insert({
-        chat_id: chatId,
-        user_id: user.id,
-        status: 'pending',
-        delivery_mode: deliveryMode,
-        payload: serializeChatJobPayload(jobPayload),
-      })
-      .select('id')
-      .single()
+    const enqueueResult = await enqueueChatGenerationJob({
+      supabase,
+      chatId,
+      userId: user.id,
+      requestId,
+      payload: jobPayload,
+      insertedTurnId,
+      insertedUserMessageId,
+    })
 
-    if (jobError || !job) {
-      if (insertedTurnId && !isRegeneration) {
-        await rollbackPersistedChatTurn(supabase, insertedTurnId, chatId, requestId)
-      } else if (insertedUserMessageId) {
-        await rollbackPersistedUserMessage(supabase, insertedUserMessageId, chatId, requestId)
-      }
-
-      if (isUniqueViolation(jobError)) {
+    if (enqueueResult.status !== 'success') {
+      if (enqueueResult.status === 'conflict') {
         return new Response(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, { status: 409 })
       }
 
-      if (isChatJobUserLimitViolation(jobError)) {
+      if (enqueueResult.status === 'user-limit') {
         return new Response(buildActiveChatJobLimitMessage(), { status: 429 })
       }
 
-      console.error('[Chat API] Failed to enqueue chat generation job', {
-        chatId,
-        requestId,
-        error: jobError?.message,
-      })
       return new Response('Failed to queue chat response', { status: 500 })
     }
+
+    const jobId = enqueueResult.jobId
 
     if (insertedUserMessageId) {
       // Fire-and-forget: trigger background translation for user message
       triggerMessageTranslation(insertedUserMessageId, user.id)
     }
 
-    // Trigger job runner via trigger endpoint (returns 202 quickly)
-    // Uses after() to guarantee delivery; cron still runs as backup
-    const adminSecret = process.env.CHAT_ADMIN_SECRET
-    if (adminSecret) {
-      const triggerUrl = buildInternalApiUrl('/api/internal/chat-job-runner/trigger').toString()
-
-      logChatApiDebug('[Chat API] Triggering job runner', {
-        chatId,
-        requestId,
-        triggerUrl,
-        vercelEnv: process.env.VERCEL_ENV,
-      })
-
-      after(async () => {
-        try {
-          const response = await fetch(triggerUrl, {
-            method: 'GET',
-            headers: {
-              Authorization: `Bearer ${adminSecret}`,
-              ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET && {
-                'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
-              }),
-            },
-          })
-
-          if (!response.ok) {
-            const text = await response.text()
-            console.error('[Chat API] Job runner trigger responded with non-OK status', {
-              chatId,
-              requestId,
-              jobId: job.id,
-              triggerUrl,
-              status: response.status,
-              body: text,
-            })
-          }
-        } catch (err) {
-          console.error('[Chat API] Failed to trigger job runner', {
-            chatId,
-            requestId,
-            jobId: job.id,
-            triggerUrl,
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      })
-    }
+    scheduleChatJobRunnerTrigger({
+      chatId,
+      jobId,
+      requestId,
+      logDebug: logChatApiDebug,
+    })
 
     return new Response(
       JSON.stringify({
-        jobId: job.id,
+        jobId,
         requestId,
       }),
       {
@@ -502,135 +402,3 @@ export async function POST(req: Request) {
     return new Response('Internal server error', { status: 500 })
   }
 }
-
-type RouteSupabaseClient = Awaited<ReturnType<typeof createClient>>
-
-async function rollbackPersistedUserMessage(
-  supabase: RouteSupabaseClient,
-  messageId: string,
-  chatId: string,
-  requestId: string,
-): Promise<void> {
-  const { error } = await supabase.from('messages').delete().eq('id', messageId)
-  if (error) {
-    console.error('[Chat API] Failed to rollback persisted user message', {
-      chatId,
-      requestId,
-      messageId,
-      error: error.message,
-    })
-  }
-}
-
-async function rollbackPersistedChatTurn(
-  supabase: RouteSupabaseClient,
-  turnId: string,
-  chatId: string,
-  requestId: string,
-): Promise<void> {
-  const { error } = await supabase.from('chat_turns').delete().eq('id', turnId)
-  if (error) {
-    console.error('[Chat API] Failed to rollback persisted chat turn', {
-      chatId,
-      requestId,
-      turnId,
-      error: error.message,
-    })
-  }
-}
-
-async function extractClientIdentifier(req: Request): Promise<string> {
-  const candidates = [req.headers.get('x-vercel-ip'), req.headers.get('cf-connecting-ip')]
-
-  if (shouldTrustProxyIpHeaders()) {
-    const forwardedFor = req.headers.get('x-forwarded-for')
-    candidates.push(req.headers.get('x-real-ip'), ...getForwardedForClientIps(forwardedFor))
-  }
-
-  let firstValidIp: string | null = null
-
-  for (const candidate of candidates) {
-    const normalized = normalizePotentialIp(candidate)
-    if (!normalized) {
-      continue
-    }
-
-    if (!firstValidIp) {
-      firstValidIp = normalized
-    }
-
-    if (!isPrivateIp(normalized)) {
-      return normalized
-    }
-  }
-
-  if (firstValidIp) {
-    return firstValidIp
-  }
-
-  return buildHashedUserAgentIdentifier(req)
-}
-
-function getForwardedForClientIps(headerValue: string | null): string[] {
-  if (!headerValue) {
-    return []
-  }
-
-  return headerValue
-    .split(',')
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-}
-
-function normalizePotentialIp(candidate: string | null): string | null {
-  if (!candidate) {
-    return null
-  }
-
-  const trimmed = candidate.trim()
-  if (!trimmed) {
-    return null
-  }
-
-  return trimmed
-}
-
-function parseDeclaredContentLength(headerValue: string | null): number | null {
-  if (!headerValue) {
-    return null
-  }
-
-  const parsed = Number.parseInt(headerValue, 10)
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return null
-  }
-
-  return parsed
-}
-
-function shouldTrustProxyIpHeaders(): boolean {
-  return process.env.TRUST_PROXY_IP_HEADERS === 'true'
-}
-
-function isPrivateIp(ip: string): boolean {
-  const privateRanges = [
-    /^10\./,
-    /^192\.168\./,
-    /^172\.(1[6-9]|2\d|3[0-1])\./,
-    /^127\./,
-    /^fc00:/i,
-    /^fe80:/i,
-    /^::1$/,
-  ]
-
-  return privateRanges.some((range) => range.test(ip))
-}
-
-function buildHashedUserAgentIdentifier(req: Request): string {
-  const ua = req.headers.get('user-agent') ?? 'unknown'
-  const acceptLanguage = req.headers.get('accept-language') ?? 'unknown'
-  const rawIdentifier = `${ua}|${acceptLanguage}`
-  return buildClientIdentifier(rawIdentifier)
-}
-
-// Unused internal API utilities removed

@@ -7,17 +7,22 @@ import {
   CHAT_ASSISTANT_STREAM_EVENT,
   getChatAssistantStreamChannelName,
 } from '@/lib/chat/assistant-stream'
+import {
+  __resetAssistantStreamBroadcastStatsForTest,
+  getAssistantStreamBroadcastStats,
+} from '@/lib/chat/assistant-stream-monitor'
 
 describe('assistant stream broadcaster', () => {
   beforeEach(() => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    __resetAssistantStreamBroadcastStatsForTest()
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('returns early when the admin client does not expose channels', async () => {
+  it('records a failure when the admin client does not expose channels', async () => {
     await expect(
       broadcastAssistantStreamSnapshot({
         supabase: {} as never,
@@ -28,7 +33,27 @@ describe('assistant stream broadcaster', () => {
       }),
     ).resolves.toBeUndefined()
 
-    expect(console.warn).not.toHaveBeenCalled()
+    expect(console.warn).toHaveBeenCalledWith(
+      '[Chat Job Runner] Assistant stream broadcast unavailable',
+      {
+        chatId: 'chat-1',
+        jobId: 'job-1',
+        kind: 'snapshot',
+        stage: 'missing-channel-api',
+      },
+    )
+    expect(getAssistantStreamBroadcastStats()).toMatchObject({
+      totalSuccesses: 0,
+      totalFailures: 1,
+      consecutiveFailures: 1,
+      lastErrorMessage: 'Supabase admin client does not expose channel()',
+      lastMetadata: {
+        chatId: 'chat-1',
+        jobId: 'job-1',
+        kind: 'snapshot',
+        stage: 'missing-channel-api',
+      },
+    })
   })
 
   it('broadcasts snapshot payloads without logging when send succeeds', async () => {
@@ -55,6 +80,18 @@ describe('assistant stream broadcaster', () => {
       },
     })
     expect(console.warn).not.toHaveBeenCalled()
+    expect(getAssistantStreamBroadcastStats()).toMatchObject({
+      totalSuccesses: 1,
+      totalFailures: 0,
+      consecutiveFailures: 0,
+      lastMetadata: {
+        chatId: 'chat-1',
+        jobId: 'job-1',
+        kind: 'snapshot',
+        stage: 'send',
+        status: 'ok',
+      },
+    })
   })
 
   it('warns when the realtime broadcast returns a non-ok status', async () => {
@@ -73,10 +110,24 @@ describe('assistant stream broadcaster', () => {
       '[Chat Job Runner] Assistant stream broadcast failed',
       {
         chatId: 'chat-1',
+        jobId: 'job-1',
         kind: 'snapshot',
         status: 'timed out',
       },
     )
+    expect(getAssistantStreamBroadcastStats()).toMatchObject({
+      totalSuccesses: 0,
+      totalFailures: 1,
+      consecutiveFailures: 1,
+      lastErrorMessage: 'Assistant stream broadcast returned status timed out',
+      lastMetadata: {
+        chatId: 'chat-1',
+        jobId: 'job-1',
+        kind: 'snapshot',
+        stage: 'send',
+        status: 'timed out',
+      },
+    })
   })
 
   it('logs thrown Error instances with their message', async () => {
@@ -97,10 +148,23 @@ describe('assistant stream broadcaster', () => {
       '[Chat Job Runner] Assistant stream broadcast errored',
       {
         chatId: 'chat-1',
+        jobId: 'job-1',
         kind: 'error',
         error: 'socket down',
       },
     )
+    expect(getAssistantStreamBroadcastStats()).toMatchObject({
+      totalSuccesses: 0,
+      totalFailures: 1,
+      consecutiveFailures: 1,
+      lastErrorMessage: 'socket down',
+      lastMetadata: {
+        chatId: 'chat-1',
+        jobId: 'job-1',
+        kind: 'error',
+        stage: 'send',
+      },
+    })
   })
 
   it('stringifies non-Error throws when broadcasting fails', async () => {
@@ -121,9 +185,22 @@ describe('assistant stream broadcaster', () => {
       '[Chat Job Runner] Assistant stream broadcast errored',
       {
         chatId: 'chat-1',
+        jobId: 'job-1',
         kind: 'error',
         error: 'socket exploded',
       },
     )
+    expect(getAssistantStreamBroadcastStats()).toMatchObject({
+      totalSuccesses: 0,
+      totalFailures: 1,
+      consecutiveFailures: 1,
+      lastErrorMessage: 'socket exploded',
+      lastMetadata: {
+        chatId: 'chat-1',
+        jobId: 'job-1',
+        kind: 'error',
+        stage: 'send',
+      },
+    })
   })
 })

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAssistantStreamBroadcastStats } from '@/lib/chat/assistant-stream-monitor'
 import { getChatRunnerTriggerStats } from '@/lib/chat/runner-trigger-monitor'
 import { getSummaryTriggerStats } from '@/lib/chat/summary-trigger'
 
@@ -20,11 +21,13 @@ export async function GET(req: NextRequest) {
 
   const chatRunnerStats = getChatRunnerTriggerStats()
   const summaryTriggerStats = getSummaryTriggerStats()
+  const assistantStreamBroadcastStats = getAssistantStreamBroadcastStats()
 
   const responseBody = {
-    status: deriveStatus([chatRunnerStats, summaryTriggerStats]),
+    status: deriveStatus([chatRunnerStats, summaryTriggerStats, assistantStreamBroadcastStats]),
     timestamp: new Date().toISOString(),
     services: {
+      assistantStreamBroadcast: decorateServiceStats(assistantStreamBroadcastStats),
       chatRunnerTrigger: decorateServiceStats(chatRunnerStats),
       summaryTrigger: decorateServiceStats(summaryTriggerStats),
     },

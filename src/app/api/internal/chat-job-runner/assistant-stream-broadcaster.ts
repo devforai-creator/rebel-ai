@@ -4,6 +4,10 @@ import {
   getChatAssistantStreamChannelName,
   type AssistantStreamBroadcastPayload,
 } from '@/lib/chat/assistant-stream'
+import {
+  recordAssistantStreamBroadcastFailure,
+  recordAssistantStreamBroadcastSuccess,
+} from '@/lib/chat/assistant-stream-monitor'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 
@@ -16,7 +20,22 @@ async function broadcastAssistantStreamEvent({
   chatId: string
   payload: AssistantStreamBroadcastPayload
 }): Promise<void> {
+  const metadata = {
+    chatId,
+    jobId: payload.jobId,
+    kind: payload.kind,
+  }
+
   if (typeof (supabase as { channel?: unknown }).channel !== 'function') {
+    const error = new Error('Supabase admin client does not expose channel()')
+    recordAssistantStreamBroadcastFailure(error, {
+      ...metadata,
+      stage: 'missing-channel-api',
+    })
+    console.warn('[Chat Job Runner] Assistant stream broadcast unavailable', {
+      ...metadata,
+      stage: 'missing-channel-api',
+    })
     return
   }
 
@@ -28,16 +47,31 @@ async function broadcastAssistantStreamEvent({
     })
 
     if (status !== 'ok') {
-      console.warn('[Chat Job Runner] Assistant stream broadcast failed', {
-        chatId,
-        kind: payload.kind,
+      const error = new Error(`Assistant stream broadcast returned status ${status}`)
+      recordAssistantStreamBroadcastFailure(error, {
+        ...metadata,
+        stage: 'send',
         status,
       })
+      console.warn('[Chat Job Runner] Assistant stream broadcast failed', {
+        ...metadata,
+        status,
+      })
+      return
     }
+
+    recordAssistantStreamBroadcastSuccess({
+      ...metadata,
+      stage: 'send',
+      status,
+    })
   } catch (error) {
+    recordAssistantStreamBroadcastFailure(error, {
+      ...metadata,
+      stage: 'send',
+    })
     console.warn('[Chat Job Runner] Assistant stream broadcast errored', {
-      chatId,
-      kind: payload.kind,
+      ...metadata,
       error: error instanceof Error ? error.message : String(error),
     })
   }

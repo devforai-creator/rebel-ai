@@ -326,6 +326,34 @@ Current status as of 2026-04-11:
 - [src/app/api/chat/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.ts) now returns `500` with `Failed to rollback persisted chat data` when rollback fails after a persistence or enqueue error
 - [src/app/api/chat/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.test.ts) now covers rollback-failure cases for both user-message persistence and queue admission races
 
+### P1-7. Assistant Stream Broadcast Visibility
+
+Scope:
+
+- [src/app/api/internal/chat-job-runner/assistant-stream-broadcaster.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/assistant-stream-broadcaster.ts)
+- [src/app/api/internal/chat-job-runner/assistant-stream-broadcaster.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/assistant-stream-broadcaster.test.ts)
+- [src/lib/chat/assistant-stream-monitor.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/assistant-stream-monitor.ts)
+- [src/app/api/internal/health/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/health/route.ts)
+- [src/app/api/internal/health/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/health/route.test.ts)
+
+Why:
+
+- assistant stream broadcast failures previously only emitted warnings, so operators had no persistent signal when realtime chat updates degraded
+- that made it harder to distinguish a provider/runtime issue from a Realtime delivery issue during incident triage
+
+Done when:
+
+- assistant stream broadcast success and failure paths are recorded through a shared tracker
+- health status exposes assistant stream broadcast degradation alongside existing trigger monitors
+- regression tests cover missing channel support, non-ok send results, thrown send errors, and health-route degradation
+
+Current status as of 2026-04-11:
+
+- [src/app/api/internal/chat-job-runner/assistant-stream-broadcaster.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/assistant-stream-broadcaster.ts) now records assistant stream broadcast successes and failures, including missing `channel()` support, non-ok send statuses, and thrown send errors
+- [src/lib/chat/assistant-stream-monitor.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/assistant-stream-monitor.ts) now exposes persistent tracker stats for assistant stream delivery
+- [src/app/api/internal/health/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/health/route.ts) now includes `assistantStreamBroadcast` in the internal health response and marks the service degraded when broadcast failures are consecutive
+- regression coverage now lives in [src/app/api/internal/chat-job-runner/assistant-stream-broadcaster.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/assistant-stream-broadcaster.test.ts) and [src/app/api/internal/health/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/health/route.test.ts)
+
 ## P2
 
 ### P2-1. Split `turns.ts` by Responsibility

@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useState } from 'react'
+import React, { useActionState, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { updateTranslationModelPreference, type TranslationModelPreferenceState } from './actions'
 
@@ -64,9 +64,9 @@ export default function TranslationModelSettingsForm({ initialKeyId, apiKeys }: 
           ))}
         </select>
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          When enabled, messages are translated to English in the background for token efficiency.
-          Recent messages stay in original language for style consistency. Recommended: Use a fast,
-          cheap model (e.g., GPT-4o-mini, Gemini Flash, Haiku).
+          Experimental option. This can reduce token usage in some chats, but it adds extra
+          translation calls and may not lower total cost. Use a fast, low-cost model if you enable
+          it.
         </p>
       </div>
 

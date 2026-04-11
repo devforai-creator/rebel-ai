@@ -106,12 +106,17 @@ export default async function AccountPage() {
             </section>
 
             <section className="border-t border-gray-200 dark:border-gray-700 pt-8">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Summary-dedicated Model
-              </h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Summary-dedicated Model
+                </h2>
+                <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                  Advanced
+                </span>
+              </div>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Summaries and fact extraction can use a different model/API key than chat. Leave
-                empty to continue using the model from your recent chat.
+                Use a cheaper or different model only for summaries and fact extraction. Leave this
+                empty to continue using the same model as chat.
               </p>
               <div className="mt-6">
                 <SummaryModelSettingsForm
@@ -151,13 +156,18 @@ export default async function AccountPage() {
             </section>
 
             <section className="border-t border-gray-200 dark:border-gray-700 pt-8">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Bilingual Memory (Experimental)
-              </h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Bilingual Memory
+                </h2>
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                  Experimental
+                </span>
+              </div>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Automatically translate messages to English in the background for token efficiency.
-                Recent 2 turns stay in original language for natural style. Recommended for
-                non-English conversations with expensive models.
+                Translates older messages in the background and may reduce context cost for some
+                chats, but savings are not guaranteed. It adds extra LLM calls and can interact
+                poorly with some cache strategies, so this is not a recommended default.
               </p>
               <div className="mt-6">
                 <TranslationModelSettingsForm

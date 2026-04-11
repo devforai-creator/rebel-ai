@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useState } from 'react'
+import React, { useActionState, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { updateSummaryModelPreference, type SummaryModelPreferenceState } from './actions'
 
@@ -64,8 +64,8 @@ export default function SummaryModelSettingsForm({ initialKeyId, apiKeys }: Prop
           ))}
         </select>
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          If not selected, the model from your recent chat will continue to be used. Keys without a
-          model set will use the provider&apos;s default model.
+          Advanced option. If not selected, the model from your recent chat will continue to be
+          used. Keys without a model set will use the provider&apos;s default model.
         </p>
       </div>
 

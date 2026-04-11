@@ -2,6 +2,16 @@ import { createClient } from '@/lib/supabase/server'
 
 type RouteSupabaseClient = Awaited<ReturnType<typeof createClient>>
 
+export class PersistenceRollbackError extends Error {
+  constructor(
+    readonly target: 'user message' | 'chat turn',
+    readonly detail: string,
+  ) {
+    super(`Failed to rollback persisted ${target}: ${detail}`)
+    this.name = 'PersistenceRollbackError'
+  }
+}
+
 export async function rollbackPersistedUserMessage(
   supabase: RouteSupabaseClient,
   messageId: string,
@@ -16,6 +26,7 @@ export async function rollbackPersistedUserMessage(
       messageId,
       error: error.message,
     })
+    throw new PersistenceRollbackError('user message', error.message)
   }
 }
 
@@ -33,5 +44,6 @@ export async function rollbackPersistedChatTurn(
       turnId,
       error: error.message,
     })
+    throw new PersistenceRollbackError('chat turn', error.message)
   }
 }

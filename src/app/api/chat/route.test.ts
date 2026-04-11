@@ -147,7 +147,9 @@ interface SupabaseFixture {
   activeChatJobsError?: { message: string; code?: string | null }
   activeUserJobsError?: { message: string; code?: string | null }
   chatTurnInsertError?: { message: string; code?: string | null }
+  chatTurnDeleteError?: { message: string; code?: string | null }
   messageInsertError?: { message: string; code?: string | null }
+  messageDeleteError?: { message: string; code?: string | null }
 }
 
 type ChatAdminRequest =
@@ -307,9 +309,18 @@ class SupabaseRouteMock {
       case 'characters':
         return new CharactersTable(this.fixture.characters)
       case 'messages':
-        return new MessagesTable(this.messages, this.fixture.messageInsertError)
+        return new MessagesTable(
+          this.messages,
+          this.fixture.messageInsertError,
+          this.fixture.messageDeleteError,
+        )
       case 'chat_turns':
-        return new ChatTurnsTable(this.chatTurns, this.messages, this.fixture.chatTurnInsertError)
+        return new ChatTurnsTable(
+          this.chatTurns,
+          this.messages,
+          this.fixture.chatTurnInsertError,
+          this.fixture.chatTurnDeleteError,
+        )
       case 'global_variables':
         return new GlobalVariablesTable(this.globalVariables)
       case 'chat_generation_jobs':
@@ -511,6 +522,7 @@ class MessagesTable {
   constructor(
     private readonly rows: MessageRow[],
     private readonly insertError?: { message: string; code?: string | null },
+    private readonly deleteError?: { message: string; code?: string | null },
   ) {}
 
   select() {
@@ -542,10 +554,20 @@ class MessagesTable {
       },
       then: <TResult1 = unknown, TResult2 = never>(
         onfulfilled?:
-          | ((value: { data: MessageRow[]; error: null }) => TResult1 | PromiseLike<TResult1>)
+          | ((value: {
+              data: MessageRow[]
+              error: { message: string; code?: string | null } | null
+            }) => TResult1 | PromiseLike<TResult1>)
           | null,
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
       ) => {
+        if (this.deleteError) {
+          return Promise.resolve({ data: [], error: this.deleteError }).then(
+            onfulfilled,
+            onrejected,
+          )
+        }
+
         const remaining = this.rows.filter((row) => !filters.every((predicate) => predicate(row)))
         this.rows.length = 0
         this.rows.push(...remaining)
@@ -615,6 +637,7 @@ class ChatTurnsTable {
     private readonly rows: ChatTurnRow[],
     private readonly messages: MessageRow[],
     private readonly insertError?: { message: string; code?: string | null },
+    private readonly deleteError?: { message: string; code?: string | null },
   ) {}
 
   select() {
@@ -712,10 +735,20 @@ class ChatTurnsTable {
       },
       then: <TResult1 = unknown, TResult2 = never>(
         onfulfilled?:
-          | ((value: { data: ChatTurnRow[]; error: null }) => TResult1 | PromiseLike<TResult1>)
+          | ((value: {
+              data: ChatTurnRow[]
+              error: { message: string; code?: string | null } | null
+            }) => TResult1 | PromiseLike<TResult1>)
           | null,
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
       ) => {
+        if (this.deleteError) {
+          return Promise.resolve({ data: [], error: this.deleteError }).then(
+            onfulfilled,
+            onrejected,
+          )
+        }
+
         const removed = this.rows.filter((row) => filters.every((predicate) => predicate(row)))
         const removedIds = new Set(removed.map((row) => row.id))
         const remaining = this.rows.filter((row) => !removedIds.has(row.id))
@@ -1653,6 +1686,38 @@ describe('POST /api/chat', () => {
     expect(supabase.chatJobs).toHaveLength(0)
   })
 
+  it('returns 500 when enqueue rollback fails after an active-job race', async () => {
+    const supabase = createSupabaseMock(
+      buildDefaultAuthenticatedFixture({
+        chatJobInsertError: {
+          code: '23505',
+          message:
+            'duplicate key value violates unique constraint "chat_generation_jobs_active_chat_idx"',
+        },
+        chatTurnDeleteError: {
+          message: 'failed to delete turn during rollback',
+          code: 'XX002',
+        },
+      }),
+    )
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        messages: [{ role: 'user', content: 'rollback race me' }],
+      }),
+    })
+
+    const response = await POST(request)
+
+    await expectJsonError(response, 500, 'Failed to rollback persisted chat data')
+    expect(supabase.messages).toHaveLength(1)
+    expect(supabase.chatTurns).toHaveLength(1)
+    expect(supabase.chatJobs).toHaveLength(0)
+  })
+
   it('returns 429 when enqueuing hits the active-user limit race', async () => {
     const supabase = createSupabaseMock(
       buildDefaultAuthenticatedFixture({
@@ -2080,6 +2145,37 @@ describe('POST /api/chat', () => {
     await expectJsonError(response, 500, 'Failed to save user message')
     expect(supabase.messages).toHaveLength(0)
     expect(supabase.chatTurns).toHaveLength(0)
+  })
+
+  it('returns 500 when chat turn rollback fails after user message persistence fails', async () => {
+    const supabase = createSupabaseMock(
+      buildDefaultAuthenticatedFixture({
+        messageInsertError: {
+          message: 'failed to insert message',
+          code: 'XX001',
+        },
+        chatTurnDeleteError: {
+          message: 'failed to delete turn during rollback',
+          code: 'XX002',
+        },
+      }),
+    )
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        messages: [{ role: 'user', content: 'persist me badly' }],
+      }),
+    })
+
+    const response = await POST(request)
+
+    await expectJsonError(response, 500, 'Failed to rollback persisted chat data')
+    expect(supabase.messages).toHaveLength(0)
+    expect(supabase.chatTurns).toHaveLength(1)
+    expect(supabase.chatJobs).toHaveLength(0)
   })
 
   it('returns 400 when regeneration target is missing or not an assistant message', async () => {

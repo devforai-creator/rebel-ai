@@ -375,7 +375,7 @@ export async function POST(req: Request) {
         return createErrorResponse(buildActiveChatJobLimitMessage(), 429)
       }
 
-      return createErrorResponse('Failed to queue chat response', 500)
+      return createErrorResponse(enqueueResult.responseMessage, 500)
     }
 
     const jobId = enqueueResult.jobId

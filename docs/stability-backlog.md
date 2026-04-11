@@ -291,6 +291,33 @@ Current status as of 2026-04-11:
 - [src/app/api/chat/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.ts) now routes all error exits through a single JSON error helper, while preserving existing status codes and `Retry-After` headers
 - [src/app/api/chat/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.test.ts) now asserts error payloads via a shared JSON error helper so the contract is locked consistently across validation, auth, queue, and regeneration failures
 
+### P1-6. Chat Persistence Rollback Visibility
+
+Scope:
+
+- [src/app/api/chat/persistence-rollback.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/persistence-rollback.ts)
+- [src/app/api/chat/job-persistence.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/job-persistence.ts)
+- [src/app/api/chat/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.ts)
+- [src/app/api/chat/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.test.ts)
+
+Why:
+
+- rollback helpers previously logged delete failures but still let higher layers report a normal queue conflict or generic save failure
+- that hid partial-persistence states exactly where operators most need to know cleanup did not finish
+
+Done when:
+
+- rollback helpers throw structured failures instead of swallowing them
+- enqueue and persistence paths convert rollback failures into explicit `500` responses instead of `409` / `429`
+- regression tests cover insert-failure plus rollback-failure combinations
+
+Current status as of 2026-04-11:
+
+- [src/app/api/chat/persistence-rollback.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/persistence-rollback.ts) now throws `PersistenceRollbackError` when message or turn cleanup fails
+- [src/app/api/chat/job-persistence.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/job-persistence.ts) now upgrades rollback failures into explicit error results instead of continuing as if cleanup succeeded
+- [src/app/api/chat/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.ts) now returns `500` with `Failed to rollback persisted chat data` when rollback fails after a persistence or enqueue error
+- [src/app/api/chat/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.test.ts) now covers rollback-failure cases for both user-message persistence and queue admission races
+
 ## P2
 
 ### P2-1. Split `turns.ts` by Responsibility

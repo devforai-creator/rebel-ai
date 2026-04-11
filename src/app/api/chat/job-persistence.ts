@@ -4,7 +4,11 @@ import { MESSAGE_STATUS_COMPLETED } from '@/lib/chat/message-status'
 import { ConcurrentChatTurnConflictError, createChatTurn } from '@/lib/chat/turns'
 import { isChatJobUserLimitViolation, isUniqueViolation } from '@/lib/queue/admission'
 import { createClient } from '@/lib/supabase/server'
-import { rollbackPersistedChatTurn, rollbackPersistedUserMessage } from './persistence-rollback'
+import {
+  PersistenceRollbackError,
+  rollbackPersistedChatTurn,
+  rollbackPersistedUserMessage,
+} from './persistence-rollback'
 
 type RouteSupabaseClient = Awaited<ReturnType<typeof createClient>>
 
@@ -19,7 +23,10 @@ type PersistUserTurnResult =
     }
   | {
       status: 'error'
-      responseMessage: 'Failed to create chat turn' | 'Failed to save user message'
+      responseMessage:
+        | 'Failed to create chat turn'
+        | 'Failed to save user message'
+        | 'Failed to rollback persisted chat data'
     }
 
 type EnqueueChatGenerationJobResult =
@@ -28,8 +35,40 @@ type EnqueueChatGenerationJobResult =
       jobId: string
     }
   | {
-      status: 'conflict' | 'user-limit' | 'error'
+      status: 'conflict'
     }
+  | {
+      status: 'user-limit'
+    }
+  | {
+      status: 'error'
+      responseMessage: 'Failed to queue chat response' | 'Failed to rollback persisted chat data'
+    }
+
+async function rollbackPersistedChatData({
+  supabase,
+  chatId,
+  requestId,
+  insertedTurnId,
+  insertedUserMessageId,
+  isRegeneration,
+}: {
+  supabase: RouteSupabaseClient
+  chatId: string
+  requestId: string
+  insertedTurnId: string | null
+  insertedUserMessageId: string | null
+  isRegeneration: boolean
+}): Promise<void> {
+  if (insertedTurnId && !isRegeneration) {
+    await rollbackPersistedChatTurn(supabase, insertedTurnId, chatId, requestId)
+    return
+  }
+
+  if (insertedUserMessageId) {
+    await rollbackPersistedUserMessage(supabase, insertedUserMessageId, chatId, requestId)
+  }
+}
 
 export async function persistUserTurn({
   supabase,
@@ -87,7 +126,23 @@ export async function persistUserTurn({
     .single()
 
   if (insertUserError || !insertedMessage) {
-    await rollbackPersistedChatTurn(supabase, turnId, chatId, requestId)
+    try {
+      await rollbackPersistedChatTurn(supabase, turnId, chatId, requestId)
+    } catch (rollbackError) {
+      console.error('[Chat API] Failed to persist user message and rollback chat turn', {
+        chatId,
+        requestId,
+        insertError: insertUserError?.message,
+        rollbackError:
+          rollbackError instanceof PersistenceRollbackError
+            ? rollbackError.message
+            : rollbackError instanceof Error
+              ? rollbackError.message
+              : String(rollbackError),
+      })
+      return { status: 'error', responseMessage: 'Failed to rollback persisted chat data' }
+    }
+
     console.error('[Chat API] Failed to persist user message', {
       chatId,
       requestId,
@@ -133,10 +188,28 @@ export async function enqueueChatGenerationJob({
     .single()
 
   if (jobError || !job) {
-    if (insertedTurnId && !payload.isRegeneration) {
-      await rollbackPersistedChatTurn(supabase, insertedTurnId, chatId, requestId)
-    } else if (insertedUserMessageId) {
-      await rollbackPersistedUserMessage(supabase, insertedUserMessageId, chatId, requestId)
+    try {
+      await rollbackPersistedChatData({
+        supabase,
+        chatId,
+        requestId,
+        insertedTurnId,
+        insertedUserMessageId,
+        isRegeneration: payload.isRegeneration,
+      })
+    } catch (rollbackError) {
+      console.error('[Chat API] Failed to rollback persisted chat data after job enqueue failure', {
+        chatId,
+        requestId,
+        enqueueError: jobError?.message,
+        rollbackError:
+          rollbackError instanceof PersistenceRollbackError
+            ? rollbackError.message
+            : rollbackError instanceof Error
+              ? rollbackError.message
+              : String(rollbackError),
+      })
+      return { status: 'error', responseMessage: 'Failed to rollback persisted chat data' }
     }
 
     if (isUniqueViolation(jobError)) {
@@ -152,7 +225,7 @@ export async function enqueueChatGenerationJob({
       requestId,
       error: jobError?.message,
     })
-    return { status: 'error' }
+    return { status: 'error', responseMessage: 'Failed to queue chat response' }
   }
 
   return { status: 'success', jobId: job.id }

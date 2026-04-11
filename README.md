@@ -184,7 +184,7 @@ The chat entry point (`/api/chat`) maintains a job queue in Node.js Runtime whil
 - **Local/Manual execution**: `npm run chat:jobs` → `scripts/run-chat-jobs.js` calls the current deployment URL to process jobs immediately.
 - **Validated low-cost deployment**: On April 7, 2026, `Vercel Hobby + Supabase Free + cron-job.org` was verified end-to-end for queued chat generation. `cron-job.org` is just one working scheduler option; any scheduler that can call the trigger route with `Authorization: Bearer ${CRON_SECRET}` should work.
 - **Environment variables**
-  - `INTERNAL_API_ORIGIN`: Fixed origin used by Edge callsites (`chat-admin` rate limiter, `/api/chat/jobs/[id]`, etc.) when calling internal admin routes (e.g., `https://app.rebelai.com`). Header-based detection risks token theft, so **must be set in production**. Preview/local environments auto-detect via `resolveInternalApiOrigin()` (falls back to current Vercel URL or `http://127.0.0.1:3000`).
+  - `INTERNAL_API_ORIGIN`: Fixed origin used by internal admin callsites (`chat-admin` rate limiter, `/api/chat/jobs/[id]`, runner triggers, etc.) when calling trusted routes (e.g., `https://app.rebelai.com`). Header-based detection risks token theft, so **must be set in deployed non-local environments**. For local verification, prefer `npm run dev:local`, which forces `INTERNAL_API_ORIGIN=http://127.0.0.1:3000` for that dev process without editing `.env.local`.
   - `CRON_SECRET`: Bearer token used by Vercel Cron and any external scheduler that invokes internal trigger routes.
   - `CHAT_ADMIN_SECRET`: Default Bearer token (used for Edge ↔ internal admin bridge & trigger → runner authentication).
   - `CHAT_JOB_RUNNER_BATCH_LIMIT` (optional): Jobs to process per batch (default 2, recommended max 5).
@@ -194,7 +194,7 @@ The chat entry point (`/api/chat`) maintains a job queue in Node.js Runtime whil
 > **TIP:** To verify scheduled execution, check the logs for whichever scheduler you use. On Vercel Pro, look for `/api/internal/chat-job-runner/trigger` → `/api/internal/chat-job-runner`. For urgent cases, run `npm run chat:jobs` to drain jobs immediately.
 
 - **Health check**: Call `GET /api/internal/health` (requires `Authorization: Bearer ${CHAT_ADMIN_SECRET}` header) to inspect recent success/failure times and consecutive failure counts for runner/broadcast/summary services. The route prefers durable database-backed snapshots and returns `healthSource: durable` when that path is active, falling back to in-memory stats only when admin DB access is unavailable. If response `status` is `degraded`, one of the trigger, runner, broadcast, or summary stages has consecutive failures.
-- **Operator smoke checks**: Use `npm run ops:smoke` for the passive low-cost profile check, and `npm run ops:smoke:active` when you intentionally want to probe runner execution. See [`docs/FIRST_CLASS_SMOKE_CHECKS.md`](./docs/FIRST_CLASS_SMOKE_CHECKS.md).
+- **Operator smoke checks**: Use `npm run ops:smoke:local` / `npm run ops:smoke:local:active` against a local `npm run dev:local` session, or `npm run ops:smoke` / `npm run ops:smoke:active` against a deployed origin. See [`docs/FIRST_CLASS_SMOKE_CHECKS.md`](./docs/FIRST_CLASS_SMOKE_CHECKS.md).
 
 ### Optional Deployment Env Profiles
 
@@ -206,7 +206,9 @@ The chat entry point (`/api/chat`) maintains a job queue in Node.js Runtime whil
 ### Internal API origin resolution
 
 - Edge callsites (e.g., job status route, `chat-admin` rate limiter, summary trigger) use `resolveInternalApiOrigin()`/`buildInternalApiUrl()` from `src/lib/internal-api-origin.ts` to compute a trusted origin.
-- Priority: `INTERNAL_API_ORIGIN` → `VERCEL_URL` (preview) → `VERCEL_PROJECT_PRODUCTION_URL` → local dev (`http://127.0.0.1:3000`).
+- `resolveInternalApiOrigin()` prefers `INTERNAL_API_ORIGIN`, falls back to `http://127.0.0.1:3000` only in local-like environments, and throws when deployed environments are missing a trusted origin.
+- `buildInternalApiUrlForEdge()` uses the current `VERCEL_URL` when available before falling back to `resolveInternalApiOrigin()`.
+- For local verification without editing `.env.local`, use `npm run dev:local`.
 - When new routes/scripts call internal APIs, reuse `buildInternalApiUrl('/api/internal/...')` instead of adding environment-specific branches.
 
 ## Operator Announcement System

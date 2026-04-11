@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
+    "dev:local": "node scripts/run-local-dev.js",
     "build": "next build",
     "start": "next start",
     "lint": "eslint src tests scripts",
@@ -25,7 +26,9 @@
     "character:jobs": "node scripts/run-character-import-jobs.js",
     "import:jobs": "node scripts/run-character-import-jobs.js",
     "ops:smoke": "node scripts/first-class-smoke-check.js",
+    "ops:smoke:local": "node scripts/first-class-smoke-check.js --local",
     "ops:smoke:active": "node scripts/first-class-smoke-check.js --active-runners",
+    "ops:smoke:local:active": "node scripts/first-class-smoke-check.js --local --active-runners",
     "cleanup:character-assets": "node scripts/cleanup-orphaned-character-assets.js",
     "cleanup:module-assets": "node scripts/cleanup-orphaned-module-assets.js",
     "backfill:facts": "node scripts/backfill-facts.js",

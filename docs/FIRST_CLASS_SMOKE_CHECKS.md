@@ -32,10 +32,22 @@ Passive, read-mostly smoke check:
 npm run ops:smoke
 ```
 
+Passive smoke check against the local dev server:
+
+```bash
+npm run ops:smoke:local
+```
+
 Active runner probe:
 
 ```bash
 npm run ops:smoke:active
+```
+
+Active runner probe against the local dev server:
+
+```bash
+npm run ops:smoke:local:active
 ```
 
 Target a deployed environment explicitly:
@@ -53,9 +65,10 @@ CHAT_ADMIN_SECRET=...
 Origin resolution order:
 
 1. `--origin https://...`
-2. `SMOKE_CHECK_APP_ORIGIN`
-3. `INTERNAL_API_ORIGIN`
-4. `http://127.0.0.1:3000`
+2. `--local` / `npm run ops:smoke:local`
+3. `SMOKE_CHECK_APP_ORIGIN`
+4. `INTERNAL_API_ORIGIN`
+5. `http://127.0.0.1:3000`
 
 ## Passive Check Contract
 
@@ -108,23 +121,25 @@ curl -X POST \
 1. Start the app locally.
 
 ```bash
-npm run dev
+npm run dev:local
 ```
 
 2. Run the passive smoke check.
 
 ```bash
-npm run ops:smoke
+npm run ops:smoke:local
 ```
 
 3. If you changed runner wiring or background auth, run the active probe.
 
 ```bash
-npm run ops:smoke:active
+npm run ops:smoke:local:active
 ```
 
 4. Manually verify one end-to-end chat if the deployment is meant to be actively used today.
    Send a message from the UI, then confirm the resulting job moves through `/api/chat/jobs/[jobId]` and appears clean in `/api/internal/triage`.
+
+`npm run dev:local` forces `INTERNAL_API_ORIGIN=http://127.0.0.1:3000` for that dev process only. Keep the deployed `INTERNAL_API_ORIGIN` in `.env.local` if you want; you no longer need to swap files just to run local smoke checks.
 
 ## Deployed Verification Flow
 

@@ -3,6 +3,7 @@ import smokeCheck from './first-class-smoke-check.js'
 
 const {
   DEFAULT_TIMEOUT_MS,
+  LOCALHOST_ORIGIN,
   createCheckDefinitions,
   parseArgs,
   resolveAppOrigin,
@@ -16,21 +17,51 @@ describe('first-class-smoke-check', () => {
       parseArgs(['--active-runners', '--origin', 'https://example.com', '--timeout-ms', '5000']),
     ).toEqual({
       activeRunners: true,
+      local: false,
       origin: 'https://example.com',
       timeoutMs: 5000,
     })
+  })
+
+  it('parses local origin mode', () => {
+    expect(parseArgs(['--local', '--active-runners'])).toEqual({
+      activeRunners: true,
+      local: true,
+      origin: null,
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+    })
+  })
+
+  it('rejects combining local and explicit origin modes', () => {
+    expect(() => parseArgs(['--local', '--origin', 'https://example.com'])).toThrow(
+      'Use either --local or --origin, not both.',
+    )
   })
 
   it('resolves origin using explicit argument first', () => {
     expect(
       resolveAppOrigin({
         explicitOrigin: 'https://explicit.example.com',
+        local: false,
         env: {
           SMOKE_CHECK_APP_ORIGIN: 'https://env.example.com',
           INTERNAL_API_ORIGIN: 'https://internal.example.com',
         },
       }),
     ).toBe('https://explicit.example.com')
+  })
+
+  it('resolves local origin before env-based origins', () => {
+    expect(
+      resolveAppOrigin({
+        explicitOrigin: null,
+        local: true,
+        env: {
+          SMOKE_CHECK_APP_ORIGIN: 'https://env.example.com',
+          INTERNAL_API_ORIGIN: 'https://internal.example.com',
+        },
+      }),
+    ).toBe(LOCALHOST_ORIGIN)
   })
 
   it('creates passive checks by default and adds active runner probes on demand', () => {

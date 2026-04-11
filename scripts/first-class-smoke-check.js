@@ -5,6 +5,7 @@ const path = require('node:path')
 const dotenv = require('dotenv')
 
 const DEFAULT_TIMEOUT_MS = 10_000
+const LOCALHOST_ORIGIN = 'http://127.0.0.1:3000'
 
 function loadEnvFiles(cwd = process.cwd()) {
   for (const file of ['.env.local', '.env']) {
@@ -18,6 +19,7 @@ function loadEnvFiles(cwd = process.cwd()) {
 function parseArgs(argv) {
   const options = {
     activeRunners: false,
+    local: false,
     origin: null,
     timeoutMs: DEFAULT_TIMEOUT_MS,
   }
@@ -27,6 +29,11 @@ function parseArgs(argv) {
 
     if (arg === '--active-runners') {
       options.activeRunners = true
+      continue
+    }
+
+    if (arg === '--local') {
+      options.local = true
       continue
     }
 
@@ -54,15 +61,20 @@ function parseArgs(argv) {
     throw new Error(`Unknown argument: ${arg}`)
   }
 
+  if (options.local && options.origin) {
+    throw new Error('Use either --local or --origin, not both.')
+  }
+
   return options
 }
 
-function resolveAppOrigin({ explicitOrigin, env = process.env }) {
+function resolveAppOrigin({ explicitOrigin, local = false, env = process.env }) {
   return (
     explicitOrigin ||
+    (local ? LOCALHOST_ORIGIN : null) ||
     env.SMOKE_CHECK_APP_ORIGIN ||
     env.INTERNAL_API_ORIGIN ||
-    'http://127.0.0.1:3000'
+    LOCALHOST_ORIGIN
   )
 }
 
@@ -391,6 +403,7 @@ async function main() {
 
     const origin = resolveAppOrigin({
       explicitOrigin: args.origin,
+      local: args.local,
       env: process.env,
     })
     const checks = createCheckDefinitions({
@@ -426,6 +439,7 @@ if (require.main === module) {
 
 module.exports = {
   DEFAULT_TIMEOUT_MS,
+  LOCALHOST_ORIGIN,
   createCheckDefinitions,
   parseArgs,
   printResults,

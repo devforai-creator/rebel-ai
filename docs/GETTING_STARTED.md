@@ -58,10 +58,12 @@ INTERNAL_API_ORIGIN=https://your-app.example.com
 Start the app:
 
 ```bash
-npm run dev
+npm run dev:local
 ```
 
 Open `http://localhost:3000`.
+
+`npm run dev:local` forces `INTERNAL_API_ORIGIN=http://127.0.0.1:3000` for the dev process, so `.env.local` can still keep your deployed origin. If you need the raw env behavior, use `npm run dev`.
 
 ## First-Run Checklist
 
@@ -70,7 +72,7 @@ Open `http://localhost:3000`.
 3. Go to `/dashboard/api-keys` and add at least one LLM API key.
 4. Go to the character import flow and upload an `.rbx` package.
 5. Open the imported character and start a chat.
-6. Run `npm run ops:smoke` to verify the current first-class low-cost operating path.
+6. Run `npm run ops:smoke:local` to verify the current first-class low-cost operating path before deployment.
 
 ## Optional Setup
 

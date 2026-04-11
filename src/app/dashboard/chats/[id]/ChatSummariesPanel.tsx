@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { CHAT_CONTEXT_WINDOW } from '@/lib/chat-context-window'
 import type { ChatMemoryConfig } from '@/lib/chat/model-config'
 import { CHUNK_SIZE } from '@/lib/chat-summaries/config'
+import { FactMemorySection, SummaryMemorySection } from './components'
 import { useChatSummariesState } from './hooks'
 import type { FactEntry, SummaryEntry } from './hooks/useChatSummariesState'
 
@@ -14,12 +15,6 @@ interface ChatSummariesPanelProps {
   totalMessages: number
   latestSequence: number
   memoryConfig: Required<ChatMemoryConfig>
-}
-
-const LEVEL_LABEL: Record<number, string> = {
-  2: 'Super Meta Summary',
-  1: 'Meta Summary',
-  0: 'Chunk Summary',
 }
 
 function formatMessageCountLabel(count: number): string {
@@ -73,25 +68,6 @@ function getEmptyStateText(memoryConfig: Required<ChatMemoryConfig>): string {
   }
 
   return `No sealed memory blocks yet. This mode starts sealing them after ${formatMessageCountLabel(memoryConfig.sealEveryMessages)}.`
-}
-
-function formatTimestamp(value: string | null): string | null {
-  if (!value) {
-    return null
-  }
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return null
-  }
-
-  return new Intl.DateTimeFormat('ko-KR', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
 }
 
 export default function ChatSummariesPanel({
@@ -282,384 +258,86 @@ export default function ChatSummariesPanel({
           </div>
         )}
 
-        {superMetaSummaries.length > 0 && (
-          <section className="space-y-4">
-            <button
-              onClick={() => setIsSuperMetaCollapsed(!isSuperMetaCollapsed)}
-              className="flex w-full items-center justify-between text-sm font-semibold text-gray-800 dark:text-gray-200 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
-            >
-              <span>Super Meta Summary ({superMetaSummaries.length})</span>
-              <span className="text-lg">{isSuperMetaCollapsed ? '▶' : '▼'}</span>
-            </button>
-            {!isSuperMetaCollapsed && (
-              <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400 mb-3">
-                <p>
-                  Top-level record compressing 4 meta summaries. Quickly grasp key points even from
-                  thousands of messages.
-                </p>
-              </div>
-            )}
-            {!isSuperMetaCollapsed && (
-              <ul className="space-y-3">
-                {superMetaSummaries.map((summary) => {
-                  const formattedTimestamp = formatTimestamp(summary.created_at)
-                  const isEditing = editingSummaryId === summary.id
+        <SummaryMemorySection
+          title="Super Meta Summary"
+          summaries={superMetaSummaries}
+          collapsed={isSuperMetaCollapsed}
+          onToggle={() => setIsSuperMetaCollapsed((current) => !current)}
+          description={
+            <p>
+              Top-level record compressing 4 meta summaries. Quickly grasp key points even from
+              thousands of messages.
+            </p>
+          }
+          className="space-y-4"
+          regenerateButtonClassName="text-emerald-600 hover:text-emerald-700 dark:text-emerald-300 disabled:opacity-50"
+          editorRows={5}
+          editingSummaryId={editingSummaryId}
+          summaryEditContent={summaryEditContent}
+          onChangeSummaryEditContent={setSummaryEditContent}
+          regeneratingSummaryId={regeneratingSummaryId}
+          onStartEdit={startSummaryEdit}
+          onSaveEdit={(summaryId) => void saveSummaryEdit(summaryId)}
+          onCancelEdit={cancelSummaryEdit}
+          onRegenerate={(summaryId) => void handleRegenerateSummary(summaryId)}
+          onDelete={(summaryId) => void handleDeleteSummary(summaryId)}
+        />
 
-                  return (
-                    <li
-                      key={summary.id}
-                      className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
-                    >
-                      <div className="mb-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                        <div>
-                          {LEVEL_LABEL[summary.level] ?? 'Summary'} · {summary.start_seq}-
-                          {summary.end_seq}
-                          {formattedTimestamp ? ` · ${formattedTimestamp}` : null}
-                        </div>
-                        {!isEditing && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => startSummaryEdit(summary.id, summary.summary)}
-                              className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                              title="Edit"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => void handleRegenerateSummary(summary.id)}
-                              disabled={regeneratingSummaryId === summary.id}
-                              className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-300 disabled:opacity-50"
-                              title="Regenerate summary"
-                            >
-                              {regeneratingSummaryId === summary.id ? '⟳' : '♻️'}
-                            </button>
-                            <button
-                              onClick={() => void handleDeleteSummary(summary.id)}
-                              className="text-red-600 hover:text-red-700 dark:text-red-400"
-                              title="Delete"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        )}
-                      </div>
+        <SummaryMemorySection
+          title="Meta Summary"
+          summaries={metaSummaries}
+          collapsed={isMetaCollapsed}
+          onToggle={() => setIsMetaCollapsed((current) => !current)}
+          className="mt-6 space-y-4"
+          listClassName="space-y-4"
+          cardClassName="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900"
+          regenerateButtonClassName="text-purple-600 hover:text-purple-700 dark:text-purple-300 disabled:opacity-50"
+          editorRows={5}
+          editingSummaryId={editingSummaryId}
+          summaryEditContent={summaryEditContent}
+          onChangeSummaryEditContent={setSummaryEditContent}
+          regeneratingSummaryId={regeneratingSummaryId}
+          onStartEdit={startSummaryEdit}
+          onSaveEdit={(summaryId) => void saveSummaryEdit(summaryId)}
+          onCancelEdit={cancelSummaryEdit}
+          onRegenerate={(summaryId) => void handleRegenerateSummary(summaryId)}
+          onDelete={(summaryId) => void handleDeleteSummary(summaryId)}
+        />
 
-                      {isEditing ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={summaryEditContent}
-                            onChange={(e) => setSummaryEditContent(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white resize-none"
-                            rows={5}
-                            autoFocus
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => void saveSummaryEdit(summary.id)}
-                              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={cancelSummaryEdit}
-                              className="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="whitespace-pre-line text-sm leading-5 text-gray-800 dark:text-gray-200">
-                          {summary.summary}
-                        </p>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </section>
-        )}
+        <SummaryMemorySection
+          title="Chunk Summary"
+          summaries={visibleChunkSummaries}
+          collapsed={isChunkCollapsed}
+          onToggle={() => setIsChunkCollapsed((current) => !current)}
+          className="mt-8 space-y-4"
+          regenerateButtonClassName="text-purple-600 hover:text-purple-700 dark:text-purple-300 disabled:opacity-50"
+          editorRows={4}
+          editingSummaryId={editingSummaryId}
+          summaryEditContent={summaryEditContent}
+          onChangeSummaryEditContent={setSummaryEditContent}
+          regeneratingSummaryId={regeneratingSummaryId}
+          onStartEdit={startSummaryEdit}
+          onSaveEdit={(summaryId) => void saveSummaryEdit(summaryId)}
+          onCancelEdit={cancelSummaryEdit}
+          onRegenerate={(summaryId) => void handleRegenerateSummary(summaryId)}
+          onDelete={(summaryId) => void handleDeleteSummary(summaryId)}
+        />
 
-        {metaSummaries.length > 0 && (
-          <section className="mt-6 space-y-4">
-            <button
-              onClick={() => setIsMetaCollapsed(!isMetaCollapsed)}
-              className="flex w-full items-center justify-between text-sm font-semibold text-gray-800 dark:text-gray-200 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
-            >
-              <span>Meta Summary ({metaSummaries.length})</span>
-              <span className="text-lg">{isMetaCollapsed ? '▶' : '▼'}</span>
-            </button>
-            {!isMetaCollapsed && (
-              <ul className="space-y-4">
-                {metaSummaries.map((summary) => {
-                  const formattedTimestamp = formatTimestamp(summary.created_at)
-                  const isEditing = editingSummaryId === summary.id
-
-                  return (
-                    <li
-                      key={summary.id}
-                      className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900"
-                    >
-                      <div className="mb-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                        <div>
-                          {LEVEL_LABEL[summary.level] ?? 'Summary'} · {summary.start_seq}-
-                          {summary.end_seq}
-                          {formattedTimestamp ? ` · ${formattedTimestamp}` : null}
-                        </div>
-                        {!isEditing && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => startSummaryEdit(summary.id, summary.summary)}
-                              className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                              title="Edit"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => void handleRegenerateSummary(summary.id)}
-                              disabled={regeneratingSummaryId === summary.id}
-                              className="text-purple-600 hover:text-purple-700 dark:text-purple-300 disabled:opacity-50"
-                              title="Regenerate summary"
-                            >
-                              {regeneratingSummaryId === summary.id ? '⟳' : '♻️'}
-                            </button>
-                            <button
-                              onClick={() => void handleDeleteSummary(summary.id)}
-                              className="text-red-600 hover:text-red-700 dark:text-red-400"
-                              title="Delete"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {isEditing ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={summaryEditContent}
-                            onChange={(e) => setSummaryEditContent(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white resize-none"
-                            rows={5}
-                            autoFocus
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => void saveSummaryEdit(summary.id)}
-                              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={cancelSummaryEdit}
-                              className="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="whitespace-pre-line text-sm leading-5 text-gray-800 dark:text-gray-200">
-                          {summary.summary}
-                        </p>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </section>
-        )}
-
-        {visibleChunkSummaries.length > 0 && (
-          <section className="mt-8 space-y-4">
-            <button
-              onClick={() => setIsChunkCollapsed(!isChunkCollapsed)}
-              className="flex w-full items-center justify-between text-sm font-semibold text-gray-800 dark:text-gray-200 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
-            >
-              <span>Chunk Summary ({visibleChunkSummaries.length})</span>
-              <span className="text-lg">{isChunkCollapsed ? '▶' : '▼'}</span>
-            </button>
-            {!isChunkCollapsed && (
-              <ul className="space-y-3">
-                {visibleChunkSummaries.map((summary) => {
-                  const formattedTimestamp = formatTimestamp(summary.created_at)
-                  const isEditing = editingSummaryId === summary.id
-
-                  return (
-                    <li
-                      key={summary.id}
-                      className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
-                    >
-                      <div className="mb-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                        <div>
-                          {LEVEL_LABEL[summary.level] ?? 'Summary'} · {summary.start_seq}-
-                          {summary.end_seq}
-                          {formattedTimestamp ? ` · ${formattedTimestamp}` : null}
-                        </div>
-                        {!isEditing && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => startSummaryEdit(summary.id, summary.summary)}
-                              className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                              title="Edit"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => void handleRegenerateSummary(summary.id)}
-                              disabled={regeneratingSummaryId === summary.id}
-                              className="text-purple-600 hover:text-purple-700 dark:text-purple-300 disabled:opacity-50"
-                              title="Regenerate summary"
-                            >
-                              {regeneratingSummaryId === summary.id ? '⟳' : '♻️'}
-                            </button>
-                            <button
-                              onClick={() => void handleDeleteSummary(summary.id)}
-                              className="text-red-600 hover:text-red-700 dark:text-red-400"
-                              title="Delete"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {isEditing ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={summaryEditContent}
-                            onChange={(e) => setSummaryEditContent(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white resize-none"
-                            rows={4}
-                            autoFocus
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => void saveSummaryEdit(summary.id)}
-                              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={cancelSummaryEdit}
-                              className="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="whitespace-pre-line text-sm leading-5 text-gray-800 dark:text-gray-200">
-                          {summary.summary}
-                        </p>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </section>
-        )}
-
-        {facts.length > 0 && (
-          <section className="mt-8 space-y-4">
-            <button
-              onClick={() => setIsFactsCollapsed(!isFactsCollapsed)}
-              className="flex w-full items-center justify-between text-sm font-semibold text-gray-800 dark:text-gray-200 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
-            >
-              <span>Episodic Memory ({facts.length})</span>
-              <span className="text-lg">{isFactsCollapsed ? '▶' : '▼'}</span>
-            </button>
-            {!isFactsCollapsed && (
-              <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400 mb-3">
-                <p>
-                  Specific facts extracted from conversations. Details like dates, places, food,
-                  appointments are preserved.
-                </p>
-              </div>
-            )}
-            {!isFactsCollapsed && (
-              <ul className="space-y-3">
-                {facts.map((fact) => {
-                  const formattedTimestamp = formatTimestamp(fact.created_at)
-                  const isEditing = editingFactId === fact.id
-
-                  return (
-                    <li
-                      key={fact.id}
-                      className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
-                    >
-                      <div className="mb-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                        <div>
-                          Messages {fact.start_seq}-{fact.end_seq}
-                          {formattedTimestamp ? ` · ${formattedTimestamp}` : null}
-                        </div>
-                        {!isEditing && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => startFactEdit(fact.id, fact.facts)}
-                              className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                              title="Edit"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={() => void handleRegenerateFacts(fact.id)}
-                              disabled={regeneratingFactId === fact.id}
-                              className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-300 disabled:opacity-50"
-                              title="Regenerate episodic memory"
-                            >
-                              {regeneratingFactId === fact.id ? '⟳' : '♻️'}
-                            </button>
-                            <button
-                              onClick={() => void handleReembedFact(fact.id)}
-                              disabled={reembeddingFactId === fact.id}
-                              className="text-purple-600 hover:text-purple-700 dark:text-purple-300 disabled:opacity-50"
-                              title="Regenerate embedding"
-                            >
-                              {reembeddingFactId === fact.id ? '⟳' : '🔄'}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      {isEditing ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={factEditContent}
-                            onChange={(e) => setFactEditContent(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white resize-none"
-                            rows={4}
-                            autoFocus
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => void saveFactEdit(fact.id)}
-                              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={cancelFactEdit}
-                              className="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="whitespace-pre-line text-sm leading-5 text-gray-800 dark:text-gray-200">
-                          {fact.facts}
-                        </div>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </section>
-        )}
+        <FactMemorySection
+          facts={facts}
+          collapsed={isFactsCollapsed}
+          onToggle={() => setIsFactsCollapsed((current) => !current)}
+          editingFactId={editingFactId}
+          factEditContent={factEditContent}
+          onChangeFactEditContent={setFactEditContent}
+          regeneratingFactId={regeneratingFactId}
+          reembeddingFactId={reembeddingFactId}
+          onStartEdit={startFactEdit}
+          onSaveEdit={(factId) => void saveFactEdit(factId)}
+          onCancelEdit={cancelFactEdit}
+          onRegenerate={(factId) => void handleRegenerateFacts(factId)}
+          onReembed={(factId) => void handleReembedFact(factId)}
+        />
       </div>
     </aside>
   )

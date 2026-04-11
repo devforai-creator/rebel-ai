@@ -1,8 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { ApiKey, Chat, Database, Persona, Character } from '@/types/database.types'
-import { ensureUserFirstForAnthropic } from '@/lib/chat/anthropic-user-first'
-import { buildMemoryPlan } from '@/lib/chat-memory'
-import { getGlobalSystemPrompt } from '@/lib/chat/global-system-prompt'
+import type { Database } from '@/types/database.types'
 import { parseChatJobPayload, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { streamText } from 'ai'
 import { claimPendingJob } from '@/lib/chat/job-queue'
@@ -16,14 +13,10 @@ import {
 } from '@/lib/llm/google-cache'
 import { estimateUsageCost } from '@/lib/model-pricing'
 import { resolveInternalApiOrigin } from '@/lib/internal-api-origin'
-import { applyBilingualContext, isBilingualEnabled } from '@/lib/chat/bilingual-context'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
-import { normalizeChatModelConfig } from '@/lib/chat/model-config'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from '@/lib/chat/delivery-mode'
 import { normalizeProviderError } from '@/lib/llm/provider-error'
 import { resolveInvocationSamplingOptions } from '@/lib/llm/invocation-sampling'
-import { buildLorebookDynamicContext } from '@/lib/lorebook/runtime'
-import { loadGenerationTranscript } from '@/lib/chat/turns'
 import {
   CHAT_JOB_LIFECYCLE_STAGE_COMPLETED,
   CHAT_JOB_LIFECYCLE_STAGE_CONTENT_FILTERED,
@@ -40,7 +33,6 @@ import {
 import { persistChatJobLifecycleStage } from '@/lib/chat/job-lifecycle-store'
 import { buildLanguageModel } from './model-factory'
 import { evaluateContentFilter } from './content-filter'
-import { buildSystemPrompt } from './system-prompt-builder'
 import { buildChatDebugInfo, type ChatRunnerActualPayload } from './usage-debug'
 import { buildStreamPayloadPlan } from './stream-payload-builder'
 import { runPostGenerationPipeline } from './post-generation-pipeline'
@@ -49,22 +41,12 @@ import {
   broadcastAssistantStreamError,
   broadcastAssistantStreamSnapshot,
 } from './assistant-stream-broadcaster'
-import { decryptSecret } from './vault'
+import { loadChatJobExecutionContext } from './execution-context'
 
-const MAX_TOTAL_INPUT_TOKENS = 150_000
 const CHAT_JOB_RUNNER_DEBUG_ENABLED = process.env.CHAT_JOB_RUNNER_DEBUG === 'true'
 const CHAT_JOB_STATUS_UPDATE_MAX_ATTEMPTS = 3
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type ChatGenerationJobUpdate = Database['public']['Tables']['chat_generation_jobs']['Update']
-type RunnerApiKeyRow = Pick<ApiKey, 'vault_secret_name' | 'service_tier' | 'reasoning_effort'>
-type RunnerChatRow = Pick<
-  Chat,
-  'id' | 'user_id' | 'character_id' | 'persona_id' | 'custom_system_prompt' | 'model_config'
->
-type RunnerPersonaRow = Pick<Persona, 'name' | 'description'>
-type RunnerCharacterRow = Pick<Character, 'id' | 'name' | 'system_prompt'> & {
-  post_history_instructions: string | null
-}
 
 function logChatJobRunnerDebug(...args: unknown[]): void {
   if (CHAT_JOB_RUNNER_DEBUG_ENABLED) {
@@ -459,187 +441,27 @@ async function executeJob({
   try {
     await markStage(CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT)
 
-    const apiKeyQueryStart = performance.now()
-    const apiKeyQueryPromise = supabase
-      .from('api_keys')
-      .select<'vault_secret_name, service_tier, reasoning_effort'>(
-        'vault_secret_name, service_tier, reasoning_effort',
-      )
-      .eq('id', apiKeyId)
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .single<RunnerApiKeyRow>()
-      .then((result) => {
-        timings['1_api_key_query'] = performance.now() - apiKeyQueryStart
-        return result
-      })
-
-    const chatQueryStart = performance.now()
-    const chatQueryPromise = supabase
-      .from('chats')
-      .select<'id, user_id, character_id, persona_id, custom_system_prompt, model_config'>(
-        'id, user_id, character_id, persona_id, custom_system_prompt, model_config',
-      )
-      .eq('id', chatId)
-      .eq('user_id', userId)
-      .single<RunnerChatRow>()
-      .then((result) => {
-        timings['2_chat_query'] = performance.now() - chatQueryStart
-        return result
-      })
-
-    const [{ data: apiKeyData, error: apiKeyError }, { data: chat, error: chatError }] =
-      await Promise.all([apiKeyQueryPromise, chatQueryPromise])
-
-    if (apiKeyError || !apiKeyData) {
-      throw new Error('API key not found or inactive')
-    }
-    if (chatError || !chat) {
-      throw new Error('Chat not found')
-    }
-
-    const apiKeyDecryptStart = performance.now()
-    const apiKeyDecryptPromise = decryptSecret({
-      supabase,
-      secretName: apiKeyData.vault_secret_name,
-      requester: userId,
-    }).then((decrypted) => {
-      timings['3_api_key_decrypt'] = performance.now() - apiKeyDecryptStart
-      return decrypted
-    })
-
-    const personaQueryStart = performance.now()
-    const personaPromise = chat.persona_id
-      ? supabase
-          .from('personas')
-          .select<'name, description'>('name, description')
-          .eq('id', chat.persona_id)
-          .eq('user_id', userId)
-          .single<RunnerPersonaRow>()
-          .then((result) => {
-            timings['4_persona_query'] = performance.now() - personaQueryStart
-            return result
-          })
-      : Promise.resolve({
-          data: null as { name: string; description: string | null } | null,
-          error: null,
-        }).then((result) => {
-          timings['4_persona_query'] = performance.now() - personaQueryStart
-          return result
-        })
-
-    const characterQueryStart = performance.now()
-    const characterPromise = supabase
-      .from('characters')
-      .select(
-        `
-      id,
-      name,
-      system_prompt,
-      post_history_instructions:metadata->>post_history_instructions
-    `,
-      )
-      .eq('id', chat.character_id)
-      .single<RunnerCharacterRow>()
-      .then((result) => {
-        timings['5_character_query'] = performance.now() - characterQueryStart
-        return result
-      })
-
-    const [decryptedApiKey, { data: personaData }, { data: character, error: characterError }] =
-      await Promise.all([apiKeyDecryptPromise, personaPromise, characterPromise])
-
-    let persona: { name: string; description: string | null } | null = null
-    if (personaData) {
-      persona = personaData
-    }
-
-    if (characterError || !character) {
-      throw new Error('Character not found')
-    }
-
-    const defaultSystemPrompt = getGlobalSystemPrompt()
-    const normalizedModelConfig = normalizeChatModelConfig(chat.model_config)
-    const generationTranscript = payload.turnId
-      ? await loadGenerationTranscript({
-          supabase,
-          chatId,
-          turnId: payload.turnId,
-          excludeAssistantForTurnId: payload.isRegeneration ? payload.turnId : null,
-        })
-      : payload.sanitizedMessages
-
-    stepStart = performance.now()
-    const systemPrompt = await buildSystemPrompt({
-      character,
-      persona,
-      defaultSystemPrompt,
-      customSystemPrompt: chat.custom_system_prompt,
-    })
-    timings['6_build_system_prompt'] = performance.now() - stepStart
-
-    stepStart = performance.now()
-    const lorebookDynamicContext = await buildLorebookDynamicContext({
-      supabase,
-      chatId,
-      characterId: character.id,
-      chatHistory: generationTranscript,
-    })
-    timings['6b_build_lorebook_context'] = performance.now() - stepStart
-
-    stepStart = performance.now()
     const {
-      dynamicContext,
-      fallbackMessages: rawRecentMessages,
-      fallbackSystemPrompt,
-      promptBlocks,
+      apiKeyData,
+      decryptedApiKey,
+      generationTranscript,
+      finalSystemPrompt,
       staticSystemPrompt,
+      dynamicContext,
+      dynamicContextTokens,
+      promptBlocks,
+      recentMessages,
       ragInfo,
-    } = await buildMemoryPlan({
+      bilingualEnabled,
+      anthropicConversationMessages,
+      anthropicPlaceholderAdded,
+      totalInputTokens,
+      staticPromptTokens,
+    } = await loadChatJobExecutionContext({
       supabase,
-      chatId,
-      sanitizedMessages: generationTranscript,
-      baseSystemPrompt: systemPrompt,
-      extraDynamicContext: lorebookDynamicContext ? [lorebookDynamicContext] : undefined,
-      modelConfig: normalizedModelConfig,
+      payload,
+      timings,
     })
-    const finalSystemPrompt = fallbackSystemPrompt
-    timings['7_build_context'] = performance.now() - stepStart
-
-    // Apply bilingual memory: use English translations for older messages to reduce token usage
-    // Recent 4 messages (2 turns) keep original Korean for style consistency
-    stepStart = performance.now()
-    const bilingualEnabled = await isBilingualEnabled(supabase, userId)
-    const bilingualMessages = bilingualEnabled
-      ? await applyBilingualContext({
-          supabase,
-          chatId,
-          messages: rawRecentMessages,
-          recentKoreanCount: 4, // 2 turns
-        })
-      : rawRecentMessages
-    timings['7b_bilingual_context'] = performance.now() - stepStart
-
-    const recentMessages = bilingualMessages
-
-    // For Anthropic caching: separate the static prompt from dynamic context.
-    // Static prompt = global/custom prompt + post-history + character + persona.
-    const systemPromptTokens = estimateTokens(finalSystemPrompt)
-    const messagesTokens = recentMessages.reduce((sum, msg) => sum + estimateTokens(msg.content), 0)
-
-    // For Anthropic, apply user-first guard to the current conversation messages.
-    // This is computed here for accurate token estimation
-    const { messages: anthropicConversationMessages, placeholderAdded: anthropicPlaceholderAdded } =
-      provider === 'anthropic'
-        ? ensureUserFirstForAnthropic(recentMessages)
-        : { messages: recentMessages, placeholderAdded: false }
-
-    const anthropicPlaceholderTokens = anthropicPlaceholderAdded ? estimateTokens('(continue)') : 0
-    const totalInputTokens = systemPromptTokens + messagesTokens + anthropicPlaceholderTokens
-
-    if (totalInputTokens > MAX_TOTAL_INPUT_TOKENS) {
-      throw new Error(`Input context too large (${totalInputTokens.toLocaleString()} tokens)`)
-    }
 
     const chatCacheKeyOverride = provider === 'openai' ? `chat:${chatId}` : undefined
 
@@ -653,8 +475,6 @@ async function executeJob({
       retentionPreference: chatCacheKeyOverride ? '24h' : undefined,
     })
 
-    // Anthropic-specific cache decision based on cached prefix tokens.
-    const staticPromptTokens = estimateTokens(staticSystemPrompt)
     const anthropicCache =
       provider === 'anthropic'
         ? resolveAnthropicCacheDecision({
@@ -773,7 +593,7 @@ async function executeJob({
           logChatJobRunnerDebug('[Chat Job Runner] Anthropic prompt caching enabled (automatic)', {
             ttl: anthropicCache.ttl,
             staticPromptTokens,
-            dynamicContextTokens: dynamicContext ? estimateTokens(dynamicContext) : 0,
+            dynamicContextTokens,
             hasDynamicContext: !!dynamicContext,
           })
         }
@@ -811,7 +631,7 @@ async function executeJob({
             anthropicCache,
             staticPromptTokens,
             dynamicContext,
-            dynamicContextTokens: dynamicContext ? estimateTokens(dynamicContext) : 0,
+            dynamicContextTokens,
             ragInfo,
             actualPayload,
             sanitizedMessageCount: generationTranscript.length,
@@ -958,7 +778,7 @@ async function executeJob({
       anthropicCacheReadInputTokens: cachedInputTokens,
       staticPromptTokens,
       dynamicContext,
-      dynamicContextTokens: dynamicContext ? estimateTokens(dynamicContext) : 0,
+      dynamicContextTokens,
       googleExplicitCacheEnabled,
       googleCacheResult,
       googleCacheDecision,
@@ -1030,10 +850,6 @@ async function executeJob({
     const message = error instanceof Error ? error.message : 'Unknown job failure'
     throw new ChatJobExecutionError(message, currentStage)
   }
-}
-
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 3)
 }
 
 export { pollAnthropicBatchJobForUser } from './anthropic-batch-orchestrator'

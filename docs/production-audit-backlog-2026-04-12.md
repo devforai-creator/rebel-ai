@@ -215,6 +215,12 @@ Done when:
 - stage-specific logic lives in narrower modules with direct tests
 - adding a new provider or post-processing rule does not require rereading one thousand lines of mixed concerns
 
+Current status as of 2026-04-12:
+
+- [service.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/service.ts) now delegates the entire `loading_context` stage to [execution-context.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/execution-context.ts), so lifecycle orchestration stays in the runner while context fetch/build logic has its own seam
+- the extracted seam now owns API key/chat/character loading, transcript selection, lorebook + memory-plan assembly, bilingual-context application, and pre-request token-budget enforcement, which makes the stage boundary explicit instead of implicit inside one long `executeJob` block
+- direct regression coverage for the extracted seam now lives in [execution-context.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/execution-context.test.ts), while [service.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/service.test.ts) continues to lock the full runner contract end to end
+
 ## P2
 
 ### P2-1. Decompose Large Chat UI Surfaces Along Feature Boundaries

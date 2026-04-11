@@ -17,6 +17,7 @@ import {
   isChatDeliveryMode,
 } from '@/lib/chat/delivery-mode'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
+import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { scheduleChatJobRunnerTrigger } from './background-trigger'
 import { enqueueChatGenerationJob, persistUserTurn } from './job-persistence'
@@ -35,6 +36,29 @@ function logChatApiDebug(...args: unknown[]): void {
   if (CHAT_API_DEBUG_ENABLED) {
     console.debug(...args)
   }
+}
+
+function createErrorResponse(
+  message: string,
+  status: number,
+  options?: {
+    retryAfter?: number | null
+    headers?: HeadersInit
+  },
+) {
+  const body: {
+    error: string
+    retryAfter?: number | null
+  } = { error: message }
+
+  if (options && 'retryAfter' in options) {
+    body.retryAfter = options.retryAfter ?? null
+  }
+
+  return NextResponse.json(body, {
+    status,
+    headers: options?.headers,
+  })
 }
 
 const chatRequestSchema = z
@@ -57,7 +81,7 @@ export async function POST(req: Request) {
       typeof declaredContentLength === 'number' &&
       declaredContentLength > MAX_CHAT_REQUEST_BODY_BYTES
     ) {
-      return new Response('Request body exceeds allowed size', { status: 413 })
+      return createErrorResponse('Request body exceeds allowed size', 413)
     }
 
     const supabase = await createClient()
@@ -72,46 +96,32 @@ export async function POST(req: Request) {
       const { allowed, retryAfter } = await checkAnonRateLimit(clientIdentifier)
 
       if (!allowed) {
-        return new Response(
-          JSON.stringify({
-            error: 'Too many requests',
-            retryAfter,
-          }),
-          {
-            status: 429,
-            headers: {
-              'Content-Type': 'application/json',
-              'Retry-After': String(retryAfter),
-            },
+        return createErrorResponse('Too many requests', 429, {
+          retryAfter,
+          headers: {
+            'Retry-After': String(retryAfter),
           },
-        )
+        })
       }
 
-      return new Response('Unauthorized', { status: 401 })
+      return createErrorResponse('Unauthorized', 401)
     }
 
     const { allowed, retryAfter } = await checkUserRateLimit(user.id)
 
     if (!allowed) {
-      return new Response(
-        JSON.stringify({
-          error: 'Rate limit exceeded',
-          retryAfter,
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': String(retryAfter ?? 60),
-          },
+      return createErrorResponse('Rate limit exceeded', 429, {
+        retryAfter,
+        headers: {
+          'Retry-After': String(retryAfter ?? 60),
         },
-      )
+      })
     }
 
     const parsed = chatRequestSchema.safeParse(await req.json().catch(() => null))
 
     if (!parsed.success) {
-      return new Response('Invalid request body', { status: 400 })
+      return createErrorResponse('Invalid request body', 400)
     }
 
     const {
@@ -124,11 +134,11 @@ export async function POST(req: Request) {
     } = parsed.data
 
     if (typeof chatId !== 'string' || !chatId) {
-      return new Response('Invalid chatId', { status: 400 })
+      return createErrorResponse('Invalid chatId', 400)
     }
 
     if (typeof apiKeyId !== 'string' || !apiKeyId) {
-      return new Response('Invalid apiKeyId', { status: 400 })
+      return createErrorResponse('Invalid apiKeyId', 400)
     }
 
     const sanitizedMessages: SanitizedMessage[] = Array.isArray(messages)
@@ -161,22 +171,22 @@ export async function POST(req: Request) {
     const textEncoder = new TextEncoder()
 
     if (isRegeneration && !regenerateAssistantMessageId) {
-      return new Response('regenerateAssistantMessageId is required', { status: 400 })
+      return createErrorResponse('regenerateAssistantMessageId is required', 400)
     }
 
     if (!isRegeneration) {
       if (sanitizedMessages.length === 0) {
-        return new Response('Messages array required', { status: 400 })
+        return createErrorResponse('Messages array required', 400)
       }
 
       const lastMessage = sanitizedMessages[sanitizedMessages.length - 1]
       if (lastMessage.role !== 'user' || !lastMessage.content.trim()) {
-        return new Response('Last message must be a non-empty user message', { status: 400 })
+        return createErrorResponse('Last message must be a non-empty user message', 400)
       }
 
       const byteLength = textEncoder.encode(lastMessage.content).length
       if (byteLength > MAX_MESSAGE_BYTES) {
-        return new Response('Message exceeds allowed size', { status: 400 })
+        return createErrorResponse('Message exceeds allowed size', 400)
       }
     }
 
@@ -189,7 +199,7 @@ export async function POST(req: Request) {
       .single()
 
     if (apiKeyError || !apiKeyData) {
-      return new Response('API key not found or inactive', { status: 404 })
+      return createErrorResponse('API key not found or inactive', 404)
     }
 
     const { data: chat, error: chatError } = await supabase
@@ -200,7 +210,7 @@ export async function POST(req: Request) {
       .single()
 
     if (chatError || !chat) {
-      return new Response('Chat not found', { status: 404 })
+      return createErrorResponse('Chat not found', 404)
     }
 
     const [existingActiveJobResult, activeUserJobsResult] = await Promise.all([
@@ -223,11 +233,11 @@ export async function POST(req: Request) {
         requestId,
         error: existingActiveJobResult.error.message,
       })
-      return new Response('Failed to inspect active chat jobs', { status: 500 })
+      return createErrorResponse('Failed to inspect active chat jobs', 500)
     }
 
     if ((existingActiveJobResult.data?.length ?? 0) > 0) {
-      return new Response(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, { status: 409 })
+      return createErrorResponse(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, 409)
     }
 
     if (activeUserJobsResult.error) {
@@ -236,11 +246,11 @@ export async function POST(req: Request) {
         requestId,
         error: activeUserJobsResult.error.message,
       })
-      return new Response('Failed to inspect active chat jobs', { status: 500 })
+      return createErrorResponse('Failed to inspect active chat jobs', 500)
     }
 
     if ((activeUserJobsResult.data?.length ?? 0) >= MAX_ACTIVE_CHAT_JOBS_PER_USER) {
-      return new Response(buildActiveChatJobLimitMessage(), { status: 429 })
+      return createErrorResponse(buildActiveChatJobLimitMessage(), 429)
     }
 
     let targetTurnId: string | null = null
@@ -271,20 +281,18 @@ export async function POST(req: Request) {
           requestId,
           targetId: regenerateAssistantMessageId,
         })
-        return new Response('Invalid regeneration target', { status: 400 })
+        return createErrorResponse('Invalid regeneration target', 400)
       }
 
       if (latestTurn.id !== targetTurn.id) {
-        return new Response('Only the latest assistant message can be regenerated', {
-          status: 400,
-        })
+        return createErrorResponse('Only the latest assistant message can be regenerated', 400)
       }
 
       targetTurnId = targetTurn.id
     }
 
     if (!isLLMProvider(apiKeyData.provider)) {
-      return new Response('Unsupported provider', { status: 400 })
+      return createErrorResponse('Unsupported provider', 400)
     }
 
     const provider = apiKeyData.provider
@@ -297,9 +305,10 @@ export async function POST(req: Request) {
       deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH &&
       !isAnthropicBatchChatSupported({ provider, modelName })
     ) {
-      return new Response('Claude Batch mode is only supported for Anthropic Opus 4.5/4.6', {
-        status: 400,
-      })
+      return createErrorResponse(
+        'Claude Batch mode is only supported for Anthropic Opus 4.5/4.6',
+        400,
+      )
     }
 
     let insertedUserMessageId: string | null = null
@@ -309,7 +318,7 @@ export async function POST(req: Request) {
       const userMessage = sanitizedMessages[sanitizedMessages.length - 1]
 
       if (userMessage?.role !== 'user' || !userMessage.content.trim()) {
-        return new Response('Invalid user message', { status: 400 })
+        return createErrorResponse('Invalid user message', 400)
       }
 
       const persistResult = await persistUserTurn({
@@ -321,11 +330,11 @@ export async function POST(req: Request) {
       })
 
       if (persistResult.status === 'conflict') {
-        return new Response(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, { status: 409 })
+        return createErrorResponse(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, 409)
       }
 
       if (persistResult.status === 'error') {
-        return new Response(persistResult.responseMessage, { status: 500 })
+        return createErrorResponse(persistResult.responseMessage, 500)
       }
 
       insertedUserMessageId = persistResult.userMessageId
@@ -359,14 +368,14 @@ export async function POST(req: Request) {
 
     if (enqueueResult.status !== 'success') {
       if (enqueueResult.status === 'conflict') {
-        return new Response(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, { status: 409 })
+        return createErrorResponse(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, 409)
       }
 
       if (enqueueResult.status === 'user-limit') {
-        return new Response(buildActiveChatJobLimitMessage(), { status: 429 })
+        return createErrorResponse(buildActiveChatJobLimitMessage(), 429)
       }
 
-      return new Response('Failed to queue chat response', { status: 500 })
+      return createErrorResponse('Failed to queue chat response', 500)
     }
 
     const jobId = enqueueResult.jobId
@@ -383,15 +392,12 @@ export async function POST(req: Request) {
       logDebug: logChatApiDebug,
     })
 
-    return new Response(
-      JSON.stringify({
+    return NextResponse.json(
+      {
         jobId,
         requestId,
-      }),
-      {
-        status: 202,
-        headers: { 'Content-Type': 'application/json' },
       },
+      { status: 202 },
     )
   } catch (error) {
     // Note: chatId/requestId may not be available if error occurs early in the flow
@@ -399,6 +405,6 @@ export async function POST(req: Request) {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     })
-    return new Response('Internal server error', { status: 500 })
+    return createErrorResponse('Internal server error', 500)
   }
 }

@@ -174,6 +174,24 @@ function buildChatAdminError(message: string, status = 500) {
   })
 }
 
+async function expectJsonError(
+  response: Response,
+  status: number,
+  error: string,
+  extra: Record<string, unknown> = {},
+) {
+  expect(response.status).toBe(status)
+  expect(response.headers.get('content-type')).toContain('application/json')
+
+  const payload = (await response.json()) as Record<string, unknown>
+  expect(payload).toMatchObject({
+    error,
+    ...extra,
+  })
+
+  return payload
+}
+
 fetchMock.mockImplementation(async (input, init) => {
   const url =
     typeof input === 'string' || input instanceof URL
@@ -865,8 +883,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(400)
-    expect(await response.text()).toBe('Invalid request body')
+    await expectJsonError(response, 400, 'Invalid request body')
   })
 
   it('returns 400 when chatId is invalid', async () => {
@@ -883,8 +900,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(400)
-    expect(await response.text()).toBe('Invalid chatId')
+    await expectJsonError(response, 400, 'Invalid chatId')
   })
 
   it('returns 400 when apiKeyId is invalid', async () => {
@@ -901,8 +917,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(400)
-    expect(await response.text()).toBe('Invalid apiKeyId')
+    await expectJsonError(response, 400, 'Invalid apiKeyId')
   })
 
   it('returns 400 when no valid chat messages are provided', async () => {
@@ -923,8 +938,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(400)
-    expect(await response.text()).toBe('Messages array required')
+    await expectJsonError(response, 400, 'Messages array required')
   })
 
   it('returns 400 when a message exceeds the byte-size limit', async () => {
@@ -941,8 +955,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(400)
-    expect(await response.text()).toBe('Message exceeds allowed size')
+    await expectJsonError(response, 400, 'Message exceeds allowed size')
   })
 
   it('returns 400 when the last message is not a non-empty user message', async () => {
@@ -962,8 +975,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(400)
-    expect(await response.text()).toBe('Last message must be a non-empty user message')
+    await expectJsonError(response, 400, 'Last message must be a non-empty user message')
   })
 
   it('returns 401 for anonymous users when the rate limit allows the request', async () => {
@@ -987,7 +999,7 @@ describe('POST /api/chat', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(401)
+    await expectJsonError(response, 401, 'Unauthorized')
   })
 
   it('returns 401 for anonymous users before attempting to parse an invalid body', async () => {
@@ -1010,8 +1022,7 @@ describe('POST /api/chat', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(401)
-    expect(await response.text()).toBe('Unauthorized')
+    await expectJsonError(response, 401, 'Unauthorized')
   })
 
   it('prefers trusted deployment headers for anonymous rate limiting by default', async () => {
@@ -1180,11 +1191,8 @@ describe('POST /api/chat', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(429)
     expect(response.headers.get('Retry-After')).toBe('17')
-    const payload = await response.json()
-    expect(payload).toMatchObject({
-      error: 'Too many requests',
+    await expectJsonError(response, 429, 'Too many requests', {
       retryAfter: 17,
     })
   })
@@ -1201,8 +1209,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(413)
-    expect(await response.text()).toBe('Request body exceeds allowed size')
+    await expectJsonError(response, 413, 'Request body exceeds allowed size')
     expect(createClientMock).not.toHaveBeenCalled()
   })
 
@@ -1228,7 +1235,7 @@ describe('POST /api/chat', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(500)
+    await expectJsonError(response, 500, 'Internal server error')
   })
 
   it('enforces chat ownership and returns 404 when chat is missing', async () => {
@@ -1270,7 +1277,7 @@ describe('POST /api/chat', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(404)
+    await expectJsonError(response, 404, 'Chat not found')
   })
 
   it('returns 404 when API key is missing or inactive', async () => {
@@ -1290,8 +1297,7 @@ describe('POST /api/chat', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(404)
-    expect(await response.text()).toBe('API key not found or inactive')
+    await expectJsonError(response, 404, 'API key not found or inactive')
   })
 
   it('rejects embedding-only providers before persisting messages or enqueuing jobs', async () => {
@@ -1333,8 +1339,7 @@ describe('POST /api/chat', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(400)
-    expect(await response.text()).toBe('Unsupported provider')
+    await expectJsonError(response, 400, 'Unsupported provider')
     expect(supabase.messages).toHaveLength(0)
     expect(supabase.chatJobs).toHaveLength(0)
   })
@@ -1502,8 +1507,9 @@ describe('POST /api/chat', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(400)
-    expect(await response.text()).toBe(
+    await expectJsonError(
+      response,
+      400,
       'Claude Batch mode is only supported for Anthropic Opus 4.5/4.6',
     )
     expect(supabase.messages).toHaveLength(0)
@@ -1536,8 +1542,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(409)
-    expect(await response.text()).toBe('This chat already has a pending or in-progress response.')
+    await expectJsonError(response, 409, 'This chat already has a pending or in-progress response.')
     expect(supabase.messages).toHaveLength(0)
     expect(supabase.chatJobs).toHaveLength(1)
   })
@@ -1563,8 +1568,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(500)
-    expect(await response.text()).toBe('Failed to inspect active chat jobs')
+    await expectJsonError(response, 500, 'Failed to inspect active chat jobs')
   })
 
   it('returns 500 when checking the active user job count fails', async () => {
@@ -1588,8 +1592,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(500)
-    expect(await response.text()).toBe('Failed to inspect active chat jobs')
+    await expectJsonError(response, 500, 'Failed to inspect active chat jobs')
   })
 
   it('returns 429 when the user already has too many active chat jobs', async () => {
@@ -1614,8 +1617,9 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(429)
-    expect(await response.text()).toBe(
+    await expectJsonError(
+      response,
+      429,
       'You already have 3 active chat responses. Wait for one to finish before sending another message.',
     )
     expect(supabase.messages).toHaveLength(0)
@@ -1644,8 +1648,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(409)
-    expect(await response.text()).toBe('This chat already has a pending or in-progress response.')
+    await expectJsonError(response, 409, 'This chat already has a pending or in-progress response.')
     expect(supabase.messages).toHaveLength(0)
     expect(supabase.chatJobs).toHaveLength(0)
   })
@@ -1671,8 +1674,9 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(429)
-    expect(await response.text()).toBe(
+    await expectJsonError(
+      response,
+      429,
       'You already have 3 active chat responses. Wait for one to finish before sending another message.',
     )
     expect(supabase.messages).toHaveLength(0)
@@ -1754,10 +1758,7 @@ describe('POST /api/chat', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(429)
-    const payload = await response.json()
-    expect(payload).toMatchObject({
-      error: 'Rate limit exceeded',
+    await expectJsonError(response, 429, 'Rate limit exceeded', {
       retryAfter: 12,
     })
   })
@@ -1782,8 +1783,10 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(429)
     expect(response.headers.get('Retry-After')).toBe('15')
+    await expectJsonError(response, 429, 'Rate limit exceeded', {
+      retryAfter: 15,
+    })
   })
 
   it('uses Retry-After=60 when user rate limit response has null retryAfter', async () => {
@@ -1806,8 +1809,10 @@ describe('POST /api/chat', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(429)
     expect(response.headers.get('Retry-After')).toBe('60')
+    await expectJsonError(response, 429, 'Rate limit exceeded', {
+      retryAfter: 60,
+    })
   })
 
   it('fails with 500 when rate limiter RPC errors', async () => {
@@ -1853,7 +1858,7 @@ describe('POST /api/chat', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(500)
+    await expectJsonError(response, 500, 'Internal server error')
   })
 
   it('validates the target assistant message and enqueues a regeneration job', async () => {
@@ -1995,8 +2000,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(400)
-    expect(await response.text()).toBe('Only the latest assistant message can be regenerated')
+    await expectJsonError(response, 400, 'Only the latest assistant message can be regenerated')
   })
 
   it('returns 500 when creating the chat turn fails', async () => {
@@ -2020,8 +2024,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(500)
-    expect(await response.text()).toBe('Failed to create chat turn')
+    await expectJsonError(response, 500, 'Failed to create chat turn')
     expect(supabase.messages).toHaveLength(0)
     expect(supabase.chatTurns).toHaveLength(0)
   })
@@ -2048,8 +2051,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(409)
-    expect(await response.text()).toBe('This chat already has a pending or in-progress response.')
+    await expectJsonError(response, 409, 'This chat already has a pending or in-progress response.')
     expect(supabase.messages).toHaveLength(0)
     expect(supabase.chatTurns).toHaveLength(0)
   })
@@ -2075,8 +2077,7 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(500)
-    expect(await response.text()).toBe('Failed to save user message')
+    await expectJsonError(response, 500, 'Failed to save user message')
     expect(supabase.messages).toHaveLength(0)
     expect(supabase.chatTurns).toHaveLength(0)
   })
@@ -2110,8 +2111,7 @@ describe('POST /api/chat', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(400)
-    expect(await response.text()).toBe('Invalid regeneration target')
+    await expectJsonError(response, 400, 'Invalid regeneration target')
   })
 })
 

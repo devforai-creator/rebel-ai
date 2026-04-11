@@ -268,6 +268,29 @@ Current status as of 2026-04-11:
 - [vitest.config.ts](/home/tmdduq96kr/projects/rebel-ai/vitest.config.ts) now defines minimum global coverage thresholds for statements, branches, functions, and lines
 - [README.md](/home/tmdduq96kr/projects/rebel-ai/README.md) now aligns local setup guidance with the Node 20 CI/runtime contract
 
+### P1-5. Chat API Error Contract Normalization
+
+Scope:
+
+- [src/app/api/chat/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.ts)
+- [src/app/api/chat/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.test.ts)
+
+Why:
+
+- the route mixed plain-text `Response` errors with JSON errors
+- that makes client error handling brittle and forces tests to lock in inconsistent parsing behavior
+
+Done when:
+
+- route errors use one JSON contract: `{ error: string }`
+- rate limit responses keep `Retry-After` headers and include `retryAfter` in the JSON body
+- route tests assert the JSON contract directly instead of reading plain text
+
+Current status as of 2026-04-11:
+
+- [src/app/api/chat/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.ts) now routes all error exits through a single JSON error helper, while preserving existing status codes and `Retry-After` headers
+- [src/app/api/chat/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.test.ts) now asserts error payloads via a shared JSON error helper so the contract is locked consistently across validation, auth, queue, and regeneration failures
+
 ## P2
 
 ### P2-1. Split `turns.ts` by Responsibility

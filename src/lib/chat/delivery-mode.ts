@@ -9,6 +9,16 @@ export function isChatDeliveryMode(value: unknown): value is ChatDeliveryMode {
   return value === CHAT_DELIVERY_MODE_STREAMING || value === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
 }
 
+export function isAnthropicBatchChatEnabled(): boolean {
+  const envValue = process.env.ANTHROPIC_BATCH_CHAT_ENABLED
+  if (!envValue) {
+    return false
+  }
+
+  const normalized = envValue.trim().toLowerCase()
+  return normalized === 'true' || normalized === '1' || normalized === 'yes'
+}
+
 export function isAnthropicBatchChatSupported({
   provider,
   modelName,

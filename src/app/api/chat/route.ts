@@ -13,6 +13,7 @@ import { getDefaultModelForProvider } from '@/lib/llm/default-model'
 import {
   CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
   CHAT_DELIVERY_MODE_STREAMING,
+  isAnthropicBatchChatEnabled,
   isAnthropicBatchChatSupported,
   isChatDeliveryMode,
 } from '@/lib/chat/delivery-mode'
@@ -301,14 +302,17 @@ export async function POST(req: Request) {
       ? rawDeliveryMode
       : CHAT_DELIVERY_MODE_STREAMING
 
-    if (
-      deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH &&
-      !isAnthropicBatchChatSupported({ provider, modelName })
-    ) {
-      return createErrorResponse(
-        'Claude Batch mode is only supported for Anthropic Opus 4.5/4.6',
-        400,
-      )
+    if (deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH) {
+      if (!isAnthropicBatchChatEnabled()) {
+        return createErrorResponse('Claude Batch mode is disabled for this deployment', 400)
+      }
+
+      if (!isAnthropicBatchChatSupported({ provider, modelName })) {
+        return createErrorResponse(
+          'Claude Batch mode is only supported for Anthropic Opus 4.5/4.6',
+          400,
+        )
+      }
     }
 
     let insertedUserMessageId: string | null = null

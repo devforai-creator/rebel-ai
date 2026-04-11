@@ -132,6 +132,7 @@ Done when:
 Current status as of 2026-04-11:
 
 - the policy split is documented in [OPERATING_PLAN.md](./OPERATING_PLAN.md)
+- `Anthropic Batch` chat is now gated behind an explicit deployment opt-in (`ANTHROPIC_BATCH_CHAT_ENABLED`) instead of being treated as an ambient supported path whenever an Opus key is present
 - the runtime still contains several optional provider and post-generation branches close to the core path
 
 ## P1

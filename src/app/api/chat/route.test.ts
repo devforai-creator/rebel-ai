@@ -1532,6 +1532,7 @@ describe('POST /api/chat', () => {
   })
 
   it('enqueues Anthropic Batch mode for supported Opus keys', async () => {
+    process.env.ANTHROPIC_BATCH_CHAT_ENABLED = 'true'
     const supabase = createSupabaseMock(
       buildDefaultAuthenticatedFixture({
         apiKeys: [
@@ -1571,7 +1572,40 @@ describe('POST /api/chat', () => {
     })
   })
 
+  it('rejects Anthropic Batch mode when the deployment keeps it disabled', async () => {
+    const supabase = createSupabaseMock(
+      buildDefaultAuthenticatedFixture({
+        apiKeys: [
+          {
+            id: 'api-key-1',
+            user_id: 'user-1',
+            provider: 'anthropic',
+            is_active: true,
+            vault_secret_name: 'secret-key',
+            model_preference: 'claude-opus-4-5',
+          },
+        ],
+      }),
+    )
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        deliveryMode: 'anthropic_batch',
+        messages: [{ role: 'user', content: 'batch please' }],
+      }),
+    })
+
+    const response = await POST(request)
+    await expectJsonError(response, 400, 'Claude Batch mode is disabled for this deployment')
+    expect(supabase.messages).toHaveLength(0)
+    expect(supabase.chatJobs).toHaveLength(0)
+  })
+
   it('rejects Anthropic Batch mode for unsupported keys', async () => {
+    process.env.ANTHROPIC_BATCH_CHAT_ENABLED = 'true'
     const supabase = createSupabaseMock(buildDefaultAuthenticatedFixture())
 
     const request = new Request('http://localhost/api/chat', {

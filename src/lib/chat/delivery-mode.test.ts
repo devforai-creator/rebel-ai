@@ -1,10 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import {
   CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
   CHAT_DELIVERY_MODE_STREAMING,
+  isAnthropicBatchChatEnabled,
   isAnthropicBatchChatSupported,
   isChatDeliveryMode,
 } from './delivery-mode'
+
+const ORIGINAL_ANTHROPIC_BATCH_CHAT_ENABLED = process.env.ANTHROPIC_BATCH_CHAT_ENABLED
+
+afterAll(() => {
+  if (ORIGINAL_ANTHROPIC_BATCH_CHAT_ENABLED === undefined) {
+    delete process.env.ANTHROPIC_BATCH_CHAT_ENABLED
+  } else {
+    process.env.ANTHROPIC_BATCH_CHAT_ENABLED = ORIGINAL_ANTHROPIC_BATCH_CHAT_ENABLED
+  }
+})
 
 describe('chat delivery modes', () => {
   it('validates known delivery modes', () => {
@@ -38,5 +49,19 @@ describe('chat delivery modes', () => {
         modelName: 'claude-opus-4-6',
       }),
     ).toBe(false)
+  })
+
+  it('keeps Anthropic Batch chat disabled by default unless explicitly enabled', () => {
+    delete process.env.ANTHROPIC_BATCH_CHAT_ENABLED
+    expect(isAnthropicBatchChatEnabled()).toBe(false)
+
+    process.env.ANTHROPIC_BATCH_CHAT_ENABLED = 'true'
+    expect(isAnthropicBatchChatEnabled()).toBe(true)
+
+    process.env.ANTHROPIC_BATCH_CHAT_ENABLED = '1'
+    expect(isAnthropicBatchChatEnabled()).toBe(true)
+
+    process.env.ANTHROPIC_BATCH_CHAT_ENABLED = 'false'
+    expect(isAnthropicBatchChatEnabled()).toBe(false)
   })
 })

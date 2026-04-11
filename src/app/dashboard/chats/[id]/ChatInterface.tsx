@@ -38,6 +38,7 @@ import {
 import {
   CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
   CHAT_DELIVERY_MODE_STREAMING,
+  isAnthropicBatchChatEnabled,
   isAnthropicBatchChatSupported,
 } from '@/lib/chat/delivery-mode'
 
@@ -176,12 +177,13 @@ export default function ChatInterface({
     () => apiKeys.find((key) => key.id === selectedApiKeyId) ?? null,
     [apiKeys, selectedApiKeyId],
   )
+  const anthropicBatchChatEnabled = isAnthropicBatchChatEnabled()
+  const anthropicBatchModeSupported = isAnthropicBatchChatSupported({
+    provider: selectedApiKey?.provider,
+    modelName: selectedApiKey?.model_preference,
+  })
   const anthropicBatchModeAvailable =
-    !alternateModelsEnabled &&
-    isAnthropicBatchChatSupported({
-      provider: selectedApiKey?.provider,
-      modelName: selectedApiKey?.model_preference,
-    })
+    anthropicBatchChatEnabled && !alternateModelsEnabled && anthropicBatchModeSupported
   const deliveryMode =
     anthropicBatchModeEnabled && anthropicBatchModeAvailable
       ? CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
@@ -323,11 +325,16 @@ export default function ChatInterface({
 
   const handleToggleAnthropicBatchMode = useCallback(() => {
     if (!anthropicBatchModeAvailable && !anthropicBatchModeEnabled) {
+      if (!anthropicBatchChatEnabled) {
+        toast.error('Claude Batch 모드는 이 배포에서 기본 비활성화되어 있습니다.')
+        return
+      }
+
       toast.error('Claude Batch 모드는 Anthropic Opus 4.5/4.6 키에서만 사용할 수 있습니다.')
       return
     }
     setAnthropicBatchModeEnabled((current) => !current)
-  }, [anthropicBatchModeAvailable, anthropicBatchModeEnabled])
+  }, [anthropicBatchChatEnabled, anthropicBatchModeAvailable, anthropicBatchModeEnabled])
 
   // Toggle developer mode
   const toggleDeveloperMode = useCallback(() => {

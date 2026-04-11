@@ -466,8 +466,11 @@ Set environment variables in Vercel Dashboard:
 - `SUMMARY_GENERATION_SECRET` _(used for summary-only node function calls)_
 - `CRON_SECRET` _(Bearer token used by trigger routes)_
 - `CHAT_JOB_RUNNER_BATCH_LIMIT` _(optional, default 2)_
+- `ANTHROPIC_BATCH_CHAT_ENABLED` _(optional, default `false`; keeps Claude Batch chat mode opt-in per deployment)_
 - `INTERNAL_API_ORIGIN` _(Required in deployed non-local environments; set to your canonical app URL)_
 - `VERCEL_AUTOMATION_BYPASS_SECRET` _(optional; only if Vercel Automation Protection is enabled)_
+
+To enable Claude Batch chat on a specific deployment, set `ANTHROPIC_BATCH_CHAT_ENABLED=true`, redeploy, and use an Anthropic Opus 4.5/4.6 API key. Leaving the variable unset or `false` keeps the batch path disabled.
 
 **GitHub Integration:** Auto-deploys on push to main branch.
 

@@ -104,7 +104,8 @@ Done when:
 Current status as of 2026-04-11:
 
 - [README.md](../README.md), [HOSTING_PROFILES.md](./HOSTING_PROFILES.md), and [GETTING_STARTED.md](./GETTING_STARTED.md) now reflect the current operating contract
-- there is still no dedicated first-class smoke-check runbook or single operator verification flow
+- [FIRST_CLASS_SMOKE_CHECKS.md](./FIRST_CLASS_SMOKE_CHECKS.md) and `npm run ops:smoke` now provide a dedicated low-cost verification runbook plus passive/active operator checks
+- there is still no single browser-based operator page for this; the current surface is script + internal JSON endpoints
 
 ### P0-3. Tighten Experimental Boundaries Around the Core Chat Path
 

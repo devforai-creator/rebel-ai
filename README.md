@@ -14,6 +14,7 @@
 [**🚀 Getting Started Guide**](./docs/GETTING_STARTED.md) — _New to RebelAI? Start here!_
 [**🧭 Hosting Profiles**](./docs/HOSTING_PROFILES.md) — _Current low-cost path vs future managed public path_
 [**📋 Operating Plan**](./docs/OPERATING_PLAN.md) — _Current operating contract, gates, and scope boundaries_
+[**🩺 Smoke Checks**](./docs/FIRST_CLASS_SMOKE_CHECKS.md) — _Repeatable verification for the current first-class low-cost path_
 
 ---
 
@@ -151,16 +152,17 @@ Note: the maintainer-operated path currently treats `prefix_live_blocks + episod
 
 ## Documentation Map
 
-| Audience        | Document                                                     | Purpose                                                         |
-| --------------- | ------------------------------------------------------------ | --------------------------------------------------------------- |
-| Setup           | [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md)                   | Local + Supabase configuration walkthrough                      |
-| Getting started | [`docs/GETTING_STARTED.md`](./docs/GETTING_STARTED.md)       | First-run guide for a fresh local deployment                    |
-| Hosting         | [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md)     | Current low-cost profile vs future managed public profile       |
-| Operations      | [`docs/OPERATING_PLAN.md`](./docs/OPERATING_PLAN.md)         | Current first-class mode, public gates, and scope boundaries    |
-| Database        | [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)                 | Tables, RLS policies, RPC functions                             |
-| Database ops    | [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md) | Migration workflow, production pushes, and drift recovery       |
-| Format          | [`docs/rbx-spec.md`](./docs/rbx-spec.md)                     | RBX package format and runtime contract                         |
-| Security        | [`SECURITY.md`](./SECURITY.md)                               | Reporting policy, security model, and self-hosting requirements |
+| Audience        | Document                                                                 | Purpose                                                           |
+| --------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Setup           | [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md)                               | Local + Supabase configuration walkthrough                        |
+| Getting started | [`docs/GETTING_STARTED.md`](./docs/GETTING_STARTED.md)                   | First-run guide for a fresh local deployment                      |
+| Hosting         | [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md)                 | Current low-cost profile vs future managed public profile         |
+| Operations      | [`docs/OPERATING_PLAN.md`](./docs/OPERATING_PLAN.md)                     | Current first-class mode, public gates, and scope boundaries      |
+| Smoke checks    | [`docs/FIRST_CLASS_SMOKE_CHECKS.md`](./docs/FIRST_CLASS_SMOKE_CHECKS.md) | Repeatable operator verification for the current first-class mode |
+| Database        | [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)                             | Tables, RLS policies, RPC functions                               |
+| Database ops    | [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md)             | Migration workflow, production pushes, and drift recovery         |
+| Format          | [`docs/rbx-spec.md`](./docs/rbx-spec.md)                                 | RBX package format and runtime contract                           |
+| Security        | [`SECURITY.md`](./SECURITY.md)                                           | Reporting policy, security model, and self-hosting requirements   |
 
 > **Tip:** Keep the public entry points small: setup, schema, security, and the RBX spec should be enough to deploy and extend the project.
 
@@ -192,6 +194,7 @@ The chat entry point (`/api/chat`) maintains a job queue in Node.js Runtime whil
 > **TIP:** To verify scheduled execution, check the logs for whichever scheduler you use. On Vercel Pro, look for `/api/internal/chat-job-runner/trigger` → `/api/internal/chat-job-runner`. For urgent cases, run `npm run chat:jobs` to drain jobs immediately.
 
 - **Health check**: Call `GET /api/internal/health` (requires `Authorization: Bearer ${CHAT_ADMIN_SECRET}` header) to inspect recent success/failure times and consecutive failure counts for runner/broadcast/summary services. The route prefers durable database-backed snapshots and returns `healthSource: durable` when that path is active, falling back to in-memory stats only when admin DB access is unavailable. If response `status` is `degraded`, one of the trigger, runner, broadcast, or summary stages has consecutive failures.
+- **Operator smoke checks**: Use `npm run ops:smoke` for the passive low-cost profile check, and `npm run ops:smoke:active` when you intentionally want to probe runner execution. See [`docs/FIRST_CLASS_SMOKE_CHECKS.md`](./docs/FIRST_CLASS_SMOKE_CHECKS.md).
 
 ### Internal API origin resolution
 

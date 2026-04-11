@@ -70,6 +70,7 @@ Open `http://localhost:3000`.
 3. Go to `/dashboard/api-keys` and add at least one LLM API key.
 4. Go to the character import flow and upload an `.rbx` package.
 5. Open the imported character and start a chat.
+6. Run `npm run ops:smoke` to verify the current first-class low-cost operating path.
 
 ## Optional Setup
 
@@ -132,6 +133,12 @@ If you use hosted Supabase Free, keep imports within the provider's current stor
 
 This low-cost profile is the current maintainer-operated first-class path while signup remains closed. If you later decide to serve outside users, freeze one public profile first instead of treating low-cost and managed public hosting as equal defaults.
 
+After changing env vars, scheduler wiring, or host assumptions, run the passive smoke check against the deployed origin:
+
+```bash
+SMOKE_CHECK_APP_ORIGIN=https://your-app.example.com npm run ops:smoke
+```
+
 ## Troubleshooting
 
 ### Signup page returns a blocked message
@@ -178,3 +185,4 @@ Check:
 - [SUPABASE_SETUP.md](../SUPABASE_SETUP.md)
 - [SECURITY.md](../SECURITY.md)
 - [DATABASE_SCHEMA.md](../DATABASE_SCHEMA.md)
+- [FIRST_CLASS_SMOKE_CHECKS.md](./FIRST_CLASS_SMOKE_CHECKS.md)

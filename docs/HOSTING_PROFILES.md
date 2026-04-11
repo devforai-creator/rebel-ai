@@ -62,4 +62,5 @@ For the current repo operating contract, this should be treated as advanced or e
 - `INTERNAL_API_ORIGIN`, `CHAT_ADMIN_SECRET`, `SUMMARY_GENERATION_SECRET`, and `CRON_SECRET` are required in every deployed profile.
 - Realtime and storage quotas vary by provider plan. Check the provider docs before advertising a public instance.
 - If you change hosting assumptions, test chat generation, background job pickup, summary generation, RBX import, and `GET /api/internal/health` before calling the setup production-ready.
+- For the current first-class low-cost path, use [`FIRST_CLASS_SMOKE_CHECKS.md`](./FIRST_CLASS_SMOKE_CHECKS.md) and `npm run ops:smoke` as the default post-change verification flow.
 - See [`OPERATING_PLAN.md`](./OPERATING_PLAN.md) for the current first-class mode and the remaining public-opening gates.

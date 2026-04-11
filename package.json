@@ -24,6 +24,8 @@
     "chat:jobs": "node scripts/run-chat-jobs.js",
     "character:jobs": "node scripts/run-character-import-jobs.js",
     "import:jobs": "node scripts/run-character-import-jobs.js",
+    "ops:smoke": "node scripts/first-class-smoke-check.js",
+    "ops:smoke:active": "node scripts/first-class-smoke-check.js --active-runners",
     "cleanup:character-assets": "node scripts/cleanup-orphaned-character-assets.js",
     "cleanup:module-assets": "node scripts/cleanup-orphaned-module-assets.js",
     "backfill:facts": "node scripts/backfill-facts.js",

@@ -150,6 +150,11 @@ Done when:
 - the operator can inspect the latest degraded services and latest failed chat jobs without stitching together multiple raw endpoints manually
 - the surface is useful for the closed personal deployment first, not designed around future public operations
 
+Current status as of 2026-04-11:
+
+- [src/app/api/internal/triage/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/triage/route.ts) now exposes a single internal JSON snapshot for degraded services plus recent failed chat jobs
+- this is still an API surface, not yet a dashboard/operator page
+
 ### P1-2. Freeze Removal Candidates More Aggressively
 
 Scope:

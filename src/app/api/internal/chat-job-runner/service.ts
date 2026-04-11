@@ -1,22 +1,18 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { claimPendingJob } from '@/lib/chat/job-queue'
-import { estimateUsageCost } from '@/lib/model-pricing'
 import { resolveInternalApiOrigin } from '@/lib/internal-api-origin'
-import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
 import {
   CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT,
   CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING,
-  CHAT_JOB_LIFECYCLE_STAGE_PERSISTING_RESPONSE,
   CHAT_JOB_LIFECYCLE_STAGE_REQUESTING_PROVIDER,
   CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE,
   type ChatJobLifecycleStage,
 } from '@/lib/chat/job-lifecycle'
 import { persistChatJobLifecycleStage } from '@/lib/chat/job-lifecycle-store'
-import { buildChatDebugInfo } from './usage-debug'
-import { runPostGenerationPipeline } from './post-generation-pipeline'
 import { pollDueAnthropicBatchJobs } from './anthropic-batch-orchestrator'
 import { loadChatJobExecutionContext } from './execution-context'
+import { runPostProcessingStage } from './post-processing-stage'
 import { processChatJobStage, type ProcessChatJobExecutionResult } from './process-job-stage'
 import { requestProviderStage } from './provider-request-stage'
 import { ChatJobExecutionError } from './runner-errors'
@@ -83,7 +79,7 @@ async function executeJob({
   payload: ChatGenerationJobPayload
   origin: string
 }): Promise<ProcessChatJobExecutionResult> {
-  const { chatId, userId, apiKeyId, provider, modelName } = payload
+  const { chatId, userId, provider } = payload
 
   const timings: Record<string, number> = {}
   const startTime = performance.now()
@@ -187,98 +183,40 @@ async function executeJob({
       regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
       logDebug: logChatJobRunnerDebug,
     })
-    const { fullText, assistantText, finishReason, anthropicCacheCreationInputTokens, usage } =
-      streamingResponse
-    let assistantMessageId: string | null = null
-    let messageInsertDuration: number | null = null
-
     timings['8_llm_generation'] = performance.now() - stepStart
-    const promptTokens = usage.promptTokens
-    const completionTokens = usage.completionTokens
-    const totalTokens = usage.totalTokens
-    const cachedInputTokens = usage.cachedInputTokens
-    const reasoningTokens = usage.reasoningTokens
-    const usageCost = estimateUsageCost({
-      provider,
-      modelName,
-      promptTokens: promptTokens ?? undefined,
-      completionTokens: completionTokens ?? undefined,
-      cachedInputTokens: cachedInputTokens ?? undefined,
-      reasoningTokens: reasoningTokens ?? undefined,
-      serviceTier: apiKeyData.service_tier,
-    })
-
-    // For Anthropic debug: show the actual conversation messages sent (with placeholder if added)
-    // For other providers: show injected blocks and messages separately
-    const debugConversationMessages =
-      provider === 'anthropic' ? anthropicConversationMessages : null
-    const usageMetrics = {
-      promptTokens,
-      completionTokens,
-      totalTokens,
-      cachedInputTokens,
-      reasoningTokens,
-    }
-
-    const debugInfo = buildChatDebugInfo({
-      requestId: payload.requestId,
-      finalSystemPrompt,
-      recentMessages,
-      anthropicConversationMessages: debugConversationMessages,
-      anthropicPlaceholderAdded,
-      promptCache,
-      totalInputTokens,
-      anthropicCache,
-      anthropicCacheCreationInputTokens,
-      anthropicCacheReadInputTokens: cachedInputTokens,
-      staticPromptTokens,
-      dynamicContext,
-      dynamicContextTokens,
-      googleExplicitCacheEnabled,
-      googleCacheResult,
-      googleCacheDecision,
-      rawResponse: fullText,
-      processedResponse: assistantText,
-      apiKeyId,
-      provider,
-      modelName,
-      finishReason,
-      usage: usageMetrics,
-      sanitizedMessageCount: generationTranscript.length,
-      ragInfo,
-      actualPayload,
-    })
 
     await markStage(CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING)
-    currentStage = CHAT_JOB_LIFECYCLE_STAGE_PERSISTING_RESPONSE
-    const postGenerationResult = await runPostGenerationPipeline({
+    const postGenerationResult = await runPostProcessingStage({
       supabase,
-      chatId,
-      userId,
-      apiKeyId,
-      provider,
-      modelName,
+      payload,
       origin,
-      requestId: payload.requestId,
-      assistantText,
-      assistantMessageId,
-      turnId: payload.turnId,
-      regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
-      promptTokens,
-      completionTokens,
-      debugInfo,
-      bilingualEnabled,
-      messageInsertDuration,
-      usage: usageMetrics,
-      usageCost,
-      triggerMessageTranslationFn: triggerMessageTranslation,
+      context: {
+        apiKeyData,
+        generationTranscript,
+        finalSystemPrompt,
+        dynamicContext,
+        dynamicContextTokens,
+        recentMessages,
+        ragInfo,
+        bilingualEnabled,
+        anthropicConversationMessages,
+        anthropicPlaceholderAdded,
+        totalInputTokens,
+        staticPromptTokens,
+      },
+      providerArtifacts: {
+        promptCache,
+        anthropicCache,
+        googleExplicitCacheEnabled,
+        googleCacheDecision,
+        googleCacheResult,
+        actualPayload,
+      },
+      streamingResponse,
     })
 
-    assistantMessageId = postGenerationResult.assistantMessageId
-    messageInsertDuration = postGenerationResult.messageInsertDuration
-
-    if (messageInsertDuration !== null) {
-      timings['9_message_insert'] = messageInsertDuration
+    if (postGenerationResult.messageInsertDuration !== null) {
+      timings['9_message_insert'] = postGenerationResult.messageInsertDuration
     }
     timings['10_usage_event_insert'] = postGenerationResult.usageEventInsertDurationMs
     timings['11_summary_trigger'] = postGenerationResult.summaryTriggerDurationMs

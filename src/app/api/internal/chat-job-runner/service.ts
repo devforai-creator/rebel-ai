@@ -1,13 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { Database } from '@/types/database.types'
-import { parseChatJobPayload, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
+import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { claimPendingJob } from '@/lib/chat/job-queue'
 import { estimateUsageCost } from '@/lib/model-pricing'
 import { resolveInternalApiOrigin } from '@/lib/internal-api-origin'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
 import {
-  CHAT_JOB_LIFECYCLE_STAGE_COMPLETED,
-  CHAT_JOB_LIFECYCLE_STAGE_INVALID_PAYLOAD,
   CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT,
   CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING,
   CHAT_JOB_LIFECYCLE_STAGE_PERSISTING_RESPONSE,
@@ -20,70 +17,18 @@ import { buildChatDebugInfo } from './usage-debug'
 import { runPostGenerationPipeline } from './post-generation-pipeline'
 import { pollDueAnthropicBatchJobs } from './anthropic-batch-orchestrator'
 import { loadChatJobExecutionContext } from './execution-context'
+import { processChatJobStage, type ProcessChatJobExecutionResult } from './process-job-stage'
 import { requestProviderStage } from './provider-request-stage'
 import { ChatJobExecutionError } from './runner-errors'
 import { consumeStreamingResponseStage } from './streaming-response-stage'
 
 const CHAT_JOB_RUNNER_DEBUG_ENABLED = process.env.CHAT_JOB_RUNNER_DEBUG === 'true'
-const CHAT_JOB_STATUS_UPDATE_MAX_ATTEMPTS = 3
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
-type ChatGenerationJobUpdate = Database['public']['Tables']['chat_generation_jobs']['Update']
 
 function logChatJobRunnerDebug(...args: unknown[]): void {
   if (CHAT_JOB_RUNNER_DEBUG_ENABLED) {
     console.debug(...args)
   }
-}
-
-class ChatJobStatusUpdateError extends Error {
-  targetStatus: 'success' | 'error'
-
-  constructor(targetStatus: 'success' | 'error', attempts: number, message: string) {
-    super(
-      `Failed to persist chat job ${targetStatus} status after ${attempts} attempts: ${message}`,
-    )
-    this.name = 'ChatJobStatusUpdateError'
-    this.targetStatus = targetStatus
-  }
-}
-
-async function persistTerminalJobStatus({
-  supabase,
-  jobId,
-  update,
-  targetStatus,
-}: {
-  supabase: AdminSupabaseClient
-  jobId: string
-  update: ChatGenerationJobUpdate
-  targetStatus: 'success' | 'error'
-}): Promise<void> {
-  let lastError: { message: string } | null = null
-
-  for (let attempt = 1; attempt <= CHAT_JOB_STATUS_UPDATE_MAX_ATTEMPTS; attempt += 1) {
-    const { error } = await supabase
-      .from('chat_generation_jobs')
-      .update(update as never)
-      .eq('id', jobId)
-
-    if (!error) {
-      return
-    }
-
-    lastError = error
-    console.warn('[Chat Job Runner] Failed to persist job status', {
-      jobId,
-      status: targetStatus,
-      attempt,
-      error: error.message,
-    })
-  }
-
-  throw new ChatJobStatusUpdateError(
-    targetStatus,
-    CHAT_JOB_STATUS_UPDATE_MAX_ATTEMPTS,
-    lastError?.message ?? 'Unknown database error',
-  )
 }
 
 export async function processChatJobs(limit: number = 1) {
@@ -103,11 +48,12 @@ export async function processChatJobs(limit: number = 1) {
       break
     }
 
-    const result = await processJob({
+    const result = await processChatJobStage({
       supabase,
       jobId: job.id,
       rawPayload: job.payload,
       origin,
+      executeChatJobFn: executeJob,
     })
 
     processed.push(result)
@@ -126,120 +72,6 @@ export async function processChatJobs(limit: number = 1) {
   }
 }
 
-async function processJob({
-  supabase,
-  jobId,
-  rawPayload,
-  origin,
-}: {
-  supabase: AdminSupabaseClient
-  jobId: string
-  rawPayload: unknown
-  origin: string
-}): Promise<{ jobId: string; status: string; error?: string }> {
-  const payload = parseChatJobPayload(rawPayload)
-
-  if (!payload) {
-    const invalidPayloadMessage = 'Invalid job payload'
-    const invalidPayloadUpdate: ChatGenerationJobUpdate = {
-      status: 'error',
-      error: invalidPayloadMessage,
-      lifecycle_stage: CHAT_JOB_LIFECYCLE_STAGE_INVALID_PAYLOAD,
-      failure_stage: CHAT_JOB_LIFECYCLE_STAGE_INVALID_PAYLOAD,
-    }
-
-    try {
-      await persistTerminalJobStatus({
-        supabase,
-        jobId,
-        update: invalidPayloadUpdate,
-        targetStatus: 'error',
-      })
-    } catch (statusError) {
-      console.error('[Chat Job Runner] Failed to persist invalid job payload status', {
-        jobId,
-        error: statusError,
-      })
-      return {
-        jobId,
-        status: 'error',
-        error: statusError instanceof Error ? statusError.message : invalidPayloadMessage,
-      }
-    }
-
-    return { jobId, status: 'error', error: invalidPayloadMessage }
-  }
-
-  try {
-    const execution = await executeJob({ supabase, jobId, payload, origin })
-
-    if (execution.status === 'processing') {
-      return { jobId, status: 'processing' }
-    }
-
-    const successUpdate: ChatGenerationJobUpdate = {
-      status: 'success',
-      error: null,
-      lifecycle_stage: CHAT_JOB_LIFECYCLE_STAGE_COMPLETED,
-      failure_stage: null,
-    }
-    await persistTerminalJobStatus({
-      supabase,
-      jobId,
-      update: successUpdate,
-      targetStatus: 'success',
-    })
-
-    return { jobId, status: 'success' }
-  } catch (error) {
-    if (error instanceof ChatJobStatusUpdateError && error.targetStatus === 'success') {
-      console.error('[Chat Job Runner] Job completed but final status update failed', {
-        jobId,
-        error,
-      })
-      return { jobId, status: 'error', error: error.message }
-    }
-
-    const message = error instanceof Error ? error.message : 'Unknown job failure'
-    const failureStage =
-      error instanceof ChatJobExecutionError
-        ? error.lifecycleStage
-        : CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT
-    const errorUpdate: ChatGenerationJobUpdate = {
-      status: 'error',
-      error: message,
-      lifecycle_stage: failureStage,
-      failure_stage: failureStage,
-    }
-
-    try {
-      await persistTerminalJobStatus({
-        supabase,
-        jobId,
-        update: errorUpdate,
-        targetStatus: 'error',
-      })
-    } catch (statusError) {
-      console.error('[Chat Job Runner] Failed to persist job error status', {
-        jobId,
-        error: statusError,
-        originalError: error,
-      })
-      return {
-        jobId,
-        status: 'error',
-        error:
-          statusError instanceof Error
-            ? `${statusError.message}. Original job error: ${message}`
-            : message,
-      }
-    }
-
-    console.error('[Chat Job Runner] Job failed', { jobId, error })
-    return { jobId, status: 'error', error: message }
-  }
-}
-
 async function executeJob({
   supabase,
   jobId,
@@ -250,7 +82,7 @@ async function executeJob({
   jobId: string
   payload: ChatGenerationJobPayload
   origin: string
-}): Promise<{ status: 'success' | 'processing' }> {
+}): Promise<ProcessChatJobExecutionResult> {
   const { chatId, userId, apiKeyId, provider, modelName } = payload
 
   const timings: Record<string, number> = {}

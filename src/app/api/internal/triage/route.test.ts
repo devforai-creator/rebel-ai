@@ -221,7 +221,7 @@ describe('GET /api/internal/triage', () => {
     if (!gteMock) {
       throw new Error('Expected gte mock to be captured')
     }
-    expect(gteMock).toHaveBeenCalledWith('updated_at', expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/))
+    expect(gteMock).toHaveBeenCalledWith('created_at', expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/))
   })
 
   it('falls back to in-memory health stats when durable stats are unavailable', async () => {

@@ -43,8 +43,8 @@ export async function GET(req: NextRequest) {
           'id, chat_id, status, error, delivery_mode, lifecycle_stage, failure_stage, created_at, updated_at',
         )
         .eq('status', 'error')
-        .gte('updated_at', failedJobsCutoffIso)
-        .order('updated_at', { ascending: false })
+        .gte('created_at', failedJobsCutoffIso)
+        .order('created_at', { ascending: false })
         .limit(FAILED_JOB_LIMIT),
     ])
 

@@ -5,31 +5,24 @@ import { claimPendingJob } from '@/lib/chat/job-queue'
 import { estimateUsageCost } from '@/lib/model-pricing'
 import { resolveInternalApiOrigin } from '@/lib/internal-api-origin'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
-import { normalizeProviderError } from '@/lib/llm/provider-error'
 import {
   CHAT_JOB_LIFECYCLE_STAGE_COMPLETED,
-  CHAT_JOB_LIFECYCLE_STAGE_CONTENT_FILTERED,
-  CHAT_JOB_LIFECYCLE_STAGE_EMPTY_RESPONSE,
   CHAT_JOB_LIFECYCLE_STAGE_INVALID_PAYLOAD,
   CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT,
   CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING,
   CHAT_JOB_LIFECYCLE_STAGE_PERSISTING_RESPONSE,
-  CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
   CHAT_JOB_LIFECYCLE_STAGE_REQUESTING_PROVIDER,
   CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE,
   type ChatJobLifecycleStage,
 } from '@/lib/chat/job-lifecycle'
 import { persistChatJobLifecycleStage } from '@/lib/chat/job-lifecycle-store'
-import { evaluateContentFilter } from './content-filter'
 import { buildChatDebugInfo } from './usage-debug'
 import { runPostGenerationPipeline } from './post-generation-pipeline'
 import { pollDueAnthropicBatchJobs } from './anthropic-batch-orchestrator'
-import {
-  broadcastAssistantStreamError,
-  broadcastAssistantStreamSnapshot,
-} from './assistant-stream-broadcaster'
 import { loadChatJobExecutionContext } from './execution-context'
 import { requestProviderStage } from './provider-request-stage'
+import { ChatJobExecutionError } from './runner-errors'
+import { consumeStreamingResponseStage } from './streaming-response-stage'
 
 const CHAT_JOB_RUNNER_DEBUG_ENABLED = process.env.CHAT_JOB_RUNNER_DEBUG === 'true'
 const CHAT_JOB_STATUS_UPDATE_MAX_ATTEMPTS = 3
@@ -51,16 +44,6 @@ class ChatJobStatusUpdateError extends Error {
     )
     this.name = 'ChatJobStatusUpdateError'
     this.targetStatus = targetStatus
-  }
-}
-
-class ChatJobExecutionError extends Error {
-  lifecycleStage: ChatJobLifecycleStage
-
-  constructor(message: string, lifecycleStage: ChatJobLifecycleStage) {
-    super(message)
-    this.name = 'ChatJobExecutionError'
-    this.lifecycleStage = lifecycleStage
   }
 }
 
@@ -101,136 +84,6 @@ async function persistTerminalJobStatus({
     CHAT_JOB_STATUS_UPDATE_MAX_ATTEMPTS,
     lastError?.message ?? 'Unknown database error',
   )
-}
-
-async function collectTextFromStreamWithSnapshots({
-  supabase,
-  chatId,
-  jobId,
-  stream,
-  provider,
-  regenerateAssistantMessageId,
-  updateIntervalMs = 120,
-  now = () => performance.now(),
-}: {
-  supabase: AdminSupabaseClient
-  chatId: string
-  jobId: string
-  stream: {
-    textStream: AsyncIterable<string> | Iterable<string>
-    fullStream?:
-      | AsyncIterable<{ type: string; text?: string; error?: unknown }>
-      | Iterable<{
-          type: string
-          text?: string
-          error?: unknown
-        }>
-  }
-  provider: string
-  regenerateAssistantMessageId: string | null
-  updateIntervalMs?: number
-  now?: () => number
-}) {
-  let fullText = ''
-  let lastBroadcastAt = now()
-  let sendInFlight: Promise<void> | null = null
-  let queuedContent: string | null = null
-  let lastSentContent = ''
-
-  const sendSnapshot = (content: string) => {
-    if (content === lastSentContent) {
-      return
-    }
-
-    if (sendInFlight) {
-      queuedContent = content
-      return
-    }
-
-    const snapshot = content
-    sendInFlight = broadcastAssistantStreamSnapshot({
-      supabase,
-      chatId,
-      jobId,
-      content: snapshot,
-      regenerateAssistantMessageId,
-    }).finally(() => {
-      lastSentContent = snapshot
-      sendInFlight = null
-
-      if (queuedContent && queuedContent !== lastSentContent) {
-        const nextContent = queuedContent
-        queuedContent = null
-        sendSnapshot(nextContent)
-        return
-      }
-
-      queuedContent = null
-    })
-  }
-
-  const flushSnapshots = async () => {
-    while (sendInFlight) {
-      await sendInFlight
-    }
-  }
-
-  try {
-    if (stream.fullStream) {
-      for await (const part of stream.fullStream) {
-        if (part.type === 'text-delta' && typeof part.text === 'string') {
-          fullText += part.text
-
-          const currentTime = now()
-          if (currentTime - lastBroadcastAt >= updateIntervalMs) {
-            sendSnapshot(fullText)
-            lastBroadcastAt = currentTime
-          }
-        }
-
-        if (part.type === 'error') {
-          const normalizedError = normalizeProviderError({
-            provider,
-            error: part.error,
-          })
-          throw new ChatJobExecutionError(
-            normalizedError.userMessage,
-            CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
-          )
-        }
-      }
-    } else {
-      for await (const chunk of stream.textStream) {
-        fullText += chunk
-
-        const currentTime = now()
-        if (currentTime - lastBroadcastAt >= updateIntervalMs) {
-          sendSnapshot(fullText)
-          lastBroadcastAt = currentTime
-        }
-      }
-    }
-  } catch (error) {
-    if (error instanceof ChatJobExecutionError) {
-      throw error
-    }
-
-    const normalizedError = normalizeProviderError({
-      provider,
-      error,
-    })
-    throw new ChatJobExecutionError(
-      normalizedError.userMessage,
-      CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
-    )
-  }
-
-  if (fullText) {
-    sendSnapshot(fullText)
-    await flushSnapshots()
-  }
-
-  return fullText
 }
 
 export async function processChatJobs(limit: number = 1) {
@@ -493,96 +346,26 @@ async function executeJob({
     } = providerRequest
 
     await markStage(CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE)
-    let fullText = ''
-    try {
-      fullText = await collectTextFromStreamWithSnapshots({
-        supabase,
-        chatId,
-        jobId,
-        stream,
-        provider,
-        regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
-      })
-    } catch (error) {
-      const streamError =
-        error instanceof ChatJobExecutionError
-          ? error
-          : new ChatJobExecutionError(
-              error instanceof Error ? error.message : String(error),
-              CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
-            )
-      await broadcastAssistantStreamError({
-        supabase,
-        chatId,
-        jobId,
-        error: streamError.message,
-        regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
-      })
-      throw streamError
-    }
+    const streamingResponse = await consumeStreamingResponseStage({
+      supabase,
+      chatId,
+      jobId,
+      stream,
+      provider,
+      regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
+      logDebug: logChatJobRunnerDebug,
+    })
+    const { fullText, assistantText, finishReason, anthropicCacheCreationInputTokens, usage } =
+      streamingResponse
     let assistantMessageId: string | null = null
     let messageInsertDuration: number | null = null
 
-    const finishReason = await stream.finishReason
-    const providerMetadata = await stream.providerMetadata
     timings['8_llm_generation'] = performance.now() - stepStart
-
-    const anthropicProviderMetadata =
-      provider === 'anthropic' &&
-      providerMetadata?.anthropic &&
-      typeof providerMetadata.anthropic === 'object'
-        ? (providerMetadata.anthropic as Record<string, unknown>)
-        : null
-    const anthropicRawUsage = anthropicProviderMetadata?.usage as Record<string, number> | undefined
-    const anthropicCacheCreationInputTokens =
-      typeof anthropicProviderMetadata?.cacheCreationInputTokens === 'number'
-        ? anthropicProviderMetadata.cacheCreationInputTokens
-        : (anthropicRawUsage?.cache_creation_input_tokens ?? null)
-
-    // Log Anthropic cache metrics
-    if (anthropicRawUsage) {
-      logChatJobRunnerDebug('[Chat Job Runner] Anthropic cache metrics', {
-        cacheRead: anthropicRawUsage.cache_read_input_tokens ?? 0,
-        cacheCreation: anthropicCacheCreationInputTokens ?? 0,
-        uncached: anthropicRawUsage.input_tokens ?? 0,
-      })
-    }
-
-    const contentFilterInfo = evaluateContentFilter({
-      provider,
-      finishReason,
-      metadata: providerMetadata,
-    })
-
-    const assistantText = fullText.trim()
-
-    if (!assistantText) {
-      if (contentFilterInfo.blocked) {
-        throw new ChatJobExecutionError(
-          'Blocked by Google Gemini content filter. Please disable safe mode or refine your input and try again.',
-          CHAT_JOB_LIFECYCLE_STAGE_CONTENT_FILTERED,
-        )
-      }
-
-      if (finishReason === 'error') {
-        throw new ChatJobExecutionError(
-          'The provider returned an error before producing text. Please try again later.',
-          CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
-        )
-      }
-
-      throw new ChatJobExecutionError(
-        'The assistant returned an empty response. Please try again later.',
-        CHAT_JOB_LIFECYCLE_STAGE_EMPTY_RESPONSE,
-      )
-    }
-
-    const usage = await stream.usage
-    const promptTokens = usage?.inputTokens ?? null
-    const completionTokens = usage?.outputTokens ?? null
-    const totalTokens = usage?.totalTokens ?? null
-    const cachedInputTokens = usage?.cachedInputTokens ?? null
-    const reasoningTokens = usage?.reasoningTokens ?? null
+    const promptTokens = usage.promptTokens
+    const completionTokens = usage.completionTokens
+    const totalTokens = usage.totalTokens
+    const cachedInputTokens = usage.cachedInputTokens
+    const reasoningTokens = usage.reasoningTokens
     const usageCost = estimateUsageCost({
       provider,
       modelName,

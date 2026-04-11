@@ -182,6 +182,13 @@ Done when:
 - the repo pins Node 20 with a machine-readable version file
 - setup docs no longer carry the whole burden of runtime consistency
 
+Current status as of 2026-04-12:
+
+- [.nvmrc](/home/tmdduq96kr/projects/rebel-ai/.nvmrc) now pins local development to Node 20 alongside the existing `package.json` engines contract and GitHub Actions setup, so the runtime contract is machine-readable outside documentation
+- [package.json](/home/tmdduq96kr/projects/rebel-ai/package.json) and [package-lock.json](/home/tmdduq96kr/projects/rebel-ai/package-lock.json) now promote `@safe-ugc-ui/types` and `@safe-ugc-ui/validator` to direct dependencies because [suu-import-validation.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/suu-import-validation.ts) imports them directly
+- unused direct dependencies `@msgpack/msgpack` and `tus-js-client` were removed from the root manifest and lockfile, so install state no longer carries dead top-level packages for unused upload/serialization paths
+- [README.md](/home/tmdduq96kr/projects/rebel-ai/README.md) now points local setup at `.nvmrc`, which keeps the docs aligned with the new machine-readable contract instead of carrying the whole requirement manually
+
 ### P1-2. Split the Chat Job Runner by Stage, Not by Line Count
 
 Scope:

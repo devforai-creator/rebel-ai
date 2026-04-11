@@ -127,7 +127,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-This repository targets Node 20 locally and in CI. If you use `nvm`, `fnm`, or Volta, pin your shell to Node 20 before installing dependencies.
+This repository targets Node 20 locally and in CI. `.nvmrc` pins the local version, so run `nvm use` before installing dependencies if you use `nvm` or a compatible version manager.
 
 **Detailed setup guide:** See [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) for database configuration.
 

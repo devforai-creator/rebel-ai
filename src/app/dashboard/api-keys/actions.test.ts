@@ -75,7 +75,8 @@ function buildApiKeyFormData(
 }
 
 function buildSupabase(options: ApiKeysSupabaseOptions = {}) {
-  const user = options.user === undefined ? { id: 'user-1' } : options.user
+  const user =
+    options.user === undefined ? { id: '11111111-1111-1111-1111-111111111111' } : options.user
 
   const state: MutationState = {
     insertPayloads: [],
@@ -239,16 +240,16 @@ describe('api key actions', () => {
       success: true,
     })
     expect(adminSupabase.rpc).toHaveBeenCalledWith('create_secret', {
-      secret_name: 'apikey_user1_loyw3v28_openai',
+      secret_name: 'apikey_11111111-1111-1111-1111-111111111111_loyw3v28_openai',
       secret_value: 'sk-1234567890abcdefghijklmn',
-      requester: 'user-1',
+      requester: '11111111-1111-1111-1111-111111111111',
     })
     expect(supabase.state.insertPayloads).toEqual([
       {
-        user_id: 'user-1',
+        user_id: '11111111-1111-1111-1111-111111111111',
         provider: 'openai',
         key_name: 'Personal GPT Key',
-        vault_secret_name: 'apikey_user1_loyw3v28_openai',
+        vault_secret_name: 'apikey_11111111-1111-1111-1111-111111111111_loyw3v28_openai',
         model_preference: 'gpt-5',
         service_tier: 'flex',
         reasoning_effort: 'high',
@@ -305,13 +306,13 @@ describe('api key actions', () => {
       success: false,
     })
     expect(adminSupabase.rpc).toHaveBeenNthCalledWith(1, 'create_secret', {
-      secret_name: 'apikey_user1_loyw3v28_google',
+      secret_name: 'apikey_11111111-1111-1111-1111-111111111111_loyw3v28_google',
       secret_value: 'AIzaSyA1234567890abcdefghijklmnopqrstu',
-      requester: 'user-1',
+      requester: '11111111-1111-1111-1111-111111111111',
     })
     expect(adminSupabase.rpc).toHaveBeenNthCalledWith(2, 'delete_secret', {
-      secret_name: 'apikey_user1_loyw3v28_google',
-      requester: 'user-1',
+      secret_name: 'apikey_11111111-1111-1111-1111-111111111111_loyw3v28_google',
+      requester: '11111111-1111-1111-1111-111111111111',
     })
     dateNowSpy.mockRestore()
   })
@@ -341,7 +342,7 @@ describe('api key actions', () => {
     expect(result).toEqual({ success: true })
     expect(adminSupabase.rpc).toHaveBeenCalledWith('delete_api_key', {
       api_key_id: 'key-1',
-      requester: 'user-1',
+      requester: '11111111-1111-1111-1111-111111111111',
     })
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/api-keys')
   })

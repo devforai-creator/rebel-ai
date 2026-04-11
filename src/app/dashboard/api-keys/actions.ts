@@ -41,6 +41,13 @@ function createApiKeyRpcClient(): ApiKeyRpcClient {
   return createAdminClient() as unknown as ApiKeyRpcClient
 }
 
+function buildVaultSecretName(userId: string, provider: Provider): string {
+  const timestampSegment = Date.now().toString(36)
+  // Keep the full user id in the prefix so the database can verify ownership
+  // without trusting caller-supplied metadata beyond the requester id itself.
+  return `apikey_${userId}_${timestampSegment}_${provider}`
+}
+
 const apiKeyFormSchema = z.object({
   provider: z.string().refine((value) => PROVIDERS.includes(value as Provider), {
     message: 'Provider를 선택해주세요.',
@@ -151,9 +158,7 @@ export async function createApiKey(
   }
 
   // Vault에 API 키 저장 (암호화)
-  const sanitizedUserSegment = user.id.replace(/-/g, '').slice(0, 12)
-  const timestampSegment = Date.now().toString(36)
-  const vaultSecretName = `apikey_${sanitizedUserSegment}_${timestampSegment}_${provider}`
+  const vaultSecretName = buildVaultSecretName(user.id, provider)
 
   const { error: vaultError } = await adminSupabase.rpc('create_secret', {
     secret_name: vaultSecretName,

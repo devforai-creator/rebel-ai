@@ -59,6 +59,11 @@ type AccountDeleteAdminOptions = {
   storageRemoveErrors?: Record<string, DbError | null>
 }
 
+type DeleteSecretCall = {
+  requester?: string
+  secret_name?: string
+}
+
 function buildFormData(entries: Record<string, string | undefined>) {
   const formData = new FormData()
 
@@ -317,7 +322,7 @@ function buildDeleteAccountSupabase(options: AccountDeleteSupabaseOptions = {}) 
 function buildDeleteAccountAdmin(options: AccountDeleteAdminOptions = {}) {
   const state = {
     events: [] as string[],
-    deleteSecretCalls: [] as string[],
+    deleteSecretCalls: [] as DeleteSecretCall[],
     storageRemoveCalls: [] as Array<{ bucket: string; paths: string[] }>,
   }
 
@@ -331,14 +336,14 @@ function buildDeleteAccountAdmin(options: AccountDeleteAdminOptions = {}) {
         }),
       },
     },
-    rpc: vi.fn(async (name: string, params?: { secret_name?: string }) => {
+    rpc: vi.fn(async (name: string, params?: DeleteSecretCall) => {
       if (name !== 'delete_secret') {
         throw new Error(`Unexpected rpc: ${name}`)
       }
 
       const secretName = params?.secret_name ?? ''
       state.events.push(`delete_secret:${secretName}`)
-      state.deleteSecretCalls.push(secretName)
+      state.deleteSecretCalls.push({ ...params })
 
       return {
         data: null,
@@ -578,7 +583,10 @@ describe('account actions', () => {
         paths: ['user-1/imports/a.rbx'],
       },
     ])
-    expect(admin.state.deleteSecretCalls).toEqual(['secret-1', 'secret-2'])
+    expect(admin.state.deleteSecretCalls).toEqual([
+      { requester: 'user-1', secret_name: 'secret-1' },
+      { requester: 'user-1', secret_name: 'secret-2' },
+    ])
     expect(supabase.auth.signOut).toHaveBeenCalledTimes(1)
   })
 

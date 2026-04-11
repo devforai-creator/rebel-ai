@@ -329,6 +329,7 @@ async function deleteVaultSecretsAfterAccountDeletion(
   for (const secretName of secretNames) {
     const { error } = await admin.rpc('delete_secret', {
       secret_name: secretName,
+      requester: userId,
     })
 
     if (!error) {

@@ -1,22 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/database.types'
 import { parseChatJobPayload, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
-import { streamText } from 'ai'
 import { claimPendingJob } from '@/lib/chat/job-queue'
-import { getProviderOptions } from '@/lib/llm/provider-options'
-import { resolvePromptCacheDecision, resolveAnthropicCacheDecision } from '@/lib/llm/prompt-cache'
-import {
-  createGoogleCache,
-  resolveGoogleCacheDecision,
-  isGoogleExplicitCacheEnabled,
-  type CreateGoogleCacheResult,
-} from '@/lib/llm/google-cache'
 import { estimateUsageCost } from '@/lib/model-pricing'
 import { resolveInternalApiOrigin } from '@/lib/internal-api-origin'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
-import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from '@/lib/chat/delivery-mode'
 import { normalizeProviderError } from '@/lib/llm/provider-error'
-import { resolveInvocationSamplingOptions } from '@/lib/llm/invocation-sampling'
 import {
   CHAT_JOB_LIFECYCLE_STAGE_COMPLETED,
   CHAT_JOB_LIFECYCLE_STAGE_CONTENT_FILTERED,
@@ -31,17 +20,16 @@ import {
   type ChatJobLifecycleStage,
 } from '@/lib/chat/job-lifecycle'
 import { persistChatJobLifecycleStage } from '@/lib/chat/job-lifecycle-store'
-import { buildLanguageModel } from './model-factory'
 import { evaluateContentFilter } from './content-filter'
-import { buildChatDebugInfo, type ChatRunnerActualPayload } from './usage-debug'
-import { buildStreamPayloadPlan } from './stream-payload-builder'
+import { buildChatDebugInfo } from './usage-debug'
 import { runPostGenerationPipeline } from './post-generation-pipeline'
-import { pollDueAnthropicBatchJobs, submitAnthropicBatchJob } from './anthropic-batch-orchestrator'
+import { pollDueAnthropicBatchJobs } from './anthropic-batch-orchestrator'
 import {
   broadcastAssistantStreamError,
   broadcastAssistantStreamSnapshot,
 } from './assistant-stream-broadcaster'
 import { loadChatJobExecutionContext } from './execution-context'
+import { requestProviderStage } from './provider-request-stage'
 
 const CHAT_JOB_RUNNER_DEBUG_ENABLED = process.env.CHAT_JOB_RUNNER_DEBUG === 'true'
 const CHAT_JOB_STATUS_UPDATE_MAX_ATTEMPTS = 3
@@ -463,194 +451,46 @@ async function executeJob({
       timings,
     })
 
-    const chatCacheKeyOverride = provider === 'openai' ? `chat:${chatId}` : undefined
-
-    const promptCache = resolvePromptCacheDecision({
-      provider,
-      modelName,
-      systemPrompt: finalSystemPrompt,
-      messages: recentMessages,
-      totalInputTokens,
-      cacheKeyOverride: chatCacheKeyOverride,
-      retentionPreference: chatCacheKeyOverride ? '24h' : undefined,
-    })
-
-    const anthropicCache =
-      provider === 'anthropic'
-        ? resolveAnthropicCacheDecision({
-            modelName,
-          })
-        : null
-
-    // Google-specific cache decision
-    // Pre-create cache with system prompt + history (excluding last message)
-    // Then use cache ID for actual request with only the last message.
-    const allMessagesForGoogle = provider === 'google' ? recentMessages : []
-    const messagesToCacheForGoogle =
-      provider === 'google' && allMessagesForGoogle.length > 1
-        ? allMessagesForGoogle.slice(0, -1)
-        : []
-    const lastMessageForGoogle =
-      provider === 'google' && allMessagesForGoogle.length > 0
-        ? allMessagesForGoogle[allMessagesForGoogle.length - 1]
-        : null
-
-    const googleCacheDecision =
-      provider === 'google'
-        ? resolveGoogleCacheDecision({
-            modelName,
-            systemPrompt: finalSystemPrompt,
-            messagesToCache: messagesToCacheForGoogle,
-          })
-        : null
-
-    // Pre-create Google cache if enabled (controlled by GOOGLE_EXPLICIT_CACHE_ENABLED env var)
-    const googleExplicitCacheEnabled = isGoogleExplicitCacheEnabled()
-    let googleCacheResult: CreateGoogleCacheResult | null = null
-    if (
-      provider === 'google' &&
-      googleExplicitCacheEnabled &&
-      googleCacheDecision?.enabled &&
-      lastMessageForGoogle
-    ) {
-      stepStart = performance.now()
-      googleCacheResult = await createGoogleCache({
-        apiKey: decryptedApiKey,
-        modelName,
-        systemPrompt: finalSystemPrompt,
-        messagesToCache: messagesToCacheForGoogle,
-        ttlSeconds: 20, // Short TTL to minimize storage cost
-      })
-      timings['7c_google_cache_create'] = performance.now() - stepStart
-
-      if (googleCacheResult.success) {
-        logChatJobRunnerDebug('[Chat Job Runner] Google cache created', {
-          cacheName: googleCacheResult.cacheName,
-          cachedTokenCount: googleCacheResult.cachedTokenCount,
-          modelName,
-        })
-      } else {
-        console.warn(
-          '[Chat Job Runner] Google cache creation failed, falling back to normal request',
-          {
-            error: googleCacheResult.error,
-            code: googleCacheResult.code,
-            modelName,
-          },
-        )
-      }
-    }
-
-    const model = buildLanguageModel({
-      provider,
-      modelName,
-      apiKey: decryptedApiKey,
-      serviceTier: apiKeyData.service_tier ?? 'standard',
-    })
-
-    const providerOptions = getProviderOptions(provider, {
-      promptCacheKey: promptCache?.key,
-      promptCacheRetention: promptCache?.retention,
-      reasoningEffort: apiKeyData.reasoning_effort,
-    })
-    const samplingOptions = resolveInvocationSamplingOptions({
-      provider,
-      modelName,
-      reasoningEffort: apiKeyData.reasoning_effort,
-    })
-
     await markStage(CHAT_JOB_LIFECYCLE_STAGE_REQUESTING_PROVIDER)
     stepStart = performance.now()
-    let stream
-
-    // Capture actual payload sent to LLM for debug_info (SSOT)
-    let actualPayload: ChatRunnerActualPayload | null = null
-
-    try {
-      const streamPayloadPlan = buildStreamPayloadPlan({
-        provider,
+    const providerRequest = await requestProviderStage({
+      supabase,
+      jobId,
+      payload,
+      context: {
+        apiKeyData,
+        decryptedApiKey,
+        generationTranscript,
         finalSystemPrompt,
         staticSystemPrompt,
         dynamicContext,
-        anthropicCache,
-        anthropicConversationMessages,
+        dynamicContextTokens,
         promptBlocks,
         recentMessages,
-        googleCacheResult,
-        messagesToCacheForGoogle,
-        lastMessageForGoogle,
-        providerOptions,
-      })
+        ragInfo,
+        bilingualEnabled,
+        anthropicConversationMessages,
+        anthropicPlaceholderAdded,
+        totalInputTokens,
+        staticPromptTokens,
+      },
+      timings,
+      logDebug: logChatJobRunnerDebug,
+    })
 
-      if (streamPayloadPlan.strategy === 'anthropic-split-system') {
-        if (anthropicPlaceholderAdded) {
-          logChatJobRunnerDebug(
-            '[Chat Job Runner] Added user placeholder for Anthropic user-first requirement',
-          )
-        }
-
-        if (anthropicCache?.enabled) {
-          logChatJobRunnerDebug('[Chat Job Runner] Anthropic prompt caching enabled (automatic)', {
-            ttl: anthropicCache.ttl,
-            staticPromptTokens,
-            dynamicContextTokens,
-            hasDynamicContext: !!dynamicContext,
-          })
-        }
-      }
-
-      if (
-        streamPayloadPlan.strategy === 'google-explicit-cache' &&
-        googleCacheResult?.success &&
-        lastMessageForGoogle
-      ) {
-        logChatJobRunnerDebug('[Chat Job Runner] Google explicit caching enabled', {
-          cacheName: googleCacheResult.cacheName,
-          cachedTokenCount: googleCacheResult.cachedTokenCount,
-          lastMessageRole: lastMessageForGoogle.role,
-        })
-      }
-
-      actualPayload = streamPayloadPlan.actualPayload
-
-      if (payload.deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH) {
-        await submitAnthropicBatchJob({
-          supabase,
-          jobId,
-          payload,
-          apiKey: decryptedApiKey,
-          streamPayloadPlan,
-          debug: {
-            requestId: payload.requestId,
-            finalSystemPrompt,
-            recentMessages,
-            anthropicConversationMessages,
-            anthropicPlaceholderAdded,
-            promptCache,
-            totalInputTokens,
-            anthropicCache,
-            staticPromptTokens,
-            dynamicContext,
-            dynamicContextTokens,
-            ragInfo,
-            actualPayload,
-            sanitizedMessageCount: generationTranscript.length,
-            bilingualEnabled,
-          },
-        })
-
-        return { status: 'processing' }
-      }
-
-      stream = await streamText({
-        model,
-        ...samplingOptions,
-        ...streamPayloadPlan.streamRequest,
-      })
-    } catch (error) {
-      const normalizedError = normalizeProviderError({ provider, error })
-      throw new Error(normalizedError.userMessage)
+    if (providerRequest.status === 'processing') {
+      return { status: 'processing' }
     }
+
+    const {
+      stream,
+      promptCache,
+      anthropicCache,
+      googleExplicitCacheEnabled,
+      googleCacheDecision,
+      googleCacheResult,
+      actualPayload,
+    } = providerRequest
 
     await markStage(CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE)
     let fullText = ''

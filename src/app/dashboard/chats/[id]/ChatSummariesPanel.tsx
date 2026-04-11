@@ -1,35 +1,20 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
+import { useMemo, useState } from 'react'
 import { CHAT_CONTEXT_WINDOW } from '@/lib/chat-context-window'
 import type { ChatMemoryConfig } from '@/lib/chat/model-config'
 import { CHUNK_SIZE } from '@/lib/chat-summaries/config'
-import type { ChatSummary, ChatFacts } from '@/types/database.types'
-import {
-  deleteSummary,
-  updateSummary,
-  updateFact,
-  reembedFact,
-  regenerateSummary,
-  regenerateFacts,
-} from './summary-actions'
+import { useChatSummariesState } from './hooks'
+import type { FactEntry, SummaryEntry } from './hooks/useChatSummariesState'
 
 interface ChatSummariesPanelProps {
   chatId: string
-  summaries: Array<
-    Pick<ChatSummary, 'id' | 'level' | 'start_seq' | 'end_seq' | 'summary' | 'created_at'>
-  >
-  facts: Array<Pick<ChatFacts, 'id' | 'start_seq' | 'end_seq' | 'facts' | 'created_at'>>
+  summaries: SummaryEntry[]
+  facts: FactEntry[]
   totalMessages: number
   latestSequence: number
   memoryConfig: Required<ChatMemoryConfig>
 }
-
-type SummaryType = ChatSummariesPanelProps['summaries'][number]
-type FactType = ChatSummariesPanelProps['facts'][number]
 
 const LEVEL_LABEL: Record<number, string> = {
   2: 'Super Meta Summary',
@@ -117,165 +102,45 @@ export default function ChatSummariesPanel({
   latestSequence,
   memoryConfig,
 }: ChatSummariesPanelProps) {
-  const router = useRouter()
-  const supabase = useMemo(() => createClient(), [])
-
-  // Local state for summaries, facts, and message count (updated in real-time)
-  const [summaries, setSummaries] = useState<SummaryType[]>(initialSummaries)
-  const [facts, setFacts] = useState<FactType[]>(initialFacts)
-  const [messageCount, setMessageCount] = useState(totalMessages)
-  const [currentLatestSequence, setCurrentLatestSequence] = useState(latestSequence)
-  const [editingSummaryId, setEditingSummaryId] = useState<string | null>(null)
-  const [summaryEditContent, setSummaryEditContent] = useState('')
-  const [editingFactId, setEditingFactId] = useState<string | null>(null)
-  const [factEditContent, setFactEditContent] = useState('')
-  const [reembeddingFactId, setReembeddingFactId] = useState<string | null>(null)
-  const [regeneratingSummaryId, setRegeneratingSummaryId] = useState<string | null>(null)
-  const [regeneratingFactId, setRegeneratingFactId] = useState<string | null>(null)
+  const {
+    summaries,
+    facts,
+    messageCount,
+    currentLatestSequence,
+    editingSummaryId,
+    summaryEditContent,
+    setSummaryEditContent,
+    editingFactId,
+    factEditContent,
+    setFactEditContent,
+    reembeddingFactId,
+    regeneratingSummaryId,
+    regeneratingFactId,
+    isRefreshingStats,
+    refreshStats,
+    startSummaryEdit,
+    cancelSummaryEdit,
+    saveSummaryEdit,
+    startFactEdit,
+    cancelFactEdit,
+    saveFactEdit,
+    handleReembedFact,
+    handleRegenerateSummary,
+    handleRegenerateFacts,
+    handleDeleteSummary,
+  } = useChatSummariesState({
+    chatId,
+    initialSummaries,
+    initialFacts,
+    totalMessages,
+    latestSequence,
+  })
 
   // Collapse states for each section
   const [isSuperMetaCollapsed, setIsSuperMetaCollapsed] = useState(false)
   const [isMetaCollapsed, setIsMetaCollapsed] = useState(false)
   const [isChunkCollapsed, setIsChunkCollapsed] = useState(false)
   const [isFactsCollapsed, setIsFactsCollapsed] = useState(false)
-
-  // Stats refresh state
-  const [isRefreshingStats, setIsRefreshingStats] = useState(false)
-
-  // Fetch message/summary counts on demand
-  const refreshStats = useCallback(async () => {
-    setIsRefreshingStats(true)
-    try {
-      const response = await fetch(`/api/chats/${chatId}/stats`, { cache: 'no-store' })
-      if (!response.ok) {
-        throw new Error('Failed to fetch stats')
-      }
-      const data = await response.json()
-      if (typeof data.messageCount === 'number') {
-        setMessageCount(data.messageCount)
-      }
-      if (typeof data.summaryCount === 'number') {
-        // Check if count changed and schedule router refresh outside render cycle
-        setSummaries((prev) => {
-          if (Math.abs(prev.length - data.summaryCount) > 0) {
-            // Defer router.refresh() to avoid setState-during-render warning
-            setTimeout(() => router.refresh(), 0)
-          }
-          return prev
-        })
-      }
-    } catch {
-      toast.error('통계를 불러오지 못했습니다')
-    } finally {
-      setIsRefreshingStats(false)
-    }
-  }, [chatId, router])
-
-  // Keep local state in sync when server data refreshes (router.refresh or navigation)
-  useEffect(() => {
-    setSummaries(initialSummaries)
-  }, [initialSummaries])
-
-  useEffect(() => {
-    setFacts(initialFacts)
-  }, [initialFacts])
-
-  useEffect(() => {
-    setMessageCount(totalMessages)
-  }, [totalMessages])
-
-  useEffect(() => {
-    setCurrentLatestSequence(latestSequence)
-  }, [latestSequence])
-
-  // Subscribe to real-time updates
-  useEffect(() => {
-    // Get current session for auth token (required for RLS to work with Realtime)
-    const setupChannel = async () => {
-      await supabase.auth.getSession()
-
-      const channel = supabase
-        .channel(`chat-${chatId}-summaries`, {
-          config: {
-            broadcast: { self: true },
-            presence: { key: '' },
-          },
-        })
-        .on(
-          'postgres_changes',
-          {
-            event: '*', // Listen to INSERT, UPDATE, DELETE
-            schema: 'public',
-            table: 'chat_summaries',
-            filter: `chat_id=eq.${chatId}`,
-          },
-          (payload) => {
-            if (payload.eventType === 'INSERT') {
-              // Add new summary
-              setSummaries((prev) => {
-                // Avoid duplicates
-                if (prev.some((s) => s.id === payload.new.id)) {
-                  return prev
-                }
-                return [...prev, payload.new as SummaryType]
-              })
-            } else if (payload.eventType === 'UPDATE') {
-              // Update existing summary
-              setSummaries((prev) =>
-                prev.map((s) => (s.id === payload.new.id ? (payload.new as SummaryType) : s)),
-              )
-            } else if (payload.eventType === 'DELETE') {
-              // Remove deleted summary
-              setSummaries((prev) => prev.filter((s) => s.id !== payload.old.id))
-            }
-          },
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: '*', // Listen to INSERT, UPDATE, DELETE
-            schema: 'public',
-            table: 'chat_facts',
-            filter: `chat_id=eq.${chatId}`,
-          },
-          (payload) => {
-            if (payload.eventType === 'INSERT') {
-              // Add new facts
-              setFacts((prev) => {
-                // Avoid duplicates
-                if (prev.some((f) => f.id === payload.new.id)) {
-                  return prev
-                }
-                return [...prev, payload.new as FactType]
-              })
-            } else if (payload.eventType === 'UPDATE') {
-              // Update existing facts
-              setFacts((prev) =>
-                prev.map((f) => (f.id === payload.new.id ? (payload.new as FactType) : f)),
-              )
-            } else if (payload.eventType === 'DELETE') {
-              // Remove deleted facts
-              setFacts((prev) => prev.filter((f) => f.id !== payload.old.id))
-            }
-          },
-        )
-        .subscribe()
-
-      return channel
-    }
-
-    let channelInstance: ReturnType<typeof supabase.channel> | null = null
-
-    setupChannel().then((channel) => {
-      channelInstance = channel
-    })
-
-    return () => {
-      if (channelInstance) {
-        supabase.removeChannel(channelInstance)
-      }
-    }
-  }, [chatId, supabase])
 
   const chunkSummaries = useMemo(
     () =>
@@ -297,7 +162,7 @@ export default function ChatSummariesPanel({
   )
 
   // Disable super meta summaries from context preview
-  const superMetaSummaries = useMemo((): SummaryType[] => {
+  const superMetaSummaries = useMemo((): SummaryEntry[] => {
     return []
   }, [])
 
@@ -352,120 +217,6 @@ export default function ChatSummariesPanel({
   const nextCheckpoint = getNextMemoryCheckpoint(messageCount, memoryConfig)
   const emptyStateText = getEmptyStateText(memoryConfig)
 
-  const startSummaryEdit = (summaryId: string, currentSummary: string) => {
-    setEditingFactId(null)
-    setFactEditContent('')
-    setEditingSummaryId(summaryId)
-    setSummaryEditContent(currentSummary)
-  }
-
-  const cancelSummaryEdit = () => {
-    setEditingSummaryId(null)
-    setSummaryEditContent('')
-  }
-
-  const saveSummaryEdit = async (summaryId: string) => {
-    if (!summaryEditContent.trim()) {
-      alert('Please enter summary content.')
-      return
-    }
-
-    const result = await updateSummary(summaryId, chatId, summaryEditContent)
-
-    if (result.error) {
-      alert('Failed to update summary: ' + result.error)
-      return
-    }
-
-    setEditingSummaryId(null)
-    setSummaryEditContent('')
-    router.refresh() // Refresh server component data
-  }
-
-  const startFactEdit = (factId: string, currentFacts: string) => {
-    setEditingSummaryId(null)
-    setSummaryEditContent('')
-    setEditingFactId(factId)
-    setFactEditContent(currentFacts)
-  }
-
-  const cancelFactEdit = () => {
-    setEditingFactId(null)
-    setFactEditContent('')
-  }
-
-  const saveFactEdit = async (factId: string) => {
-    if (!factEditContent.trim()) {
-      alert('Please enter content.')
-      return
-    }
-
-    const result = await updateFact(factId, chatId, factEditContent)
-
-    if (result.error) {
-      alert(result.error)
-      return
-    }
-
-    setEditingFactId(null)
-    setFactEditContent('')
-    router.refresh()
-  }
-
-  const handleReembedFact = async (factId: string) => {
-    setReembeddingFactId(factId)
-    const result = await reembedFact(factId, chatId)
-    setReembeddingFactId(null)
-
-    if (result?.error) {
-      alert(result.error)
-      return
-    }
-
-    router.refresh()
-  }
-
-  const handleRegenerateSummary = async (summaryId: string) => {
-    setRegeneratingSummaryId(summaryId)
-    const result = await regenerateSummary(summaryId, chatId)
-    setRegeneratingSummaryId(null)
-
-    if (result?.error) {
-      alert(result.error)
-      return
-    }
-
-    router.refresh()
-  }
-
-  const handleRegenerateFacts = async (factId: string) => {
-    setRegeneratingFactId(factId)
-    const result = await regenerateFacts(factId, chatId)
-    setRegeneratingFactId(null)
-
-    if (result?.error) {
-      alert(result.error)
-      return
-    }
-
-    router.refresh()
-  }
-
-  // Delete summary
-  const handleDelete = async (summaryId: string) => {
-    if (!confirm('Delete this summary?')) {
-      return
-    }
-
-    const result = await deleteSummary(summaryId, chatId)
-    if (result.error) {
-      alert('Failed to delete summary: ' + result.error)
-      return
-    }
-
-    router.refresh() // Refresh server component data
-  }
-
   return (
     <aside className="h-full w-full border-l border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 flex-shrink-0">
       <div className="h-full overflow-y-auto p-4 lg:p-6">
@@ -489,7 +240,7 @@ export default function ChatSummariesPanel({
               </p>
             </div>
             <button
-              onClick={refreshStats}
+              onClick={() => void refreshStats()}
               disabled={isRefreshingStats}
               className="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Refresh stats"
@@ -583,7 +334,7 @@ export default function ChatSummariesPanel({
                               {regeneratingSummaryId === summary.id ? '⟳' : '♻️'}
                             </button>
                             <button
-                              onClick={() => void handleDelete(summary.id)}
+                              onClick={() => void handleDeleteSummary(summary.id)}
                               className="text-red-600 hover:text-red-700 dark:text-red-400"
                               title="Delete"
                             >
@@ -674,7 +425,7 @@ export default function ChatSummariesPanel({
                               {regeneratingSummaryId === summary.id ? '⟳' : '♻️'}
                             </button>
                             <button
-                              onClick={() => void handleDelete(summary.id)}
+                              onClick={() => void handleDeleteSummary(summary.id)}
                               className="text-red-600 hover:text-red-700 dark:text-red-400"
                               title="Delete"
                             >
@@ -765,7 +516,7 @@ export default function ChatSummariesPanel({
                               {regeneratingSummaryId === summary.id ? '⟳' : '♻️'}
                             </button>
                             <button
-                              onClick={() => void handleDelete(summary.id)}
+                              onClick={() => void handleDeleteSummary(summary.id)}
                               className="text-red-600 hover:text-red-700 dark:text-red-400"
                               title="Delete"
                             >

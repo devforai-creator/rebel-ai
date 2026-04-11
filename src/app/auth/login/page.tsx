@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useState } from 'react'
 import Link from 'next/link'
 import { login } from '../actions'
@@ -85,12 +86,14 @@ export default function LoginPage() {
           </div>
 
           <div className="text-center text-sm">
-            <span className="text-gray-600 dark:text-gray-400">Don&apos;t have an account? </span>
+            <span className="text-gray-600 dark:text-gray-400">
+              Need access or checking signup status?{' '}
+            </span>
             <Link
               href="/auth/signup"
               className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400"
             >
-              Sign Up
+              View Sign-up Status
             </Link>
           </div>
         </form>

@@ -47,7 +47,8 @@ export async function deleteChat(chatId: string, shouldRedirect: boolean = true)
 }
 
 /**
- * Import chat from RisuAI format
+ * Compatibility-only import path for archived RisuAI chat JSON.
+ * RBX/SUU remains the primary product surface.
  */
 export async function importChat(
   characterId: string,

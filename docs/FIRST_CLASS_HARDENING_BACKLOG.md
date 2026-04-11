@@ -178,6 +178,12 @@ Done when:
 - commented-out and obviously deprecated flows stop receiving incidental changes
 - removal candidates are explicitly marked or scheduled for deletion after usage review
 
+Current status as of 2026-04-12:
+
+- [src/app/auth/actions.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/auth/actions.ts) no longer carries the old commented-out signup implementation; the closed-signup contract now exists only as the live blocked action
+- [src/app/auth/signup/page.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/auth/signup/page.tsx) no longer presents a dormant registration form; it is now an explicit closed-signup notice page
+- [src/app/dashboard/chats/actions.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/actions.ts) and [src/lib/chat/risu-converter.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/risu-converter.ts) now mark Risu chat import/export as compatibility-only rather than implying a first-class product path
+
 ## Parked Until the Operating Contract Changes
 
 These are real future tasks, but they are not part of the current first-class hardening backlog.

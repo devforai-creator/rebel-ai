@@ -1,7 +1,8 @@
 /**
- * RisuAI <-> RebelAI chat conversion utilities
+ * Compatibility-only RisuAI <-> RebelAI chat conversion utilities.
  *
- * Conversion functions for bidirectional compatibility
+ * Keep this module for archived chat import/export and migration workflows.
+ * It is not part of the first-class RBX/SUU product surface.
  */
 
 import type {

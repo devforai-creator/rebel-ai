@@ -19,7 +19,7 @@ Status: first-class now
 Why this is the current mode:
 
 - The project is already valuable as a personal tool and does not need public traffic to justify itself.
-- The codebase still has open operational and security boundaries that should be closed before exposing signup.
+- The highest-risk internal boundary fixes are now closed, but public-opening gates still remain.
 - A solo maintainer should not carry two first-class operating modes at once.
 
 Primary evidence:
@@ -133,28 +133,47 @@ Evidence:
 
 Public signup stays closed until every item below is closed or deliberately waived with written rationale.
 
+Current status on 2026-04-11:
+
+- Gate 1: closed
+- Gate 2: closed
+- Gate 3: open
+- Gate 4: open
+- Gate 5: open
+
 ### Gate 1. Secret-write boundary is fixed
 
-- Fix the current gap around secret creation/ownership enforcement before exposing public signup.
-- Re-run security verification after the fix and keep the check in the normal release path.
+Status: closed on 2026-04-11
+
+- Vault write helpers are now restricted to the service role, requester-bound ownership checks are enforced again, and legacy over-permissive helper grants were revoked.
+- Keep the verification in the normal release path so future schema drift does not reopen the boundary.
 
 Evidence:
 
-- [63_reconcile_production_public.sql](../supabase/migrations/63_reconcile_production_public.sql)
+- [68_harden_vault_write_helpers.sql](../supabase/migrations/68_harden_vault_write_helpers.sql)
 - [schema.sql](../supabase/schema.sql)
+- [vault-rpc.integration.test.ts](../src/lib/rls/vault-rpc.integration.test.ts)
 - [SECURITY.md](../SECURITY.md)
 
 ### Gate 2. Runner health is durable across processes
 
-- Replace or supplement process-local health tracking with a durable signal.
-- The operator must be able to tell whether triggers fired, runners picked up jobs, and summaries advanced across deploys/restarts.
+Status: closed on 2026-04-11
+
+- Service health now persists durable snapshots in the database and the health route prefers those snapshots over process-local counters.
+- The operator can now distinguish durable vs fallback health reads via `healthSource`, even across deploys and restarts.
 
 Evidence:
 
+- [69_service_health_status.sql](../supabase/migrations/69_service_health_status.sql)
+- [70_fix_service_health_rpc.sql](../supabase/migrations/70_fix_service_health_rpc.sql)
+- [71_rename_service_health_rpc_args.sql](../supabase/migrations/71_rename_service_health_rpc_args.sql)
 - [trigger-tracker.ts](../src/lib/monitoring/trigger-tracker.ts)
+- [service-health-store.ts](../src/lib/monitoring/service-health-store.ts)
 - [route.ts](../src/app/api/internal/health/route.ts)
 
 ### Gate 3. Public abuse controls exist
+
+Status: open
 
 - Add a minimum viable public control set: rate limiting, signup policy, usage ceiling, and cost guardrails.
 - Public mode must fail closed when limits are exceeded.
@@ -166,6 +185,8 @@ Evidence:
 
 ### Gate 4. One public deployment profile is frozen
 
+Status: open
+
 - Pick exactly one official public profile and document it as the only supported public path.
 - Do not open signup while both low-cost and managed public operation are treated as equal first-class modes.
 
@@ -175,6 +196,8 @@ Evidence:
 - [README.md](../README.md)
 
 ### Gate 5. Failure triage is operator-usable
+
+Status: open
 
 - The maintainer must be able to answer: did request acceptance fail, job persistence fail, trigger dispatch fail, runner execution fail, or post-processing fail.
 - If that answer still requires digging across ad-hoc branches or local-only counters, public signup is premature.
@@ -232,11 +255,11 @@ Rule:
 
 This is the recommended order for the next cycle.
 
-1. Fix the secret/Vault write boundary and document the invariant.
-2. Add durable runner/summary health visibility that survives process restarts.
-3. Freeze one actual current deployment profile and update docs to reflect that reality.
+1. Freeze one actual current deployment profile and update docs to reflect that reality.
+2. Add a minimum viable public abuse-control set before reconsidering signup.
+3. Improve failure triage until operator-visible stages map cleanly to request acceptance, persistence, trigger, runner, and post-processing.
 4. Move non-core features behind clearer experimental boundaries.
-5. Revisit public signup only after gates 1 through 4 are closed.
+5. Revisit public signup only after gates 3 through 5 are closed.
 
 ## Decision Rules
 

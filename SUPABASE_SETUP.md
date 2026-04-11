@@ -11,6 +11,8 @@ Use this document when you want to:
 
 If you only want the shortest possible local boot flow, start with [docs/GETTING_STARTED.md](./docs/GETTING_STARTED.md).
 
+Repository default note: public signup is currently blocked. For a fresh personal deployment, create the first user from Supabase Dashboard instead of relying on the app signup form.
+
 ## 1. Create a Supabase Project
 
 1. Go to [supabase.com](https://supabase.com) and create a project.
@@ -107,7 +109,7 @@ http://localhost:3000/**
 https://app.example.com/**
 ```
 
-If this is wrong, signup and email verification flows will point users at the wrong domain.
+If this is wrong, login recovery, email verification, and any future signup flows will point users at the wrong domain.
 
 ### Email Auth
 
@@ -174,14 +176,15 @@ npm run dev
 Then verify the happy path:
 
 1. Open `http://localhost:3000`
-2. Sign up
-3. Add an API key in `/dashboard/api-keys`
-4. Import an `.rbx` package in the character import UI
-5. Start a chat and confirm responses stream
+2. Create the first user from Supabase Dashboard (`Authentication -> Users`) if you are using the repository defaults
+3. Sign in
+4. Add an API key in `/dashboard/api-keys`
+5. Import an `.rbx` package in the character import UI
+6. Start a chat and confirm responses stream
 
 ## 7. Optional Admin Access
 
-The first signed-up user is not automatically an admin.
+The first user is not automatically an admin.
 
 If you need admin-only features such as announcement management, run this in Supabase SQL Editor:
 
@@ -205,7 +208,7 @@ If you deploy on Vercel:
 - verify `vercel.json` cron jobs are active after deployment
 
 Current trigger endpoints accept only bearer-token auth. You should not rely on query-string secrets.
-Minute-level Vercel Cron is the managed default and requires a plan that supports it. On Vercel Hobby, use an external scheduler or run the runner scripts from another process instead.
+Minute-level Vercel Cron is the simplest future public-serving path and requires a plan that supports it. On Vercel Hobby, use an external scheduler or run the runner scripts from another process instead.
 
 ### Vercel Hobby / Non-Vercel Hosting
 
@@ -216,6 +219,8 @@ If you self-host elsewhere, or you deploy the app on Vercel Hobby:
 - or run `npm run chat:jobs` / `npm run character:jobs` from your own worker process
 
 For low-cost hosted setups, keep RBX imports within your storage provider's limits. Raising `NEXT_PUBLIC_IMPORT_MAX_UPLOAD_MB` does not bypass hosted storage caps.
+
+If you are following the current repo operating contract, this low-cost profile is the active maintainer-operated first-class path while signup remains closed.
 
 ## Troubleshooting
 

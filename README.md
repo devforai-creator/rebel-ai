@@ -7,12 +7,13 @@
 
 > A character chat web app you deploy on your own infrastructure.
 > Bring your own API keys to control costs. Keep conversations and characters in your own database.
-> Runs on free-tier cloud (Vercel Hobby + Supabase Free) or your own stack.
+> Supports both low-cost self-hosting and a simpler managed public profile, but the current repo operating contract keeps signup closed and treats the maintainer-run low-cost profile as the active first-class path.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdevforai-creator%2Frebel-ai&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,CHAT_ADMIN_SECRET,SUMMARY_GENERATION_SECRET,CRON_SECRET,INTERNAL_API_ORIGIN)
 
 [**🚀 Getting Started Guide**](./docs/GETTING_STARTED.md) — _New to RebelAI? Start here!_
-[**🧭 Hosting Profiles**](./docs/HOSTING_PROFILES.md) — _Managed production vs low-cost self-hosting_
+[**🧭 Hosting Profiles**](./docs/HOSTING_PROFILES.md) — _Current low-cost path vs future managed public path_
+[**📋 Operating Plan**](./docs/OPERATING_PLAN.md) — _Current operating contract, gates, and scope boundaries_
 
 ---
 
@@ -22,10 +23,19 @@ An open-source character chat web app that runs on your own infrastructure. You 
 
 Web-based by design: server-side long-term memory, background chat generation, and cross-device access are architectural choices, not add-ons. **RBX** is the native character package format, and **Safe UGC UI (SUU)** renders declarative character UI without script execution.
 
+## Current Operating Contract
+
+- Repository defaults keep public signup closed.
+- The active first-class operating mode is a personal/closed deployment on the low-cost profile the maintainer actually runs.
+- `Vercel Pro + Supabase Pro` is still documented because it is the intended future public-serving profile, not because both profiles are treated as equal day-to-day operating defaults.
+- Gate 1 (Vault write boundary) and Gate 2 (durable internal health) are closed. Public opening still depends on abuse controls, one frozen public profile, and clearer failure triage.
+
+See [`docs/OPERATING_PLAN.md`](./docs/OPERATING_PLAN.md) for the current operating contract.
+
 ### Key Features
 
 - 🔑 **BYOK Architecture** - API keys encrypted via Vault, user-controlled costs + OpenAI Standard/Flex service tier selection
-- ⚠️ **Managed vs Self-Hosted** - Vercel + Supabase Pro is the easiest production path, but low-cost self-hosting is supported with an external scheduler/worker and host-aware import limits.
+- ⚠️ **Operating Profiles** - The current maintainer-operated first-class path is the low-cost closed-deployment profile, while `Vercel Pro + Supabase Pro` remains the simplest future public-serving path once the remaining public gates are closed.
 - 💾 **Prompt Caching** - Shared caching strategy for supported LLM providers:
   - **OpenAI**: Fixed cache keys per operation (`chat:…`, `summary:…`) with 24-hour retention
   - **Anthropic**: Prefix-aware cache control for stable memory plans, including a switchable prefix-optimized chat mode for long conversations
@@ -33,7 +43,7 @@ Web-based by design: server-side long-term memory, background chat generation, a
 - 📦 **RBX Native Format** - RebelAI's native `.rbx` package is the recommended format for new cards: portable manifests, explicit asset references, declarative UI, and no script execution by design.
 - 📥 **Background RBX Import Jobs** - Queue `.rbx` packages into a background runner with configurable size limits. Practical maximum depends on your host and storage plan.
 - 🧩 **Safe UGC UI (SUU) Integration** - RBX `ui_card` and `image_display` payloads render via `@safe-ugc-ui/react`, giving native character cards a declarative safe UI layer for status panels and emotion-image layouts without adding new raw HTML/CSS paths.
-- 🧠 **Long-term Memory** - Dual memory system (semantic + episodic memory), custom prompts, Realtime updates, optional Voyage embeddings-based retrieval, and switchable memory modes: the default summary-window mode plus a prefix-optimized mode for cache-friendly long chats.
+- 🧠 **Long-term Memory** - Tiered memory profiles: maintainer-operated chats actively verify `prefix_live_blocks + episodic RAG`, while the code-level public-safe/system fallback remains `summary_window`. Voyage embeddings-backed retrieval stays optional.
 - 🌀 **Async Chat Queue (Realtime streaming)** - `/api/chat` (Node) enqueues jobs, runner uses `streamText` to update `messages` in real-time for Realtime subscription streaming. Job status API maintained as backup channel for completion/token aggregation.
 - 📄 **Message Pagination** - Optimized for large chats (loads 80 at a time, supports 1000+ messages)
 - ⚡ **SWR Data Caching** - Eliminates duplicate API calls, automatic revalidation
@@ -122,13 +132,15 @@ This repository targets Node 20 locally and in CI. If you use `nvm`, `fnm`, or V
 
 ### Hosting Profiles
 
-- **Managed production** — Vercel Pro + Supabase Pro. Easiest path for built-in minutely cron, larger hosted quotas, and always-on production projects.
-- **Low-cost self-hosted** — Vercel Hobby or another Node host + Supabase Free + external scheduler. Verified end-to-end on April 7, 2026 using `cron-job.org`: character import and chat generation both completed successfully. Good for personal or small deployments; keep imports within your storage provider's file-size limits.
-- **Full self-hosted** — Any Node host + your own scheduler/worker + your own Supabase/Postgres stack.
+- **Managed production** — Vercel Pro + Supabase Pro. Easiest path if you intend to serve outside users later; treat this as the future public-opening target, not the current maintainer-operated default.
+- **Low-cost self-hosted** — Vercel Hobby or another Node host + Supabase Free + external scheduler. This is the current maintainer-operated first-class profile for personal/closed deployment. Verified end-to-end on April 7, 2026 using `cron-job.org`: character import and chat generation both completed successfully.
+- **Full self-hosted** — Any Node host + your own scheduler/worker + your own Supabase/Postgres stack. Highest flexibility, but more infrastructure responsibility and not the current day-to-day first-class path.
 
 See [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md) for the tradeoffs and required infrastructure for each mode.
 
 ### Optional: Episodic Memory RAG
+
+Note: the maintainer-operated path currently treats `prefix_live_blocks + episodic RAG` as the actively verified memory profile. Public-safe and system-fallback behavior remains `summary_window`.
 
 1.  **Register Voyage Embeddings key** – In `/dashboard/api-keys`, select `Voyage (Embeddings)` provider and save your key.
 2.  **Enable in account settings** – In `/dashboard/account` → _Episodic Memory RAG_ section, toggle on and select your Voyage key.
@@ -143,7 +155,8 @@ See [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md) for the tradeoffs a
 | --------------- | ------------------------------------------------------------ | --------------------------------------------------------------- |
 | Setup           | [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md)                   | Local + Supabase configuration walkthrough                      |
 | Getting started | [`docs/GETTING_STARTED.md`](./docs/GETTING_STARTED.md)       | First-run guide for a fresh local deployment                    |
-| Hosting         | [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md)     | Managed production vs low-cost self-hosted deployment profiles  |
+| Hosting         | [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md)     | Current low-cost profile vs future managed public profile       |
+| Operations      | [`docs/OPERATING_PLAN.md`](./docs/OPERATING_PLAN.md)         | Current first-class mode, public gates, and scope boundaries    |
 | Database        | [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)                 | Tables, RLS policies, RPC functions                             |
 | Database ops    | [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md) | Migration workflow, production pushes, and drift recovery       |
 | Format          | [`docs/rbx-spec.md`](./docs/rbx-spec.md)                     | RBX package format and runtime contract                         |
@@ -178,7 +191,7 @@ The chat entry point (`/api/chat`) maintains a job queue in Node.js Runtime whil
 
 > **TIP:** To verify scheduled execution, check the logs for whichever scheduler you use. On Vercel Pro, look for `/api/internal/chat-job-runner/trigger` → `/api/internal/chat-job-runner`. For urgent cases, run `npm run chat:jobs` to drain jobs immediately.
 
-- **Health check**: Call `GET /api/internal/health` (requires `Authorization: Bearer ${CHAT_ADMIN_SECRET}` header) to check recent success/failure times and consecutive failure counts for chat runner trigger and summary trigger. If response `status` is `degraded`, one of Cron settings, runner logs, or summary bridge has consecutive failures.
+- **Health check**: Call `GET /api/internal/health` (requires `Authorization: Bearer ${CHAT_ADMIN_SECRET}` header) to inspect recent success/failure times and consecutive failure counts for runner/broadcast/summary services. The route prefers durable database-backed snapshots and returns `healthSource: durable` when that path is active, falling back to in-memory stats only when admin DB access is unavailable. If response `status` is `degraded`, one of the trigger, runner, broadcast, or summary stages has consecutive failures.
 
 ### Internal API origin resolution
 

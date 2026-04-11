@@ -4,6 +4,8 @@ This is the fastest path from a fresh checkout to a working local or deployed Re
 
 For the full Supabase walkthrough, see [SUPABASE_SETUP.md](../SUPABASE_SETUP.md).
 
+Repository default note: public signup is currently blocked. For a fresh personal deployment, create the first user in Supabase Dashboard before logging in. Public signup is a later operating-mode decision, not part of the default boot path.
+
 ## Quick Start
 
 ### 1. Install dependencies
@@ -63,10 +65,11 @@ Open `http://localhost:3000`.
 
 ## First-Run Checklist
 
-1. Sign up for an account.
-2. Go to `/dashboard/api-keys` and add at least one LLM API key.
-3. Go to the character import flow and upload an `.rbx` package.
-4. Open the imported character and start a chat.
+1. Create the first user from Supabase Dashboard (`Authentication -> Users`) if you are using the repository defaults.
+2. Sign in with that user.
+3. Go to `/dashboard/api-keys` and add at least one LLM API key.
+4. Go to the character import flow and upload an `.rbx` package.
+5. Open the imported character and start a chat.
 
 ## Optional Setup
 
@@ -105,7 +108,7 @@ RebelAI is set up to work well on Vercel, but production deployment should inclu
 - `INTERNAL_API_ORIGIN`
 
 Vercel Cron calls the trigger routes with bearer auth. You do not need query-string secrets.
-Per-minute Vercel Cron is the managed-path default and requires a plan that supports minute-level schedules. If you run on Vercel Hobby, use an external scheduler or worker instead.
+Per-minute Vercel Cron is the simplest managed public-serving path and requires a plan that supports minute-level schedules. If you are running the current closed/personal low-cost profile on Vercel Hobby, use an external scheduler or worker instead.
 
 ### Vercel Hobby / Other hosts
 
@@ -127,11 +130,13 @@ Verified reference setup on April 7, 2026: `Vercel Hobby + Supabase Free + cron-
 
 If you use hosted Supabase Free, keep imports within the provider's current storage limits and start with small `.rbx` packages.
 
+This low-cost profile is the current maintainer-operated first-class path while signup remains closed. If you later decide to serve outside users, freeze one public profile first instead of treating low-cost and managed public hosting as equal defaults.
+
 ## Troubleshooting
 
-### Signup works locally but not on the deployed app
+### Signup page returns a blocked message
 
-Check your Supabase auth `Site URL` and `Redirect URLs`.
+This is the current repository default. Create the first user from Supabase Dashboard (`Authentication -> Users`) for personal/closed deployments. If you plan to reopen signup later, update the auth flow intentionally and then verify `Site URL` and `Redirect URLs`.
 
 ### Messages do not generate
 
@@ -153,6 +158,10 @@ Check:
 ### Production works inconsistently or internal calls fail
 
 Check `INTERNAL_API_ORIGIN` first. In non-local environments it must be set to the canonical app URL.
+
+### Health endpoint shows `healthSource: memory-fallback`
+
+Check that `SUPABASE_SERVICE_ROLE_KEY` and the admin DB path are configured for the deployed environment. The health route should prefer durable service snapshots; `memory-fallback` means it could not load the durable path and is falling back to in-process counters.
 
 ### Storage keeps growing unexpectedly
 

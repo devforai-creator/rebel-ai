@@ -175,6 +175,8 @@ Current status as of 2026-04-11:
 Scope:
 
 - [src/app/api/chat/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.ts)
+- [src/app/api/chat/background-trigger.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/background-trigger.ts)
+- [src/app/api/chat/background-trigger.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/background-trigger.test.ts)
 - [src/app/api/chat/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.test.ts)
 
 Why:
@@ -185,11 +187,15 @@ Done when:
 
 - tests assert trigger invocation
 - tests assert the expected internal URL and auth headers for the runner trigger
+- runner-trigger success and failure paths are recorded through shared monitoring helpers
+- missing secret, URL-resolution failure, non-OK responses, and fetch exceptions are visible in test coverage
 
 Current status as of 2026-04-11:
 
 - [src/app/api/chat/route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.test.ts) now asserts that successful user-message requests dispatch [triggerMessageTranslation](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/translation-trigger.ts) with the persisted message ID and requester user ID
 - the same test file now asserts `/api/internal/chat-job-runner/trigger` is called with the resolved internal origin, bearer auth header, and deployment-bypass header when configured
+- [src/app/api/chat/background-trigger.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/background-trigger.ts) now reports runner-trigger success and failure through [src/lib/chat/runner-trigger-monitor.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/runner-trigger-monitor.ts), including missing `CHAT_ADMIN_SECRET`, trigger URL resolution failures, non-OK responses, and fetch exceptions
+- [src/app/api/chat/background-trigger.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/background-trigger.test.ts) now locks those visibility paths with direct unit coverage instead of relying only on route-level success assertions
 
 ### P1-3. RBX Import Orphan Cleanup
 

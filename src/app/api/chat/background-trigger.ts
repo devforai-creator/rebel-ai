@@ -1,4 +1,8 @@
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
+import {
+  recordChatRunnerTriggerFailure,
+  recordChatRunnerTriggerSuccess,
+} from '@/lib/chat/runner-trigger-monitor'
 import { after } from 'next/server'
 
 export function scheduleChatJobRunnerTrigger({
@@ -13,20 +17,42 @@ export function scheduleChatJobRunnerTrigger({
   logDebug?: (...args: unknown[]) => void
 }): void {
   const adminSecret = process.env.CHAT_ADMIN_SECRET
+  const baseMetadata = { chatId, jobId, requestId }
+
   if (!adminSecret) {
+    const error = new Error('CHAT_ADMIN_SECRET is not configured')
+    recordChatRunnerTriggerFailure(error, {
+      ...baseMetadata,
+      stage: 'schedule',
+    })
+    console.error('[Chat API] CHAT_ADMIN_SECRET missing; cannot trigger job runner', baseMetadata)
     return
   }
 
-  const triggerUrl = buildInternalApiUrl('/api/internal/chat-job-runner/trigger').toString()
-
-  logDebug?.('[Chat API] Triggering job runner', {
-    chatId,
-    requestId,
-    triggerUrl,
-    vercelEnv: process.env.VERCEL_ENV,
-  })
-
   after(async () => {
+    let triggerUrl: string
+
+    try {
+      triggerUrl = buildInternalApiUrl('/api/internal/chat-job-runner/trigger').toString()
+    } catch (error) {
+      recordChatRunnerTriggerFailure(error, {
+        ...baseMetadata,
+        stage: 'resolve-trigger-url',
+      })
+      console.error('[Chat API] Failed to resolve job runner trigger URL', {
+        ...baseMetadata,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return
+    }
+
+    logDebug?.('[Chat API] Triggering job runner', {
+      chatId,
+      requestId,
+      triggerUrl,
+      vercelEnv: process.env.VERCEL_ENV,
+    })
+
     try {
       const response = await fetch(triggerUrl, {
         method: 'GET',
@@ -40,20 +66,36 @@ export function scheduleChatJobRunnerTrigger({
 
       if (!response.ok) {
         const text = await response.text()
+        const error = new Error(
+          `Job runner trigger responded with status ${response.status}: ${text || 'Unknown error'}`,
+        )
+        recordChatRunnerTriggerFailure(error, {
+          ...baseMetadata,
+          triggerUrl,
+          status: response.status,
+        })
         console.error('[Chat API] Job runner trigger responded with non-OK status', {
-          chatId,
-          requestId,
-          jobId,
+          ...baseMetadata,
           triggerUrl,
           status: response.status,
           body: text,
         })
+        return
       }
+
+      recordChatRunnerTriggerSuccess({
+        ...baseMetadata,
+        triggerUrl,
+        status: response.status,
+      })
     } catch (error) {
+      recordChatRunnerTriggerFailure(error, {
+        ...baseMetadata,
+        triggerUrl,
+        stage: 'fetch-trigger',
+      })
       console.error('[Chat API] Failed to trigger job runner', {
-        chatId,
-        requestId,
-        jobId,
+        ...baseMetadata,
         triggerUrl,
         error: error instanceof Error ? error.message : String(error),
       })

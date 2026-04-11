@@ -42,14 +42,7 @@ function appendPipelineStep(
   })
 }
 
-/**
- * Normalize fullwidth Unicode characters to ASCII equivalents.
- * LLMs sometimes output fullwidth punctuation (especially in CJK contexts),
- * which breaks regex patterns expecting ASCII characters.
- * @internal Exported for testing
- */
 export function normalizeFullwidthChars(text: string): string {
-  // Fast path: skip if no fullwidth characters present
   if (!/[｜［］：－–—]/.test(text)) {
     return text
   }
@@ -95,8 +88,6 @@ export function prepareMessageContentForRendering(
   content: string,
   trace?: PipelineTraceCollector,
 ): PreparedMessageContentForRendering {
-  // Normalize legacy inline asset tokens to the canonical markdown form
-  // so downstream resolution and future markdown rendering share one syntax.
   appendPipelineStep(trace?.steps, 'original', content, null)
 
   const assetTokenNormalizedContent = normalizeLegacyAssetImageTokens(content)
@@ -168,13 +159,7 @@ export function computeClientRenderDiagnostics(
   const unresolvedImageTags =
     hasStrictResolvers && imageTags.length > 0
       ? filterUnresolvedImageTags(imageTags, (name) =>
-          resolveImageTagForDiagnostics(
-            name,
-            assetUrlMap,
-            characterAssets,
-            imageCommandUrlMap,
-            storageBaseUrl,
-          ),
+          resolveImageTagForDiagnostics(name, characterAssets, imageCommandUrlMap, storageBaseUrl),
         )
       : []
   return {
@@ -224,7 +209,6 @@ function filterUnresolvedImageTags(
 
 function resolveImageTagForDiagnostics(
   name: string,
-  assetUrlMap: Record<string, string> | undefined,
   characterAssets: CharacterAsset[] | undefined,
   imageCommandUrlMap: Record<string, string> | undefined,
   storageBaseUrl: string,

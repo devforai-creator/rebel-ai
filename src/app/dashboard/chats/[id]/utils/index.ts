@@ -1,4 +1,3 @@
-// Types
 export type {
   DisplayMessage,
   StreamingAssistantDraft,
@@ -17,7 +16,6 @@ export type {
 
 export { mapMessageToDisplay, buildSanitizedMessages } from './types'
 
-// Formatters
 export {
   formatTokenValue,
   formatUsd,
@@ -26,7 +24,6 @@ export {
   formatServiceTierLabel,
 } from './formatters'
 
-// Message Renderer
 export { renderMessageContent } from './message-renderer'
 
 export type {

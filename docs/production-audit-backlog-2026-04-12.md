@@ -303,6 +303,13 @@ Done when:
 - comments explain intent, invariants, or sharp edges only
 - dead or commented-out compatibility remnants are removed instead of narrated
 
+Current status as of 2026-04-12:
+
+- [message-content-pipeline.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/message-content-pipeline.ts) no longer carries step-by-step narration around straightforward normalization flow, and its strict diagnostics resolver no longer accepts an unused generic `assetUrlMap` parameter that had stopped affecting behavior
+- [message-renderer.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/message-renderer.tsx) dropped long pipeline/explanation blocks that were restating the code after the earlier compatibility split, so the file now emphasizes the actual render path instead of preserving stale commentary about already-extracted legacy handling
+- [utils/index.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/index.ts) no longer pads simple re-exports with heading comments, which keeps the module registry terse now that the surrounding seams are explicit
+- regression coverage for the cleaned render/normalization path still passes in [message-content-pipeline.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/message-content-pipeline.test.ts), [message-renderer.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/message-renderer.test.tsx), and [lorebook-panel.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/lorebook-panel.test.ts), so the cleanup stayed on the cosmetic/dead-fragment side rather than changing runtime behavior
+
 ## Recommended Order
 
 1. P0-1 Freeze the support matrix and failure-signal policy

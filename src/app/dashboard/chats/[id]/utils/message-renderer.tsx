@@ -29,11 +29,6 @@ const ALLOWED_MARKDOWN_ELEMENTS = [
   'ul',
 ] as const
 
-/**
- * Pre-render validation for image_display card JSON.
- * Parses the JSON and checks that the card has a valid view to render.
- * Returns null if the card is invalid (caller should fall back to <Image>).
- */
 function validateImageDisplayCard(cardJson: string): boolean {
   try {
     const card = JSON.parse(cardJson)
@@ -41,7 +36,6 @@ function validateImageDisplayCard(cardJson: string): boolean {
     if (!card.views || typeof card.views !== 'object') return false
     const viewKeys = Object.keys(card.views)
     if (viewKeys.length === 0) return false
-    // Check that the first view has at least a type (minimal structure check)
     const firstView = card.views[viewKeys[0]]
     if (!firstView || typeof firstView !== 'object' || !firstView.type) return false
     return true
@@ -50,11 +44,6 @@ function validateImageDisplayCard(cardJson: string): boolean {
   }
 }
 
-/**
- * Error boundary for UGCRenderer. Last-resort safety net for unexpected render throws.
- * Pre-render validation (validateImageDisplayCard) handles the common failure cases;
- * this boundary catches only unforeseen runtime errors.
- */
 class ImageDisplayErrorBoundary extends React.Component<
   { fallback: React.ReactNode; children: React.ReactNode },
   { hasError: boolean }
@@ -177,22 +166,6 @@ function renderMarkdownSegment(text: string, keyPrefix: string): React.ReactNode
   return parts.length > 0 ? <>{parts}</> : null
 }
 
-/**
- * Render message content with emotion images and plain-text message rendering
- *
- * Processing Pipeline (order matters - each step runs ONCE):
- * 1. Message Normalization
- *    - Fullwidth punctuation normalization
- *    - Legacy @@move_top reordering only
- *
- * 2. Emotion Image Rendering
- *    - ![alt](asset:key) → React Image component
- *    - Legacy image tokens normalize to the same canonical form upstream
- *
- * 3. Markdown Rendering
- *    - Remaining content renders as safe Markdown (GFM + single-newline breaks)
- *    - Raw HTML stays inert because rehype-raw is not enabled
- */
 export function renderMessageContent(
   content: string,
   characterAssets: CharacterAsset[],
@@ -211,14 +184,12 @@ export function renderMessageContent(
   isLatestMessage?: boolean,
   imageDisplay?: Record<string, unknown> | null,
 ): React.ReactNode {
-  // Get Supabase URL from environment
   const storageBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 
   const { processedContent } = prepareMessageContentForRendering(content)
   void screenWidth
   void randomSeed
 
-  // Per-message inline UGCRenderer: replace extract regex match with ui_card component
   if ((uiCard || uiCardRegistry) && moduleRegex) {
     const inlineResult = renderWithInlineUiCard(
       processedContent,
@@ -226,8 +197,6 @@ export function renderMessageContent(
       uiCard,
       uiCardRegistry,
       assetUrlMap,
-      // Historical snapshot: past messages only use extract results + ui_card.state.
-      // Runtime variables (Toggle/Button) only apply to the latest message.
       isLatestMessage ? defaultVariables : undefined,
       characterAssets,
       imageCommandUrlMap,
@@ -248,14 +217,6 @@ export function renderMessageContent(
   )
 }
 
-/**
- * Per-message inline UGCRenderer rendering.
- *
- * Finds all extract regex matches in processedContent, resolves each one to a
- * card, and renders text/card spans in message order.
- *
- * Returns null if no extract regex matches (caller falls through to default pipeline).
- */
 function renderWithInlineUiCard(
   processedContent: string,
   moduleRegex: ModuleRegexEntry[],
@@ -408,12 +369,8 @@ function renderContentWithEmotionImages(
     return <div>{renderMarkdownSegment(processedContent, 'plain')}</div>
   }
 
-  // Core rendering only consumes canonical asset markdown.
-  // Legacy inline tokens are normalized upstream in prepareMessageContentForRendering().
   const imageMatches = collectCanonicalAssetImageTokenMatches(processedContent)
 
-  // Pre-serialize and validate imageDisplay once before the loop.
-  // If serialization or validation fails, imageDisplayJson stays null → fallback to <Image>.
   const imageDisplayJson = imageDisplay
     ? (() => {
         try {
@@ -429,7 +386,6 @@ function renderContentWithEmotionImages(
   let lastIndex = 0
 
   for (const match of imageMatches) {
-    // Add text before the image token.
     if (match.index > lastIndex) {
       const textPart = processedContent.substring(lastIndex, match.index)
       parts.push(
@@ -452,9 +408,6 @@ function renderContentWithEmotionImages(
     if (renderTarget) {
       const emotionUrl = renderTarget.resolvedUrl
       if (imageDisplayJson) {
-        // UCC-based image rendering: use card author's display template
-        // Card JSON is pre-validated by validateImageDisplayCard() above.
-        // ErrorBoundary is a last-resort safety net for unforeseen render throws.
         const imgAssetMap: Record<string, string> = {
           '@assets/emotion': emotionUrl,
           emotion: emotionUrl,
@@ -482,7 +435,6 @@ function renderContentWithEmotionImages(
           </ImageDisplayErrorBoundary>,
         )
       } else {
-        // Legacy: hardcoded Image
         parts.push(
           <Image
             key={`emotion-${match.index}`}
@@ -500,7 +452,6 @@ function renderContentWithEmotionImages(
     lastIndex = match.index + match.raw.length
   }
 
-  // Add remaining text after the final image token.
   if (lastIndex < processedContent.length) {
     const textPart = processedContent.substring(lastIndex)
     parts.push(

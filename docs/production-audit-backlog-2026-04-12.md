@@ -247,6 +247,12 @@ Done when:
 - rendering, data hooks, mutations, and compatibility helpers are split into cohesive modules
 - feature work can land without touching unrelated UI branches
 
+Current status as of 2026-04-12:
+
+- [ChatInterface.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatInterface.tsx) now delegates API-key selection, alternate-model toggles, memory-mode selection, Anthropic batch delivery gating, and developer-mode persistence to [useChatInterfaceSettings.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/hooks/useChatInterfaceSettings.ts), which turns the first large UI branch into an explicit seam instead of keeping settings logic inline with asset loading, realtime subscriptions, history, and composer handling
+- the extracted seam now carries direct regression coverage in [useChatInterfaceSettings.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/hooks/useChatInterfaceSettings.test.ts), so initial API-key resolution and alternate-model enablement rules stay locked as the surrounding UI keeps shrinking
+- [ChatInterface.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatInterface.tsx) is down to `767` lines from its previous `968`, which is not the end state but does confirm the file is moving toward a state/orchestration shell instead of remaining a monolithic settings + realtime + rendering surface
+
 ### P2-2. Finish Shrinking Server Action Monoliths
 
 Scope:

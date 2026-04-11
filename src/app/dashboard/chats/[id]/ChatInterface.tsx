@@ -21,26 +21,13 @@ import {
   mapMessageToDisplay,
   shouldRefreshTokenStats,
 } from './utils'
-import { useQueuedChat } from './hooks'
-import { updateChatModelConfig } from './actions'
+import { useChatInterfaceSettings, useQueuedChat } from './hooks'
 import { MessageList, TokenStatsPanel, DebugModal } from './components'
 import {
   CHAT_ASSISTANT_STREAM_EVENT,
   getChatAssistantStreamChannelName,
   type AssistantStreamBroadcastPayload,
 } from '@/lib/chat/assistant-stream'
-import {
-  buildOperatorDefaultChatModelConfig,
-  normalizeChatModelConfig,
-  resolveChatMemoryConfig,
-  type ChatMemoryMode,
-} from '@/lib/chat/model-config'
-import {
-  CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
-  CHAT_DELIVERY_MODE_STREAMING,
-  isAnthropicBatchChatEnabled,
-  isAnthropicBatchChatSupported,
-} from '@/lib/chat/delivery-mode'
 
 // Default empty asset data
 const EMPTY_ASSET_DATA: ChatAssetData = {
@@ -114,107 +101,33 @@ export default function ChatInterface({
   // Runtime variables state (merged with character's default_variables)
   const [runtimeVariables, setRuntimeVariables] = useState<Record<string, unknown>>({})
   const runtimeVariablesRef = useRef<Record<string, unknown>>({})
-  const normalizedModelConfig = useMemo(
-    () => normalizeChatModelConfig(initialModelConfig),
-    [initialModelConfig],
-  )
-  const initialResolvedMemoryConfig = useMemo(
-    () =>
-      resolveChatMemoryConfig(normalizedModelConfig, {
-        defaultMode: isDeveloper ? 'prefix_live_blocks' : undefined,
-      }),
-    [isDeveloper, normalizedModelConfig],
-  )
-  const didPersistOperatorDefaultMemoryRef = useRef(false)
 
   useEffect(() => {
     runtimeVariablesRef.current = runtimeVariables
   }, [runtimeVariables])
 
-  useEffect(() => {
-    if (
-      !isDeveloper ||
-      normalizedModelConfig.memory ||
-      didPersistOperatorDefaultMemoryRef.current
-    ) {
-      return
-    }
-
-    didPersistOperatorDefaultMemoryRef.current = true
-    const operatorDefaultConfig = buildOperatorDefaultChatModelConfig(normalizedModelConfig)
-
-    void updateChatModelConfig(chatId, operatorDefaultConfig).then((result) => {
-      if (result?.error) {
-        toast.error(result.error)
-      }
-    })
-  }, [chatId, isDeveloper, normalizedModelConfig])
-
-  const resolveValidApiKeyId = useCallback(
-    (candidate?: string | null) => {
-      if (!candidate) return null
-      return apiKeys.some((key) => key.id === candidate) ? candidate : null
-    },
-    [apiKeys],
-  )
-
-  const initialPrimaryApiKeyId = (() => {
-    const fromConfig = resolveValidApiKeyId(normalizedModelConfig.alternateModels?.primaryApiKeyId)
-    if (fromConfig) return fromConfig
-    const fromPreselected = resolveValidApiKeyId(preselectedApiKeyId ?? null)
-    if (fromPreselected) return fromPreselected
-    const savedKey = localStorage.getItem('lastUsedApiKey')
-    const fromSaved = resolveValidApiKeyId(savedKey)
-    if (fromSaved) return fromSaved
-    return apiKeys[0]?.id || ''
-  })()
-
-  const initialSecondaryApiKeyId = (() => {
-    const fromConfig = resolveValidApiKeyId(
-      normalizedModelConfig.alternateModels?.secondaryApiKeyId,
-    )
-    if (fromConfig) return fromConfig
-    const fallback = apiKeys.find((key) => key.id !== initialPrimaryApiKeyId)
-    return fallback?.id || ''
-  })()
-
-  const [selectedApiKeyId, setSelectedApiKeyId] = useState(initialPrimaryApiKeyId)
-  const [secondaryApiKeyId, setSecondaryApiKeyId] = useState(initialSecondaryApiKeyId)
-  const [anthropicBatchModeEnabled, setAnthropicBatchModeEnabled] = useState(false)
-  const [alternateModelsEnabled, setAlternateModelsEnabled] = useState(() => {
-    const enabled = normalizedModelConfig.alternateModels?.enabled ?? false
-    const hasPair =
-      !!initialPrimaryApiKeyId &&
-      !!initialSecondaryApiKeyId &&
-      initialPrimaryApiKeyId !== initialSecondaryApiKeyId
-    return enabled && hasPair
+  const {
+    selectedApiKeyId,
+    secondaryApiKeyId,
+    alternateModelsEnabled,
+    memoryMode,
+    anthropicBatchModeEnabled,
+    anthropicBatchModeAvailable,
+    deliveryMode,
+    developerMode,
+    handleToggleAlternateModels,
+    handleSelectPrimaryApiKey,
+    handleSelectSecondaryApiKey,
+    handleSelectMemoryMode,
+    handleToggleAnthropicBatchMode,
+    toggleDeveloperMode,
+  } = useChatInterfaceSettings({
+    chatId,
+    apiKeys,
+    preselectedApiKeyId,
+    initialModelConfig,
+    isDeveloper,
   })
-  const [memoryMode, setMemoryMode] = useState<ChatMemoryMode>(initialResolvedMemoryConfig.mode)
-  const [memorySettings] = useState(() => ({
-    sealEveryMessages: initialResolvedMemoryConfig.sealEveryMessages,
-    retainTailMessages: initialResolvedMemoryConfig.retainTailMessages,
-  }))
-  const selectedApiKey = useMemo(
-    () => apiKeys.find((key) => key.id === selectedApiKeyId) ?? null,
-    [apiKeys, selectedApiKeyId],
-  )
-  const anthropicBatchChatEnabled = isAnthropicBatchChatEnabled()
-  const anthropicBatchModeSupported = isAnthropicBatchChatSupported({
-    provider: selectedApiKey?.provider,
-    modelName: selectedApiKey?.model_preference,
-  })
-  const anthropicBatchModeAvailable =
-    anthropicBatchChatEnabled && !alternateModelsEnabled && anthropicBatchModeSupported
-  const deliveryMode =
-    anthropicBatchModeEnabled && anthropicBatchModeAvailable
-      ? CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
-      : CHAT_DELIVERY_MODE_STREAMING
-
-  useEffect(() => {
-    if (!anthropicBatchModeAvailable && anthropicBatchModeEnabled) {
-      setAnthropicBatchModeEnabled(false)
-    }
-  }, [anthropicBatchModeAvailable, anthropicBatchModeEnabled])
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -230,7 +143,6 @@ export default function ChatInterface({
   const [editContent, setEditContent] = useState('')
 
   // Developer mode state
-  const [developerMode, setDeveloperMode] = useState(false)
   const [statsExpanded, setStatsExpanded] = useState(false)
   const [debugModal, setDebugModal] = useState<{
     isOpen: boolean
@@ -250,119 +162,6 @@ export default function ChatInterface({
   // Debug info and persisted IDs tracking
   const debugInfoMap = useRef<Map<string, DebugInfo>>(new Map())
   const persistedMessageIds = useRef<Set<string>>(new Set())
-
-  // Load developer mode from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('developerMode')
-    if (saved === 'true') {
-      setDeveloperMode(true)
-    }
-  }, [])
-
-  // Save selected API key to localStorage
-  useEffect(() => {
-    if (selectedApiKeyId) {
-      localStorage.setItem('lastUsedApiKey', selectedApiKeyId)
-    }
-  }, [selectedApiKeyId])
-
-  const persistModelConfig = useCallback(
-    async (
-      nextEnabled: boolean,
-      nextPrimary: string,
-      nextSecondary: string,
-      nextMemoryMode: ChatMemoryMode,
-    ) => {
-      const config = {
-        alternateModels: {
-          enabled: nextEnabled,
-          primaryApiKeyId: nextPrimary || null,
-          secondaryApiKeyId: nextSecondary || null,
-        },
-        memory:
-          nextMemoryMode === 'prefix_live_blocks'
-            ? {
-                mode: nextMemoryMode,
-                sealEveryMessages: memorySettings.sealEveryMessages,
-                retainTailMessages: memorySettings.retainTailMessages,
-              }
-            : null,
-      }
-
-      const result = await updateChatModelConfig(chatId, config)
-      if (result?.error) {
-        toast.error(result.error)
-      }
-    },
-    [chatId, memorySettings.retainTailMessages, memorySettings.sealEveryMessages],
-  )
-
-  const handleToggleAlternateModels = useCallback(() => {
-    const nextEnabled = !alternateModelsEnabled
-    if (nextEnabled) {
-      if (!selectedApiKeyId || !secondaryApiKeyId) {
-        toast.error('교대 모드를 사용하려면 두 개의 API 키를 선택하세요.')
-        return
-      }
-      if (selectedApiKeyId === secondaryApiKeyId) {
-        toast.error('교대 모드는 서로 다른 API 키가 필요합니다.')
-        return
-      }
-    }
-
-    setAlternateModelsEnabled(nextEnabled)
-    void persistModelConfig(nextEnabled, selectedApiKeyId, secondaryApiKeyId, memoryMode)
-  }, [alternateModelsEnabled, memoryMode, selectedApiKeyId, secondaryApiKeyId, persistModelConfig])
-
-  const handleSelectPrimaryApiKey = useCallback(
-    (nextId: string) => {
-      setSelectedApiKeyId(nextId)
-      if (alternateModelsEnabled && nextId === secondaryApiKeyId) {
-        toast.error('교대 모드는 서로 다른 API 키가 필요합니다.')
-      }
-      void persistModelConfig(alternateModelsEnabled, nextId, secondaryApiKeyId, memoryMode)
-    },
-    [alternateModelsEnabled, memoryMode, secondaryApiKeyId, persistModelConfig],
-  )
-
-  const handleSelectSecondaryApiKey = useCallback(
-    (nextId: string) => {
-      setSecondaryApiKeyId(nextId)
-      if (alternateModelsEnabled && nextId === selectedApiKeyId) {
-        toast.error('교대 모드는 서로 다른 API 키가 필요합니다.')
-      }
-      void persistModelConfig(alternateModelsEnabled, selectedApiKeyId, nextId, memoryMode)
-    },
-    [alternateModelsEnabled, memoryMode, selectedApiKeyId, persistModelConfig],
-  )
-
-  const handleSelectMemoryMode = useCallback(
-    (nextMode: ChatMemoryMode) => {
-      setMemoryMode(nextMode)
-      void persistModelConfig(alternateModelsEnabled, selectedApiKeyId, secondaryApiKeyId, nextMode)
-    },
-    [alternateModelsEnabled, persistModelConfig, secondaryApiKeyId, selectedApiKeyId],
-  )
-
-  const handleToggleAnthropicBatchMode = useCallback(() => {
-    if (!anthropicBatchModeAvailable && !anthropicBatchModeEnabled) {
-      if (!anthropicBatchChatEnabled) {
-        toast.error('Claude Batch 모드는 이 배포에서 기본 비활성화되어 있습니다.')
-        return
-      }
-
-      toast.error('Claude Batch 모드는 Anthropic Opus 4.5/4.6 키에서만 사용할 수 있습니다.')
-      return
-    }
-    setAnthropicBatchModeEnabled((current) => !current)
-  }, [anthropicBatchChatEnabled, anthropicBatchModeAvailable, anthropicBatchModeEnabled])
-
-  // Toggle developer mode
-  const toggleDeveloperMode = useCallback(() => {
-    const newValue = !developerMode
-    setDeveloperMode(newValue)
-    localStorage.setItem('developerMode', String(newValue))
-  }, [developerMode])
 
   // Initialize debug info map
   useEffect(() => {

@@ -1,5 +1,8 @@
 import { resolveAssetTag, resolveAssetUrl, type CharacterAsset } from '@/lib/asset-resolver'
-import { normalizeLegacyAssetImageTokens } from '@/lib/asset-token'
+import {
+  collectCanonicalAssetImageTokenMatches,
+  normalizeLegacyAssetImageTokens,
+} from '@/lib/asset-token'
 import type { ModuleRegexEntry } from './types'
 
 const PIPELINE_TRACE_PREVIEW_LIMIT = 300
@@ -131,9 +134,6 @@ export type ClientRenderDiagnostics = Readonly<{
   embeddedHtmlDoc: null
 }>
 
-const UNRESOLVED_IMAGE_TAG_REGEX =
-  /!\[([^\]]*)\]\(\s*asset:((?:[^)\s]|\s(?!\)))*[^)\s]?)\s*\)|<img\s*(?:="([^"]+)"|src=(?!["']?(?:https?:\/\/|data:))(?:"([^"]+)"|'([^']+)'|([^\s>"']+)))(?:\s*\/)?(?:\s*>)?|\[\s*🖼\s*\|\s*([^\]]+?)\s*\]|\{\{image::([^}]+)\}\}/gim
-
 export function computeClientRenderDiagnostics(
   content: string,
   moduleRegex: ModuleRegexEntry[] | undefined,
@@ -194,29 +194,15 @@ type ImageTag = Readonly<{ original: string; extractedName: string }>
 function collectImageTags(content: string): ImageTag[] {
   if (!content) return []
 
-  const tags: ImageTag[] = []
   const seen = new Set<string>()
-  const regex = new RegExp(UNRESOLVED_IMAGE_TAG_REGEX)
+  const tags: ImageTag[] = []
 
-  let match
-  while ((match = regex.exec(content)) !== null) {
-    const extractedName = (
-      match[2] ||
-      match[3] ||
-      match[4] ||
-      match[5] ||
-      match[6] ||
-      match[7] ||
-      match[8]
-    )?.trim()
-    if (!extractedName) continue
-
-    const original = match[0]
-    const key = `${original}::${extractedName}`
+  for (const match of collectCanonicalAssetImageTokenMatches(content)) {
+    const key = `${match.raw}::${match.assetKey}`
     if (seen.has(key)) continue
     seen.add(key)
 
-    tags.push({ original, extractedName })
+    tags.push({ original: match.raw, extractedName: match.assetKey })
   }
 
   return tags

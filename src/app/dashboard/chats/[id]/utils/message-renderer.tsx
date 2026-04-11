@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import type { CharacterAsset } from '@/lib/asset-resolver'
+import { collectCanonicalAssetImageTokenMatches } from '@/lib/asset-token'
 import type { InlineUiCardRegistry, ModuleRegexEntry } from './types'
 import { prepareMessageContentForRendering } from './message-content-pipeline'
 import { UGCRenderer } from '@safe-ugc-ui/react'
@@ -392,18 +393,6 @@ function renderWithInlineUiCard(
   return <>{parts}</>
 }
 
-const EMOTION_TAG_REGEX =
-  /!\[([^\]]*)\]\(\s*asset:((?:[^)\s]|\s(?!\)))*[^)\s]?)\s*\)|<img\s*(?:="([^"]+)"|src=(?!["']?(?:https?:\/\/|data:))(?:"([^"]+)"|'([^']+)'|([^\s>"']+)))(?:\s*\/)?(?:\s*>)?|\[\s*🖼\s*\|\s*([^\]]+?)\s*\]|\{\{image::([^}]+)\}\}/gim
-
-function getEmotionNameFromMatch(match: RegExpExecArray): string | null {
-  return (match[2] || match[3] || match[4] || match[5] || match[6] || match[7] || match[8])?.trim()
-}
-
-function getEmotionAltFromMatch(match: RegExpExecArray, emotionName: string): string {
-  const alt = match[1]?.trim()
-  return alt || emotionName
-}
-
 function renderContentWithEmotionImages(
   processedContent: string,
   characterAssets: CharacterAsset[],
@@ -419,17 +408,9 @@ function renderContentWithEmotionImages(
     return <div>{renderMarkdownSegment(processedContent, 'plain')}</div>
   }
 
-  // Find all emotion image tags that need resolution
-  // Supports formats:
-  // 1. ![alt](asset:key) - canonical RBX/RebelAI token
-  // 2. <img="miro_happy"> - legacy inline asset tag
-  // 3. <img src=miro_happy> - legacy HTML shorthand
-  // 4. [ 🖼 | clothed_smile ] - legacy emoji token
-  // 5. {{image::filename.png}} - legacy template token
-  // NOTE: {{img::...}} is a retired legacy syntax and is no longer rewritten upstream
-  // NOTE: http(s) and data: URLs are excluded - already resolved
-  const regex = EMOTION_TAG_REGEX
-  let match: RegExpExecArray | null
+  // Core rendering only consumes canonical asset markdown.
+  // Legacy inline tokens are normalized upstream in prepareMessageContentForRendering().
+  const imageMatches = collectCanonicalAssetImageTokenMatches(processedContent)
 
   // Pre-serialize and validate imageDisplay once before the loop.
   // If serialization or validation fails, imageDisplayJson stays null → fallback to <Image>.
@@ -447,7 +428,7 @@ function renderContentWithEmotionImages(
   const parts: React.ReactNode[] = []
   let lastIndex = 0
 
-  while ((match = regex.exec(processedContent)) !== null) {
+  for (const match of imageMatches) {
     // Add text before the image token.
     if (match.index > lastIndex) {
       const textPart = processedContent.substring(lastIndex, match.index)
@@ -458,9 +439,8 @@ function renderContentWithEmotionImages(
       )
     }
 
-    const emotionName = getEmotionNameFromMatch(match)
-    if (!emotionName) continue
-    const altText = getEmotionAltFromMatch(match, emotionName)
+    const emotionName = match.assetKey
+    const altText = match.altText
 
     const renderTarget = resolveEmotionRenderTarget({
       rawTag: emotionName,
@@ -517,7 +497,7 @@ function renderContentWithEmotionImages(
       }
     }
 
-    lastIndex = regex.lastIndex
+    lastIndex = match.index + match.raw.length
   }
 
   // Add remaining text after the final image token.

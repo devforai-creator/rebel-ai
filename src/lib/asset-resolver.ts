@@ -14,6 +14,10 @@
 
 import { normalizeAssetKey } from './asset-uri'
 import { extractAssetTokens, unwrapAssetToken } from './asset-token'
+import {
+  registerLegacyCompatibleAssetUrlKeys,
+  resolveLegacyCompatibleAssetUrl,
+} from './asset-url-map-legacy-compat'
 
 // Re-export for convenience
 export { normalizeAssetKey } from './asset-uri'
@@ -384,15 +388,7 @@ export function buildAssetUrlMap(
 
     // Register fuzzy key (underscores removed) for RisuAI compatibility
     // Handles cases like "lifting_skirt" matching "liftingskirt"
-    const fuzzyNormalized = normalizeAssetKeyFuzzy(key)
-    if (
-      fuzzyNormalized &&
-      fuzzyNormalized !== normalized &&
-      fuzzyNormalized !== looseNormalized &&
-      fuzzyNormalized !== key
-    ) {
-      urlMap[fuzzyNormalized] = publicUrl
-    }
+    registerLegacyCompatibleAssetUrlKeys(urlMap, key, publicUrl)
 
     // Register base filename (without path)
     const baseName = key.split('/').pop()
@@ -411,16 +407,7 @@ export function buildAssetUrlMap(
       ) {
         urlMap[looseBase] = publicUrl
       }
-      // Register fuzzy base
-      const fuzzyBase = normalizeAssetKeyFuzzy(baseName)
-      if (
-        fuzzyBase &&
-        fuzzyBase !== normalizedBase &&
-        fuzzyBase !== looseBase &&
-        fuzzyBase !== baseName
-      ) {
-        urlMap[fuzzyBase] = publicUrl
-      }
+      registerLegacyCompatibleAssetUrlKeys(urlMap, baseName, publicUrl)
     }
   }
 
@@ -460,9 +447,6 @@ export function resolveAssetUrl(
 ): string | undefined {
   if (!assetUrlMap || !source) return undefined
 
-  // Common image extensions for fallback matching
-  const imageExtensions = ['.png', '.webp', '.jpg', '.jpeg', '.gif', '.avif']
-
   // Debug: only log for unicon assets to reduce noise
   // Try direct lookup first (most common case)
   const direct = assetUrlMap[source]
@@ -486,15 +470,6 @@ export function resolveAssetUrl(
     }
   }
 
-  // Try fuzzy lookup (underscores removed) for RisuAI compatibility
-  const fuzzyNormalized = normalizeAssetKeyFuzzy(source)
-  if (fuzzyNormalized) {
-    const fuzzyMatch = assetUrlMap[fuzzyNormalized]
-    if (fuzzyMatch) {
-      return fuzzyMatch
-    }
-  }
-
   // Try base filename lookup
   const base = source.split('/').pop()
   if (base && base !== source) {
@@ -512,61 +487,11 @@ export function resolveAssetUrl(
       const looseBaseMatch = assetUrlMap[looseBase]
       if (looseBaseMatch) return looseBaseMatch
     }
-
-    const fuzzyBase = normalizeAssetKeyFuzzy(base)
-    if (fuzzyBase) {
-      const fuzzyBaseMatch = assetUrlMap[fuzzyBase]
-      if (fuzzyBaseMatch) return fuzzyBaseMatch
-    }
   }
 
-  // Try with common extensions (for templates like <img src=seolji_excited>)
-  // This handles legacy imports that don't have extension-less aliases
-  for (const ext of imageExtensions) {
-    const withExt = source + ext
-    const match = assetUrlMap[withExt]
-    if (match) {
-      return match
-    }
-
-    const normalizedWithExt = normalizeAssetKey(withExt)
-    if (normalizedWithExt) {
-      const normalizedMatch = assetUrlMap[normalizedWithExt]
-      if (normalizedMatch) {
-        return normalizedMatch
-      }
-    }
-
-    const looseWithExt = normalizeAssetKeyLoose(withExt)
-    if (looseWithExt) {
-      const looseMatch = assetUrlMap[looseWithExt]
-      if (looseMatch) {
-        return looseMatch
-      }
-    }
-
-    const fuzzyWithExt = normalizeAssetKeyFuzzy(withExt)
-    if (fuzzyWithExt) {
-      const fuzzyMatch = assetUrlMap[fuzzyWithExt]
-      if (fuzzyMatch) {
-        return fuzzyMatch
-      }
-    }
-
-    // Try double extension (handles buggy imports like "file.webp.webp")
-    const withDoubleExt = source + ext + ext
-    const doubleMatch = assetUrlMap[withDoubleExt]
-    if (doubleMatch) {
-      return doubleMatch
-    }
-
-    const normalizedDoubleExt = normalizeAssetKey(withDoubleExt)
-    if (normalizedDoubleExt) {
-      const normalizedDoubleMatch = assetUrlMap[normalizedDoubleExt]
-      if (normalizedDoubleMatch) {
-        return normalizedDoubleMatch
-      }
-    }
+  const legacyCompatibleMatch = resolveLegacyCompatibleAssetUrl(source, assetUrlMap)
+  if (legacyCompatibleMatch) {
+    return legacyCompatibleMatch
   }
 
   return undefined
@@ -586,29 +511,4 @@ function normalizeAssetKeyLoose(value?: string | null): string | null {
   const looseBase = base.replace(/[.]+/g, '_')
 
   return `${looseBase}${ext}`
-}
-
-/**
- * Normalize asset key by removing all underscores for fuzzy matching.
- * This handles legacy imported packages where asset names and document
- * references differ:
- * - Asset name: "character_pose_variant.png"
- * - Document tag: "character_posevariant"
- * Both normalize to: "shionbasicliftingskirt"
- */
-function normalizeAssetKeyFuzzy(value?: string | null): string | null {
-  const normalized = normalizeAssetKey(value)
-  if (!normalized) {
-    return null
-  }
-
-  const extMatch = normalized.match(LOOSE_IMAGE_EXTENSION_REGEX)
-  const ext = extMatch?.[0] ?? ''
-  const base = ext ? normalized.slice(0, -ext.length) : normalized
-  // Remove underscores and common LLM wrapper chars (parentheses, brackets)
-  // RisuAI handles this via Levenshtein distance tolerance; we handle it
-  // at the normalization level since our fuzzy tier is the most aggressive.
-  const fuzzyBase = base.replace(/[_()[\]{}]/g, '')
-
-  return `${fuzzyBase}${ext}`
 }

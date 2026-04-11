@@ -124,6 +124,13 @@ Done when:
 - new rendering features do not need to touch legacy branches by default
 - regression tests prove that compatibility behavior stays outside the primary render contract
 
+Current status as of 2026-04-12:
+
+- [message-renderer.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/message-renderer.tsx) and [message-content-pipeline.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/message-content-pipeline.ts) now consume only canonical asset markdown after upstream normalization, so the core render path no longer carries its own legacy token regex matrix
+- legacy token normalization remains centralized in [asset-token.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/asset-token.ts), with canonical-token helpers added so renderer and diagnostics can stay on the primary format
+- legacy URL-map fallbacks now live in [asset-url-map-legacy-compat.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/asset-url-map-legacy-compat.ts), making fuzzy underscore drift and extension-recovery behavior an explicit compatibility layer instead of mixed-in core resolver logic
+- regression coverage for the extracted seams now lives in [asset-token.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/asset-token.test.ts), [asset-url-map-legacy-compat.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/asset-url-map-legacy-compat.test.ts), [asset-resolver.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/asset-resolver.test.ts), [message-content-pipeline.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/message-content-pipeline.test.ts), and [message-renderer.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/utils/message-renderer.test.tsx)
+
 ### P0-4. Differentiate Summary and Translation Observability
 
 Scope:

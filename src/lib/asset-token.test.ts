@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildCanonicalAssetImageToken,
+  collectCanonicalAssetImageTokenMatches,
   extractAssetTokens,
+  extractCanonicalAssetTokens,
   normalizeLegacyAssetImageTokens,
   unwrapAssetToken,
 } from './asset-token'
@@ -30,6 +32,9 @@ describe('normalizeLegacyAssetImageTokens', () => {
     const input = [
       '<mmg="hero_happy.png">',
       '<img="hero_sad.png">',
+      '<img src="hero_angry.png">',
+      "<img src='hero_surprised.png'>",
+      '<img src=hero_calm.png>',
       '[ 🖼 | hero_wave.png ]',
       '{{image::hero_laugh.png}}',
       '{{img::hero_cry.png}}',
@@ -39,11 +44,23 @@ describe('normalizeLegacyAssetImageTokens', () => {
       [
         '![hero_happy.png](asset:hero_happy.png)',
         '![hero_sad.png](asset:hero_sad.png)',
+        '![hero_angry.png](asset:hero_angry.png)',
+        '![hero_surprised.png](asset:hero_surprised.png)',
+        '![hero_calm.png](asset:hero_calm.png)',
         '![hero_wave.png](asset:hero_wave.png)',
         '![hero_laugh.png](asset:hero_laugh.png)',
         '![hero_cry.png](asset:hero_cry.png)',
       ].join(' '),
     )
+  })
+
+  it('leaves external and data image src values untouched', () => {
+    const input = [
+      '<img src="https://example.com/already.png">',
+      '<img src="data:image/png;base64,abc123">',
+    ].join(' ')
+
+    expect(normalizeLegacyAssetImageTokens(input)).toBe(input)
   })
 })
 
@@ -147,5 +164,41 @@ describe('extractAssetTokens', () => {
     ].join('\n')
 
     expect(extractAssetTokens(input)).toEqual([])
+  })
+})
+
+describe('canonical asset token helpers', () => {
+  it('collects canonical asset markdown matches with positions and alt text', () => {
+    const input = [
+      'Before',
+      '![Hero Mood](asset:hero_happy.png)',
+      'Middle',
+      '![hero_sad.png](asset:hero_sad.png)',
+    ].join(' ')
+
+    expect(collectCanonicalAssetImageTokenMatches(input)).toEqual([
+      {
+        raw: '![Hero Mood](asset:hero_happy.png)',
+        altText: 'Hero Mood',
+        assetKey: 'hero_happy.png',
+        index: 7,
+      },
+      {
+        raw: '![hero_sad.png](asset:hero_sad.png)',
+        altText: 'hero_sad.png',
+        assetKey: 'hero_sad.png',
+        index: 49,
+      },
+    ])
+  })
+
+  it('extracts canonical asset keys without reading legacy wrappers directly', () => {
+    const input = [
+      '![Hero](asset:hero_happy.png)',
+      '<img="legacy_only.png">',
+      '![Sad](asset:hero_sad.png)',
+    ].join('\n')
+
+    expect(extractCanonicalAssetTokens(input)).toEqual(['hero_happy.png', 'hero_sad.png'])
   })
 })

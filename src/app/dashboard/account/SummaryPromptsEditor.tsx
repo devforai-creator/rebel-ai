@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import Button from '@/app/dashboard/components/Button'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import { updateSummaryPrompts } from './actions'
@@ -125,20 +126,12 @@ export default function SummaryPromptsEditor({
       </div>
 
       <div className="flex gap-3">
-        <button
-          onClick={handleSave}
-          disabled={isLoading}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        <Button onClick={handleSave} disabled={isLoading}>
           {isLoading ? 'Saving...' : 'Save'}
-        </button>
-        <button
-          onClick={handleReset}
-          disabled={isLoading}
-          className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        </Button>
+        <Button onClick={handleReset} disabled={isLoading} variant="secondary">
           Reset to Defaults
-        </button>
+        </Button>
       </div>
 
       <ConfirmDialog

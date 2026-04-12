@@ -2,6 +2,9 @@
 
 import { useActionState, useEffect, useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom'
+import Button from '@/app/dashboard/components/Button'
+import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
+import { surfaceCardClassName } from '@/app/dashboard/components/SurfaceCard'
 import { listUiModelIdsByProvider } from '@/lib/models'
 import { createApiKey, type ApiKeyFormState } from './actions'
 import GoogleApiKeySidePanel from './GoogleApiKeySidePanel'
@@ -88,7 +91,9 @@ export default function AddApiKeyForm() {
         id="add-api-key-form"
         action={formAction}
         ref={formRef}
-        className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700"
+        className={surfaceCardClassName({
+          padding: 'lg',
+        })}
       >
         {/* Guide Button */}
         {provider === 'google' && (
@@ -110,23 +115,15 @@ export default function AddApiKeyForm() {
         )}
 
         {displayError && (
-          <div
-            role="alert"
-            aria-live="polite"
-            className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm"
-          >
+          <InlineFeedback tone="error" className="mb-4">
             {displayError}
-          </div>
+          </InlineFeedback>
         )}
 
         {showSuccess && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-lg text-sm"
-          >
+          <InlineFeedback tone="success" className="mb-4">
             API key registered securely!
-          </div>
+          </InlineFeedback>
         )}
 
         <div className="space-y-4">
@@ -278,12 +275,8 @@ function SubmitButton() {
   const { pending } = useFormStatus()
 
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-    >
+    <Button type="submit" disabled={pending} size="lg" fullWidth>
       {pending ? 'Registering...' : 'Register API Key'}
-    </button>
+    </Button>
   )
 }

@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useId, type ReactNode } from 'react'
+import Button from './Button'
+import SurfaceCard from './SurfaceCard'
 
 type ConfirmDialogTone = 'danger' | 'primary'
 
@@ -48,22 +50,18 @@ export default function ConfirmDialog({
     return null
   }
 
-  const confirmButtonClassName =
-    tone === 'primary'
-      ? 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
-      : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
       role="presentation"
     >
-      <div
+      <SurfaceCard
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-md rounded-xl bg-white shadow-xl dark:bg-gray-800"
+        padding="none"
+        className="w-full max-w-md overflow-hidden shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="border-b border-gray-200 px-6 py-5 dark:border-gray-700">
@@ -78,24 +76,18 @@ export default function ConfirmDialog({
         </div>
 
         <div className="flex flex-col-reverse gap-2 px-6 py-4 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isConfirming}
-            className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-          >
+          <Button onClick={onClose} disabled={isConfirming} variant="secondary">
             {cancelLabel}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={onConfirm}
             disabled={isConfirming}
-            className={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-offset-gray-800 ${confirmButtonClassName}`}
+            variant={tone === 'primary' ? 'primary' : 'destructive'}
           >
             {isConfirming ? 'Working...' : confirmLabel}
-          </button>
+          </Button>
         </div>
-      </div>
+      </SurfaceCard>
     </div>
   )
 }

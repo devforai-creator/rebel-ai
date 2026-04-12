@@ -1,8 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Button from '@/app/dashboard/components/Button'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
+import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { CHAT_CONTEXT_WINDOW } from '@/lib/chat-context-window'
 import type { ChatMemoryConfig } from '@/lib/chat/model-config'
 import { CHUNK_SIZE } from '@/lib/chat-summaries/config'
@@ -212,7 +214,7 @@ export default function ChatSummariesPanel({
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{memoryDescription}</p>
         </div>
 
-        <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+        <SurfaceCard tone="subtle" className="mb-6 text-sm text-gray-600 dark:text-gray-300">
           <div className="flex items-center justify-between">
             <div>
               <p>
@@ -226,10 +228,11 @@ export default function ChatSummariesPanel({
                 messages
               </p>
             </div>
-            <button
+            <Button
               onClick={() => void refreshStats()}
               disabled={isRefreshingStats}
-              className="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="secondary"
+              size="sm"
               title="Refresh stats"
             >
               {isRefreshingStats ? (
@@ -259,14 +262,17 @@ export default function ChatSummariesPanel({
                   />
                 </svg>
               )}
-            </button>
+            </Button>
           </div>
-        </div>
+        </SurfaceCard>
 
         {!hasMemoryEntries && (
-          <div className="rounded-lg border border-dashed border-gray-300 bg-white p-4 text-center text-sm text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400">
+          <SurfaceCard
+            tone="dashed"
+            className="text-center text-sm text-gray-500 dark:text-gray-400"
+          >
             {emptyStateText}
-          </div>
+          </SurfaceCard>
         )}
 
         <SummaryMemorySection

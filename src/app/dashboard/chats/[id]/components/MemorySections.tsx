@@ -2,6 +2,8 @@
 
 import React from 'react'
 import type { ReactNode } from 'react'
+import Button from '@/app/dashboard/components/Button'
+import { surfaceCardClassName } from '@/app/dashboard/components/SurfaceCard'
 import type { FactEntry, SummaryEntry } from '../hooks/useChatSummariesState'
 
 const LEVEL_LABEL: Record<number, string> = {
@@ -97,7 +99,9 @@ export function SummaryMemorySection({
   description,
   className,
   listClassName = 'space-y-3',
-  cardClassName = 'rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900',
+  cardClassName = surfaceCardClassName({
+    className: 'dark:bg-gray-900',
+  }),
   regenerateButtonClassName,
   editorRows,
   editingSummaryId,
@@ -173,18 +177,12 @@ export function SummaryMemorySection({
                     autoFocus
                   />
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => onSaveEdit(summary.id)}
-                      className="rounded bg-blue-600 px-3 py-1 text-xs text-white transition-colors hover:bg-blue-700"
-                    >
+                    <Button onClick={() => onSaveEdit(summary.id)} size="sm">
                       Save
-                    </button>
-                    <button
-                      onClick={onCancelEdit}
-                      className="rounded bg-gray-500 px-3 py-1 text-xs text-white transition-colors hover:bg-gray-600"
-                    >
+                    </Button>
+                    <Button onClick={onCancelEdit} variant="secondary" size="sm">
                       Cancel
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -257,7 +255,9 @@ export function FactMemorySection({
           return (
             <li
               key={fact.id}
-              className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
+              className={surfaceCardClassName({
+                className: 'dark:bg-gray-900',
+              })}
             >
               <div className="mb-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                 <div>
@@ -302,18 +302,12 @@ export function FactMemorySection({
                     autoFocus
                   />
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => onSaveEdit(fact.id)}
-                      className="rounded bg-blue-600 px-3 py-1 text-xs text-white transition-colors hover:bg-blue-700"
-                    >
+                    <Button onClick={() => onSaveEdit(fact.id)} size="sm">
                       Save
-                    </button>
-                    <button
-                      onClick={onCancelEdit}
-                      className="rounded bg-gray-500 px-3 py-1 text-xs text-white transition-colors hover:bg-gray-600"
-                    >
+                    </Button>
+                    <Button onClick={onCancelEdit} variant="secondary" size="sm">
                       Cancel
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : (

@@ -260,6 +260,146 @@ Done when:
 - the core dashboard surfaces stop inventing their own local interaction language
 - later visual polish can be applied through system changes rather than one-off overrides
 
+Execution rule:
+
+- do not treat this as a visual redesign batch
+- prefer extracting a small shared dashboard UI layer over restyling one screen at a time
+- land it as narrow batches below rather than one large "UI cleanup" diff
+
+### P2-2a. Define the Shared Dashboard UI Contract
+
+Scope:
+
+- [src/app/dashboard/components/ConfirmDialog.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/ConfirmDialog.tsx)
+- the shared dashboard component layer under [src/app/dashboard/components](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components)
+- first reference surfaces that currently encode the button and panel rules ad hoc, especially [SummaryPromptsEditor.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/SummaryPromptsEditor.tsx), [ApiKeyList.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/ApiKeyList.tsx), and [ChatSummariesPanel.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatSummariesPanel.tsx)
+
+Why:
+
+- the repo now has repeated dashboard interaction patterns but no explicit product-level contract for them
+- later UI work will stay expensive until button priority, panel shells, and feedback tone are encoded once
+
+Done when:
+
+- one shared rule exists for `primary`, `secondary`, `destructive`, and low-emphasis actions
+- one shared panel/card shell exists for section-level surfaces instead of repeated local `rounded`, `border`, and `padding` combinations
+- one shared inline feedback pattern exists for success, warning, and error messaging on dashboard forms and tools
+- the batch leaves behind a clear place to extend the product UI system without reaching into unrelated feature folders
+
+Current status as of 2026-04-12:
+
+- the shared dashboard UI layer now exists in [Button.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/Button.tsx), [SurfaceCard.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/SurfaceCard.tsx), [InlineFeedback.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/InlineFeedback.tsx), and [classNames.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/classNames.ts), giving the repo one explicit source of truth for button hierarchy, card shells, and inline status treatment
+- [ConfirmDialog.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/ConfirmDialog.tsx) now consumes the shared primitives instead of encoding its own modal action styles, so destructive and primary confirmations inherit the same contract as the rest of the dashboard
+- the first reference surfaces in [SummaryPromptsEditor.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/SummaryPromptsEditor.tsx), [AddApiKeyForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/AddApiKeyForm.tsx), [ApiKeyList.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/ApiKeyList.tsx), [ChatSummariesPanel.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatSummariesPanel.tsx), and [MemorySections.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/MemorySections.tsx) now use the shared contract instead of repeated local button/card class bundles
+- regression coverage for the new primitives now lives in [ui-primitives.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/ui-primitives.test.tsx), and the existing memory-panel regression tests in [MemorySections.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/MemorySections.test.tsx) still pass against the shared button/card primitives
+
+### P2-2b. Normalize Account and API-Key Surfaces Against the Shared Contract
+
+Scope:
+
+- [src/app/dashboard/account/DeleteAccountButton.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/DeleteAccountButton.tsx)
+- [src/app/dashboard/account/SummaryPromptsEditor.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/SummaryPromptsEditor.tsx)
+- [src/app/dashboard/account/ChangePasswordForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/ChangePasswordForm.tsx)
+- [src/app/dashboard/account/RagSettingsForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/RagSettingsForm.tsx)
+- [src/app/dashboard/account/ReprocessSettingsForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/ReprocessSettingsForm.tsx)
+- [src/app/dashboard/account/SummaryModelSettingsForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/SummaryModelSettingsForm.tsx)
+- [src/app/dashboard/account/TranslationModelSettingsForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/TranslationModelSettingsForm.tsx)
+- [src/app/dashboard/api-keys/AddApiKeyForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/AddApiKeyForm.tsx)
+- [src/app/dashboard/api-keys/ApiKeyList.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/ApiKeyList.tsx)
+- [src/app/dashboard/api-keys/GoogleApiKeySidePanel.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/GoogleApiKeySidePanel.tsx)
+
+Why:
+
+- these are dense operator-facing forms where visual inconsistency immediately turns into slower comprehension and weaker perceived quality
+- they are also the fastest place to prove whether the shared contract is actually usable before pushing it into chat and character surfaces
+
+Done when:
+
+- save, reset, cancel, and destructive actions follow the same priority rules across account and API-key pages
+- form-level errors, success feedback, disabled states, and loading labels read as one product instead of per-file inventions
+- side-panel and section-card spacing matches the shared dashboard shell from `P2-2a`
+
+### P2-2c. Normalize Chat-Adjacent Panels and Overlays
+
+Scope:
+
+- [src/app/dashboard/chats/[id]/ChatSummariesPanel.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatSummariesPanel.tsx)
+- [src/app/dashboard/chats/[id]/DeleteChatButton.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/DeleteChatButton.tsx)
+- [src/app/dashboard/chats/[id]/SystemPromptEditorButton.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/SystemPromptEditorButton.tsx)
+- [src/app/dashboard/chats/[id]/LorebookPanel.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/LorebookPanel.tsx)
+- [src/app/dashboard/chats/[id]/components/TokenStatsPanel.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/TokenStatsPanel.tsx)
+- [src/app/dashboard/chats/[id]/components/DebugModal.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/DebugModal.tsx)
+- [src/app/dashboard/components/ConfirmDialog.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/ConfirmDialog.tsx) as the shared destructive-overlay anchor
+
+Why:
+
+- the chat screen is now structurally easier to change, but its side panels and overlays still carry their own local spacing and feedback language
+- this is the highest-frequency dashboard surface after the main message stream, so inconsistency here is expensive
+
+Done when:
+
+- side panels, modal shells, and destructive flows on the chat screen follow one spacing and action hierarchy
+- empty and loading states inside chat-adjacent tools stop using local one-off copy/layout patterns
+- chat-surface polish can proceed later without reopening basic UI-contract questions
+
+### P2-2d. Normalize Character List and Detail Surfaces
+
+Scope:
+
+- [src/app/dashboard/characters/CharacterCard.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterCard.tsx)
+- [src/app/dashboard/characters/CharacterForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterForm.tsx)
+- [src/app/dashboard/characters/CharacterImport.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterImport.tsx)
+- [src/app/dashboard/characters/[id]/CharacterDetailView.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/[id]/CharacterDetailView.tsx)
+- [src/app/dashboard/characters/[id]/ChatImportModal.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/[id]/ChatImportModal.tsx)
+- [src/app/dashboard/characters/[id]/NewChatButton.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/[id]/NewChatButton.tsx)
+
+Why:
+
+- character management mixes discovery, editing, destructive actions, and chat bootstrapping in one product area
+- if these surfaces keep separate card, header, and action conventions, later visual improvement will stay fragmented
+
+Done when:
+
+- list cards and detail panels share the same shell density and action hierarchy
+- character creation, import, and destructive flows use the shared form and confirmation language
+- moving between list, detail, and related modals feels like one system instead of adjacent pages with different local rules
+
+### P2-2e. Lock Shared Empty, Loading, and Error-State Language
+
+Scope:
+
+- [src/app/dashboard/characters/loading.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/loading.tsx)
+- [src/app/dashboard/characters/error.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/error.tsx)
+- [src/app/dashboard/chats/new/loading.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/new/loading.tsx)
+- [src/app/dashboard/chats/[id]/ChatSummariesPanelLoader.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatSummariesPanelLoader.tsx)
+- [src/app/dashboard/chats/[id]/LorebookPanelLoader.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/LorebookPanelLoader.tsx)
+- [src/app/dashboard/chats/[id]/components/LorebookPanelContent.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/LorebookPanelContent.tsx)
+- any equivalent first-class dashboard empty/loading/error surface touched by `P2-2b` through `P2-2d`
+
+Why:
+
+- users read loading and empty states as part of the interface contract, not as implementation leftovers
+- if these states remain inconsistent, the product will still feel improvised even after buttons and cards are normalized
+
+Done when:
+
+- first-class dashboard surfaces use one clear pattern for "loading", "empty", and recoverable failure states
+- terse placeholder copy like `Empty.` and ad hoc loading language is replaced by deliberate product wording
+- later polish work can change tone and visuals centrally without hunting for state-specific one-offs
+
+Suggested execution order:
+
+1. `P2-2a`
+2. `P2-2b`
+3. `P2-2c`
+4. `P2-2d`
+5. `P2-2e`
+
+Cut line for this phase:
+
+- stop once the shared contract exists and the first-class dashboard surfaces use it consistently
+- do not spill into raw "make it prettier" work until `P3-1`
+
 ## P3
 
 ### P3-1. Product UI Improvement Pass

@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import Button from '@/app/dashboard/components/Button'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
+import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import type { ApiKey } from '@/types/database.types'
 import { PROVIDER_CATALOG } from '@/lib/providers/catalog'
 import { deleteApiKey, toggleApiKey } from './actions'
@@ -56,10 +58,7 @@ export default function ApiKeyList({ apiKeys }: Props) {
   return (
     <div className="space-y-4">
       {apiKeys.map((key) => (
-        <div
-          key={key.id}
-          className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700"
-        >
+        <SurfaceCard key={key.id} className="transition-colors">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               {/* Header */}
@@ -126,22 +125,24 @@ export default function ApiKeyList({ apiKeys }: Props) {
 
             {/* Actions */}
             <div className="flex flex-col gap-2 ml-4">
-              <button
+              <Button
                 onClick={() => handleToggle(key.id, key.is_active)}
-                className="px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                variant="secondary"
+                size="sm"
               >
                 {key.is_active ? 'Deactivate' : 'Activate'}
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => handleDelete(key.id)}
                 disabled={deletingId === key.id}
-                className="px-3 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50"
+                variant="destructive"
+                size="sm"
               >
                 {deletingId === key.id ? 'Deleting...' : 'Delete'}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </SurfaceCard>
       ))}
 
       <ConfirmDialog

@@ -12,7 +12,7 @@ Updated: 2026-04-12
 
 ## Next Priorities
 
-- Continue `P2-1` by splitting the remaining renderer-specific complexity in the chat message bubble path if more chat-surface work lands, otherwise move toward the minimal UI-system pass.
+- Continue `P2-2` with `P2-2b`: apply the shared button/card/feedback contract consistently across the remaining account and API-key forms before moving on to `P2-2c` chat-adjacent panel and overlay normalization.
 
 ## Optional Follow-up
 

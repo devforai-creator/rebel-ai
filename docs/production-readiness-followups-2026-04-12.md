@@ -349,6 +349,14 @@ Done when:
 - empty and loading states inside chat-adjacent tools stop using local one-off copy/layout patterns
 - chat-surface polish can proceed later without reopening basic UI-contract questions
 
+Current status as of 2026-04-12:
+
+- [DeleteChatButton.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/DeleteChatButton.tsx) and [SystemPromptEditorButton.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/SystemPromptEditorButton.tsx) now use the shared button contract for both inline actions and menu-item variants instead of carrying separate local button-class bundles
+- the chat-side overlay shells in [SystemPromptEditorButton.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/SystemPromptEditorButton.tsx) and [DebugModal.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/DebugModal.tsx) now inherit the same `SurfaceCard` and button hierarchy as the rest of the dashboard, including shared close actions and shared info-state treatment when server debug data is missing
+- the lorebook surfaces in [LorebookPanel.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/LorebookPanel.tsx) and [LorebookPanelContent.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/LorebookPanelContent.tsx) now use shared icon buttons, mobile panel chrome, and explicit dashed empty states instead of local `hover:bg-muted` controls and placeholder `Empty.` text
+- [TokenStatsPanel.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/TokenStatsPanel.tsx) now routes its stats toggle and developer asset-diagnostics CTA through the shared button contract, reducing one-off hover and warning-button styling on the highest-frequency chat side surface
+- regression coverage for these chat-adjacent UI contracts now lives in [chat-adjacent-ui.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/chat-adjacent-ui.test.tsx), while existing render coverage in [LorebookEntryRow.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/LorebookEntryRow.test.tsx), [MemorySections.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/MemorySections.test.tsx), and [ui-primitives.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/ui-primitives.test.tsx) still passes against the shared primitives
+
 ### P2-2d. Normalize Character List and Detail Surfaces
 
 Scope:

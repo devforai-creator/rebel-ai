@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { BookOpen } from 'lucide-react'
+import Button from '@/app/dashboard/components/Button'
+import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import type { LorebookEntry } from '@/types/risuai.types'
 import { LorebookPanelContent } from './components'
 import { setLorebookEntryOverride } from './lorebook-actions'
@@ -216,14 +218,16 @@ export default function LorebookPanel({
         }`}
       >
         {!isDesktopOpen ? (
-          <button
+          <Button
             onClick={() => setIsDesktopOpen(true)}
-            className="absolute left-0 top-4 flex h-10 w-10 items-center justify-center rounded-r-lg border border-l-0 bg-background transition-colors hover:bg-muted"
+            variant="secondary"
+            size="icon"
+            className="absolute left-0 top-4 rounded-l-none rounded-r-lg border-l-0 bg-background shadow-none"
             title="Open lorebook"
             aria-label="Open lorebook"
           >
             <BookOpen className="h-5 w-5 text-muted-foreground" />
-          </button>
+          </Button>
         ) : (
           <LorebookPanelContent
             {...panelContentProps}
@@ -234,26 +238,31 @@ export default function LorebookPanel({
       </div>
 
       {!isMobileOpen ? (
-        <button
+        <Button
           onClick={() => setIsMobileOpen(true)}
-          className="fixed left-4 top-28 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 bg-white text-blue-600 shadow-lg transition-colors dark:border-gray-700 dark:bg-gray-800 lg:hidden"
+          variant="primary"
+          size="icon"
+          className="fixed left-4 top-28 z-40 h-12 w-12 rounded-full shadow-lg lg:hidden"
           aria-label="Open lorebook"
           title="Open lorebook"
         >
           <BookOpen className="h-5 w-5" />
-        </button>
+        </Button>
       ) : null}
 
       {isMobileOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileOpen(false)} />
-          <div className="absolute bottom-0 left-0 top-0 w-80 max-w-[90vw] border-r border-gray-200 bg-background shadow-xl dark:border-gray-700">
+          <SurfaceCard
+            padding="none"
+            className="absolute bottom-0 left-0 top-0 w-80 max-w-[90vw] overflow-hidden rounded-none border-r border-b-0 border-l-0 border-t-0 bg-background shadow-xl dark:border-gray-700"
+          >
             <LorebookPanelContent
               {...panelContentProps}
               onClose={() => setIsMobileOpen(false)}
               className="h-full border-l-0"
             />
-          </div>
+          </SurfaceCard>
         </div>
       ) : null}
     </>

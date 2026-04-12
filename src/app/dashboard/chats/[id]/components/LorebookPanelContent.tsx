@@ -2,6 +2,8 @@
 
 import React, { useMemo, useState } from 'react'
 import { ArrowLeft, BookOpen, Folder, Search, SlidersHorizontal, X } from 'lucide-react'
+import Button from '@/app/dashboard/components/Button'
+import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import type { LorebookEntry } from '@/types/risuai.types'
 import type {
   GroupedLorebookEntries,
@@ -83,30 +85,36 @@ export function LorebookPanelContent({
           <h3 className="text-sm font-semibold">Lorebook</h3>
         </div>
         <div className="flex items-center gap-1">
-          <button
+          <Button
             onClick={() => setIsSearchOpen((previousValue) => !previousValue)}
-            className="rounded-md p-1.5 hover:bg-muted"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
             title="Search"
             aria-label="Toggle search"
           >
             <Search className="h-4 w-4" />
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => setIsOptionsOpen((previousValue) => !previousValue)}
-            className="rounded-md p-1.5 hover:bg-muted"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
             title="Options"
             aria-label="Toggle options"
           >
             <SlidersHorizontal className="h-4 w-4" />
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={onClose}
-            className="rounded-md p-1.5 hover:bg-muted"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
             title="Close"
             aria-label="Close lorebook"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -177,7 +185,7 @@ export function LorebookPanelContent({
         {groupByFolder && !isSearching ? (
           <div className="p-2">
             {activeFolderKey ? (
-              <div className="overflow-hidden rounded-md border">
+              <SurfaceCard padding="none" className="overflow-hidden rounded-md shadow-none">
                 <button
                   onClick={() => setActiveFolderKey(null)}
                   className="flex w-full items-center gap-2 border-b px-2 py-2 text-left transition-colors hover:bg-muted/30"
@@ -191,7 +199,12 @@ export function LorebookPanelContent({
                 </button>
 
                 {activeFolderEntries.length === 0 ? (
-                  <div className="p-4 text-sm text-muted-foreground">Empty.</div>
+                  <SurfaceCard
+                    tone="dashed"
+                    className="m-2 text-sm text-muted-foreground shadow-none"
+                  >
+                    No entries in this folder yet.
+                  </SurfaceCard>
                 ) : (
                   activeFolderEntries.map((entry) => (
                     <LorebookEntryRow
@@ -208,9 +221,9 @@ export function LorebookPanelContent({
                     />
                   ))
                 )}
-              </div>
+              </SurfaceCard>
             ) : (
-              <div className="overflow-hidden rounded-md border">
+              <SurfaceCard padding="none" className="overflow-hidden rounded-md shadow-none">
                 {groupedEntries.folderOrder
                   .filter((folderKey) => (groupedEntries.folderMap.get(folderKey) ?? []).length > 0)
                   .map((folderKey) => {
@@ -232,13 +245,15 @@ export function LorebookPanelContent({
                       </button>
                     )
                   })}
-              </div>
+              </SurfaceCard>
             )}
           </div>
         ) : (
           <div className="border-t">
             {flatEntries.length === 0 ? (
-              <div className="p-4 text-sm text-muted-foreground">No entries.</div>
+              <SurfaceCard tone="dashed" className="m-2 text-sm text-muted-foreground shadow-none">
+                No lorebook entries match the current view.
+              </SurfaceCard>
             ) : (
               flatEntries.map((entry) => (
                 <LorebookEntryRow

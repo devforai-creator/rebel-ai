@@ -1,6 +1,7 @@
 'use client'
 
 import { memo } from 'react'
+import Button from '@/app/dashboard/components/Button'
 import type { ChatMemoryMode } from '@/lib/chat/model-config'
 import {
   LatestMessageTokenStats,
@@ -107,13 +108,15 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
               Claude Batch
             </label>
             {isDeveloper && developerMode && (
-              <button
+              <Button
                 type="button"
                 onClick={onOpenAssetDiagnostics}
-                className="text-[10px] px-1.5 py-0.5 rounded border border-amber-300 text-amber-700 dark:text-amber-200 dark:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                variant="secondary"
+                size="sm"
+                className="px-2 py-0.5 text-[11px] text-amber-700 dark:border-amber-600 dark:text-amber-200"
               >
                 에셋
-              </button>
+              </Button>
             )}
           </div>
           <select
@@ -221,10 +224,7 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                 </select>
               </div>
               {/* Summary info (click to expand) */}
-              <button
-                onClick={onToggleStats}
-                className="flex items-center gap-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1 rounded transition-colors"
-              >
+              <Button onClick={onToggleStats} variant="ghost" size="sm" className="gap-2 px-2">
                 <span className="text-emerald-600 dark:text-emerald-400 font-medium">
                   {formatUsd(latestUsage?.costUsd)}
                 </span>
@@ -243,7 +243,7 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                     d="M19 9l-7 7-7-7"
                   />
                 </svg>
-              </button>
+              </Button>
 
               {isDeveloper && (
                 <div className="flex items-center gap-2 border-l border-gray-300 dark:border-gray-600 pl-3">
@@ -257,13 +257,15 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                     <span className="text-[11px] text-gray-600 dark:text-gray-400">Dev</span>
                   </label>
                   {developerMode && (
-                    <button
+                    <Button
                       type="button"
                       onClick={onOpenAssetDiagnostics}
-                      className="text-[11px] px-1.5 py-0.5 rounded border border-amber-300 text-amber-700 dark:text-amber-200 dark:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                      variant="secondary"
+                      size="sm"
+                      className="px-2 py-0.5 text-[11px] text-amber-700 dark:border-amber-600 dark:text-amber-200"
                     >
                       에셋
-                    </button>
+                    </Button>
                   )}
                 </div>
               )}

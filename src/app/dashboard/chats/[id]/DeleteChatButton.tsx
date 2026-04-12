@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { toast } from 'sonner'
+import Button from '@/app/dashboard/components/Button'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import { deleteChat } from '../actions'
@@ -36,16 +37,18 @@ export default function DeleteChatButton({ chatId, chatTitle, asMenuItem = false
     })
   }
 
-  const buttonClassName = asMenuItem
-    ? 'w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 disabled:opacity-50'
-    : 'px-3 py-1.5 text-sm border border-red-300 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg transition-colors disabled:opacity-50'
-
   return (
     <>
-      <button
+      <Button
         onClick={handleDelete}
         disabled={deleting}
-        className={buttonClassName}
+        variant="ghostDestructive"
+        size={asMenuItem ? 'md' : 'sm'}
+        className={
+          asMenuItem
+            ? 'w-full justify-start px-4 text-left'
+            : 'border border-red-300 dark:border-red-800'
+        }
         title="Delete chat"
         role={asMenuItem ? 'menuitem' : undefined}
       >
@@ -66,7 +69,7 @@ export default function DeleteChatButton({ chatId, chatTitle, asMenuItem = false
         ) : (
           'Delete'
         )}
-      </button>
+      </Button>
 
       <ConfirmDialog
         isOpen={isConfirmOpen}

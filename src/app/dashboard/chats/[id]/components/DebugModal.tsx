@@ -1,6 +1,9 @@
 'use client'
 
-import { memo, useEffect, useMemo, useState } from 'react'
+import React, { memo, useEffect, useMemo, useState } from 'react'
+import Button from '@/app/dashboard/components/Button'
+import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
+import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import type { CharacterAsset } from '@/lib/asset-resolver'
 import {
   computeClientRenderDiagnostics,
@@ -105,14 +108,19 @@ export const DebugModal = memo(function DebugModal({
   const modalTitle = isAssetMode ? 'Asset Diagnostics' : 'Debug Info'
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <SurfaceCard
+        padding="none"
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden shadow-xl"
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{modalTitle}</h3>
-          <button
+          <Button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            variant="ghost"
+            size="icon"
+            className="rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -122,7 +130,7 @@ export const DebugModal = memo(function DebugModal({
                 d="M6 18L18 6M6 6l12 12"
               />
             </svg>
-          </button>
+          </Button>
         </div>
 
         {/* Content */}
@@ -266,7 +274,7 @@ export const DebugModal = memo(function DebugModal({
                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                   Render Diagnostics (Client)
                 </h4>
-                <button
+                <Button
                   type="button"
                   onClick={async () => {
                     try {
@@ -275,10 +283,11 @@ export const DebugModal = memo(function DebugModal({
                       console.error('Failed to copy render diagnostics:', error)
                     }
                   }}
-                  className="px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+                  variant="secondary"
+                  size="sm"
                 >
                   Copy JSON
-                </button>
+                </Button>
               </div>
               <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 text-xs font-mono overflow-x-auto">
                 <pre className="whitespace-pre-wrap text-gray-800 dark:text-gray-200">
@@ -644,26 +653,23 @@ export const DebugModal = memo(function DebugModal({
               )}
             </>
           ) : !isAssetMode && debugInfo === undefined ? (
-            <div className="text-center text-gray-500 dark:text-gray-400 py-8">
+            <InlineFeedback tone="info" className="py-8 text-center">
               Loading server debug_info...
-            </div>
+            </InlineFeedback>
           ) : !isAssetMode ? (
-            <div className="text-center text-gray-500 dark:text-gray-400 py-8">
+            <InlineFeedback tone="info" className="py-8 text-center">
               No server debug_info stored (only the newest assistant message retains debug_info).
-            </div>
+            </InlineFeedback>
           ) : null}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
+          <Button onClick={onClose} variant="secondary">
             Close
-          </button>
+          </Button>
         </div>
-      </div>
+      </SurfaceCard>
     </div>
   )
 })

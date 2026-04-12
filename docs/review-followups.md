@@ -11,10 +11,11 @@ Updated: 2026-04-12
 - Replaced dashboard browser `alert` / `confirm` flows with shared confirmation dialogs and toast or inline feedback paths.
 - `7cf3d7f` `Introduce shared dashboard UI primitives`
 - Normalized the remaining account and API-key forms against the shared button/card/feedback contract.
+- Normalized the chat-adjacent panels and overlays against the shared button/card/feedback contract.
 
 ## Next Priorities
 
-- Continue `P2-2` with `P2-2c`: apply the shared button/card/feedback contract to the remaining chat-adjacent panels and overlays before touching character surfaces or broader visual polish.
+- Continue `P2-2` with `P2-2d`: apply the shared button/card/feedback contract to the character list/detail surfaces before locking the remaining empty/loading/error-state language.
 
 ## Optional Follow-up
 

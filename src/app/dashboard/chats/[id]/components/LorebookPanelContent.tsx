@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react'
 import { ArrowLeft, BookOpen, Folder, Search, SlidersHorizontal, X } from 'lucide-react'
 import Button from '@/app/dashboard/components/Button'
+import EmptyState from '@/app/dashboard/components/EmptyState'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import type { LorebookEntry } from '@/types/risuai.types'
 import type {
@@ -199,12 +200,12 @@ export function LorebookPanelContent({
                 </button>
 
                 {activeFolderEntries.length === 0 ? (
-                  <SurfaceCard
-                    tone="dashed"
-                    className="m-2 text-sm text-muted-foreground shadow-none"
-                  >
-                    No entries in this folder yet.
-                  </SurfaceCard>
+                  <EmptyState
+                    compact
+                    className="m-2"
+                    title="This folder has no active entries"
+                    description="Select a different folder or review the linked modules that provide lorebook content."
+                  />
                 ) : (
                   activeFolderEntries.map((entry) => (
                     <LorebookEntryRow
@@ -251,9 +252,12 @@ export function LorebookPanelContent({
         ) : (
           <div className="border-t">
             {flatEntries.length === 0 ? (
-              <SurfaceCard tone="dashed" className="m-2 text-sm text-muted-foreground shadow-none">
-                No lorebook entries match the current view.
-              </SurfaceCard>
+              <EmptyState
+                compact
+                className="m-2"
+                title="No matching lorebook entries"
+                description="Try clearing the search or switching filters to broaden the current view."
+              />
             ) : (
               flatEntries.map((entry) => (
                 <LorebookEntryRow

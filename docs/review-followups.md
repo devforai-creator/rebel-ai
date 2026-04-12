@@ -13,10 +13,11 @@ Updated: 2026-04-12
 - Normalized the remaining account and API-key forms against the shared button/card/feedback contract.
 - Normalized the chat-adjacent panels and overlays against the shared button/card/feedback contract.
 - Normalized the character list/detail surfaces against the shared button/card/feedback contract.
+- Locked the dashboard empty/loading/error-state language with shared state primitives across the first-class character and chat surfaces.
 
 ## Next Priorities
 
-- Continue `P2-2` with `P2-2e`: lock the remaining empty/loading/error-state copy and layout now that account, chat, and character surfaces share the same action/card primitives.
+- Start `P3-1`: run the first intentional product UI improvement pass now that the shared action, card, and state contracts are in place.
 
 ## Optional Follow-up
 

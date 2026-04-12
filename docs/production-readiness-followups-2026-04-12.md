@@ -409,6 +409,13 @@ Done when:
 - terse placeholder copy like `Empty.` and ad hoc loading language is replaced by deliberate product wording
 - later polish work can change tone and visuals centrally without hunting for state-specific one-offs
 
+Current status as of 2026-04-12:
+
+- shared state primitives now live in [EmptyState.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/EmptyState.tsx), [LoadingState.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/LoadingState.tsx), and [ErrorState.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/ErrorState.tsx), giving the dashboard one reusable shell for empty, loading, and recoverable error surfaces
+- page-level states in [src/app/dashboard/characters/loading.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/loading.tsx), [src/app/dashboard/characters/error.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/error.tsx), [src/app/dashboard/chats/new/loading.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/new/loading.tsx), and [src/app/dashboard/chats/error.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/error.tsx) now use explicit product copy instead of anonymous skeletons or one-off retry cards
+- state surfaces inside first-class chat and character flows now reuse the same language and shell: [CharactersPage](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/page.tsx) for an empty library, [CharacterDetailView](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/[id]/CharacterDetailView.tsx) for empty chat history, [ChatSummariesPanel](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatSummariesPanel.tsx) for no long-term memory yet, [LorebookPanelContent](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/LorebookPanelContent.tsx) for empty folder/filter views, and [src/app/dashboard/chats/[id]/page.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/page.tsx) for the memory-panel suspense fallback
+- regression coverage now locks the shared state primitives in [ui-primitives.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/ui-primitives.test.tsx), while [chat-adjacent-ui.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/chat-adjacent-ui.test.tsx) was updated to assert the new lorebook empty-state wording
+
 Suggested execution order:
 
 1. `P2-2a`

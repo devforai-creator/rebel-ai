@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import Button from '@/app/dashboard/components/Button'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
+import EmptyState from '@/app/dashboard/components/EmptyState'
 import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { CHAT_CONTEXT_WINDOW } from '@/lib/chat-context-window'
@@ -267,12 +268,7 @@ export default function ChatSummariesPanel({
         </SurfaceCard>
 
         {!hasMemoryEntries && (
-          <SurfaceCard
-            tone="dashed"
-            className="text-center text-sm text-gray-500 dark:text-gray-400"
-          >
-            {emptyStateText}
-          </SurfaceCard>
+          <EmptyState compact title="No long-term memory yet" description={emptyStateText} />
         )}
 
         <SummaryMemorySection

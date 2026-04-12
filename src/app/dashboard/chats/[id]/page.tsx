@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import LoadingState from '@/app/dashboard/components/LoadingState'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ChatInterface from './ChatInterface'
@@ -186,7 +187,12 @@ function LorebookPanelFallback() {
 function ChatSummariesFallback() {
   return (
     <aside className="h-full w-full border-l border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
-      <div className="h-full animate-pulse bg-gray-50 dark:bg-gray-900" />
+      <div className="p-4 lg:p-6">
+        <LoadingState
+          title="Loading long-term memory"
+          description="Preparing summaries, facts, and memory checkpoints for this chat."
+        />
+      </div>
     </aside>
   )
 }

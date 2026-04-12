@@ -2,7 +2,10 @@ import React from 'react'
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import Button, { buttonClassName } from './Button'
+import EmptyState from './EmptyState'
+import ErrorState from './ErrorState'
 import InlineFeedback from './InlineFeedback'
+import LoadingState from './LoadingState'
 import SurfaceCard, { surfaceCardClassName } from './SurfaceCard'
 
 describe('buttonClassName', () => {
@@ -63,5 +66,43 @@ describe('Button', () => {
 
     expect(html).toContain('type="button"')
     expect(html).toContain('Click')
+  })
+})
+
+describe('EmptyState', () => {
+  it('renders the shared dashed empty-state contract with status semantics', () => {
+    const html = renderToStaticMarkup(
+      <EmptyState title="Nothing here" description="Create something to get started." />,
+    )
+
+    expect(html).toContain('role="status"')
+    expect(html).toContain('Nothing here')
+    expect(html).toContain('Create something to get started.')
+    expect(html).toContain('border-dashed')
+  })
+})
+
+describe('LoadingState', () => {
+  it('renders the shared loading copy with a status role', () => {
+    const html = renderToStaticMarkup(
+      <LoadingState title="Loading data" description="Preparing the current dashboard view." />,
+    )
+
+    expect(html).toContain('role="status"')
+    expect(html).toContain('Loading data')
+    expect(html).toContain('Preparing the current dashboard view.')
+    expect(html).toContain('animate-pulse')
+  })
+})
+
+describe('ErrorState', () => {
+  it('renders the shared recoverable error shell with alert semantics', () => {
+    const html = renderToStaticMarkup(
+      <ErrorState title="Something went wrong" description="Please try again." />,
+    )
+
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('Something went wrong')
+    expect(html).toContain('Please try again.')
   })
 })

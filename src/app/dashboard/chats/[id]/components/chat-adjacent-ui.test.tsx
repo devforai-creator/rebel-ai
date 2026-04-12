@@ -65,7 +65,8 @@ describe('LorebookPanelContent', () => {
       />,
     )
 
-    expect(html).toContain('No lorebook entries match the current view.')
+    expect(html).toContain('No matching lorebook entries')
+    expect(html).toContain('Try clearing the search or switching filters')
   })
 })
 

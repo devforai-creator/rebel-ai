@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
+import Button, { buttonClassName } from '@/app/dashboard/components/Button'
+import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
+import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
+import { cx } from '@/app/dashboard/components/classNames'
 
 interface GoogleApiKeySidePanelProps {
   isOpen: boolean
@@ -113,9 +117,11 @@ export default function GoogleApiKeySidePanel({ isOpen, onClose }: GoogleApiKeyS
               Follow the steps to get your API key
             </p>
           </div>
-          <button
+          <Button
             onClick={handleClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            variant="ghost"
+            size="icon"
+            className="rounded-full"
             aria-label="Close"
           >
             <svg
@@ -131,11 +137,14 @@ export default function GoogleApiKeySidePanel({ isOpen, onClose }: GoogleApiKeyS
                 d="M6 18L18 6M6 6l12 12"
               />
             </svg>
-          </button>
+          </Button>
         </div>
 
         {/* Progress Indicator */}
-        <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+        <SurfaceCard
+          tone="subtle"
+          className="rounded-none border-x-0 border-t-0 px-6 py-4 dark:bg-gray-800/50"
+        >
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
               Step {currentStep + 1} / {steps.length}
@@ -155,7 +164,7 @@ export default function GoogleApiKeySidePanel({ isOpen, onClose }: GoogleApiKeyS
               ))}
             </div>
           </div>
-        </div>
+        </SurfaceCard>
 
         {/* Content */}
         <div className="px-6 py-6">
@@ -170,7 +179,7 @@ export default function GoogleApiKeySidePanel({ isOpen, onClose }: GoogleApiKeyS
               href={currentStepData.action.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 mb-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              className={buttonClassName({ className: 'mb-6' })}
             >
               <span>{currentStepData.action.label}</span>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -185,7 +194,11 @@ export default function GoogleApiKeySidePanel({ isOpen, onClose }: GoogleApiKeyS
           )}
 
           {/* Image */}
-          <div className="relative w-full bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden shadow-md mb-6">
+          <SurfaceCard
+            tone="subtle"
+            padding="none"
+            className="relative mb-6 w-full overflow-hidden"
+          >
             <Image
               src={currentStepData.image}
               alt={currentStepData.title}
@@ -194,11 +207,11 @@ export default function GoogleApiKeySidePanel({ isOpen, onClose }: GoogleApiKeyS
               className="w-full h-auto"
               priority={currentStep === 0}
             />
-          </div>
+          </SurfaceCard>
 
           {/* Tips */}
           {currentStep === 0 && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <InlineFeedback tone="info">
               <div className="flex gap-2">
                 <svg
                   className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
@@ -218,11 +231,11 @@ export default function GoogleApiKeySidePanel({ isOpen, onClose }: GoogleApiKeyS
                   </p>
                 </div>
               </div>
-            </div>
+            </InlineFeedback>
           )}
 
           {currentStep === 4 && (
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+            <InlineFeedback tone="success">
               <div className="flex gap-2">
                 <svg
                   className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5"
@@ -244,51 +257,36 @@ export default function GoogleApiKeySidePanel({ isOpen, onClose }: GoogleApiKeyS
                   </p>
                 </div>
               </div>
-            </div>
+            </InlineFeedback>
           )}
         </div>
 
         {/* Navigation */}
         <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-6 py-4">
           <div className="flex items-center justify-between gap-4">
-            <button
-              onClick={handlePrev}
-              disabled={currentStep === 0}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                currentStep === 0
-                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
-              }`}
-            >
+            <Button onClick={handlePrev} disabled={currentStep === 0} variant="secondary">
               Previous
-            </button>
+            </Button>
 
             <div className="flex gap-2">
               {steps.map((_, index) => (
                 <button
                   key={index}
                   onClick={() => setCurrentStep(index)}
-                  className={`w-2 h-2 rounded-full transition-colors ${
+                  className={cx(
+                    'h-2 w-2 rounded-full transition-colors',
                     index === currentStep
                       ? 'bg-blue-600'
-                      : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
-                  }`}
+                      : 'bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500',
+                  )}
                   aria-label={`Go to step ${index + 1}`}
                 />
               ))}
             </div>
 
-            <button
-              onClick={handleNext}
-              disabled={currentStep === steps.length - 1}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                currentStep === steps.length - 1
-                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-            >
+            <Button onClick={handleNext} disabled={currentStep === steps.length - 1}>
               Next
-            </button>
+            </Button>
           </div>
         </div>
       </div>

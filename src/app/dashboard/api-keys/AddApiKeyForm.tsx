@@ -97,10 +97,13 @@ export default function AddApiKeyForm() {
       >
         {/* Guide Button */}
         {provider === 'google' && (
-          <button
+          <Button
             type="button"
             onClick={() => setIsGuideOpen(true)}
-            className="w-full mb-4 py-3 px-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
+            variant="secondary"
+            size="lg"
+            fullWidth
+            className="mb-4"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -111,7 +114,7 @@ export default function AddApiKeyForm() {
               />
             </svg>
             <span>Google API Key Guide</span>
-          </button>
+          </Button>
         )}
 
         {displayError && (

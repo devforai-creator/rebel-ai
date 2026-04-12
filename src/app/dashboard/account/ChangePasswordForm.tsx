@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import Button from '@/app/dashboard/components/Button'
+import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import { changePassword } from './actions'
 
 export default function ChangePasswordForm() {
@@ -41,17 +43,9 @@ export default function ChangePasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
-          {error}
-        </div>
-      )}
+      {error && <InlineFeedback tone="error">{error}</InlineFeedback>}
 
-      {success && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-lg text-sm">
-          Password changed successfully.
-        </div>
-      )}
+      {success && <InlineFeedback tone="success">Password changed successfully.</InlineFeedback>}
 
       <div>
         <label
@@ -89,13 +83,9 @@ export default function ChangePasswordForm() {
         />
       </div>
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
+      <Button type="submit" disabled={loading}>
         {loading ? 'Changing...' : 'Change Password'}
-      </button>
+      </Button>
     </form>
   )
 }

@@ -2,6 +2,9 @@
 
 import { useActionState, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import Button from '@/app/dashboard/components/Button'
+import InlineFeedback, { type InlineFeedbackTone } from '@/app/dashboard/components/InlineFeedback'
+import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { updateRagSettings, type RagSettingsState } from './actions'
 
 type VoyageKey = {
@@ -58,6 +61,13 @@ export default function RagSettingsForm({
   const hasKeys = voyageKeys.length > 0
   const hasActiveKey = voyageKeys.some((key) => key.is_active)
   const allowToggle = hasActiveKey
+  const statusTone: InlineFeedbackTone | null = statusMessage
+    ? state.error
+      ? 'error'
+      : state.success
+        ? 'success'
+        : 'warning'
+    : null
 
   return (
     <form action={formAction} className="space-y-6">
@@ -92,13 +102,17 @@ export default function RagSettingsForm({
       </div>
 
       {!hasKeys && (
-        <div className="rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+        <SurfaceCard
+          tone="dashed"
+          padding="sm"
+          className="text-sm text-gray-600 dark:text-gray-300"
+        >
           No Voyage Embeddings key found.{' '}
           <Link href="/dashboard/api-keys" className="text-blue-600 dark:text-blue-400 underline">
             API Key Management
           </Link>{' '}
           - Please register a `Voyage (Embeddings)` key first.
-        </div>
+        </SurfaceCard>
       )}
 
       <div className="space-y-2">
@@ -124,25 +138,13 @@ export default function RagSettingsForm({
         </p>
       </div>
 
-      {statusMessage && (
-        <div
-          className={`rounded-md px-3 py-2 text-sm ${
-            state.error
-              ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'
-              : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
-          }`}
-        >
-          {statusMessage}
-        </div>
+      {statusMessage && statusTone && (
+        <InlineFeedback tone={statusTone}>{statusMessage}</InlineFeedback>
       )}
 
-      <button
-        type="submit"
-        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        disabled={enableRag && (!selectedKey || !hasActiveKey)}
-      >
+      <Button type="submit" disabled={enableRag && (!selectedKey || !hasActiveKey)}>
         Save
-      </button>
+      </Button>
     </form>
   )
 }

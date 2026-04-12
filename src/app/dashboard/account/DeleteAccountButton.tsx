@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import Button from '@/app/dashboard/components/Button'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import { deleteAccount } from './actions'
@@ -47,14 +48,9 @@ export default function DeleteAccountButton() {
 
   return (
     <div className="space-y-4">
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={isDeleting}
-        className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-70 disabled:cursor-not-allowed transition-colors"
-      >
+      <Button onClick={handleClick} disabled={isDeleting} variant="destructive">
         {isDeleting ? 'Deleting account...' : 'Delete Account'}
-      </button>
+      </Button>
 
       <ConfirmDialog
         isOpen={isConfirmOpen}

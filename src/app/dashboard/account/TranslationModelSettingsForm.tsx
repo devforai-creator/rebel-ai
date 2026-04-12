@@ -2,6 +2,9 @@
 
 import React, { useActionState, useEffect, useState } from 'react'
 import Link from 'next/link'
+import Button from '@/app/dashboard/components/Button'
+import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
+import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { updateTranslationModelPreference, type TranslationModelPreferenceState } from './actions'
 
 type TranslationApiKey = {
@@ -71,34 +74,26 @@ export default function TranslationModelSettingsForm({ initialKeyId, apiKeys }: 
       </div>
 
       {!hasKeys && (
-        <p className="rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm text-gray-600 dark:text-gray-300">
+        <SurfaceCard
+          tone="dashed"
+          padding="sm"
+          className="text-sm text-gray-600 dark:text-gray-300"
+        >
           No LLM API keys registered.{' '}
           <Link href="/dashboard/api-keys" className="text-blue-600 dark:text-blue-400 underline">
             API Key Management
           </Link>{' '}
           - Please register an LLM API key first.
-        </p>
+        </SurfaceCard>
       )}
 
       {statusMessage && (
-        <div
-          className={`rounded-md px-3 py-2 text-sm ${
-            state.error
-              ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'
-              : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
-          }`}
-        >
-          {statusMessage}
-        </div>
+        <InlineFeedback tone={state.error ? 'error' : 'success'}>{statusMessage}</InlineFeedback>
       )}
 
-      <button
-        type="submit"
-        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        disabled={!hasKeys && selectedKey !== ''}
-      >
+      <Button type="submit" disabled={!hasKeys && selectedKey !== ''}>
         Save
-      </button>
+      </Button>
     </form>
   )
 }

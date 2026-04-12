@@ -319,6 +319,13 @@ Done when:
 - form-level errors, success feedback, disabled states, and loading labels read as one product instead of per-file inventions
 - side-panel and section-card spacing matches the shared dashboard shell from `P2-2a`
 
+Current status as of 2026-04-12:
+
+- the remaining account forms in [ChangePasswordForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/ChangePasswordForm.tsx), [RagSettingsForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/RagSettingsForm.tsx), [ReprocessSettingsForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/ReprocessSettingsForm.tsx), [SummaryModelSettingsForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/SummaryModelSettingsForm.tsx), and [TranslationModelSettingsForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/TranslationModelSettingsForm.tsx) now use the shared `Button`, `InlineFeedback`, and dashed `SurfaceCard` patterns instead of bespoke local button and status-box classes
+- destructive account cleanup in [DeleteAccountButton.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/DeleteAccountButton.tsx) now inherits the shared destructive button contract instead of carrying its own isolated red-button implementation
+- the API-key surfaces now use the same contract not only for create/list flows but also for guidance chrome: [AddApiKeyForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/AddApiKeyForm.tsx) now treats the setup guide trigger as a shared secondary action, and [GoogleApiKeySidePanel.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/GoogleApiKeySidePanel.tsx) now uses shared button, card, and inline-feedback patterns for its header actions, progress shell, step CTA, and informational callouts
+- regression coverage for the settings-form copy contracts still passes in [ReprocessSettingsForm.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/ReprocessSettingsForm.test.tsx), [SummaryModelSettingsForm.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/SummaryModelSettingsForm.test.tsx), and [TranslationModelSettingsForm.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/TranslationModelSettingsForm.test.tsx), while the shared primitive contract remains locked in [ui-primitives.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/ui-primitives.test.tsx)
+
 ### P2-2c. Normalize Chat-Adjacent Panels and Overlays
 
 Scope:

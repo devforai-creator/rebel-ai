@@ -228,6 +228,13 @@ Suggested seams:
 - side-panel state
 - debug / operator-only affordances
 
+Current status as of 2026-04-12:
+
+- [src/app/dashboard/chats/[id]/hooks/useChatMessageActions.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/hooks/useChatMessageActions.ts) now owns message edit/delete/regenerate/reprocess/retranslate flows, including the delete-dialog description logic that previously lived inline in [ChatInterface](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatInterface.tsx)
+- [src/app/dashboard/chats/[id]/hooks/useChatDebugModal.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/hooks/useChatDebugModal.ts) now owns debug-modal fetch/open/close behavior plus asset-diagnostics target selection instead of keeping that state machine inside the main chat shell
+- [ChatInterface](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatInterface.tsx) is now closer to an orchestration shell for asset loading, realtime wiring, and top-level layout composition; the next split should target [MessageList](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/MessageList.tsx) row-level action rendering and the remaining history/data-loading concerns
+- regression coverage now exists for the new pure helper seams in [useChatMessageActions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/hooks/useChatMessageActions.test.ts) and [useChatDebugModal.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/hooks/useChatDebugModal.test.ts)
+
 ### P2-2. Lock a Minimal Product UI System Before Visual Redesign
 
 Scope:

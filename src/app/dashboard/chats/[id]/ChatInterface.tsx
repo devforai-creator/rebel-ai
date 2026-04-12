@@ -4,10 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { toast } from 'sonner'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
-import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import type { Message } from '@/types/database.types'
 import type { CharacterAsset } from '@/lib/asset-resolver'
-import { editMessage, deleteMessage } from './message-actions'
 import { useAutosizeTextArea } from '@/hooks/useAutosizeTextArea'
 import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 
@@ -19,11 +17,15 @@ import {
   type LatestMessageTokenStats,
   type MessageChangePayload,
   type DebugInfo,
-  type DisplayMessage,
   mapMessageToDisplay,
   shouldRefreshTokenStats,
 } from './utils'
-import { useChatInterfaceSettings, useQueuedChat } from './hooks'
+import {
+  useChatInterfaceSettings,
+  useQueuedChat,
+  useChatMessageActions,
+  useChatDebugModal,
+} from './hooks'
 import { MessageList, TokenStatsPanel, DebugModal } from './components'
 import {
   CHAT_ASSISTANT_STREAM_EVENT,
@@ -140,27 +142,14 @@ export default function ChatInterface({
   const [latestUsage, setLatestUsage] = useState<LatestMessageTokenStats | null>(initialUsageStats)
   const supabase = useMemo(() => createSupabaseClient(), [])
 
-  // Message editing state
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
-  const [editContent, setEditContent] = useState('')
-
   // Developer mode state
   const [statsExpanded, setStatsExpanded] = useState(false)
-  const [debugModal, setDebugModal] = useState<{
-    isOpen: boolean
-    messageId: string | null
-    debugInfo: DebugInfo | null | undefined
-    mode: 'message' | 'assets'
-  }>({ isOpen: false, messageId: null, debugInfo: undefined, mode: 'message' })
 
   // History pagination
   const [historyMessages, setHistoryMessages] = useState<Message[]>([])
   const [historyCursor, setHistoryCursor] = useState<number | null>(initialHistoryCursor)
   const [historyHasMore, setHistoryHasMore] = useState(hasMoreHistory)
   const [isHistoryLoading, setIsHistoryLoading] = useState(false)
-  const [reprocessingMessageId, setReprocessingMessageId] = useState<string | null>(null)
-  const [retranslatingMessageId, setRetranslatingMessageId] = useState<string | null>(null)
-  const [pendingDeleteMessageId, setPendingDeleteMessageId] = useState<string | null>(null)
 
   // Debug info and persisted IDs tracking
   const debugInfoMap = useRef<Map<string, DebugInfo>>(new Map())
@@ -318,43 +307,6 @@ export default function ChatInterface({
 
   useAutosizeTextArea(composerRef, input, { minHeight: 96, maxHeight: 600 })
 
-  // Show debug info modal
-  const showDebugInfo = useCallback(
-    async (messageId: string) => {
-      const cached = debugInfoMap.current.get(messageId)
-      if (cached) {
-        setDebugModal({ isOpen: true, messageId, debugInfo: cached, mode: 'message' })
-        return
-      }
-
-      setDebugModal({ isOpen: true, messageId, debugInfo: undefined, mode: 'message' })
-
-      try {
-        const response = await fetch(`/api/chats/${chatId}/messages/${messageId}/debug`)
-        if (response.ok) {
-          const data = await response.json()
-          const serverDebugInfo = data.debugInfo as DebugInfo | null
-          if (serverDebugInfo) {
-            debugInfoMap.current.set(messageId, serverDebugInfo)
-          }
-          setDebugModal((prev) =>
-            prev.isOpen && prev.messageId === messageId
-              ? { ...prev, debugInfo: serverDebugInfo, mode: 'message' }
-              : prev,
-          )
-        }
-      } catch (error) {
-        console.error('Failed to fetch debug info:', error)
-        setDebugModal((prev) =>
-          prev.isOpen && prev.messageId === messageId
-            ? { ...prev, debugInfo: null, mode: 'message' }
-            : prev,
-        )
-      }
-    },
-    [chatId],
-  )
-
   // Load older messages
   const loadOlderMessages = useCallback(async () => {
     if (!historyHasMore || isHistoryLoading || historyCursor === null) return
@@ -402,29 +354,10 @@ export default function ChatInterface({
   }, [chatId, historyCursor, historyHasMore, isHistoryLoading])
 
   // Combined messages
-  const combinedMessages = useMemo<DisplayMessage[]>(() => {
+  const combinedMessages = useMemo(() => {
     if (historyMessages.length === 0) return messages
     return [...historyMessages.map(mapMessageToDisplay), ...messages]
   }, [historyMessages, messages])
-
-  const debugMessage = useMemo<DisplayMessage | null>(() => {
-    if (!debugModal.messageId) return null
-    return combinedMessages.find((msg) => msg.id === debugModal.messageId) ?? null
-  }, [combinedMessages, debugModal.messageId])
-
-  const openAssetDiagnostics = useCallback(() => {
-    const latestAssistant = [...combinedMessages]
-      .reverse()
-      .find((message) => message.role === 'assistant')
-    const fallback = combinedMessages[combinedMessages.length - 1] ?? null
-    const target = latestAssistant ?? fallback
-    setDebugModal({
-      isOpen: true,
-      messageId: target?.id ?? null,
-      debugInfo: null,
-      mode: 'assets',
-    })
-  }, [combinedMessages])
 
   const defaultVariables = useMemo(() => {
     return character.metadata?.default_variables as Record<string, unknown> | undefined
@@ -509,158 +442,37 @@ export default function ChatInterface({
     [persistRuntimeVariables],
   )
 
-  // Message editing handlers
-  const startEdit = useCallback((messageId: string, currentContent: string) => {
-    setEditingMessageId(messageId)
-    setEditContent(currentContent)
-  }, [])
+  const {
+    editingMessageId,
+    editContent,
+    setEditContent,
+    reprocessingMessageId,
+    retranslatingMessageId,
+    pendingDeleteMessage,
+    deleteDialogDescription,
+    startEdit,
+    cancelEdit,
+    saveEdit,
+    requestDelete,
+    closeDeleteDialog,
+    confirmDelete,
+    handleRegenerate,
+    handleReprocess,
+    handleRetranslate,
+  } = useChatMessageActions({
+    combinedMessages,
+    persistedMessageIds,
+    debugInfoMap,
+    setMessages,
+    reload,
+  })
 
-  const cancelEdit = useCallback(() => {
-    setEditingMessageId(null)
-    setEditContent('')
-  }, [])
-
-  const saveEdit = useCallback(
-    async (messageId: string) => {
-      if (!editContent.trim()) return
-
-      const result = await editMessage(messageId, editContent)
-      if (result.error) {
-        toast.error('Failed to edit message: ' + result.error)
-        return
-      }
-
-      setMessages((prev) =>
-        prev.map((m) => (m.id === messageId ? { ...m, content: editContent } : m)),
-      )
-      setEditingMessageId(null)
-      setEditContent('')
-    },
-    [editContent, setMessages],
-  )
-
-  // Delete message
-  const handleDelete = useCallback(async (messageId: string) => {
-    setPendingDeleteMessageId(messageId)
-  }, [])
-
-  const confirmDelete = useCallback(async () => {
-    const targetId = pendingDeleteMessageId
-    setPendingDeleteMessageId(null)
-
-    await runConfirmedAction(targetId, async (messageId) => {
-      const result = await deleteMessage(messageId)
-      if (result.error) {
-        toast.error('Failed to delete message: ' + result.error)
-        return
-      }
-
-      persistedMessageIds.current.delete(messageId)
-      debugInfoMap.current.delete(messageId)
-      setMessages((prev) => prev.filter((m) => m.id !== messageId))
+  const { debugModal, debugMessage, openMessageDebug, openAssetDiagnostics, closeDebugModal } =
+    useChatDebugModal({
+      chatId,
+      combinedMessages,
+      debugInfoMap,
     })
-  }, [pendingDeleteMessageId, setMessages])
-
-  const pendingDeleteMessage = useMemo(
-    () => combinedMessages.find((message) => message.id === pendingDeleteMessageId) ?? null,
-    [combinedMessages, pendingDeleteMessageId],
-  )
-
-  const messageDeleteDescription = useMemo(() => {
-    if (!pendingDeleteMessage) {
-      return 'This message will be removed from the chat history.'
-    }
-
-    const preview = pendingDeleteMessage.content.trim().replace(/\s+/g, ' ').slice(0, 120)
-    return preview.length > 0
-      ? `This permanently deletes the selected message.\n\n"${preview}${preview.length === 120 ? '…' : ''}"`
-      : 'This permanently deletes the selected message.'
-  }, [pendingDeleteMessage])
-
-  // Regenerate message
-  const handleRegenerate = useCallback(
-    (messageId: string) => {
-      if (!persistedMessageIds.current.has(messageId)) {
-        toast.error('Message not yet saved. Please try again in a moment.')
-        return
-      }
-
-      void reload({
-        body: {
-          isRegeneration: true,
-          regenerateAssistantMessageId: messageId,
-        },
-      })
-    },
-    [reload],
-  )
-
-  // Reprocess message with custom prompt
-  const handleReprocess = useCallback(async (messageId: string) => {
-    if (!persistedMessageIds.current.has(messageId)) {
-      toast.error('Message not yet saved. Please try again in a moment.')
-      return
-    }
-
-    setReprocessingMessageId(messageId)
-    try {
-      const response = await fetch('/api/messages/reprocess', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageId }),
-      })
-
-      const isExperimental = response.headers.get('X-RebelAI-Support-Tier') === 'experimental'
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        toast.error(
-          errorText ||
-            (isExperimental ? 'Experimental reprocess failed' : 'Failed to reprocess message'),
-        )
-        return
-      }
-
-      toast.success(
-        isExperimental ? 'Experimental reprocess completed' : 'Message reprocessed successfully',
-      )
-    } catch (error) {
-      console.error('[Reprocess] Error:', error)
-      toast.error('Experimental reprocess failed')
-    } finally {
-      setReprocessingMessageId(null)
-    }
-  }, [])
-
-  // Retranslate message (bilingual memory)
-  const handleRetranslate = useCallback(async (messageId: string) => {
-    if (!persistedMessageIds.current.has(messageId)) {
-      toast.error('Message not yet saved. Please try again in a moment.')
-      return
-    }
-
-    setRetranslatingMessageId(messageId)
-    try {
-      const response = await fetch('/api/messages/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageId }),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        toast.error(errorText || 'Failed to translate message')
-        return
-      }
-
-      toast.success('Message translated successfully')
-    } catch (error) {
-      console.error('[Retranslate] Error:', error)
-      toast.error('Failed to translate message')
-    } finally {
-      setRetranslatingMessageId(null)
-    }
-  }, [])
 
   // Scroll to bottom on initial load
   useEffect(() => {
@@ -713,11 +525,11 @@ export default function ChatInterface({
             onStartEdit={startEdit}
             onSaveEdit={saveEdit}
             onCancelEdit={cancelEdit}
-            onDelete={handleDelete}
+            onDelete={requestDelete}
             onRegenerate={handleRegenerate}
             onReprocess={handleReprocess}
             onRetranslate={handleRetranslate}
-            onShowDebugInfo={showDebugInfo}
+            onShowDebugInfo={openMessageDebug}
             developerMode={developerMode}
             persistedMessageIds={persistedMessageIds.current}
             isLoading={isLoading}
@@ -781,18 +593,16 @@ export default function ChatInterface({
         characterAssets={characterAssets as CharacterAsset[]}
         imageCommandUrlMap={imageCommandUrlMap}
         mode={debugModal.mode}
-        onClose={() =>
-          setDebugModal({ isOpen: false, messageId: null, debugInfo: undefined, mode: 'message' })
-        }
+        onClose={closeDebugModal}
       />
 
       <ConfirmDialog
         isOpen={pendingDeleteMessage !== null}
         title="Delete message?"
-        description={messageDeleteDescription}
+        description={deleteDialogDescription}
         confirmLabel="Delete message"
         onConfirm={() => void confirmDelete()}
-        onClose={() => setPendingDeleteMessageId(null)}
+        onClose={closeDeleteDialog}
       />
     </div>
   )

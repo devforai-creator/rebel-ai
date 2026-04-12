@@ -12,7 +12,7 @@ Updated: 2026-04-12
 
 ## Next Priorities
 
-- Split the main chat and character detail surfaces further before visual redesign work grows the change radius again.
+- Continue `P2-1` by splitting `MessageList` row/action rendering and the remaining history/data-loading logic out of the main chat shell before visual redesign work grows the change radius again.
 
 ## Optional Follow-up
 

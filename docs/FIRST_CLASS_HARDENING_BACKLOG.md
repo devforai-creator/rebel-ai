@@ -134,7 +134,7 @@ Current status as of 2026-04-11:
 - the policy split is documented in [OPERATING_PLAN.md](./OPERATING_PLAN.md)
 - `Anthropic Batch` chat is now gated behind an explicit deployment opt-in (`ANTHROPIC_BATCH_CHAT_ENABLED`) instead of being treated as an ambient supported path whenever an Opus key is present
 - developer/operator chats now resolve to `prefix_live_blocks` as their default UI/runtime memory path and persist that choice into `model_config`, while the system fallback remains `summary_window`
-- provider-specific cache toggles now have a manual deployment profile template in [env/profiles/caching.env.example](../env/profiles/caching.env.example), so cache experiments can be pinned explicitly in deployment settings instead of living only as ambient code defaults
+- provider-specific cache policy now has a manual deployment profile template in [env/profiles/caching.env.example](../env/profiles/caching.env.example), so the low-cost profile can pin `auto` explicitly in deployment settings instead of relying on ambient code defaults
 - the runtime still contains several optional provider and post-generation branches close to the core path
 
 ## P1

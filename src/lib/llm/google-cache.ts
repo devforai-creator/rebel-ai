@@ -9,24 +9,29 @@
  * - Cache read: 10% of input price (90% discount)
  * - Storage: $4.50/1M tokens/hour
  *
- * Toggle via environment variable:
- * - GOOGLE_EXPLICIT_CACHE_ENABLED=true (default: true)
- * - Set to "false" to disable if Google starts charging for cache creation
+ * Policy via environment variable:
+ * - GOOGLE_EXPLICIT_CACHE_MODE=auto enables the current explicit-cache strategy
+ * - GOOGLE_EXPLICIT_CACHE_MODE=off disables it
+ * - Default: off when unset
  *
  * @see https://ai.google.dev/gemini-api/docs/caching
  * @see https://ai.google.dev/api/caching
  */
 
 import { GoogleAICacheManager, type CachedContent } from '@google/generative-ai/server'
+import { resolveProviderCacheMode } from './cache-mode'
 
 /**
  * Check if Google explicit caching is enabled via environment variable
- * Default: true (enabled)
+ * Default: false when the mode is unset
  */
 export function isGoogleExplicitCacheEnabled(): boolean {
-  const envValue = process.env.GOOGLE_EXPLICIT_CACHE_ENABLED
-  // Default to true if not set, only disable if explicitly set to "false"
-  return envValue !== 'false'
+  return (
+    resolveProviderCacheMode({
+      modeEnvName: 'GOOGLE_EXPLICIT_CACHE_MODE',
+      legacyEnvNames: ['GOOGLE_EXPLICIT_CACHE_ENABLED'],
+    }) === 'auto'
+  )
 }
 
 /** Minimum token thresholds for caching (Google's requirement) */

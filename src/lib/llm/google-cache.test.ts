@@ -1,6 +1,5 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest'
 import {
-  isGoogleExplicitCacheEnabled,
   getGoogleCacheMinTokens,
   shouldCreateGoogleCache,
   resolveGoogleCacheDecision,
@@ -21,40 +20,41 @@ vi.mock('@google/generative-ai/server', () => {
 
 describe('google-cache', () => {
   describe('isGoogleExplicitCacheEnabled', () => {
-    const originalEnv = process.env.GOOGLE_EXPLICIT_CACHE_ENABLED
-
     afterEach(() => {
-      if (originalEnv === undefined) {
-        delete process.env.GOOGLE_EXPLICIT_CACHE_ENABLED
-      } else {
-        process.env.GOOGLE_EXPLICIT_CACHE_ENABLED = originalEnv
-      }
+      vi.resetModules()
+      vi.restoreAllMocks()
+      vi.unstubAllEnvs()
     })
 
-    it('returns true when env var is not set (default)', () => {
-      delete process.env.GOOGLE_EXPLICIT_CACHE_ENABLED
-      expect(isGoogleExplicitCacheEnabled()).toBe(true)
-    })
+    it('returns false when mode env var is not set (default)', async () => {
+      const { isGoogleExplicitCacheEnabled } = await import('./google-cache')
 
-    it('returns true when env var is "true"', () => {
-      process.env.GOOGLE_EXPLICIT_CACHE_ENABLED = 'true'
-      expect(isGoogleExplicitCacheEnabled()).toBe(true)
-    })
-
-    it('returns false when env var is "false"', () => {
-      process.env.GOOGLE_EXPLICIT_CACHE_ENABLED = 'false'
       expect(isGoogleExplicitCacheEnabled()).toBe(false)
     })
 
-    it('returns true for any other value', () => {
-      process.env.GOOGLE_EXPLICIT_CACHE_ENABLED = 'yes'
-      expect(isGoogleExplicitCacheEnabled()).toBe(true)
+    it('returns true when mode env var is "auto"', async () => {
+      vi.stubEnv('GOOGLE_EXPLICIT_CACHE_MODE', 'auto')
+      const { isGoogleExplicitCacheEnabled } = await import('./google-cache')
 
-      process.env.GOOGLE_EXPLICIT_CACHE_ENABLED = '1'
       expect(isGoogleExplicitCacheEnabled()).toBe(true)
+    })
 
-      process.env.GOOGLE_EXPLICIT_CACHE_ENABLED = ''
-      expect(isGoogleExplicitCacheEnabled()).toBe(true)
+    it('returns false when mode env var is "off"', async () => {
+      vi.stubEnv('GOOGLE_EXPLICIT_CACHE_MODE', 'off')
+      const { isGoogleExplicitCacheEnabled } = await import('./google-cache')
+
+      expect(isGoogleExplicitCacheEnabled()).toBe(false)
+    })
+
+    it('returns false for invalid mode values', async () => {
+      vi.stubEnv('GOOGLE_EXPLICIT_CACHE_MODE', 'yes')
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const { isGoogleExplicitCacheEnabled } = await import('./google-cache')
+
+      expect(isGoogleExplicitCacheEnabled()).toBe(false)
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid GOOGLE_EXPLICIT_CACHE_MODE value "yes"'),
+      )
     })
   })
 

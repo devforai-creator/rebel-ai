@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type ResolveArgs = Parameters<(typeof import('./prompt-cache'))['resolvePromptCacheDecision']>[0]
 type AnthropicResolveArgs = Parameters<
@@ -23,6 +23,10 @@ async function loadModule() {
 }
 
 describe('OpenAI prompt cache decision', () => {
+  beforeEach(() => {
+    vi.stubEnv('OPENAI_PROMPT_CACHE_MODE', 'auto')
+  })
+
   afterEach(() => {
     vi.resetModules()
     vi.unstubAllEnvs()
@@ -39,8 +43,17 @@ describe('OpenAI prompt cache decision', () => {
     expect(decision).toBeNull()
   })
 
-  it('returns null when caching is disabled via env', async () => {
-    vi.stubEnv('OPENAI_PROMPT_CACHE_ENABLED', '0')
+  it('defaults to off when mode env is missing', async () => {
+    vi.unstubAllEnvs()
+    const { resolvePromptCacheDecision } = await loadModule()
+
+    const decision = resolvePromptCacheDecision(baseArgs)
+
+    expect(decision).toBeNull()
+  })
+
+  it('returns null when caching mode is off', async () => {
+    vi.stubEnv('OPENAI_PROMPT_CACHE_MODE', 'off')
     const { resolvePromptCacheDecision } = await loadModule()
 
     const decision = resolvePromptCacheDecision(baseArgs)
@@ -142,13 +155,25 @@ describe('OpenAI prompt cache decision', () => {
 })
 
 describe('Anthropic prompt cache decision', () => {
+  beforeEach(() => {
+    vi.stubEnv('ANTHROPIC_PROMPT_CACHE_MODE', 'auto')
+  })
+
   afterEach(() => {
     vi.resetModules()
     vi.unstubAllEnvs()
   })
 
-  it('returns null when anthropic caching is disabled via env', async () => {
-    vi.stubEnv('ANTHROPIC_PROMPT_CACHE_ENABLED', '0')
+  it('defaults to off when mode env is missing', async () => {
+    vi.unstubAllEnvs()
+    const { resolveAnthropicCacheDecision } = await loadModule()
+
+    const decision = resolveAnthropicCacheDecision(baseAnthropicArgs)
+    expect(decision).toBeNull()
+  })
+
+  it('returns null when anthropic caching mode is off', async () => {
+    vi.stubEnv('ANTHROPIC_PROMPT_CACHE_MODE', 'off')
     const { resolveAnthropicCacheDecision } = await loadModule()
 
     const decision = resolveAnthropicCacheDecision(baseAnthropicArgs)

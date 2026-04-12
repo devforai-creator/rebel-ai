@@ -2,15 +2,17 @@ import crypto from 'crypto'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import { hasExtendedOpenAICacheRetention } from '@/lib/models'
 import { getAnthropicMinCacheTokens, type AnthropicCacheTTL } from './provider-options'
+import { resolveProviderCacheMode } from './cache-mode'
 
 const PROMPT_CACHE_VERSION = 'v1'
 
 function isEnabled(): boolean {
-  const raw = process.env.OPENAI_PROMPT_CACHE_ENABLED
-  if (!raw) {
-    return true
-  }
-  return raw === '1' || raw.toLowerCase() === 'true'
+  return (
+    resolveProviderCacheMode({
+      modeEnvName: 'OPENAI_PROMPT_CACHE_MODE',
+      legacyEnvNames: ['OPENAI_PROMPT_CACHE_ENABLED'],
+    }) === 'auto'
+  )
 }
 
 function resolveMinTokens(): number {
@@ -101,11 +103,12 @@ export interface AnthropicCacheDecision {
 }
 
 function isAnthropicCacheEnabled(): boolean {
-  const raw = process.env.ANTHROPIC_PROMPT_CACHE_ENABLED
-  if (!raw) {
-    return true // Enabled by default (split-system strategy implemented 2025-12-10)
-  }
-  return raw === '1' || raw.toLowerCase() === 'true'
+  return (
+    resolveProviderCacheMode({
+      modeEnvName: 'ANTHROPIC_PROMPT_CACHE_MODE',
+      legacyEnvNames: ['ANTHROPIC_PROMPT_CACHE_ENABLED'],
+    }) === 'auto'
+  )
 }
 
 function resolveAnthropicCacheTTL(): AnthropicCacheTTL {

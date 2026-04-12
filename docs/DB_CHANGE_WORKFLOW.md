@@ -49,7 +49,7 @@ npm run db:schema
 4. Run the checks that match the change.
 
 ```bash
-npx tsc --noEmit
+npm run typecheck
 npm run test
 ```
 

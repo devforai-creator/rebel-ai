@@ -307,7 +307,7 @@ npm run dev          # Development server (localhost:3000)
 npm run build        # Production build
 npm run lint         # ESLint check
 npm run test         # Vitest (unit + integration)
-npx tsc --noEmit     # Type check
+npm run typecheck    # Generate Next route types + TypeScript check
 npm run backfill:embeddings  # Voyage embeddings backfill (optional feature)
 ```
 

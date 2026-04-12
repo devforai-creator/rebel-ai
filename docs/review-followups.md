@@ -12,7 +12,7 @@ Updated: 2026-04-12
 
 ## Next Priorities
 
-- Continue `P2-1` by splitting `MessageList` row/action rendering and the remaining history/data-loading logic out of the main chat shell before visual redesign work grows the change radius again.
+- Continue `P2-1` by splitting `MessageList` bubble/renderer concerns further now that message tools and history loading are no longer embedded in the main chat shell.
 
 ## Optional Follow-up
 

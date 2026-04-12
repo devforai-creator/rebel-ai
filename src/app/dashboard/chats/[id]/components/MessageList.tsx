@@ -4,6 +4,7 @@ import { memo, useMemo, useRef, type RefObject } from 'react'
 import Image from 'next/image'
 import type { CharacterAsset } from '@/lib/asset-resolver'
 import { useAutosizeTextArea } from '@/hooks/useAutosizeTextArea'
+import { MessageActionBar } from './MessageActionBar'
 import {
   DisplayMessage,
   StreamingAssistantDraft,
@@ -277,61 +278,25 @@ export const ChatMessageRow = memo(function ChatMessageRow({
                 )}
               </div>
             </div>
-            <div className="flex gap-2 items-center flex-wrap">
-              <button
-                onClick={() => onStartEdit(message.id, message.content)}
-                className="text-xs text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
-                title="Edit message"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => void onDelete(message.id)}
-                className="text-xs text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
-                title="Delete message"
-              >
-                Delete
-              </button>
-              {isAssistant && isLastMessage && persistedMessageIds.has(message.id) && (
-                <button
-                  onClick={() => onRegenerate(message.id)}
-                  className="text-xs text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 transition-colors"
-                  title="Regenerate"
-                  disabled={isLoading}
-                >
-                  Regenerate
-                </button>
-              )}
-              {isAssistant && persistedMessageIds.has(message.id) && (
-                <button
-                  onClick={() => onReprocess(message.id)}
-                  className="text-xs text-gray-500 hover:text-orange-600 dark:text-gray-400 dark:hover:text-orange-400 transition-colors"
-                  title="Experimental reprocess with custom prompt"
-                  disabled={isLoading || reprocessingMessageId !== null}
-                >
-                  {isReprocessing ? 'Reprocessing...' : 'Reprocess'}
-                </button>
-              )}
-              {developerMode && isAssistant && persistedMessageIds.has(message.id) && (
-                <button
-                  onClick={() => onShowDebugInfo(message.id)}
-                  className="text-xs text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors"
-                  title="View debug info"
-                >
-                  Debug
-                </button>
-              )}
-              {persistedMessageIds.has(message.id) && (
-                <button
-                  onClick={() => onRetranslate(message.id)}
-                  className="text-xs text-gray-500 hover:text-cyan-600 dark:text-gray-400 dark:hover:text-cyan-400 transition-colors"
-                  title="Translate to English (Bilingual Memory)"
-                  disabled={isLoading || retranslatingMessageId !== null}
-                >
-                  {isRetranslating ? 'Translating...' : 'Translate'}
-                </button>
-              )}
-            </div>
+            <MessageActionBar
+              messageId={message.id}
+              messageContent={message.content}
+              role={message.role}
+              isPersisted={persistedMessageIds.has(message.id)}
+              isLastMessage={isLastMessage}
+              developerMode={developerMode}
+              isLoading={isLoading}
+              isReprocessing={isReprocessing}
+              reprocessingMessageId={reprocessingMessageId}
+              isRetranslating={isRetranslating}
+              retranslatingMessageId={retranslatingMessageId}
+              onStartEdit={onStartEdit}
+              onDelete={onDelete}
+              onRegenerate={onRegenerate}
+              onReprocess={onReprocess}
+              onShowDebugInfo={onShowDebugInfo}
+              onRetranslate={onRetranslate}
+            />
           </>
         )}
       </div>

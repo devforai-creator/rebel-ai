@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { toast } from 'sonner'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
-import type { Message } from '@/types/database.types'
 import type { CharacterAsset } from '@/lib/asset-resolver'
 import { useAutosizeTextArea } from '@/hooks/useAutosizeTextArea'
 import { createClient as createSupabaseClient } from '@/lib/supabase/client'
@@ -17,7 +16,6 @@ import {
   type LatestMessageTokenStats,
   type MessageChangePayload,
   type DebugInfo,
-  mapMessageToDisplay,
   shouldRefreshTokenStats,
 } from './utils'
 import {
@@ -25,6 +23,8 @@ import {
   useQueuedChat,
   useChatMessageActions,
   useChatDebugModal,
+  useChatHistory,
+  combineHistoryWithLiveMessages,
 } from './hooks'
 import { MessageList, TokenStatsPanel, DebugModal } from './components'
 import {
@@ -145,12 +145,6 @@ export default function ChatInterface({
   // Developer mode state
   const [statsExpanded, setStatsExpanded] = useState(false)
 
-  // History pagination
-  const [historyMessages, setHistoryMessages] = useState<Message[]>([])
-  const [historyCursor, setHistoryCursor] = useState<number | null>(initialHistoryCursor)
-  const [historyHasMore, setHistoryHasMore] = useState(hasMoreHistory)
-  const [isHistoryLoading, setIsHistoryLoading] = useState(false)
-
   // Debug info and persisted IDs tracking
   const debugInfoMap = useRef<Map<string, DebugInfo>>(new Map())
   const persistedMessageIds = useRef<Set<string>>(new Set())
@@ -223,6 +217,14 @@ export default function ChatInterface({
     },
     [fetchLatestUsage],
   )
+
+  const { historyMessages, historyHasMore, isHistoryLoading, loadOlderMessages } = useChatHistory({
+    chatId,
+    initialHistoryCursor,
+    hasMoreHistory,
+    persistedMessageIds,
+    debugInfoMap,
+  })
 
   // Use the queued chat hook
   const {
@@ -307,57 +309,10 @@ export default function ChatInterface({
 
   useAutosizeTextArea(composerRef, input, { minHeight: 96, maxHeight: 600 })
 
-  // Load older messages
-  const loadOlderMessages = useCallback(async () => {
-    if (!historyHasMore || isHistoryLoading || historyCursor === null) return
-
-    setIsHistoryLoading(true)
-    try {
-      const response = await fetch(
-        `/api/chats/${chatId}/messages/history?before=${historyCursor}`,
-        {
-          cache: 'no-store',
-        },
-      )
-
-      if (!response.ok) {
-        console.error('Failed to load older messages:', response.statusText)
-        setHistoryHasMore(false)
-        return
-      }
-
-      const data = (await response.json()) as {
-        messages: Message[]
-        hasMore: boolean
-        nextCursor: number | null
-      }
-
-      if (Array.isArray(data.messages) && data.messages.length > 0) {
-        setHistoryMessages((prev) => [...data.messages, ...prev])
-        setHistoryCursor(data.nextCursor)
-        setHistoryHasMore(data.hasMore)
-
-        for (const msg of data.messages) {
-          persistedMessageIds.current.add(msg.id)
-          if (msg.debug_info) {
-            debugInfoMap.current.set(msg.id, msg.debug_info as DebugInfo)
-          }
-        }
-      } else {
-        setHistoryHasMore(false)
-      }
-    } catch (error) {
-      console.error('Failed to load older messages:', error)
-    } finally {
-      setIsHistoryLoading(false)
-    }
-  }, [chatId, historyCursor, historyHasMore, isHistoryLoading])
-
-  // Combined messages
-  const combinedMessages = useMemo(() => {
-    if (historyMessages.length === 0) return messages
-    return [...historyMessages.map(mapMessageToDisplay), ...messages]
-  }, [historyMessages, messages])
+  const combinedMessages = useMemo(
+    () => combineHistoryWithLiveMessages(historyMessages, messages),
+    [historyMessages, messages],
+  )
 
   const defaultVariables = useMemo(() => {
     return character.metadata?.default_variables as Record<string, unknown> | undefined

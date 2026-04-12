@@ -818,6 +818,7 @@ describe('processChatJobs', () => {
   })
 
   it('uses the configured Anthropic cache TTL for batch explicit cache blocks', async () => {
+    vi.stubEnv('ANTHROPIC_PROMPT_CACHE_MODE', 'auto')
     vi.stubEnv('ANTHROPIC_PROMPT_CACHE_TTL', '1h')
 
     const supabase = createChatJobRunnerSupabaseMock({

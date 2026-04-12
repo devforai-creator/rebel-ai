@@ -5,6 +5,7 @@ import Button from '@/app/dashboard/components/Button'
 import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { createCharacter, updateCharacter } from './actions'
+import { submitCharacterForm, toggleSelectedModuleIds } from './character-ui-logic'
 import type { Character } from '@/types/database.types'
 import { useUserModules } from '@/hooks/useUserResources'
 
@@ -49,12 +50,14 @@ export default function CharacterForm({
     setLoading(true)
     setError(null)
 
-    // Add module selections to formData
-    formData.append('module_ids', selectedModuleIds.join(','))
-
-    const result = isEditing
-      ? await updateCharacter(character.id, formData)
-      : await createCharacter(formData)
+    const result = await submitCharacterForm({
+      characterId: character?.id,
+      formData,
+      isEditing,
+      selectedModuleIds,
+      createCharacterImpl: createCharacter,
+      updateCharacterImpl: updateCharacter,
+    })
 
     if (result?.error) {
       setError(result.error)
@@ -64,9 +67,7 @@ export default function CharacterForm({
   }
 
   function toggleModule(moduleId: string) {
-    setSelectedModuleIds((prev) =>
-      prev.includes(moduleId) ? prev.filter((id) => id !== moduleId) : [...prev, moduleId],
-    )
+    setSelectedModuleIds((prev) => toggleSelectedModuleIds(prev, moduleId))
   }
 
   return (

@@ -9,6 +9,7 @@ import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { importChat } from '@/app/dashboard/chats/actions'
+import { deriveChatImportTitle, submitChatImport } from './chat-import-logic'
 
 interface Props {
   characterId: string
@@ -34,42 +35,31 @@ export default function ChatImportModal({ characterId, characterName, isOpen, on
     if (file) {
       setSelectedFile(file)
       setError(null)
-      // Try to extract title from filename
-      const nameWithoutExt = file.name.replace(/_chat\.json$/i, '').replace(/\.json$/i, '')
-      setChatTitle(nameWithoutExt)
+      setChatTitle(deriveChatImportTitle(file.name))
     }
   }
 
   async function handleImport() {
-    if (!selectedFile) {
-      setError('Please select a file')
-      return
-    }
-
     setIsLoading(true)
     setError(null)
 
-    try {
-      const content = await selectedFile.text()
-      const result = await importChat(characterId, content, chatTitle || undefined)
+    const result = await submitChatImport({
+      characterId,
+      selectedFile,
+      chatTitle,
+      importChatImpl: importChat,
+    })
 
-      if (result.success) {
-        onClose()
-        router.refresh()
-        if (result.chatId) {
-          setPendingImportedChat({
-            chatId: result.chatId,
-            messageCount: result.messageCount ?? 0,
-          })
-        }
-      } else {
-        setError(result.error || 'Import failed')
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to read file')
-    } finally {
-      setIsLoading(false)
+    setIsLoading(false)
+
+    if (!result.ok) {
+      setError(result.error)
+      return
     }
+
+    onClose()
+    router.refresh()
+    setPendingImportedChat(result.pendingImportedChat)
   }
 
   function handleClose() {

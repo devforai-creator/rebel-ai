@@ -11,6 +11,7 @@ import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import type { Character } from '@/types/database.types'
 import { deleteCharacter } from './actions'
+import { runCharacterDelete } from './character-ui-logic'
 
 export type CharacterListItem = Pick<
   Character,
@@ -37,7 +38,10 @@ export default function CharacterCard({ character, isStarter = false }: Props) {
 
     await runConfirmedAction(shouldDelete ? character.id : null, async (characterId) => {
       setDeleting(true)
-      const result = await deleteCharacter(characterId)
+      const result = await runCharacterDelete({
+        characterId,
+        deleteCharacterImpl: deleteCharacter,
+      })
 
       if (result?.error) {
         toast.error(result.error)

@@ -6,50 +6,17 @@ import Button from '@/app/dashboard/components/Button'
 import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { cx } from '@/app/dashboard/components/classNames'
-import { IMPORT_UPLOAD_BUCKET, MAX_IMPORT_UPLOAD_MB } from '@/lib/import/constants'
+import { MAX_IMPORT_UPLOAD_MB } from '@/lib/import/constants'
 import { createClient } from '@/lib/supabase/client'
-
-type JobStatus = 'pending' | 'processing' | 'success' | 'error'
-
-type ImportStats = {
-  assetsUploaded?: number
-  failedAssets?: number
-  failedAssetSamples?: Array<{
-    fileName: string
-    reason: string
-  }>
-  modulesCreated?: number
-  lorebookEntries?: number
-  moduleAssetsUploaded?: number
-  validationWarnings?: string[]
-}
-
-const statusCopy: Record<JobStatus, string> = {
-  pending: 'Job is waiting. Server will process it in order.',
-  processing: 'Importing RBX package and uploading assets.',
-  success: 'Import complete. Character list will refresh shortly.',
-  error: 'Import failed. Please check the error message.',
-}
-
-function isSupportedRbxFile(file: File) {
-  return file.name.toLowerCase().endsWith('.rbx')
-}
-
-function buildUploadPath(userId: string, file: File) {
-  const sanitizedName = file.name
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-
-  const uniqueSuffix =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}`
-
-  const safeName = sanitizedName || 'character.rbx'
-  return `${userId}/imports/${uniqueSuffix}-${safeName}`
-}
+import {
+  characterImportStatusCopy,
+  getCharacterImportErrorMessage,
+  getCharacterImportSelectionError,
+  resolveCharacterImportJobProgress,
+  startCharacterImportJob,
+  type CharacterImportJobStatus,
+  type CharacterImportStats,
+} from './character-ui-logic'
 
 export default function CharacterImport() {
   const router = useRouter()
@@ -62,28 +29,13 @@ export default function CharacterImport() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
   const [visibleJobId, setVisibleJobId] = useState<string | null>(null)
-  const [jobStatus, setJobStatus] = useState<JobStatus | null>(null)
-  const [importStats, setImportStats] = useState<ImportStats | null>(null)
+  const [jobStatus, setJobStatus] = useState<CharacterImportJobStatus | null>(null)
+  const [importStats, setImportStats] = useState<CharacterImportStats | null>(null)
 
   const showJobPanel = Boolean(visibleJobId || jobStatus)
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-
-    if (!selectedFile) {
-      setError('Please select an RBX file.')
-      return
-    }
-
-    if (!isSupportedRbxFile(selectedFile)) {
-      setError('Supported files: .rbx only')
-      return
-    }
-
-    if (selectedFile.size > MAX_IMPORT_UPLOAD_MB * 1024 * 1024) {
-      setError(`File size must be ${MAX_IMPORT_UPLOAD_MB}MB or less.`)
-      return
-    }
 
     setError(null)
     setLoading(true)
@@ -93,60 +45,24 @@ export default function CharacterImport() {
     setJobStatus(null)
     setStatusMessage('Uploading RBX package to Supabase Storage...')
 
-    try {
-      const supabase = createClient()
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
+    const result = await startCharacterImportJob({
+      selectedFile,
+      supabase: createClient(),
+      fetchImpl: fetch,
+    })
 
-      if (userError || !user) {
-        throw new Error('Login required')
-      }
-
-      const uploadPath = buildUploadPath(user.id, selectedFile)
-      const uploadResult = await supabase.storage
-        .from(IMPORT_UPLOAD_BUCKET)
-        .upload(uploadPath, selectedFile, {
-          upsert: false,
-          cacheControl: '3600',
-          contentType: selectedFile.type || 'application/octet-stream',
-        })
-
-      if (uploadResult.error || !uploadResult.data) {
-        throw new Error(uploadResult.error?.message || 'File upload failed')
-      }
-
-      const response = await fetch('/api/characters/import/storage', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          path: uploadResult.data.path,
-          fileName: selectedFile.name,
-          fileType: selectedFile.type,
-          fileSize: selectedFile.size,
-        }),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok || !result?.jobId) {
-        throw new Error(result?.error || 'Import job enqueue failed')
-      }
-
-      setJobId(result.jobId as string)
-      setVisibleJobId(result.jobId as string)
-      setJobStatus((result.status as JobStatus) || 'pending')
-      setStatusMessage('Preparing background import job...')
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      setError(`Import failed: ${message}`)
+    if (!result.ok) {
+      setError(result.error)
       setStatusMessage(null)
       setLoading(false)
       setVisibleJobId(null)
+      return
     }
+
+    setJobId(result.jobId)
+    setVisibleJobId(result.jobId)
+    setJobStatus(result.jobStatus)
+    setStatusMessage(result.statusMessage)
   }
 
   useEffect(() => {
@@ -165,38 +81,35 @@ export default function CharacterImport() {
           return
         }
 
-        if (!response.ok) {
-          throw new Error(data?.error || 'Failed to load job status')
-        }
+        const nextState = resolveCharacterImportJobProgress({
+          ok: response.ok,
+          data,
+        })
 
-        setJobStatus(data.status as JobStatus)
+        setJobStatus(nextState.jobStatus)
 
-        if (data.status === 'success') {
-          if (data.result?.stats) {
-            setImportStats(data.result.stats as ImportStats)
-          }
-          setStatusMessage('Import complete! Redirecting to character list...')
+        if (nextState.kind === 'success') {
+          setImportStats(nextState.importStats)
+          setStatusMessage(nextState.statusMessage)
           setLoading(false)
           setJobId(null)
           return
         }
 
-        if (data.status === 'error') {
-          setError(data.error || 'Import failed')
+        if (nextState.kind === 'error') {
+          setError(nextState.error)
           setStatusMessage(null)
           setLoading(false)
           setJobId(null)
           return
         }
 
-        setStatusMessage(
-          data.status === 'processing' ? 'Processing RBX package...' : 'Waiting in queue...',
-        )
+        setStatusMessage(nextState.statusMessage)
       } catch (err) {
         if (!isSubscribed) {
           return
         }
-        setError(`Status check failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+        setError(getCharacterImportErrorMessage(err, 'Status check failed'))
         setStatusMessage(null)
         setLoading(false)
         setJobId(null)
@@ -239,8 +152,9 @@ export default function CharacterImport() {
   }
 
   function selectFile(file: File) {
-    if (!isSupportedRbxFile(file)) {
-      setError('Supported files: .rbx only')
+    const selectionError = getCharacterImportSelectionError(file)
+    if (selectionError) {
+      setError(selectionError)
       return
     }
 
@@ -287,7 +201,7 @@ export default function CharacterImport() {
             <p className="font-medium">Background import job is in progress.</p>
             <p>
               {jobStatus
-                ? statusCopy[jobStatus]
+                ? characterImportStatusCopy[jobStatus]
                 : 'Preparing job... You can navigate away and the job will continue.'}
             </p>
             <p className="text-xs text-amber-700 dark:text-amber-300">

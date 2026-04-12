@@ -1,13 +1,23 @@
+// @vitest-environment jsdom
+
 import React from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import ChatImportModal from './ChatImportModal'
 import NewChatButton from './NewChatButton'
+import { importChat } from '@/app/dashboard/chats/actions'
+
+const { pushMock, refreshMock } = vi.hoisted(() => ({
+  pushMock: vi.fn(),
+  refreshMock: vi.fn(),
+}))
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
-    push: vi.fn(),
-    refresh: vi.fn(),
+    push: pushMock,
+    refresh: refreshMock,
   }),
 }))
 
@@ -34,6 +44,76 @@ describe('ChatImportModal', () => {
     expect(html).toContain('Cancel')
     expect(html).toContain('Import')
   })
+
+  it('imports a chat file and offers navigation to the imported chat', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    vi.mocked(importChat).mockResolvedValue({
+      success: true,
+      chatId: 'chat-42',
+      messageCount: 7,
+    })
+
+    const { container } = render(
+      <ChatImportModal characterId="char-1" characterName="Guide" isOpen onClose={onClose} />,
+    )
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+
+    await user.upload(
+      input,
+      new File(['{"chat":true}'], 'guide_chat.json', { type: 'application/json' }),
+    )
+
+    const titleInput = screen.getByPlaceholderText(
+      'Title for the imported chat',
+    ) as HTMLInputElement
+    expect(titleInput.value).toBe('guide')
+
+    await user.clear(titleInput)
+    await user.type(titleInput, 'Imported session')
+    await user.click(screen.getByRole('button', { name: 'Import' }))
+
+    await waitFor(() => {
+      expect(importChat).toHaveBeenCalledWith('char-1', '{"chat":true}', 'Imported session')
+      expect(onClose).toHaveBeenCalledTimes(1)
+      expect(refreshMock).toHaveBeenCalledTimes(1)
+    })
+
+    expect(await screen.findByText('Open imported chat?')).toBeTruthy()
+    expect(screen.getByText('Imported 7 messages successfully.')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Go to chat' }))
+
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith('/dashboard/chats/chat-42')
+    })
+  })
+
+  it('surfaces import failures and resets local state on cancel', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    vi.mocked(importChat).mockResolvedValue({
+      success: false,
+      error: 'Malformed export',
+    })
+
+    const { container } = render(
+      <ChatImportModal characterId="char-1" characterName="Guide" isOpen onClose={onClose} />,
+    )
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+
+    await user.upload(
+      input,
+      new File(['{"chat":false}'], 'broken.json', { type: 'application/json' }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Import' }))
+
+    expect(await screen.findByText('Malformed export')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Click to select JSON file')).toBeTruthy()
+  })
 })
 
 describe('NewChatButton', () => {
@@ -44,4 +124,9 @@ describe('NewChatButton', () => {
     expect(html).toContain('bg-blue-600')
     expect(html).toContain('새 채팅 시작')
   })
+})
+
+afterEach(() => {
+  cleanup()
+  vi.clearAllMocks()
 })

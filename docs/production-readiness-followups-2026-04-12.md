@@ -192,6 +192,13 @@ Done when:
 - mutation failures use one shared toast or inline-feedback pattern
 - tests cover the behavior where the old browser dialog path previously short-circuited control flow
 
+Current status as of 2026-04-12:
+
+- [src/app/dashboard/components/ConfirmDialog.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/ConfirmDialog.tsx) now provides the shared destructive-confirmation shell used across dashboard flows instead of browser-native dialogs
+- [src/app/dashboard/components/confirm-action.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/confirm-action.ts) and [confirm-action.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/confirm-action.test.ts) now lock the short-circuit behavior explicitly so cancelled confirmations do not execute the pending mutation callback
+- core product surfaces in [ApiKeyList](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/ApiKeyList.tsx), [DeleteAccountButton](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/DeleteAccountButton.tsx), [DeleteChatButton](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/DeleteChatButton.tsx), [ChatInterface](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatInterface.tsx), and [ChatSummariesPanel](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatSummariesPanel.tsx) now use dialog-backed confirmation plus `sonner` or existing inline feedback instead of `alert` / `confirm`
+- the latest dashboard search no longer finds runtime `alert` / `confirm` usage outside test fixtures, including supporting flows under characters, modules, personas, summary-prompt settings, and announcement admin
+
 ## P2
 
 ### P2-1. Continue Decomposing the Main Chat UI by Feature Boundary

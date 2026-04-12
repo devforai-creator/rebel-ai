@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
+import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
+import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import { CheckCircle2, Megaphone, PauseCircle, RefreshCw, Trash2, Pencil } from 'lucide-react'
 import type { Announcement, AnnouncementSeverity } from '@/types/database.types'
 import {
@@ -107,6 +109,9 @@ export default function AnnouncementAdminPanel({ initialAnnouncements }: Props) 
   const [isFormPending, startFormTransition] = useTransition()
   const [isRowPending, startRowTransition] = useTransition()
   const [rowActionId, setRowActionId] = useState<string | null>(null)
+  const [pendingDeleteAnnouncementId, setPendingDeleteAnnouncementId] = useState<string | null>(
+    null,
+  )
 
   const activeCount = useMemo(
     () => announcements.filter((a) => a.is_active).length,
@@ -200,20 +205,28 @@ export default function AnnouncementAdminPanel({ initialAnnouncements }: Props) 
   }
 
   const handleDelete = (announcementId: string) => {
-    if (!confirm('Permanently delete this announcement?')) return
-    setRowActionId(announcementId)
-    startRowTransition(async () => {
-      const result = await deleteAnnouncement(announcementId)
-      if (result.error) {
-        showFeedback('error', result.error)
-      } else {
-        setAnnouncements((prev) => prev.filter((item) => item.id !== announcementId))
-        showFeedback('success', 'Announcement deleted.')
-        if (editingId === announcementId) {
-          resetForm()
+    setPendingDeleteAnnouncementId(announcementId)
+  }
+
+  const confirmDelete = () => {
+    const targetId = pendingDeleteAnnouncementId
+    setPendingDeleteAnnouncementId(null)
+
+    void runConfirmedAction(targetId, async (announcementId) => {
+      setRowActionId(announcementId)
+      startRowTransition(async () => {
+        const result = await deleteAnnouncement(announcementId)
+        if (result.error) {
+          showFeedback('error', result.error)
+        } else {
+          setAnnouncements((prev) => prev.filter((item) => item.id !== announcementId))
+          showFeedback('success', 'Announcement deleted.')
+          if (editingId === announcementId) {
+            resetForm()
+          }
         }
-      }
-      setRowActionId(null)
+        setRowActionId(null)
+      })
     })
   }
 
@@ -391,6 +404,16 @@ export default function AnnouncementAdminPanel({ initialAnnouncements }: Props) 
           </div>
         </div>
       </section>
+
+      <ConfirmDialog
+        isOpen={pendingDeleteAnnouncementId !== null}
+        title="Delete announcement?"
+        description="This permanently removes the announcement from the dashboard."
+        confirmLabel="Delete announcement"
+        isConfirming={isRowPending && pendingDeleteAnnouncementId !== null}
+        onConfirm={confirmDelete}
+        onClose={() => setPendingDeleteAnnouncementId(null)}
+      />
 
       <section className="bg-white dark:bg-gray-800 shadow-sm rounded-xl border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center justify-between mb-6">

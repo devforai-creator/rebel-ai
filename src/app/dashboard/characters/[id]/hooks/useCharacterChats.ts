@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { deleteChat } from '@/app/dashboard/chats/actions'
 import type { CharacterChat } from '../character-detail-types'
 
@@ -18,6 +19,11 @@ type UseCharacterChatsParams = {
   initialHasMoreChats: boolean
 }
 
+type PendingDeleteChat = {
+  id: string
+  title: string | null
+}
+
 export function useCharacterChats({
   characterId,
   initialChats,
@@ -31,6 +37,7 @@ export function useCharacterChats({
   const [hasMoreChatPages, setHasMoreChatPages] = useState(initialHasMoreChats)
   const [isChatLoading, setIsChatLoading] = useState(false)
   const [exportingChatId, setExportingChatId] = useState<string | null>(null)
+  const [pendingDeleteChat, setPendingDeleteChat] = useState<PendingDeleteChat | null>(null)
 
   async function exportChat(chatId: string) {
     setExportingChatId(chatId)
@@ -46,26 +53,32 @@ export function useCharacterChats({
       downloadBlob(blob, filename)
     } catch (error) {
       console.error('Export failed:', error)
-      window.alert('Failed to export chat')
+      toast.error('Failed to export chat')
     } finally {
       setExportingChatId(null)
     }
   }
 
-  async function deleteCharacterChat(chatId: string, chatTitle: string | null) {
-    if (
-      !window.confirm(
-        `Are you sure you want to delete "${chatTitle || 'this chat'}"?\n\nAll messages and summaries will be deleted and cannot be recovered.`,
-      )
-    ) {
+  function requestDeleteCharacterChat(chatId: string, chatTitle: string | null) {
+    setPendingDeleteChat({ id: chatId, title: chatTitle })
+  }
+
+  function cancelDeleteCharacterChat() {
+    setPendingDeleteChat(null)
+  }
+
+  async function confirmDeleteCharacterChat() {
+    if (!pendingDeleteChat) {
       return
     }
 
+    const { id: chatId } = pendingDeleteChat
+    setPendingDeleteChat(null)
     setDeletingChatId(chatId)
     const result = await deleteChat(chatId, false)
 
     if (result?.error) {
-      window.alert(result.error)
+      toast.error(result.error)
       setDeletingChatId(null)
       return
     }
@@ -115,8 +128,11 @@ export function useCharacterChats({
     chatList,
     hasMoreChatPages,
     isChatLoading,
+    pendingDeleteChat,
     exportChat,
-    deleteCharacterChat,
+    requestDeleteCharacterChat,
+    cancelDeleteCharacterChat,
+    confirmDeleteCharacterChat,
     loadMoreChats,
   }
 }

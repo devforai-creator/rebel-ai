@@ -1,6 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
+import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
+import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 
 type ModuleSummary = {
   id: string
@@ -29,6 +32,7 @@ export default function ModuleManagementSection() {
     error: null,
   })
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [pendingDeleteModule, setPendingDeleteModule] = useState<ModuleSummary | null>(null)
 
   const loadModules = useCallback(async () => {
     setState({ loading: true, error: null })
@@ -56,30 +60,34 @@ export default function ModuleManagementSection() {
   }, [loadModules])
 
   const handleDelete = useCallback(async (id: string, label: string) => {
-    const confirmMessage = `Delete module "${label}"?\nIt will be automatically removed from connected characters.`
-    if (!window.confirm(confirmMessage)) {
-      return
-    }
-
-    setDeleting(id)
-    try {
-      const response = await fetch(`/api/modules?id=${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        const { error: apiError } = await response.json().catch(() => ({ error: null }))
-        throw new Error(apiError || 'Failed to delete module.')
-      }
-
-      setModules((prev) => prev.filter((module) => module.id !== id))
-    } catch (err) {
-      console.error('[Module Admin] Failed to delete module', err)
-      alert(err instanceof Error ? err.message : 'An error occurred during deletion.')
-    } finally {
-      setDeleting((current) => (current === id ? null : current))
-    }
+    setPendingDeleteModule({ id, name: label })
   }, [])
+
+  const confirmDelete = useCallback(async () => {
+    const pendingModule = pendingDeleteModule
+    setPendingDeleteModule(null)
+
+    await runConfirmedAction(pendingModule, async ({ id }) => {
+      setDeleting(id)
+      try {
+        const response = await fetch(`/api/modules?id=${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+        })
+
+        if (!response.ok) {
+          const { error: apiError } = await response.json().catch(() => ({ error: null }))
+          throw new Error(apiError || 'Failed to delete module.')
+        }
+
+        setModules((prev) => prev.filter((module) => module.id !== id))
+      } catch (err) {
+        console.error('[Module Admin] Failed to delete module', err)
+        toast.error(err instanceof Error ? err.message : 'An error occurred during deletion.')
+      } finally {
+        setDeleting((current) => (current === id ? null : current))
+      }
+    })
+  }, [pendingDeleteModule])
 
   const hasModules = modules.length > 0
 
@@ -173,6 +181,16 @@ export default function ModuleManagementSection() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={pendingDeleteModule !== null}
+        title={`Delete module "${pendingDeleteModule?.name ?? ''}"?`}
+        description="It will be automatically removed from connected characters."
+        confirmLabel="Delete module"
+        isConfirming={pendingDeleteModule !== null && deleting === pendingDeleteModule.id}
+        onConfirm={() => void confirmDelete()}
+        onClose={() => setPendingDeleteModule(null)}
+      />
     </section>
   )
 }

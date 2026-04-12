@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
+import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import type { ApiKey } from '@/types/database.types'
 import { PROVIDER_CATALOG } from '@/lib/providers/catalog'
 import { deleteApiKey, toggleApiKey } from './actions'
@@ -15,29 +18,35 @@ type ApiKeyListItem = Omit<ApiKey, 'vault_secret_name' | 'user_id'>
 export default function ApiKeyList({ apiKeys }: Props) {
   const router = useRouter()
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   async function handleDelete(id: string) {
-    if (!confirm('Are you sure you want to delete this API key?')) {
-      return
-    }
+    setPendingDeleteId(id)
+  }
 
-    setDeletingId(id)
-    const result = await deleteApiKey(id)
-    setDeletingId(null)
+  async function confirmDelete() {
+    const targetId = pendingDeleteId
+    setPendingDeleteId(null)
 
-    if (result?.error) {
-      alert(result.error)
-      return
-    }
+    await runConfirmedAction(targetId, async (id) => {
+      setDeletingId(id)
+      const result = await deleteApiKey(id)
+      setDeletingId(null)
 
-    router.refresh()
+      if (result?.error) {
+        toast.error(result.error)
+        return
+      }
+
+      router.refresh()
+    })
   }
 
   async function handleToggle(id: string, isActive: boolean) {
     const result = await toggleApiKey(id, isActive)
 
     if (result?.error) {
-      alert(result.error)
+      toast.error(result.error)
       return
     }
 
@@ -134,6 +143,16 @@ export default function ApiKeyList({ apiKeys }: Props) {
           </div>
         </div>
       ))}
+
+      <ConfirmDialog
+        isOpen={pendingDeleteId !== null}
+        title="Delete API key?"
+        description="Deleting this key removes the saved provider credential from your account."
+        confirmLabel="Delete key"
+        isConfirming={pendingDeleteId !== null && deletingId === pendingDeleteId}
+        onConfirm={() => void confirmDelete()}
+        onClose={() => setPendingDeleteId(null)}
+      />
     </div>
   )
 }

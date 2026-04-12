@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
+import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import { updateSummaryPrompts } from './actions'
 import {
   DEFAULT_CHUNK_SUMMARY_PROMPT,
@@ -25,6 +28,7 @@ export default function SummaryPromptsEditor({
   const [metaPrompt, setMetaPrompt] = useState(initialMetaPrompt || DEFAULT_META_SUMMARY_PROMPT)
   const [factPrompt, setFactPrompt] = useState(initialFactPrompt || DEFAULT_FACT_EXTRACTION_PROMPT)
   const [isLoading, setIsLoading] = useState(false)
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
 
   const handleSave = async () => {
     setIsLoading(true)
@@ -38,19 +42,26 @@ export default function SummaryPromptsEditor({
     setIsLoading(false)
 
     if (result.error) {
-      alert('Save failed: ' + result.error)
+      toast.error('Save failed: ' + result.error)
     } else {
-      alert('Saved successfully!')
+      toast.success('Saved successfully.')
       router.refresh()
     }
   }
 
   const handleReset = () => {
-    if (confirm('Reset to defaults? Unsaved changes will be lost.')) {
+    setIsResetConfirmOpen(true)
+  }
+
+  const confirmReset = async () => {
+    const shouldReset = isResetConfirmOpen
+    setIsResetConfirmOpen(false)
+
+    await runConfirmedAction(shouldReset ? true : null, async () => {
       setChunkPrompt(DEFAULT_CHUNK_SUMMARY_PROMPT)
       setMetaPrompt(DEFAULT_META_SUMMARY_PROMPT)
       setFactPrompt(DEFAULT_FACT_EXTRACTION_PROMPT)
-    }
+    })
   }
 
   return (
@@ -129,6 +140,16 @@ export default function SummaryPromptsEditor({
           Reset to Defaults
         </button>
       </div>
+
+      <ConfirmDialog
+        isOpen={isResetConfirmOpen}
+        title="Reset prompts to defaults?"
+        description="Unsaved prompt edits will be discarded."
+        confirmLabel="Reset prompts"
+        tone="primary"
+        onConfirm={() => void confirmReset()}
+        onClose={() => setIsResetConfirmOpen(false)}
+      />
     </div>
   )
 }

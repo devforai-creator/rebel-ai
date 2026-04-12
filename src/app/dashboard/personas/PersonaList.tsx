@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
+import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import type { Persona } from '@/types/database.types'
 import { createPersona, updatePersona, deletePersona } from './actions'
 import { Plus, Edit2, Trash2, X, Check } from 'lucide-react'
@@ -17,6 +19,7 @@ export default function PersonaList({ initialPersonas }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({ name: '', description: '' })
@@ -74,17 +77,24 @@ export default function PersonaList({ initialPersonas }: Props) {
   }
 
   const handleDelete = (personaId: string) => {
-    if (!confirm('Delete this persona?')) return
+    setPendingDeleteId(personaId)
+  }
 
-    startTransition(async () => {
-      const result = await deletePersona(personaId)
+  const confirmDelete = () => {
+    const targetId = pendingDeleteId
+    setPendingDeleteId(null)
 
-      if (result.error) {
-        setError(result.error)
-      } else {
-        setPersonas(personas.filter((p) => p.id !== personaId))
-        setError(null)
-      }
+    void runConfirmedAction(targetId, async (personaId) => {
+      startTransition(async () => {
+        const result = await deletePersona(personaId)
+
+        if (result.error) {
+          setError(result.error)
+        } else {
+          setPersonas(personas.filter((p) => p.id !== personaId))
+          setError(null)
+        }
+      })
     })
   }
 
@@ -298,6 +308,16 @@ export default function PersonaList({ initialPersonas }: Props) {
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        isOpen={pendingDeleteId !== null}
+        title="Delete persona?"
+        description="This removes the saved persona from your account."
+        confirmLabel="Delete persona"
+        isConfirming={isPending && pendingDeleteId !== null}
+        onConfirm={confirmDelete}
+        onClose={() => setPendingDeleteId(null)}
+      />
     </div>
   )
 }

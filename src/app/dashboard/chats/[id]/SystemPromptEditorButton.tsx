@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 
 interface Props {
   chatId: string
@@ -50,7 +51,7 @@ export default function SystemPromptEditorButton({
       router.refresh()
     } catch (error) {
       console.error('Failed to save system prompt', error)
-      alert('Failed to save system prompt.')
+      toast.error('Failed to save system prompt.')
     } finally {
       setIsSaving(false)
     }

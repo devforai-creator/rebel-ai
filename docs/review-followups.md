@@ -8,10 +8,11 @@ Updated: 2026-04-12
 - `f71a4c3` `Refactor character detail chat state`
 - `d405529` `Validate auth and account form actions`
 - Aligned RBX/SUU docs and feedback form validation with the current runtime/import contract.
+- Replaced dashboard browser `alert` / `confirm` flows with shared confirmation dialogs and toast or inline feedback paths.
 
 ## Next Priorities
 
-- Replace `alert` / `confirm` flows with toast or dialog-based UI patterns where practical.
+- Split the main chat and character detail surfaces further before visual redesign work grows the change radius again.
 
 ## Optional Follow-up
 

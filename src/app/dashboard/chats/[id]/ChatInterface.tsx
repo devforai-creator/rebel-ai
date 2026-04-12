@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { toast } from 'sonner'
+import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
+import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import type { Message } from '@/types/database.types'
 import type { CharacterAsset } from '@/lib/asset-resolver'
 import { editMessage, deleteMessage } from './message-actions'
@@ -158,6 +160,7 @@ export default function ChatInterface({
   const [isHistoryLoading, setIsHistoryLoading] = useState(false)
   const [reprocessingMessageId, setReprocessingMessageId] = useState<string | null>(null)
   const [retranslatingMessageId, setRetranslatingMessageId] = useState<string | null>(null)
+  const [pendingDeleteMessageId, setPendingDeleteMessageId] = useState<string | null>(null)
 
   // Debug info and persisted IDs tracking
   const debugInfoMap = useRef<Map<string, DebugInfo>>(new Map())
@@ -537,10 +540,15 @@ export default function ChatInterface({
   )
 
   // Delete message
-  const handleDelete = useCallback(
-    async (messageId: string) => {
-      if (!confirm('Are you sure you want to delete this message?')) return
+  const handleDelete = useCallback(async (messageId: string) => {
+    setPendingDeleteMessageId(messageId)
+  }, [])
 
+  const confirmDelete = useCallback(async () => {
+    const targetId = pendingDeleteMessageId
+    setPendingDeleteMessageId(null)
+
+    await runConfirmedAction(targetId, async (messageId) => {
       const result = await deleteMessage(messageId)
       if (result.error) {
         toast.error('Failed to delete message: ' + result.error)
@@ -550,9 +558,24 @@ export default function ChatInterface({
       persistedMessageIds.current.delete(messageId)
       debugInfoMap.current.delete(messageId)
       setMessages((prev) => prev.filter((m) => m.id !== messageId))
-    },
-    [setMessages],
+    })
+  }, [pendingDeleteMessageId, setMessages])
+
+  const pendingDeleteMessage = useMemo(
+    () => combinedMessages.find((message) => message.id === pendingDeleteMessageId) ?? null,
+    [combinedMessages, pendingDeleteMessageId],
   )
+
+  const messageDeleteDescription = useMemo(() => {
+    if (!pendingDeleteMessage) {
+      return 'This message will be removed from the chat history.'
+    }
+
+    const preview = pendingDeleteMessage.content.trim().replace(/\s+/g, ' ').slice(0, 120)
+    return preview.length > 0
+      ? `This permanently deletes the selected message.\n\n"${preview}${preview.length === 120 ? '…' : ''}"`
+      : 'This permanently deletes the selected message.'
+  }, [pendingDeleteMessage])
 
   // Regenerate message
   const handleRegenerate = useCallback(
@@ -761,6 +784,15 @@ export default function ChatInterface({
         onClose={() =>
           setDebugModal({ isOpen: false, messageId: null, debugInfo: undefined, mode: 'message' })
         }
+      />
+
+      <ConfirmDialog
+        isOpen={pendingDeleteMessage !== null}
+        title="Delete message?"
+        description={messageDeleteDescription}
+        confirmLabel="Delete message"
+        onConfirm={() => void confirmDelete()}
+        onClose={() => setPendingDeleteMessageId(null)}
       />
     </div>
   )

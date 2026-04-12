@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import CharacterForm from '../CharacterForm'
 import ChatImportModal from './ChatImportModal'
 import type { CharacterDetailViewProps } from './character-detail-types'
@@ -30,8 +31,11 @@ export default function CharacterDetailView({
     chatList,
     hasMoreChatPages,
     isChatLoading,
+    pendingDeleteChat,
     exportChat,
-    deleteCharacterChat,
+    requestDeleteCharacterChat,
+    cancelDeleteCharacterChat,
+    confirmDeleteCharacterChat,
     loadMoreChats,
   } = useCharacterChats({
     characterId: character.id,
@@ -204,7 +208,7 @@ export default function CharacterDetailView({
                       {exportingChatId === chat.id ? 'Exporting...' : 'Export'}
                     </button>
                     <button
-                      onClick={() => deleteCharacterChat(chat.id, chat.title)}
+                      onClick={() => requestDeleteCharacterChat(chat.id, chat.title)}
                       disabled={deletingChatId === chat.id}
                       className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50"
                     >
@@ -258,6 +262,16 @@ export default function CharacterDetailView({
         characterName={character.name}
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={pendingDeleteChat !== null}
+        title={`Delete "${pendingDeleteChat?.title || 'this chat'}"?`}
+        description="All messages and summaries will be deleted and cannot be recovered."
+        confirmLabel="Delete chat"
+        isConfirming={pendingDeleteChat !== null && deletingChatId === pendingDeleteChat.id}
+        onConfirm={() => void confirmDeleteCharacterChat()}
+        onClose={cancelDeleteCharacterChat}
       />
     </div>
   )

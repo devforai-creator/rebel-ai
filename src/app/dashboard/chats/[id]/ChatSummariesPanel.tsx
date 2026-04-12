@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
+import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import { CHAT_CONTEXT_WINDOW } from '@/lib/chat-context-window'
 import type { ChatMemoryConfig } from '@/lib/chat/model-config'
 import { CHUNK_SIZE } from '@/lib/chat-summaries/config'
@@ -117,6 +119,7 @@ export default function ChatSummariesPanel({
   const [isMetaCollapsed, setIsMetaCollapsed] = useState(false)
   const [isChunkCollapsed, setIsChunkCollapsed] = useState(false)
   const [isFactsCollapsed, setIsFactsCollapsed] = useState(false)
+  const [pendingDeleteSummaryId, setPendingDeleteSummaryId] = useState<string | null>(null)
 
   const chunkSummaries = useMemo(
     () =>
@@ -192,6 +195,14 @@ export default function ChatSummariesPanel({
   const memoryDescription = getMemoryDescription(memoryConfig)
   const nextCheckpoint = getNextMemoryCheckpoint(messageCount, memoryConfig)
   const emptyStateText = getEmptyStateText(memoryConfig)
+  const pendingDeleteSummary =
+    summaries.find((summary) => summary.id === pendingDeleteSummaryId) ?? null
+
+  async function confirmDeleteSummary() {
+    const targetId = pendingDeleteSummaryId
+    setPendingDeleteSummaryId(null)
+    await runConfirmedAction(targetId, handleDeleteSummary)
+  }
 
   return (
     <aside className="h-full w-full border-l border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 flex-shrink-0">
@@ -280,7 +291,7 @@ export default function ChatSummariesPanel({
           onSaveEdit={(summaryId) => void saveSummaryEdit(summaryId)}
           onCancelEdit={cancelSummaryEdit}
           onRegenerate={(summaryId) => void handleRegenerateSummary(summaryId)}
-          onDelete={(summaryId) => void handleDeleteSummary(summaryId)}
+          onDelete={setPendingDeleteSummaryId}
         />
 
         <SummaryMemorySection
@@ -301,7 +312,7 @@ export default function ChatSummariesPanel({
           onSaveEdit={(summaryId) => void saveSummaryEdit(summaryId)}
           onCancelEdit={cancelSummaryEdit}
           onRegenerate={(summaryId) => void handleRegenerateSummary(summaryId)}
-          onDelete={(summaryId) => void handleDeleteSummary(summaryId)}
+          onDelete={setPendingDeleteSummaryId}
         />
 
         <SummaryMemorySection
@@ -320,7 +331,7 @@ export default function ChatSummariesPanel({
           onSaveEdit={(summaryId) => void saveSummaryEdit(summaryId)}
           onCancelEdit={cancelSummaryEdit}
           onRegenerate={(summaryId) => void handleRegenerateSummary(summaryId)}
-          onDelete={(summaryId) => void handleDeleteSummary(summaryId)}
+          onDelete={setPendingDeleteSummaryId}
         />
 
         <FactMemorySection
@@ -337,6 +348,19 @@ export default function ChatSummariesPanel({
           onCancelEdit={cancelFactEdit}
           onRegenerate={(factId) => void handleRegenerateFacts(factId)}
           onReembed={(factId) => void handleReembedFact(factId)}
+        />
+
+        <ConfirmDialog
+          isOpen={pendingDeleteSummary !== null}
+          title="Delete summary?"
+          description={
+            pendingDeleteSummary
+              ? `This removes the summary for messages ${pendingDeleteSummary.start_seq}-${pendingDeleteSummary.end_seq}.`
+              : undefined
+          }
+          confirmLabel="Delete summary"
+          onConfirm={() => void confirmDeleteSummary()}
+          onClose={() => setPendingDeleteSummaryId(null)}
         />
       </div>
     </aside>

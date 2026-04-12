@@ -234,13 +234,13 @@ export function useChatSummariesState({
   const saveSummaryEdit = useCallback(
     async (summaryId: string) => {
       if (!summaryEditContent.trim()) {
-        alert('Please enter summary content.')
+        toast.error('Please enter summary content.')
         return
       }
 
       const result = await updateSummary(summaryId, chatId, summaryEditContent)
       if (result.error) {
-        alert('Failed to update summary: ' + result.error)
+        toast.error('Failed to update summary: ' + result.error)
         return
       }
 
@@ -266,13 +266,13 @@ export function useChatSummariesState({
   const saveFactEdit = useCallback(
     async (factId: string) => {
       if (!factEditContent.trim()) {
-        alert('Please enter content.')
+        toast.error('Please enter content.')
         return
       }
 
       const result = await updateFact(factId, chatId, factEditContent)
       if (result.error) {
-        alert(result.error)
+        toast.error(result.error)
         return
       }
 
@@ -290,7 +290,7 @@ export function useChatSummariesState({
       setReembeddingFactId(null)
 
       if (result?.error) {
-        alert(result.error)
+        toast.error(result.error)
         return
       }
 
@@ -306,7 +306,7 @@ export function useChatSummariesState({
       setRegeneratingSummaryId(null)
 
       if (result?.error) {
-        alert(result.error)
+        toast.error(result.error)
         return
       }
 
@@ -322,7 +322,7 @@ export function useChatSummariesState({
       setRegeneratingFactId(null)
 
       if (result?.error) {
-        alert(result.error)
+        toast.error(result.error)
         return
       }
 
@@ -333,13 +333,9 @@ export function useChatSummariesState({
 
   const handleDeleteSummary = useCallback(
     async (summaryId: string) => {
-      if (!confirm('Delete this summary?')) {
-        return
-      }
-
       const result = await deleteSummary(summaryId, chatId)
       if (result.error) {
-        alert('Failed to delete summary: ' + result.error)
+        toast.error('Failed to delete summary: ' + result.error)
         return
       }
 

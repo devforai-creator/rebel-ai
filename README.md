@@ -201,6 +201,7 @@ The chat entry point (`/api/chat`) maintains a job queue in Node.js Runtime whil
 - [`env/profiles/caching.env.example`](./env/profiles/caching.env.example) groups the provider-specific cache policy settings (`OPENAI_PROMPT_CACHE_MODE`, `OPENAI_PROMPT_CACHE_RETENTION`, `OPENAI_PROMPT_CACHE_MIN_TOKENS`, `ANTHROPIC_PROMPT_CACHE_MODE`, `ANTHROPIC_PROMPT_CACHE_TTL`, `GOOGLE_EXPLICIT_CACHE_MODE`) into one manual import template.
 - These files are reference templates only. Vercel does **not** auto-apply them from the repository.
 - Apply them manually in your deployment environment settings or via the Vercel CLI, then redeploy for the changes to take effect.
+- Current cache scope: OpenAI prompt caching applies to both chat and summary generation. Anthropic prompt caching and Google explicit caching currently apply to the chat path only; the summary pipeline intentionally does not use those provider-specific cache strategies yet.
 - Keep user-level choices such as summary-dedicated model, translation model, and episodic RAG in account/profile settings rather than deployment env.
 
 ### Internal API origin resolution

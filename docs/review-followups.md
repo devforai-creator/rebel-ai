@@ -12,7 +12,7 @@ Updated: 2026-04-12
 
 ## Next Priorities
 
-- Continue `P2-1` by splitting `MessageList` bubble/renderer concerns further now that message tools and history loading are no longer embedded in the main chat shell.
+- Continue `P2-1` by splitting the remaining renderer-specific complexity in the chat message bubble path if more chat-surface work lands, otherwise move toward the minimal UI-system pass.
 
 ## Optional Follow-up
 

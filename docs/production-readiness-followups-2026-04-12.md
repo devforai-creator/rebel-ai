@@ -454,6 +454,152 @@ Rule for this batch:
 - do not start it until P0 is complete
 - do not use it to hide unresolved structural or validation debt
 
+Recommended execution principle:
+
+- move from shared visual direction to the highest-frequency product surface, then outward
+- treat this as product-interface work, not a one-off "make it pretty" paint pass
+- keep behavior stable unless a layout or wording problem is directly causing user friction
+
+### P3-1a. Establish the Shared Visual Direction
+
+Scope:
+
+- first-class dashboard page shells and section headers
+- [src/app/dashboard/components/SurfaceCard.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/SurfaceCard.tsx)
+- [src/app/dashboard/components/Button.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/Button.tsx)
+- [src/app/dashboard/components/EmptyState.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/EmptyState.tsx)
+- [src/app/dashboard/components/LoadingState.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/LoadingState.tsx)
+- [src/app/dashboard/components/ErrorState.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/components/ErrorState.tsx)
+- page-level wrappers that set the visual density for [account/page.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/page.tsx), [api-keys/page.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/page.tsx), [characters/page.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/page.tsx), and [chats/[id]/page.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/page.tsx)
+
+Why:
+
+- later surface-by-surface polish will fragment immediately unless one typography, spacing, and emphasis direction is chosen first
+- this is the phase where the dashboard should stop looking like adjacent cards on a neutral canvas and start reading as one product
+
+Done when:
+
+- page titles, supporting copy, section rhythm, and card density follow one deliberate visual system
+- the shared button and card primitives gain a stronger product voice without breaking the P2 interaction contract
+- empty/loading/error shells still feel like the same system, but no longer read as generic utility boxes
+
+Guardrails:
+
+- do not redesign individual feature flows yet
+- do not add one-off colors, fonts, or shadows at the page level that bypass the shared primitives
+
+### P3-1b. Improve the Chat Workspace Hierarchy
+
+Scope:
+
+- [src/app/dashboard/chats/[id]/ChatInterface.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatInterface.tsx)
+- [src/app/dashboard/chats/[id]/components/MessageList.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/MessageList.tsx)
+- [src/app/dashboard/chats/[id]/components/MessageBubble.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/components/MessageBubble.tsx)
+- [src/app/dashboard/chats/[id]/ChatSummariesPanel.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatSummariesPanel.tsx)
+- adjacent chat-side tools already normalized in `P2-2c`
+
+Why:
+
+- chat is the highest-frequency product surface and currently the most visible place where the UI still reads as utilitarian
+- once the shared visual direction exists, chat is where hierarchy, density, and emphasis will either prove out or fail
+
+Done when:
+
+- the message stream, composer, and side-memory tools have a clear primary/secondary visual hierarchy
+- operator-only controls and debug affordances remain available but visually subordinate to the core conversation flow
+- message spacing, role distinction, streaming state, and action affordances feel intentional instead of inherited from default utility classes
+
+Guardrails:
+
+- do not reopen the `P2-1` decomposition unless a renderer-specific branch directly blocks the visual pass
+- keep message semantics, moderation behavior, and action wiring unchanged
+
+### P3-1c. Improve Character Discovery and Detail Flow
+
+Scope:
+
+- [src/app/dashboard/characters/page.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/page.tsx)
+- [src/app/dashboard/characters/CharacterCard.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterCard.tsx)
+- [src/app/dashboard/characters/CharacterForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterForm.tsx)
+- [src/app/dashboard/characters/CharacterImport.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterImport.tsx)
+- [src/app/dashboard/characters/[id]/CharacterDetailView.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/[id]/CharacterDetailView.tsx)
+- [src/app/dashboard/characters/[id]/ChatImportModal.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/[id]/ChatImportModal.tsx)
+
+Why:
+
+- this area carries the second-most important user journey after chat: discover a character, inspect it, modify it, then start or import a conversation
+- the current screens are functionally coherent but still read as operator tooling instead of a polished product flow
+
+Done when:
+
+- list cards, import/create flows, and the detail screen feel like one connected experience
+- character metadata, system prompt, linked resources, and chat history have a clearer visual order
+- the transition from browsing a character to starting or importing a chat feels intentionally guided
+
+Guardrails:
+
+- do not widen the feature scope beyond the first-class character flows
+- keep the shared destructive and feedback patterns from `P2-2d` intact
+
+### P3-1d. Improve Settings and API-Key Operator Surfaces
+
+Scope:
+
+- [src/app/dashboard/account/page.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/page.tsx)
+- [src/app/dashboard/account/SummaryPromptsEditor.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/SummaryPromptsEditor.tsx)
+- [src/app/dashboard/account/ChangePasswordForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/ChangePasswordForm.tsx)
+- [src/app/dashboard/account/RagSettingsForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/RagSettingsForm.tsx)
+- [src/app/dashboard/account/ReprocessSettingsForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/ReprocessSettingsForm.tsx)
+- [src/app/dashboard/account/SummaryModelSettingsForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/SummaryModelSettingsForm.tsx)
+- [src/app/dashboard/account/TranslationModelSettingsForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/account/TranslationModelSettingsForm.tsx)
+- [src/app/dashboard/api-keys/page.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/page.tsx)
+- [src/app/dashboard/api-keys/ApiKeyList.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/ApiKeyList.tsx)
+- [src/app/dashboard/api-keys/AddApiKeyForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/AddApiKeyForm.tsx)
+- [src/app/dashboard/api-keys/GoogleApiKeySidePanel.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/api-keys/GoogleApiKeySidePanel.tsx)
+
+Why:
+
+- these pages are dense and information-heavy, so weak hierarchy quickly turns into fatigue even when the interaction contract is already correct
+- a better product UI here is less about decoration and more about making risk, guidance, and primary tasks obvious
+
+Done when:
+
+- account and API-key surfaces read as curated task areas instead of stacked forms
+- supporting copy, hints, and danger zones are visually clearer without becoming louder than the primary actions
+- users can scan what each settings block does before reading the full body copy
+
+Guardrails:
+
+- do not reintroduce local visual rules that diverge from `P3-1a`
+- keep the action hierarchy stable so the visual pass does not become a behavior change
+
+### P3-1e. Responsive Cohesion and Final First-Class Pass
+
+Scope:
+
+- the desktop and mobile layouts for the `P3-1a` through `P3-1d` surfaces
+- the first-class empty/loading/error states after the new visual language lands
+- any small cleanup needed to remove visual drift introduced during the earlier `P3-1` slices
+
+Why:
+
+- visual improvement work often looks coherent on desktop while regressing on mobile density, scroll depth, or action reachability
+- this pass is where the product should be checked as one connected dashboard rather than as individual polished screens
+
+Done when:
+
+- the first-class flows feel visually related on both desktop and mobile instead of as separate layout variants
+- action reachability, panel collapse behavior, and empty/loading/error presentations remain clear at smaller sizes
+- there are no obvious style regressions or one-off patches left behind from the earlier `P3-1` slices
+
+Suggested execution order:
+
+1. `P3-1a`
+2. `P3-1b`
+3. `P3-1c`
+4. `P3-1d`
+5. `P3-1e`
+
 ## Out of Scope for This Repo Backlog
 
 - a separate SUU-library audit or hardening plan

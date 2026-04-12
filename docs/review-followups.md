@@ -17,7 +17,11 @@ Updated: 2026-04-12
 
 ## Next Priorities
 
-- Start `P3-1`: run the first intentional product UI improvement pass now that the shared action, card, and state contracts are in place.
+- Start `P3-1a`: establish the shared visual direction across the first-class dashboard shells before touching feature-specific polish.
+- Then run `P3-1b`: improve the chat workspace hierarchy, since chat is the highest-frequency surface.
+- Follow with `P3-1c`: improve the character discovery/detail flow.
+- After that, run `P3-1d`: improve the account and API-key operator surfaces.
+- Close the pass with `P3-1e`: responsive cohesion and final first-class cleanup.
 
 ## Optional Follow-up
 

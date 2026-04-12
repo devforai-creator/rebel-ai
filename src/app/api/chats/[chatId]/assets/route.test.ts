@@ -670,6 +670,79 @@ describe('GET /api/chats/[chatId]/assets', () => {
     })
   })
 
+  it('orders module regex and summaries by descending character-module priority', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      characterAssetsRows: [],
+      characterModulesRows: [
+        {
+          character_id: 'char-1',
+          module_id: 'module-low',
+          enabled: true,
+          priority: 1,
+          modules: {
+            id: 'module-low',
+            name: 'Low Priority Module',
+            regex: [{ in: 'low', out: 'LOW', comment: 'low', ableFlag: true }],
+            assets: ['low.webp'],
+          },
+        },
+        {
+          character_id: 'char-1',
+          module_id: 'module-high',
+          enabled: true,
+          priority: 5,
+          modules: {
+            id: 'module-high',
+            name: 'High Priority Module',
+            regex: [{ in: 'high', out: 'HIGH', comment: 'high', ableFlag: true }],
+            assets: ['high.webp'],
+          },
+        },
+      ],
+      moduleAssetsRows: [],
+    })
+    const { GET } = await loadRoute()
+
+    const response = await GET(buildRequest(), buildContext('chat-1'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(supabase.queryCalls.character_modules?.[0]?.orders).toEqual([
+      { field: 'priority', ascending: false },
+    ])
+    expect(body.moduleRegex).toEqual([
+      {
+        type: '',
+        comment: 'high',
+        in: 'high',
+        out: 'HIGH',
+        ableFlag: true,
+      },
+      {
+        type: '',
+        comment: 'low',
+        in: 'low',
+        out: 'LOW',
+        ableFlag: true,
+      },
+    ])
+    expect(body.moduleAssetSummary).toEqual([
+      {
+        moduleId: 'module-high',
+        moduleName: 'High Priority Module',
+        assetCount: 0,
+        expectedAssetCount: 1,
+      },
+      {
+        moduleId: 'module-low',
+        moduleName: 'Low Priority Module',
+        assetCount: 0,
+        expectedAssetCount: 1,
+      },
+    ])
+  })
+
   it('retries character asset loading on retriable errors and then succeeds', async () => {
     vi.useFakeTimers()
     const supabase = buildSupabase({

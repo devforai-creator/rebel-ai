@@ -53,6 +53,35 @@ describe('renderActiveLorebookBlock', () => {
       '=== Active Lorebook Entries ===\nKeyword lore\n\nPinned lore\n\nAlways lore',
     )
   })
+
+  it('uses higher module priority as the final tiebreaker before module id', () => {
+    const entries: LorebookRuntimeEntry[] = [
+      {
+        moduleId: 'module-z',
+        modulePriority: 1,
+        key: 'same',
+        content: 'Low priority lore',
+        insertorder: 10,
+        comment: 'tie',
+      },
+      {
+        moduleId: 'module-a',
+        modulePriority: 5,
+        key: 'same',
+        content: 'High priority lore',
+        insertorder: 10,
+        comment: 'tie',
+      },
+    ]
+
+    const result = renderActiveLorebookBlock({
+      entries,
+      overrideMap: new Map(),
+      chatHistory: [{ role: 'user', content: 'same' }],
+    })
+
+    expect(result).toBe('=== Active Lorebook Entries ===\nHigh priority lore\n\nLow priority lore')
+  })
 })
 
 describe('buildLorebookDynamicContext', () => {
@@ -127,5 +156,65 @@ describe('buildLorebookDynamicContext', () => {
     })
 
     expect(result).toBe('=== Active Lorebook Entries ===\nKeyword lore\n\nPinned lore')
+  })
+
+  it('loads character modules in descending priority order before extracting lorebook entries', async () => {
+    const supabase = createSupabaseMock({
+      tables: {
+        character_modules: {
+          rows: [
+            {
+              character_id: 'char-1',
+              module_id: 'module-low',
+              enabled: true,
+              priority: 1,
+              modules: {
+                id: 'module-low',
+                lorebook: [
+                  {
+                    key: 'same',
+                    content: 'Low priority lore',
+                    insertorder: 10,
+                    comment: 'tie',
+                  },
+                ],
+              },
+            },
+            {
+              character_id: 'char-1',
+              module_id: 'module-high',
+              enabled: true,
+              priority: 5,
+              modules: {
+                id: 'module-high',
+                lorebook: [
+                  {
+                    key: 'same',
+                    content: 'High priority lore',
+                    insertorder: 10,
+                    comment: 'tie',
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        lorebook_overrides_v2: {
+          rows: [],
+        },
+        lorebook_overrides: {
+          rows: [],
+        },
+      },
+    }) as unknown as ServerSupabaseClient
+
+    const result = await buildLorebookDynamicContext({
+      supabase,
+      chatId: 'chat-1',
+      characterId: 'char-1',
+      chatHistory: [{ role: 'user', content: 'same' }] satisfies SanitizedMessage[],
+    })
+
+    expect(result).toBe('=== Active Lorebook Entries ===\nHigh priority lore\n\nLow priority lore')
   })
 })

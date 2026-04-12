@@ -6,10 +6,11 @@ import {
   getLorebookOverrideKeyV2,
 } from '@/lib/lorebook/override-identity'
 
-type LorebookRuntimeEntry = LorebookEntry & { moduleId: string }
+type LorebookRuntimeEntry = LorebookEntry & { moduleId: string; modulePriority?: number }
 
 type CharacterModuleRow = {
   module_id: string
+  priority?: number | null
   modules:
     | { id?: string | null; lorebook?: LorebookEntry[] | null }
     | Array<{
@@ -70,7 +71,8 @@ export async function loadChatLorebookState({
         `,
       )
       .eq('character_id', characterId)
-      .eq('enabled', true),
+      .eq('enabled', true)
+      .order('priority', { ascending: false }),
     supabase
       .from('lorebook_overrides_v2')
       .select('module_id, entry_key, entry_insertorder, entry_fingerprint, enabled')
@@ -200,6 +202,7 @@ function extractLorebookEntries(characterModules: CharacterModuleRow[]): Loreboo
       ...moduleLorebook.map((entry) => ({
         ...entry,
         moduleId: characterModule.module_id,
+        modulePriority: characterModule.priority ?? 0,
       })),
     )
   }
@@ -286,8 +289,8 @@ function getLorebookOverrideMode(
 }
 
 function compareLorebookEntries(
-  a: LorebookEntry & { moduleId?: string },
-  b: LorebookEntry & { moduleId?: string },
+  a: LorebookEntry & { moduleId?: string; modulePriority?: number },
+  b: LorebookEntry & { moduleId?: string; modulePriority?: number },
 ): number {
   const insertorderDiff = (b.insertorder ?? 0) - (a.insertorder ?? 0)
   if (insertorderDiff !== 0) {
@@ -302,6 +305,11 @@ function compareLorebookEntries(
   const commentDiff = (a.comment ?? '').localeCompare(b.comment ?? '')
   if (commentDiff !== 0) {
     return commentDiff
+  }
+
+  const modulePriorityDiff = (b.modulePriority ?? 0) - (a.modulePriority ?? 0)
+  if (modulePriorityDiff !== 0) {
+    return modulePriorityDiff
   }
 
   return (a.moduleId ?? '').localeCompare(b.moduleId ?? '')

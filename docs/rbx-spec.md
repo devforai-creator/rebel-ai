@@ -147,13 +147,13 @@ Additional metadata fields (e.g., generation tool info) may be present and are p
 
 Wraps a `Module` with attachment state from the `character_modules` join table.
 
-| Field      | Type      | Required | Default | Description                                                                                                |
-| ---------- | --------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------- |
-| `enabled`  | `boolean` | No       | `true`  | Whether this module is active for the character.                                                           |
-| `priority` | `number`  | No       | `0`     | Module processing order. Stored as provided; interpretation depends on the runtime query (see note below). |
-| `module`   | `Module`  | Yes      | —       | The module data.                                                                                           |
+| Field      | Type      | Required | Default | Description                                                                                 |
+| ---------- | --------- | -------- | ------- | ------------------------------------------------------------------------------------------- |
+| `enabled`  | `boolean` | No       | `true`  | Whether this module is active for the character.                                            |
+| `priority` | `number`  | No       | `0`     | Module processing order. Higher values are applied first across runtime and operator views. |
+| `module`   | `Module`  | Yes      | —       | The module data.                                                                            |
 
-> **Note on `priority` ordering**: The current codebase has inconsistent sort direction — the system prompt builder reads `priority DESC` (higher value = processed first) while the assets API reads `priority ASC`. The DB schema documents it as "Higher = applied first". The `.rbx` format stores the raw value without prescribing sort direction; the importer writes it as-is to `character_modules.priority`. This inconsistency should be resolved in the runtime before the spec can mandate a direction.
+> **Priority contract**: `character_modules.priority` is interpreted as descending precedence. Higher values apply first. The importer stores the raw value from `.rbx`, and runtime/operator queries should read it with the same descending rule.
 
 ### Module
 

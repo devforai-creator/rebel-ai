@@ -325,7 +325,7 @@ async function fetchModuleData(
     )
     .eq('character_id', characterId)
     .eq('enabled', true)
-    .order('priority', { ascending: true })
+    .order('priority', { ascending: false })
 
   if (!characterModules || characterModules.length === 0) {
     return { allRegex: [], moduleAssetUrls: {}, moduleAssetSummary: [] }

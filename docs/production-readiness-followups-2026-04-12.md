@@ -122,6 +122,13 @@ Done when:
 - tests lock the chosen ordering rule directly
 - the RBX spec and any UI/operator docs match the runtime behavior
 
+Current status as of 2026-04-12:
+
+- [src/app/api/chats/[chatId]/assets/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chats/[chatId]/assets/route.ts) now reads `character_modules.priority` in descending order, matching the schema contract and operator screens
+- [src/lib/lorebook/runtime.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/lorebook/runtime.ts) now carries module priority into lorebook entry ordering as the final deterministic tiebreaker instead of silently falling back to module id alone
+- regression coverage now locks both the descending assets-query order and lorebook tie-breaking behavior in [route.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chats/[chatId]/assets/route.test.ts) and [runtime.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/lorebook/runtime.test.ts)
+- [docs/rbx-spec.md](/home/tmdduq96kr/projects/rebel-ai/docs/rbx-spec.md) now states the descending priority contract directly instead of documenting the old inconsistency as a known gap
+
 ## P1
 
 ### P1-1. Normalize Server Action Validation Patterns

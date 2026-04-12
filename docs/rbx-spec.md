@@ -334,7 +334,7 @@ The Safe UGC UI card format provides **structural security** — the format itse
 
 For RebelAI specifically, final image fetch origins are a host boundary rather than a card boundary: imported asset binaries are re-hosted through RebelAI-managed storage, and the runtime only injects those host-generated URLs into the SUU `assets` map.
 
-> **Runtime integration status**: `ui_card` is already wired into the RebelAI runtime and renders through `@safe-ugc-ui/react`. The remaining gap is **import-time** validation with `@safe-ugc-ui/validator` inside the RBX import path. See §9 Runtime Status.
+> **Runtime integration status**: `ui_card`, `ui_cards`, and `image_display` are already wired into the RebelAI runtime and render through `@safe-ugc-ui/react`. The RBX import path also runs admission validation before storage: unsafe payloads fail import, while safe-but-incompatible validator findings are recorded as warnings and included in import diagnostics. See §9 Runtime Status.
 
 ### §6.1 Image Display Template
 
@@ -576,21 +576,21 @@ For implementors building legacy-format → `.rbx` converters:
 
 This section tracks the implementation status of v1.1 features in the RebelAI runtime.
 
-| Feature                      | Spec         | Parser                      | Importer                           | Runtime Rendering                                       | Status                       |
-| ---------------------------- | ------------ | --------------------------- | ---------------------------------- | ------------------------------------------------------- | ---------------------------- |
-| `ui_card` field              | ✅           | ✅ stored as-is             | ✅ saved to DB                     | ✅ `UGCRenderer` in ChatInterface                       | **Functional**               |
-| `ui_cards` registry          | ✅           | ✅ stored as-is             | ✅ saved to DB                     | ✅ `extract.card_ref` resolves named cards              | **Functional**               |
-| `extract` regex type         | ✅           | ✅ parsed with bindings     | ✅ saved to DB                     | ✅ per-match bindings wired to ui_card / ui_cards state | **Functional**               |
-| `background_html` deprecated | ✅           | ❌ rejects populated values | ✅ defensive strip if bypassed     | ❌ no longer rendered by the active chat runtime        | **Removed from active path** |
-| `emotion_images` removed     | ✅           | ❌ rejects populated values | ✅ ignored if bypassed             | N/A                                                     | **Write-blocked legacy**     |
-| `triggers` removed from spec | ✅           | ❌ rejects populated values | ✅ no longer persisted             | ❌ no longer read by assets/chat runtime                | **Removed from new path**    |
-| `toggle_definitions` removed | ✅           | ❌ rejects populated values | ✅ no longer persisted             | ❌ no longer exposed by chat/runtime UI                 | **Removed from active path** |
-| `editdisplay` removed        | ✅           | ❌ rejected by schema       | ✅ no longer persisted as behavior | ❌ no longer applied by message/background rendering    | **Removed from new path**    |
-| SUU validator integration    | ✅ described | ❌                          | ❌                                 | ✅ via `UGCRenderer` (validates internally)             | **Runtime only**             |
+| Feature                      | Spec         | Parser                      | Importer                                                                              | Runtime Rendering                                       | Status                       |
+| ---------------------------- | ------------ | --------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------- |
+| `ui_card` field              | ✅           | ✅ stored as-is             | ✅ saved to DB                                                                        | ✅ `UGCRenderer` in ChatInterface                       | **Functional**               |
+| `ui_cards` registry          | ✅           | ✅ stored as-is             | ✅ saved to DB                                                                        | ✅ `extract.card_ref` resolves named cards              | **Functional**               |
+| `extract` regex type         | ✅           | ✅ parsed with bindings     | ✅ saved to DB                                                                        | ✅ per-match bindings wired to ui_card / ui_cards state | **Functional**               |
+| `background_html` deprecated | ✅           | ❌ rejects populated values | ✅ defensive strip if bypassed                                                        | ❌ no longer rendered by the active chat runtime        | **Removed from active path** |
+| `emotion_images` removed     | ✅           | ❌ rejects populated values | ✅ ignored if bypassed                                                                | N/A                                                     | **Write-blocked legacy**     |
+| `triggers` removed from spec | ✅           | ❌ rejects populated values | ✅ no longer persisted                                                                | ❌ no longer read by assets/chat runtime                | **Removed from new path**    |
+| `toggle_definitions` removed | ✅           | ❌ rejects populated values | ✅ no longer persisted                                                                | ❌ no longer exposed by chat/runtime UI                 | **Removed from active path** |
+| `editdisplay` removed        | ✅           | ❌ rejected by schema       | ✅ no longer persisted as behavior                                                    | ❌ no longer applied by message/background rendering    | **Removed from new path**    |
+| SUU validator integration    | ✅ described | N/A (handled at import)     | ✅ `validateSuuImportMetadata` rejects unsafe payloads and records validator warnings | ✅ via `UGCRenderer` (validates internally)             | **Functional**               |
 
-**What works today**: v1.1-style `.rbx` files parse and import successfully. New content may use `ui_card`, `ui_cards`, and `extract`. The import path rejects populated legacy fields such as `background_html`, `emotion_images`, `triggers`, `toggle_definitions`, and `editdisplay`, and the active chat runtime no longer executes those legacy paths.
+**What works today**: v1.1-style `.rbx` files parse and import successfully. New content may use `ui_card`, `ui_cards`, `image_display`, and `extract`. The import path rejects populated legacy fields such as `background_html`, `emotion_images`, `triggers`, `toggle_definitions`, and `editdisplay`, and it now applies SUU admission validation before storage so unsafe card payloads fail import instead of reaching runtime first.
 
-**Remaining**: Add `@safe-ugc-ui/validator` to the import path (`rbx-importer.ts`) for import-time validation of `ui_card` structure. Currently validation only happens at render time inside `UGCRenderer`.
+**Warning model**: validator findings that indicate safe-but-unsupported structure are recorded as import warnings and do not block import by default. That keeps RebelAI's admission layer conservative on security boundaries without forcing the importer to duplicate the full evolving SUU schema.
 
 ---
 

@@ -114,7 +114,7 @@ AI character definitions with system prompts.
 - `system_prompt` (text): Core AI instructions
 - `greeting_message` (text): First message (optional)
 - `visibility` (enum): 'private' | 'draft' | 'public'
-- `metadata` (jsonb): Additional runtime/import metadata (post-history instructions, alternate greetings, UI payloads, legacy imported fields, etc.)
+- `metadata` (jsonb): Additional runtime/import metadata (post-history instructions, SUU UI payloads validated during RBX import, compatibility fields, etc.)
 - `archived_at` (timestamptz): Soft delete timestamp
 - `created_at`, `updated_at` (timestamptz)
 
@@ -128,7 +128,11 @@ AI character definitions with system prompts.
     "mood": "calm"
   },
   "lorebook": [...],  // Legacy compatibility field for imported content
-  "ui_card": { "...": "..." }
+  "ui_card": { "...": "..." },
+  "ui_cards": {
+    "status": { "...": "..." }
+  },
+  "image_display": { "...": "..." }
 }
 ```
 
@@ -222,7 +226,7 @@ Individual chat messages with token tracking.
 - `chat_id` (uuid, FK → chats)
 - `sequence` (bigint, auto-increment): Message order within chat
 - `role` (text): 'system' | 'user' | 'assistant'
-- `content` (text): Message text (supports HTML from v0.4.7+)
+- `content` (text): Message text. The active chat UI renders constrained markdown, asset tokens, and RBX/SUU inline UI; raw HTML is not part of the supported authoring contract.
 - `model_used` (text): Which model generated this response
 - `prompt_tokens` (int): Tokens in prompt
 - `completion_tokens` (int): Tokens in completion

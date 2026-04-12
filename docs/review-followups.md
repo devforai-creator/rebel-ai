@@ -1,16 +1,16 @@
 # Review Follow-ups
 
-Updated: 2026-04-08
+Updated: 2026-04-12
 
 ## Completed
 
 - `657acd6` `Harden server action form validation`
 - `f71a4c3` `Refactor character detail chat state`
 - `d405529` `Validate auth and account form actions`
+- Aligned RBX/SUU docs and feedback form validation with the current runtime/import contract.
 
 ## Next Priorities
 
-- Apply the same `FormData + zod` validation pattern to [feedback actions](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/feedback/actions.ts).
 - Replace `alert` / `confirm` flows with toast or dialog-based UI patterns where practical.
 
 ## Optional Follow-up

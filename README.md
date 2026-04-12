@@ -43,7 +43,7 @@ See [`docs/OPERATING_PLAN.md`](./docs/OPERATING_PLAN.md) for the current operati
   - **Google / DeepSeek**: Provider-native caching behavior where available
 - 📦 **RBX Native Format** - RebelAI's native `.rbx` package is the recommended format for new cards: portable manifests, explicit asset references, declarative UI, and no script execution by design.
 - 📥 **Background RBX Import Jobs** - Queue `.rbx` packages into a background runner with configurable size limits. Practical maximum depends on your host and storage plan.
-- 🧩 **Safe UGC UI (SUU) Integration** - RBX `ui_card` and `image_display` payloads render via `@safe-ugc-ui/react`, giving native character cards a declarative safe UI layer for status panels and emotion-image layouts without adding new raw HTML/CSS paths.
+- 🧩 **Safe UGC UI (SUU) Integration** - RBX `ui_card`, `ui_cards`, and `image_display` payloads render via `@safe-ugc-ui/react`, and RBX import runs admission validation before storage so unsafe payloads fail early without adding new raw HTML/CSS paths.
 - 🧠 **Long-term Memory** - Tiered memory profiles: maintainer-operated chats actively verify `prefix_live_blocks + episodic RAG`, while the code-level public-safe/system fallback remains `summary_window`. Voyage embeddings-backed retrieval stays optional.
 - 🌀 **Async Chat Queue (Realtime streaming)** - `/api/chat` (Node) enqueues jobs, runner uses `streamText` to update `messages` in real-time for Realtime subscription streaming. Job status API maintained as backup channel for completion/token aggregation.
 - 📄 **Message Pagination** - Optimized for large chats (loads 80 at a time, supports 1000+ messages)
@@ -56,7 +56,7 @@ See [`docs/OPERATING_PLAN.md`](./docs/OPERATING_PLAN.md) for the current operati
 
 ### Implementation Highlights
 
-- RBX runtime: native `.rbx` parser/importer with direct manifest validation, explicit asset references, and SUU-based UI payloads.
+- RBX runtime: native `.rbx` parser/importer with direct manifest validation, import-time SUU admission validation, explicit asset references, and SUU-based UI payloads.
 - Lorebook engine: v3 decorators, keyword/regex activation, recursion, overrides, and token budgeting.
 - Import pipeline: RBX-native import queue with rollback on failure, staged upload cleanup, and asset/module import stats.
 - Safety: RBX excludes script execution by design; regex script execution remains blocked in production.

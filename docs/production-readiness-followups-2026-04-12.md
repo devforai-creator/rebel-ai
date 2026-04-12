@@ -109,6 +109,12 @@ Done when:
 - any still-open runtime mismatch is called out once in the canonical document, not scattered
 - dated references that imply stale schema or support assumptions are corrected
 
+Current status as of 2026-04-12:
+
+- [docs/rbx-spec.md](/home/tmdduq96kr/projects/rebel-ai/docs/rbx-spec.md) now documents SUU admission validation as part of the active RBX import path instead of a remaining gap, and it distinguishes hard import failures from warning-only compatibility findings
+- [DATABASE_SCHEMA.md](/home/tmdduq96kr/projects/rebel-ai/DATABASE_SCHEMA.md) now describes `characters.metadata` in terms of the current RBX/SUU payloads and removes the stale claim that chat message content is an HTML-supporting product contract
+- [README.md](/home/tmdduq96kr/projects/rebel-ai/README.md) now describes SUU integration and the RBX importer in terms of the current import-time admission validation behavior rather than runtime-only validation
+
 ### P0-4. Resolve Module Priority Direction as a Single Runtime Contract
 
 Scope:
@@ -157,6 +163,12 @@ Done when:
 - feedback actions use the shared validation pattern
 - field-level errors and auth handling follow the same structure as the hardened actions
 - regression coverage locks the behavior
+
+Current status as of 2026-04-12:
+
+- [src/app/dashboard/feedback/actions.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/feedback/actions.ts) now uses the same `FormData + zod + safeParseFormData` pattern as the hardened server actions instead of manually reading and trimming `FormData`
+- validation now treats missing feedback, blank-after-trim feedback, and over-limit feedback as schema-level failures before any write attempt, while preserving the existing action state contract used by [FeedbackBox](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/FeedbackBox.tsx)
+- regression coverage now lives in [src/app/dashboard/feedback/actions.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/feedback/actions.test.ts), covering auth failure, validation failure, source-page normalization, and persistence failure behavior
 
 ### P1-2. Replace Browser Dialog Flows with a Shared Interaction Pattern
 

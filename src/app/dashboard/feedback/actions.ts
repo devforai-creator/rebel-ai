@@ -1,5 +1,7 @@
 'use server'
 
+import { z } from 'zod'
+import { getFormDataErrorMessage, safeParseFormData } from '@/lib/form-data'
 import { createClient } from '@/lib/supabase/server'
 import { MAX_FEEDBACK_LENGTH } from './config'
 
@@ -8,30 +10,51 @@ export type FeedbackFormState = {
   success: boolean
 }
 
+const feedbackFormSchema = z.object({
+  message: z
+    .string()
+    .trim()
+    .min(1, 'Please write feedback content.')
+    .max(MAX_FEEDBACK_LENGTH, `Feedback must be ${MAX_FEEDBACK_LENGTH} characters or less.`),
+  source_page: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim()
+      return trimmed && trimmed.length > 0 ? trimmed.slice(0, 120) : null
+    }),
+})
+
+function parseFeedbackFormData(
+  formData: FormData,
+): { success: true; data: z.infer<typeof feedbackFormSchema> } | { success: false; error: string } {
+  const parsed = safeParseFormData(formData, feedbackFormSchema)
+
+  if (!parsed.success) {
+    return {
+      error: getFeedbackFormErrorMessage(parsed.error),
+      success: false as const,
+    }
+  }
+
+  return { success: true as const, data: parsed.data }
+}
+
+function getFeedbackFormErrorMessage(error: z.ZodError): string {
+  const firstIssue = error.issues[0]
+  const field = typeof firstIssue?.path[0] === 'string' ? firstIssue.path[0] : null
+
+  if (field === 'message' && firstIssue.code === 'invalid_type') {
+    return 'Please enter feedback.'
+  }
+
+  return getFormDataErrorMessage(error, 'Please check your feedback and try again.')
+}
+
 export async function submitFeedback(
   _prevState: FeedbackFormState,
   formData: FormData,
 ): Promise<FeedbackFormState> {
-  const rawMessage = formData.get('message')
-  const sourcePageRaw = formData.get('source_page')
-
-  if (typeof rawMessage !== 'string') {
-    return { error: 'Please enter feedback.', success: false }
-  }
-
-  const normalizedMessage = rawMessage.trim()
-
-  if (!normalizedMessage) {
-    return { error: 'Please write feedback content.', success: false }
-  }
-
-  if (normalizedMessage.length > MAX_FEEDBACK_LENGTH) {
-    return {
-      error: `Feedback must be ${MAX_FEEDBACK_LENGTH} characters or less.`,
-      success: false,
-    }
-  }
-
   const supabase = await createClient()
 
   const {
@@ -42,15 +65,16 @@ export async function submitFeedback(
     return { error: 'Login required.', success: false }
   }
 
-  const sourcePage =
-    typeof sourcePageRaw === 'string' && sourcePageRaw.trim().length > 0
-      ? sourcePageRaw.slice(0, 120)
-      : null
+  const parsedForm = parseFeedbackFormData(formData)
+
+  if (!parsedForm.success) {
+    return { error: parsedForm.error, success: false }
+  }
 
   const { error } = await supabase.from('user_feedback').insert({
     user_id: user.id,
-    message: normalizedMessage,
-    source_page: sourcePage,
+    message: parsedForm.data.message,
+    source_page: parsedForm.data.source_page,
   })
 
   if (error) {

@@ -58,6 +58,14 @@ Suggested first targets:
 - [src/lib/suu-import-validation.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/suu-import-validation.ts)
 - [src/lib/monitoring/service-health-store.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/monitoring/service-health-store.ts)
 
+Current status as of 2026-04-12:
+
+- [vitest.config.ts](/home/tmdduq96kr/projects/rebel-ai/vitest.config.ts) now excludes the large chat-detail client shells under `src/app/dashboard/chats/[id]` from the global coverage denominator while keeping server actions, route handlers, and pure runtime utilities in the gate; this matches the current hardening boundary where P0 protects production-bearing logic and P2 owns the chat UI decomposition work
+- direct regression coverage now exists for orphaned-module cleanup edge cases in [src/lib/modules/orphan-cleanup.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/modules/orphan-cleanup.test.ts), including RPC failure, preload failure, remaining-module lookup failure, and storage-cleanup failure behavior
+- durable monitoring persistence coverage is broader in [src/lib/monitoring/service-health-store.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/monitoring/service-health-store.test.ts), including RPC/query failure paths, default stat construction, unknown-label filtering, and metadata normalization
+- SUU import validation coverage is broader in [src/lib/suu-import-validation.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/suu-import-validation.test.ts), including invalid asset prefixes, prototype-polluting keys, forbidden CSS `url()`, and circular-payload serialization failures
+- `npm run test -- --coverage` now passes again at `86.8%` statements, `77.94%` branches, `90.46%` functions, and `87.23%` lines without lowering the declared thresholds
+
 ### P0-2. Make Typecheck Order-Independent
 
 Scope:

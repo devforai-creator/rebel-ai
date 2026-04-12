@@ -25,9 +25,11 @@ export default function LoadingState({
         <div className="flex items-start gap-3">
           <span className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full bg-blue-500 animate-pulse" />
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">{title}</p>
+            <p className="text-base font-semibold tracking-tight text-slate-950 dark:text-white">
+              {title}
+            </p>
             {description ? (
-              <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
+              <p className="text-sm leading-7 text-slate-600 dark:text-slate-300">{description}</p>
             ) : null}
           </div>
         </div>

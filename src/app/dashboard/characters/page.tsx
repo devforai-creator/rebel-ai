@@ -2,6 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import EmptyState from '@/app/dashboard/components/EmptyState'
+import {
+  DashboardCallout,
+  DashboardPageShell,
+  DashboardSectionHeading,
+} from '@/app/dashboard/components/DashboardPageShell'
 import CharacterCard, { type CharacterListItem } from './CharacterCard'
 
 type ImportJob = {
@@ -98,208 +103,179 @@ export default async function CharactersPage() {
   const recentJobs = (recentJobsResult.data ?? []) as ImportJobWithResult[]
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Link
-              href="/dashboard"
-              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-            >
-              ← Dashboard
-            </Link>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Character Management
-            </h1>
-          </div>
-          <Link
-            href="/dashboard/characters/new"
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-          >
-            + New Character
-          </Link>
-        </div>
-      </header>
+    <DashboardPageShell
+      width="wide"
+      title="Character Management"
+      eyebrow="Library"
+      description="Build focused personas, world simulations, and importable packages with a clearer path from browsing to conversation."
+      backHref="/dashboard"
+      backLabel="Back to Dashboard"
+      actions={
+        <Link
+          href="/dashboard/characters/new"
+          className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_16px_34px_-18px_rgba(37,99,235,0.78)] transition-colors hover:bg-blue-700"
+        >
+          + New Character
+        </Link>
+      }
+    >
+      <DashboardCallout
+        tone="info"
+        eyebrow="Entry Paths"
+        title="Characters and simulations share one authoring flow"
+        description="Create one-on-one personas, broader story worlds, or import RBX packages without switching mental models between pages."
+      >
+        <ul className="space-y-1">
+          <li>
+            * <strong>1:1 Character:</strong> Chat with a specific persona
+          </li>
+          <li>
+            * <strong>Simulation:</strong> Build a world with multiple characters and system rules
+          </li>
+          <li>* All settings remain configurable through the system prompt and linked resources</li>
+        </ul>
+      </DashboardCallout>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Info Message */}
-        <div className="mb-8 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-300 mb-2">
-            Characters & Simulations
-          </h3>
-          <p className="text-sm text-purple-800 dark:text-purple-300 mb-3">
-            Create 1:1 conversation characters or multi-character simulations freely.
-          </p>
-          <ul className="text-sm text-purple-700 dark:text-purple-400 space-y-1">
-            <li>
-              * <strong>1:1 Character:</strong> Chat with a specific persona
-            </li>
-            <li>
-              * <strong>Simulation:</strong> World with multiple characters (story writing, etc.)
-            </li>
-            <li>* All settings configurable in system prompt</li>
+      {activeJobs.length > 0 && (
+        <DashboardCallout
+          tone="warm"
+          eyebrow="Background Jobs"
+          title="Processing character imports"
+          description="Imported characters may show partial artwork until asset upload completes. The job continues even if you leave this page."
+        >
+          <ul className="space-y-2">
+            {activeJobs.map((job) => (
+              <li
+                key={job.id}
+                className="flex flex-col gap-2 rounded-2xl border border-white/70 bg-white/70 px-4 py-3 dark:border-slate-800/80 dark:bg-slate-950/45 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="font-medium">{job.original_filename}</p>
+                  <p className="text-xs opacity-80">
+                    Job ID: {job.id.slice(0, 8)}... Started:{' '}
+                    {new Date(job.created_at).toLocaleString()}
+                  </p>
+                </div>
+                <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-900 dark:bg-amber-900/50 dark:text-amber-100">
+                  {job.status === 'pending' ? 'Pending' : 'Processing'}
+                </span>
+              </li>
+            ))}
           </ul>
-        </div>
+        </DashboardCallout>
+      )}
 
-        {/* Character Import Progress */}
-        {activeJobs.length > 0 && (
-          <div className="mb-8 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-5">
-            <h3 className="text-lg font-semibold text-amber-900 dark:text-amber-200 mb-2">
-              Processing Character Imports
-            </h3>
-            <p className="text-sm text-amber-800 dark:text-amber-200 mb-4">
-              Newly imported characters may have missing thumbnails or expression images until asset
-              upload completes. The job will continue even if you navigate away or close the
-              dashboard.
-            </p>
-            <ul className="space-y-2">
-              {activeJobs.map((job) => (
+      {recentJobs.length > 0 && (
+        <DashboardCallout
+          tone="neutral"
+          eyebrow="Recent Imports"
+          title="Review the latest import outcomes"
+          description="Completed jobs stay visible briefly so you can confirm regex cleanup and import results after the redirect finishes."
+        >
+          <ul className="space-y-3">
+            {recentJobs.map((job) => {
+              const limits = job.result?.stats?.regexLimits
+              const rejectedCount = job.result?.stats?.regexRejected?.length ?? 0
+              const regexSummary =
+                limits && limits.total > 0
+                  ? `Regex kept ${limits.kept}/${limits.total} · scripts ${limits.strippedScripts} · invalid ${limits.invalidPatterns} · trimmed ${limits.trimmedPatterns} · missing ${limits.missingPatterns}${
+                      rejectedCount > 0 ? ` · examples ${Math.min(rejectedCount, 5)}` : ''
+                    }`
+                  : null
+              const jobStatusLabel =
+                job.status === 'success'
+                  ? 'Success'
+                  : job.status === 'error'
+                    ? 'Error'
+                    : job.status === 'processing'
+                      ? 'Processing'
+                      : 'Pending'
+
+              return (
                 <li
                   key={job.id}
-                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-sm bg-white/60 dark:bg-gray-900/30 rounded-md px-3 py-2"
+                  className="flex flex-col gap-2 rounded-2xl border border-slate-200/80 bg-white/78 px-4 py-3 dark:border-slate-800/80 dark:bg-slate-950/45"
                 >
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">
-                      {job.original_filename}
-                    </p>
-                    <p className="text-gray-600 dark:text-gray-400 text-xs">
-                      Job ID: {job.id.slice(0, 8)}... Started:{' '}
-                      {new Date(job.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-                    {job.status === 'pending' ? 'Pending' : 'Processing'}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Recent Character Import Results */}
-        {recentJobs.length > 0 && (
-          <div className="mb-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              Recent Character Imports
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Completed jobs remain here briefly so you can review import outcomes after the page
-              redirects.
-            </p>
-            <ul className="space-y-3">
-              {recentJobs.map((job) => {
-                const limits = job.result?.stats?.regexLimits
-                const rejectedCount = job.result?.stats?.regexRejected?.length ?? 0
-                const regexSummary =
-                  limits && limits.total > 0
-                    ? `Regex kept ${limits.kept}/${limits.total} · scripts ${limits.strippedScripts} · invalid ${limits.invalidPatterns} · trimmed ${limits.trimmedPatterns} · missing ${limits.missingPatterns}${
-                        rejectedCount > 0 ? ` · examples ${Math.min(rejectedCount, 5)}` : ''
-                      }`
-                    : null
-                const jobStatusLabel =
-                  job.status === 'success'
-                    ? 'Success'
-                    : job.status === 'error'
-                      ? 'Error'
-                      : job.status === 'processing'
-                        ? 'Processing'
-                        : 'Pending'
-
-                return (
-                  <li
-                    key={job.id}
-                    className="flex flex-col gap-1 rounded-md border border-gray-100 dark:border-gray-700 px-3 py-2 bg-gray-50/60 dark:bg-gray-900/30"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-gray-100">
-                          {job.original_filename}
-                        </p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">
-                          {new Date(job.created_at).toLocaleString()} · Job ID {job.id.slice(0, 8)}
-                          ...
-                        </p>
-                      </div>
-                      <span
-                        className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
-                          job.status === 'success'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-100'
-                            : job.status === 'error'
-                              ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-100'
-                              : 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100'
-                        }`}
-                      >
-                        {jobStatusLabel}
-                      </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium text-slate-950 dark:text-slate-100">
+                        {job.original_filename}
+                      </p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        {new Date(job.created_at).toLocaleString()} · Job ID {job.id.slice(0, 8)}...
+                      </p>
                     </div>
-                    {regexSummary ? (
-                      <p className="text-xs text-gray-700 dark:text-gray-300">{regexSummary}</p>
-                    ) : job.result?.error ? (
-                      <p className="text-xs text-red-600 dark:text-red-400">
-                        Error: {job.result.error}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        No regex stats recorded.
-                      </p>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        )}
+                    <span
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${
+                        job.status === 'success'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-100'
+                          : job.status === 'error'
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-100'
+                            : 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100'
+                      }`}
+                    >
+                      {jobStatusLabel}
+                    </span>
+                  </div>
+                  {regexSummary ? (
+                    <p className="text-xs text-slate-700 dark:text-slate-300">{regexSummary}</p>
+                  ) : job.result?.error ? (
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      Error: {job.result.error}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      No regex stats recorded.
+                    </p>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </DashboardCallout>
+      )}
 
-        {/* Starter Characters Section */}
-        {starterCharacters && starterCharacters.length > 0 && (
-          <div className="mb-12">
-            <div className="flex items-center mb-6">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl"></span>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Get Started</h2>
-              </div>
-              <span className="ml-3 px-3 py-1 text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full">
-                Recommended
-              </span>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-              Ready-to-use characters you can start chatting with right away
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {starterCharacters.map((character) => (
-                <CharacterCard key={character.id} character={character} isStarter={true} />
-              ))}
-            </div>
+      {starterCharacters.length > 0 ? (
+        <section className="space-y-6">
+          <DashboardSectionHeading
+            title="Get Started"
+            badge="Recommended"
+            description="Ready-to-use characters you can open immediately while you shape your own library."
+          />
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {starterCharacters.map((character) => (
+              <CharacterCard key={character.id} character={character} isStarter={true} />
+            ))}
           </div>
-        )}
+        </section>
+      ) : null}
 
-        {/* My Characters Section */}
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">My Characters</h2>
-          {myCharacters && myCharacters.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {myCharacters.map((character) => (
-                <CharacterCard key={character.id} character={character} isStarter={false} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="No characters yet"
-              description="Create your first character or import an RBX package to start building your library."
-              action={
-                <Link
-                  href="/dashboard/characters/new"
-                  className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                >
-                  Create First Character
-                </Link>
-              }
-            />
-          )}
-        </div>
-      </main>
-    </div>
+      <section className="space-y-6">
+        <DashboardSectionHeading
+          title="My Characters"
+          description="Your private personas, simulations, and imported packages stay here once they are ready to iterate on."
+        />
+        {myCharacters && myCharacters.length > 0 ? (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {myCharacters.map((character) => (
+              <CharacterCard key={character.id} character={character} isStarter={false} />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="No characters yet"
+            description="Create your first character or import an RBX package to start building your library."
+            action={
+              <Link
+                href="/dashboard/characters/new"
+                className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_16px_34px_-18px_rgba(37,99,235,0.78)] transition-colors hover:bg-blue-700"
+              >
+                Create First Character
+              </Link>
+            }
+          />
+        )}
+      </section>
+    </DashboardPageShell>
   )
 }

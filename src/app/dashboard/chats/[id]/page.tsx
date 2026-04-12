@@ -1,7 +1,5 @@
 import { Suspense } from 'react'
 import LoadingState from '@/app/dashboard/components/LoadingState'
-import { dashboardPageBackgroundClassName } from '@/app/dashboard/components/DashboardPageShell'
-import { cx } from '@/app/dashboard/components/classNames'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ChatInterface from './ChatInterface'
@@ -123,7 +121,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
   const preselectedApiKeyId = search.apiKey || apiKeyList[0]?.id
 
   return (
-    <div className={cx('h-screen flex flex-col', dashboardPageBackgroundClassName)}>
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <ChatHeader
         characterId={chat.character_id}
@@ -182,13 +180,13 @@ export default async function ChatPage({ params, searchParams }: Props) {
 
 function LorebookPanelFallback() {
   return (
-    <div className="hidden w-12 border-r border-white/70 bg-white/45 backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-950/35 lg:block" />
+    <div className="hidden lg:block w-12 border-r border-gray-200 bg-gray-100 dark:border-gray-800 dark:bg-gray-900" />
   )
 }
 
 function ChatSummariesFallback() {
   return (
-    <aside className="h-full w-full border-l border-white/70 bg-white/58 backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-950/48">
+    <aside className="h-full w-full border-l border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
       <div className="p-4 lg:p-6">
         <LoadingState
           title="Loading long-term memory"

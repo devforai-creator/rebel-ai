@@ -36,13 +36,11 @@ export default function EmptyState({
           compact ? 'max-w-sm gap-2' : 'max-w-md gap-3',
         )}
       >
-        {icon ? <div className="text-slate-400 dark:text-slate-500">{icon}</div> : null}
+        {icon ? <div className="text-gray-400 dark:text-gray-500">{icon}</div> : null}
         <div className="space-y-1">
-          <h3 className="text-base font-semibold tracking-tight text-slate-950 dark:text-white">
-            {title}
-          </h3>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{title}</h3>
           {description ? (
-            <p className="text-sm leading-7 text-slate-600 dark:text-slate-300">{description}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
           ) : null}
         </div>
         {action ? <div className="pt-1">{action}</div> : null}

@@ -17,8 +17,7 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family:
-    'Avenir Next', 'Segoe UI Variable Text', 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
 @layer utilities {

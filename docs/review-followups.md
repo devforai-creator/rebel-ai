@@ -12,10 +12,11 @@ Updated: 2026-04-12
 - `7cf3d7f` `Introduce shared dashboard UI primitives`
 - Normalized the remaining account and API-key forms against the shared button/card/feedback contract.
 - Normalized the chat-adjacent panels and overlays against the shared button/card/feedback contract.
+- Normalized the character list/detail surfaces against the shared button/card/feedback contract.
 
 ## Next Priorities
 
-- Continue `P2-2` with `P2-2d`: apply the shared button/card/feedback contract to the character list/detail surfaces before locking the remaining empty/loading/error-state language.
+- Continue `P2-2` with `P2-2e`: lock the remaining empty/loading/error-state copy and layout now that account, chat, and character surfaces share the same action/card primitives.
 
 ## Optional Follow-up
 

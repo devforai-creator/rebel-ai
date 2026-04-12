@@ -1,7 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Button from '@/app/dashboard/components/Button'
+import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
+import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
+import { cx } from '@/app/dashboard/components/classNames'
 import { IMPORT_UPLOAD_BUCKET, MAX_IMPORT_UPLOAD_MB } from '@/lib/import/constants'
 import { createClient } from '@/lib/supabase/client'
 
@@ -265,7 +269,7 @@ export default function CharacterImport() {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8">
+    <SurfaceCard padding="none" className="p-8">
       <div className="mb-6">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
           Import Character
@@ -276,14 +280,10 @@ export default function CharacterImport() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
-            {error}
-          </div>
-        )}
+        {error && <InlineFeedback tone="error">{error}</InlineFeedback>}
 
         {showJobPanel && (
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-200 px-4 py-3 rounded-lg text-sm space-y-1">
+          <InlineFeedback tone="warning" className="space-y-1">
             <p className="font-medium">Background import job is in progress.</p>
             <p>
               {jobStatus
@@ -298,11 +298,11 @@ export default function CharacterImport() {
               </span>
             </p>
             {statusMessage ? <p className="text-xs">{statusMessage}</p> : null}
-          </div>
+          </InlineFeedback>
         )}
 
         {importStats && (
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 px-4 py-3 rounded-lg text-sm space-y-1">
+          <InlineFeedback tone="success" className="space-y-1">
             <p className="font-medium">Import complete.</p>
             <p>
               Assets: {importStats.assetsUploaded ?? 0} · Modules: {importStats.modulesCreated ?? 0}{' '}
@@ -312,14 +312,14 @@ export default function CharacterImport() {
             {typeof importStats.failedAssets === 'number' && importStats.failedAssets > 0 ? (
               <p>Failed assets: {importStats.failedAssets}</p>
             ) : null}
-          </div>
+          </InlineFeedback>
         )}
 
         {typeof importStats?.failedAssets === 'number' &&
           importStats.failedAssets > 0 &&
           importStats.failedAssetSamples &&
           importStats.failedAssetSamples.length > 0 && (
-            <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-200 px-4 py-3 rounded-lg text-sm space-y-1">
+            <InlineFeedback tone="warning" className="space-y-1">
               <p className="font-medium">Some assets failed to import.</p>
               <ul className="list-disc ml-5 text-xs space-y-0.5">
                 {importStats.failedAssetSamples.slice(0, 5).map((item, index) => (
@@ -328,11 +328,11 @@ export default function CharacterImport() {
                   </li>
                 ))}
               </ul>
-            </div>
+            </InlineFeedback>
           )}
 
         {importStats?.validationWarnings && importStats.validationWarnings.length > 0 && (
-          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-200 px-4 py-3 rounded-lg text-sm space-y-1">
+          <InlineFeedback tone="warning" className="space-y-1">
             <p className="font-medium">Imported with SUU compatibility warnings.</p>
             <ul className="list-disc ml-5 text-xs space-y-0.5">
               {importStats.validationWarnings.slice(0, 5).map((warning, index) => (
@@ -341,7 +341,7 @@ export default function CharacterImport() {
                 </li>
               ))}
             </ul>
-          </div>
+          </InlineFeedback>
         )}
 
         <div
@@ -350,11 +350,12 @@ export default function CharacterImport() {
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
-          className={`relative border-2 border-dashed rounded-lg p-8 transition-colors cursor-pointer ${
+          className={cx(
+            'relative cursor-pointer rounded-lg border-2 border-dashed p-8 transition-colors',
             dragActive
               ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-              : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
-          }`}
+              : 'border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500',
+          )}
         >
           <input
             ref={fileInputRef}
@@ -401,7 +402,7 @@ export default function CharacterImport() {
           </div>
         </div>
 
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <InlineFeedback tone="info">
           <h3 className="text-sm font-medium text-blue-900 dark:text-blue-400 mb-2">
             RBX Import Notes
           </h3>
@@ -414,25 +415,21 @@ export default function CharacterImport() {
             <li>* Imports run as background jobs, so you can leave this page after upload.</li>
             <li>* Legacy compatibility import paths are no longer part of the public core.</li>
           </ul>
-        </div>
+        </InlineFeedback>
 
         <div className="flex items-center justify-end gap-3">
-          <button
+          <Button
             type="button"
             onClick={() => router.push('/dashboard/characters')}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            variant="secondary"
           >
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={loading || !selectedFile}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 rounded-lg transition-colors"
-          >
+          </Button>
+          <Button type="submit" disabled={loading || !selectedFile}>
             {loading ? 'Importing...' : 'Import RBX'}
-          </button>
+          </Button>
         </div>
       </form>
-    </div>
+    </SurfaceCard>
   )
 }

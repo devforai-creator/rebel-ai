@@ -1,6 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
+import Button from '@/app/dashboard/components/Button'
+import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
+import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { createCharacter, updateCharacter } from './actions'
 import type { Character } from '@/types/database.types'
 import { useUserModules } from '@/hooks/useUserResources'
@@ -67,14 +70,10 @@ export default function CharacterForm({
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8">
+    <SurfaceCard padding="none" className="p-8">
       {/* 폼 */}
       <form id="character-form" action={handleSubmit} className="space-y-6">
-        {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
-            {error}
-          </div>
-        )}
+        {error && <InlineFeedback tone="error">{error}</InlineFeedback>}
 
         {/* 이름 */}
         <div>
@@ -167,9 +166,13 @@ export default function CharacterForm({
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-gray-500 dark:text-gray-400 py-2">
+                <SurfaceCard
+                  tone="dashed"
+                  padding="sm"
+                  className="text-sm text-gray-500 dark:text-gray-400 shadow-none"
+                >
                   사용 가능한 모듈이 없습니다.
-                </div>
+                </SurfaceCard>
               )}
               <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                 모듈을 선택하면 로어북, extract regex, UI 카드 보조 데이터가 함께 적용됩니다.
@@ -180,11 +183,7 @@ export default function CharacterForm({
 
         {/* 제출 버튼 */}
         <div className="flex gap-4">
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex-1 py-3 px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
+          <Button type="submit" disabled={loading} size="lg" fullWidth className="flex-1">
             {loading
               ? isEditing
                 ? '수정 중...'
@@ -192,9 +191,9 @@ export default function CharacterForm({
               : isEditing
                 ? '캐릭터 수정'
                 : '캐릭터 생성'}
-          </button>
+          </Button>
         </div>
       </form>
-    </div>
+    </SurfaceCard>
   )
 }

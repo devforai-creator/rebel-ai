@@ -1,12 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import Button from '@/app/dashboard/components/Button'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
+import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import type { Character } from '@/types/database.types'
 import { deleteCharacter } from './actions'
 
@@ -53,7 +55,7 @@ export default function CharacterCard({ character, isStarter = false }: Props) {
 
   return (
     <>
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-shadow">
+      <SurfaceCard padding="none" className="overflow-hidden transition-shadow hover:shadow-lg">
         {/* 캐릭터 헤더 (클릭 가능) */}
         <Link
           href={`/dashboard/characters/${character.id}`}
@@ -104,16 +106,18 @@ export default function CharacterCard({ character, isStarter = false }: Props) {
         {/* Delete Button */}
         {!isStarter && (
           <div className="px-6 pb-6">
-            <button
+            <Button
               onClick={handleDelete}
               disabled={deleting}
-              className="w-full py-2 px-4 border border-red-300 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              variant="ghostDestructive"
+              fullWidth
+              className="border border-red-300 dark:border-red-800"
             >
               {deleting ? '...' : 'Delete'}
-            </button>
+            </Button>
           </div>
         )}
-      </div>
+      </SurfaceCard>
 
       <ConfirmDialog
         isOpen={isConfirmOpen}

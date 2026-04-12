@@ -4,7 +4,9 @@ import dynamic from 'next/dynamic'
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import Button, { buttonClassName } from '@/app/dashboard/components/Button'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
+import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import CharacterForm from '../CharacterForm'
 import ChatImportModal from './ChatImportModal'
 import type { CharacterDetailViewProps } from './character-detail-types'
@@ -50,12 +52,9 @@ export default function CharacterDetailView({
         {/* Edit mode header */}
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Edit Character</h2>
-          <button
-            onClick={() => setIsEditMode(false)}
-            className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
+          <Button onClick={() => setIsEditMode(false)} variant="secondary">
             ← View Mode
-          </button>
+          </Button>
         </div>
 
         {/* CharacterForm */}
@@ -72,7 +71,7 @@ export default function CharacterDetailView({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Left: Character info */}
       <div className="lg:col-span-1">
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 sticky top-8">
+        <SurfaceCard padding="lg" className="sticky top-8">
           {/* Avatar */}
           <div className="flex justify-center mb-4">
             {character.avatar_url ? (
@@ -122,37 +121,42 @@ export default function CharacterDetailView({
           {/* Edit button */}
           {!isStarter && (
             <>
-              <button
+              <Button
                 onClick={() => setIsEditMode(true)}
-                className="w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-lg transition-colors mb-2"
+                variant="secondary"
+                fullWidth
+                className="mb-2"
               >
                 Edit Mode
-              </button>
+              </Button>
               <Link
                 href={`/dashboard/characters/${character.id}/lorebook`}
-                className="block w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-lg transition-colors text-center"
+                className={buttonClassName({
+                  variant: 'secondary',
+                  fullWidth: true,
+                })}
               >
                 Lorebook Management
               </Link>
             </>
           )}
-        </div>
+        </SurfaceCard>
       </div>
 
       {/* Right: Chat list */}
       <div className="lg:col-span-2">
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <SurfaceCard padding="lg">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Chat History</h2>
             <div className="flex items-center gap-2">
-              <button
+              <Button
                 onClick={() => setIsImportModalOpen(true)}
-                className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                variant="secondary"
                 title="Import chat"
               >
                 Import Chat
-              </button>
+              </Button>
               <NewChatButton characterId={character.id} />
             </div>
           </div>
@@ -161,10 +165,7 @@ export default function CharacterDetailView({
           {chatList.length > 0 ? (
             <div className="space-y-3">
               {chatList.map((chat) => (
-                <div
-                  key={chat.id}
-                  className="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden"
-                >
+                <SurfaceCard key={chat.id} tone="subtle" padding="none" className="overflow-hidden">
                   <Link
                     href={`/dashboard/chats/${chat.id}`}
                     className="block p-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -200,26 +201,30 @@ export default function CharacterDetailView({
                     </div>
                   </Link>
                   <div className="px-4 pb-3 border-t border-gray-200 dark:border-gray-600 pt-2 flex items-center gap-3">
-                    <button
+                    <Button
                       onClick={() => exportChat(chat.id)}
                       disabled={exportingChatId === chat.id}
-                      className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-50"
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-2"
                     >
                       {exportingChatId === chat.id ? 'Exporting...' : 'Export'}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={() => requestDeleteCharacterChat(chat.id, chat.title)}
                       disabled={deletingChatId === chat.id}
-                      className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50"
+                      variant="ghostDestructive"
+                      size="sm"
+                      className="-ml-2"
                     >
                       {deletingChatId === chat.id ? 'Deleting...' : 'Delete'}
-                    </button>
+                    </Button>
                   </div>
-                </div>
+                </SurfaceCard>
               ))}
             </div>
           ) : (
-            <div className="text-center py-12">
+            <SurfaceCard tone="dashed" padding="lg" className="py-12 text-center shadow-none">
               <svg
                 className="mx-auto h-12 w-12 text-gray-400 mb-4"
                 fill="none"
@@ -239,21 +244,17 @@ export default function CharacterDetailView({
               <p className="text-sm text-gray-400 dark:text-gray-500">
                 Click the &quot;Start New Chat&quot; button above to begin a conversation
               </p>
-            </div>
+            </SurfaceCard>
           )}
 
           {hasMoreChatPages && (
             <div className="mt-6 flex justify-center">
-              <button
-                onClick={loadMoreChats}
-                disabled={isChatLoading}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-              >
+              <Button onClick={loadMoreChats} disabled={isChatLoading} variant="secondary">
                 {isChatLoading ? 'Loading...' : 'Load More Chats'}
-              </button>
+              </Button>
             </div>
           )}
-        </div>
+        </SurfaceCard>
       </div>
 
       {/* Import Modal */}

@@ -1,10 +1,14 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { importChat } from '@/app/dashboard/chats/actions'
+import React from 'react'
 import { useRouter } from 'next/navigation'
+import { useRef, useState } from 'react'
+import Button from '@/app/dashboard/components/Button'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
+import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
+import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
+import { importChat } from '@/app/dashboard/chats/actions'
 
 interface Props {
   characterId: string
@@ -92,7 +96,7 @@ export default function ChatImportModal({ characterId, characterName, isOpen, on
           <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
 
           {/* Modal */}
-          <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+          <SurfaceCard padding="none" className="relative max-w-md w-full mx-4 p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Import Chat
             </h3>
@@ -111,21 +115,23 @@ export default function ChatImportModal({ characterId, characterName, isOpen, on
                 onChange={handleFileChange}
                 className="hidden"
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full py-3 px-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 transition-colors text-center"
-              >
-                {selectedFile ? (
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
-                    {selectedFile.name}
-                  </span>
-                ) : (
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    Click to select JSON file
-                  </span>
-                )}
-              </button>
+              <SurfaceCard tone="dashed" padding="none" className="shadow-none">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full px-4 py-3 text-center transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/40"
+                >
+                  {selectedFile ? (
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      {selectedFile.name}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      Click to select JSON file
+                    </span>
+                  )}
+                </button>
+              </SurfaceCard>
             </div>
 
             {/* Chat title */}
@@ -146,31 +152,32 @@ export default function ChatImportModal({ characterId, characterName, isOpen, on
 
             {/* Error message */}
             {error && (
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-              </div>
+              <InlineFeedback tone="error" className="mb-4">
+                {error}
+              </InlineFeedback>
             )}
 
             {/* Buttons */}
             <div className="flex gap-3">
-              <button
+              <Button
                 type="button"
                 onClick={handleClose}
                 disabled={isLoading}
-                className="flex-1 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                variant="secondary"
+                className="flex-1"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={handleImport}
                 disabled={isLoading || !selectedFile}
-                className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                className="flex-1"
               >
                 {isLoading ? 'Importing...' : 'Import'}
-              </button>
+              </Button>
             </div>
-          </div>
+          </SurfaceCard>
         </div>
       ) : null}
 

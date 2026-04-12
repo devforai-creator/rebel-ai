@@ -379,6 +379,13 @@ Done when:
 - character creation, import, and destructive flows use the shared form and confirmation language
 - moving between list, detail, and related modals feels like one system instead of adjacent pages with different local rules
 
+Current status as of 2026-04-12:
+
+- [CharacterCard.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterCard.tsx), [CharacterForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterForm.tsx), and [CharacterImport.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterImport.tsx) now inherit the shared `SurfaceCard`, `Button`, and `InlineFeedback` contract instead of keeping separate local card shells, destructive buttons, and form-status boxes
+- [CharacterDetailView.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/[id]/CharacterDetailView.tsx) now uses the same panel density and button hierarchy for edit mode, lorebook management, chat import, empty chat history, chat export/delete, and load-more pagination, reducing the number of one-off button bundles on the character detail screen
+- [ChatImportModal.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/[id]/ChatImportModal.tsx) and [NewChatButton.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/[id]/NewChatButton.tsx) now reuse the shared modal shell and primary/secondary action styling, so chat bootstrapping from character detail no longer looks like a separate UI system
+- regression coverage for this batch now lives in [character-ui.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/character-ui.test.tsx) and [character-detail-ui.test.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/[id]/character-detail-ui.test.tsx), locking the shared contract on the character list, form, import, modal, and new-chat entry points
+
 ### P2-2e. Lock Shared Empty, Loading, and Error-State Language
 
 Scope:

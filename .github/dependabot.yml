@@ -4,15 +4,20 @@ updates:
   - package-ecosystem: 'npm'
     directory: '/'
     schedule:
-      interval: 'weekly'
-      day: 'monday'
+      interval: 'daily'
       time: '09:00'
       timezone: 'Asia/Seoul'
     groups:
+      safe-ugc-ui:
+        applies-to: 'version-updates'
+        patterns:
+          - '@safe-ugc-ui/*'
       npm-patch-updates:
         applies-to: 'version-updates'
         patterns:
           - '*'
+        exclude-patterns:
+          - '@safe-ugc-ui/*'
         update-types:
           - 'patch'
     open-pull-requests-limit: 5

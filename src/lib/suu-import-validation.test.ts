@@ -21,7 +21,7 @@ describe('validateSuuImportMetadata', () => {
     expect(result.warnings).toEqual([])
   })
 
-  it('classifies unsupported card structure as a warning', () => {
+  it('rejects unsupported card structure', () => {
     const result = validateSuuImportMetadata({
       ui_card: {
         meta: { name: 'legacy', version: '1.0.0' },
@@ -35,11 +35,51 @@ describe('validateSuuImportMetadata', () => {
       image_display: null,
     })
 
-    expect(result.errors).toEqual([])
-    expect(result.warnings).toHaveLength(1)
-    expect(result.warnings[0].code).toBe('SCHEMA_ERROR')
-    expect(formatSuuImportValidationIssue(result.warnings[0])).toContain(
+    expect(result.warnings).toEqual([])
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].code).toBe('SCHEMA_ERROR')
+    expect(formatSuuImportValidationIssue(result.errors[0])).toContain(
       'character.metadata.ui_card.views.Main',
+    )
+  })
+
+  it('rejects legacy border style props that the renderer cannot load', () => {
+    const result = validateSuuImportMetadata({
+      ui_card: null,
+      ui_cards: {
+        timetable: {
+          meta: { name: 'timetable', version: '1.0.0' },
+          views: {
+            Main: {
+              type: 'Column',
+              style: {
+                borderWidth: 1,
+                borderColor: '#e0e0e0',
+                borderStyle: 'solid',
+              },
+              children: [
+                {
+                  type: 'Text',
+                  content: '1교시',
+                  style: {
+                    borderTopWidth: 1,
+                    borderTopColor: '#e0e0e0',
+                    borderTopStyle: 'solid',
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+      image_display: null,
+    })
+
+    expect(result.warnings).toEqual([])
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].code).toBe('SCHEMA_ERROR')
+    expect(formatSuuImportValidationIssue(result.errors[0])).toContain(
+      'character.metadata.ui_cards.timetable.views.Main',
     )
   })
 

@@ -373,8 +373,7 @@ describe('importRbx', () => {
       expect(mock.calls.characterInserts[0].visibility).toBe('draft')
     })
 
-    it('records SUU compatibility warnings but proceeds with import', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    it('rejects invalid SUU cards before character creation', async () => {
       const mock = createMockSupabase()
       const parseResult = createMinimalParseResult({
         manifest: {
@@ -413,17 +412,12 @@ describe('importRbx', () => {
         supabaseClient: mock.client,
       })
 
-      expect(result.success).toBe(true)
-      expect(result.stats?.validationWarnings).toHaveLength(1)
-      expect(result.stats?.validationWarnings?.[0]).toContain(
-        'character.metadata.ui_card.views.Main',
-      )
-      expect(mock.calls.characterInserts).toHaveLength(1)
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('SUU validation warning(s); import will continue'),
-        expect.arrayContaining([expect.stringContaining('[SCHEMA_ERROR]')]),
-      )
-      warnSpy.mockRestore()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Unsafe SUU content detected in RBX import')
+      expect(result.error).toContain('[SCHEMA_ERROR]')
+      expect(result.error).toContain('character.metadata.ui_card.views.Main')
+      expect(mock.calls.characterInserts).toHaveLength(0)
+      expect(mock.calls.characterDeletes).toHaveLength(0)
     })
   })
 

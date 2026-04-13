@@ -1,5 +1,5 @@
 import { CARD_JSON_MAX_BYTES } from '@safe-ugc-ui/types'
-import { loadCard, type ValidationError, type ValidationErrorCode } from '@safe-ugc-ui/validator'
+import { loadCard, type ValidationError } from '@safe-ugc-ui/validator'
 import { isUnsafeImportedAssetUrl } from '@/lib/asset-url-safety'
 import type { RbxCharacterMetadata } from '@/types/rbx.types'
 
@@ -7,36 +7,10 @@ const MAX_GENERIC_JSON_DEPTH = 48
 const MAX_GENERIC_NODE_COUNT = 5000
 const MAX_STRING_LENGTH = 100_000
 
-const WARNING_VALIDATION_CODES = new Set<ValidationErrorCode>([
-  'INVALID_JSON',
-  'MISSING_FIELD',
-  'INVALID_TYPE',
-  'INVALID_VALUE',
-  'UNKNOWN_NODE_TYPE',
-  'SCHEMA_ERROR',
-  'REF_NOT_ALLOWED',
-  'DYNAMIC_NOT_ALLOWED',
-  'STYLE_VALUE_OUT_OF_RANGE',
-  'INVALID_COLOR',
-  'INVALID_LENGTH',
-  'LOOP_SOURCE_NOT_ARRAY',
-  'LOOP_SOURCE_MISSING',
-  'STYLE_REF_NOT_FOUND',
-  'INVALID_STYLE_REF',
-  'INVALID_STYLE_NAME',
-  'FRAGMENT_REF_NOT_FOUND',
-  'FRAGMENT_NESTED_USE',
-  'INVALID_FRAGMENT_NAME',
-  'INVALID_HOVER_STYLE',
-  'HOVER_STYLE_NESTED',
-  'TRANSITION_RAW_STRING',
-  'TRANSITION_PROPERTY_FORBIDDEN',
-])
-
 const SRC_FIELD_NAMES = new Set(['src'])
 
 type SuuImportIssueCode =
-  | ValidationErrorCode
+  | ValidationError['code']
   | 'JSON_DEPTH_EXCEEDED'
   | 'JSON_NODE_COUNT_EXCEEDED'
   | 'STRING_LENGTH_EXCEEDED'
@@ -80,7 +54,8 @@ function pushIssue(buckets: ValidationBuckets, issue: SuuImportValidationIssue):
 }
 
 function classifyValidatorIssue(error: ValidationError): 'warning' | 'error' {
-  return WARNING_VALIDATION_CODES.has(error.code) ? 'warning' : 'error'
+  void error
+  return 'error'
 }
 
 function formatPath(scope: string, path: string): string {

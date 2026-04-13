@@ -15,6 +15,11 @@ export interface JobPollerDeps {
   onError: (error: Error) => void
   /** Called when polling takes longer than expected (e.g., after 30s) */
   onSlowProgress?: (elapsedMs: number) => void
+  /**
+   * Optional hook for real streaming progress. When present, timeout is measured
+   * from the latest known progress timestamp instead of the original poll start.
+   */
+  getLastProgressAt?: () => number | null
   now: () => number
   sleep: (ms: number) => Promise<void>
 }
@@ -29,7 +34,7 @@ export interface JobPollerConfig {
 }
 
 export const DEFAULT_JOB_POLLER_CONFIG: JobPollerConfig = {
-  timeoutMs: 90_000,
+  timeoutMs: 10 * 60 * 1000,
   initialDelayMs: 800,
   maxDelayMs: 5000,
   backoffMultiplier: 1.5,
@@ -52,8 +57,15 @@ export async function pollJobStatus(
   const slowThreshold = config.slowProgressThresholdMs ?? 30_000
 
   while (true) {
-    // Check timeout
-    const elapsed = deps.now() - startTime
+    const currentTime = deps.now()
+    const lastProgressAt = deps.getLastProgressAt?.()
+    const timeoutReference =
+      typeof lastProgressAt === 'number' && Number.isFinite(lastProgressAt)
+        ? Math.max(startTime, lastProgressAt)
+        : startTime
+    const elapsed = currentTime - timeoutReference
+
+    // Check timeout from the last known meaningful progress
     if (elapsed > config.timeoutMs) {
       const seconds = Math.round(config.timeoutMs / 1000)
       const timeoutError = new Error(`Response timed out after ${seconds}s`)

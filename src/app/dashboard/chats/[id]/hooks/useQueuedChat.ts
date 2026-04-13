@@ -69,6 +69,7 @@ export function useQueuedChat({
   const [pendingJobId, setPendingJobId] = useState<string | null>(null)
   const pendingJobIdRef = useRef<string | null>(null)
   const pendingRegenerationTargetIdRef = useRef<string | null>(null)
+  const lastStreamProgressAtRef = useRef<number | null>(null)
   const [streamingDraft, setStreamingDraft] = useState<StreamingAssistantDraft | null>(null)
   const [error, setError] = useState<Error | null>(null)
 
@@ -120,6 +121,7 @@ export function useQueuedChat({
 
   const startStreamingDraft = useCallback(
     (jobId: string, regenerateAssistantMessageId: string | null) => {
+      lastStreamProgressAtRef.current = null
       const isBatchMode = deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
       setStreamingDraft({
         id: `stream-${jobId}`,
@@ -139,6 +141,7 @@ export function useQueuedChat({
 
   const clearPendingJob = useCallback(() => {
     pendingJobIdRef.current = null
+    lastStreamProgressAtRef.current = null
     setPendingJobId(null)
   }, [])
 
@@ -211,6 +214,7 @@ export function useQueuedChat({
               return null
             }
           },
+          getLastProgressAt: () => lastStreamProgressAtRef.current,
           onSuccess: async () => {
             await appendAssistantMessage()
             await fetchLatestUsage()
@@ -291,6 +295,8 @@ export function useQueuedChat({
       setStreamingDraft(null)
       return
     }
+
+    lastStreamProgressAtRef.current = Date.now()
 
     setStreamingDraft((current) => {
       if (!current || current.jobId !== payload.jobId) {

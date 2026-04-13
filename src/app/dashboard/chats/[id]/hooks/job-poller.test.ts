@@ -143,6 +143,40 @@ describe('pollJobStatus', () => {
       )
       expect(totalSleepTime).toBeLessThanOrEqual(SHORT_CONFIG.timeoutMs + SHORT_CONFIG.maxDelayMs)
     })
+
+    it('extends the timeout window when streaming progress keeps arriving', async () => {
+      const ACTIVITY_CONFIG: JobPollerConfig = {
+        timeoutMs: 1000,
+        initialDelayMs: 400,
+        maxDelayMs: 400,
+        backoffMultiplier: 1,
+      }
+
+      let lastProgressAt: number | null = null
+      let pollCount = 0
+
+      const depsWithProgress: JobPollerDeps = {
+        ...mockDeps,
+        getLastProgressAt: () => lastProgressAt,
+      }
+
+      vi.mocked(depsWithProgress.fetchJobStatus).mockImplementation(async () => {
+        pollCount += 1
+
+        if (pollCount < 3) {
+          lastProgressAt = currentTime
+          return { status: 'processing' }
+        }
+
+        return { status: 'success' }
+      })
+
+      const result = await pollJobStatus('job-123', depsWithProgress, ACTIVITY_CONFIG)
+
+      expect(result).toEqual({ outcome: 'success' })
+      expect(currentTime).toBeGreaterThan(ACTIVITY_CONFIG.timeoutMs)
+      expect(depsWithProgress.onError).not.toHaveBeenCalled()
+    })
   })
 
   describe('backoff', () => {

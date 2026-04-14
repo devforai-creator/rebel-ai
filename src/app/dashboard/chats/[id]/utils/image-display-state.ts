@@ -48,6 +48,23 @@ function getAssetCandidateKeys(asset: CharacterAsset): string[] {
   return [...keys, ...aliases].filter((value): value is string => Boolean(value))
 }
 
+function resolveCharacterAssetUrl(
+  asset: CharacterAsset,
+  assetUrlMap: Record<string, string> | undefined,
+  storageBaseUrl: string,
+): string | undefined {
+  if (assetUrlMap) {
+    for (const candidate of getAssetCandidateKeys(asset)) {
+      const mappedUrl = resolveAssetUrl(candidate, assetUrlMap)
+      if (mappedUrl) {
+        return mappedUrl
+      }
+    }
+  }
+
+  return buildPublicCharacterAssetUrl(storageBaseUrl, asset.storage_path)
+}
+
 function findAssetByResolvedUrl(
   resolvedUrl: string,
   characterAssets: CharacterAsset[],
@@ -55,16 +72,8 @@ function findAssetByResolvedUrl(
   storageBaseUrl: string,
 ): CharacterAsset | undefined {
   for (const asset of characterAssets) {
-    if (assetUrlMap) {
-      for (const candidate of getAssetCandidateKeys(asset)) {
-        if (resolveAssetUrl(candidate, assetUrlMap) === resolvedUrl) {
-          return asset
-        }
-      }
-    }
-
-    const publicUrl = buildPublicCharacterAssetUrl(storageBaseUrl, asset.storage_path)
-    if (publicUrl === resolvedUrl) {
+    const assetUrl = resolveCharacterAssetUrl(asset, assetUrlMap, storageBaseUrl)
+    if (assetUrl === resolvedUrl) {
       return asset
     }
   }
@@ -173,6 +182,8 @@ export function resolveEmotionRenderTarget(options: {
         assets: options.characterAssets,
         storageBaseUrl: options.storageBaseUrl,
         bucketName: 'character-assets',
+        getAssetUrl: (asset) =>
+          resolveCharacterAssetUrl(asset, options.assetUrlMap, options.storageBaseUrl),
       })?.asset ??
       findAssetByResolvedUrl(
         resolvedFromCommand,
@@ -193,6 +204,8 @@ export function resolveEmotionRenderTarget(options: {
     assets: options.characterAssets,
     storageBaseUrl: options.storageBaseUrl,
     bucketName: 'character-assets',
+    getAssetUrl: (asset) =>
+      resolveCharacterAssetUrl(asset, options.assetUrlMap, options.storageBaseUrl),
   })
   if (resolvedAsset) {
     return {

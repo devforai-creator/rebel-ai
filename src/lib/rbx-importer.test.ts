@@ -196,9 +196,6 @@ function createMockSupabase(config?: {
           calls.storageRemovals.push({ bucket, paths })
           return Promise.resolve({ data: [], error: config?.storageRemoveError ?? null })
         }),
-        getPublicUrl: vi.fn((path: string) => ({
-          data: { publicUrl: `https://storage.example.com/${path}` },
-        })),
       })),
     },
   }
@@ -426,7 +423,7 @@ describe('importRbx', () => {
   // --------------------------------------------------------------------------
 
   describe('asset upload behavior', () => {
-    it('sets avatar_url from icon asset', async () => {
+    it('does not persist a storage URL into avatar_url for icon assets', async () => {
       const mock = createMockSupabase()
       const parseResult = createMinimalParseResult({
         manifest: {
@@ -452,9 +449,8 @@ describe('importRbx', () => {
       })
 
       expect(result.success).toBe(true)
-      // Avatar URL should be set in the character update
       const updateData = mock.calls.characterUpdates[0].data
-      expect(updateData.avatar_url).toMatch(/^https:\/\/storage\.example\.com\//)
+      expect(updateData).not.toHaveProperty('avatar_url')
     })
 
     it('tracks failed assets with correct fileName and reason', async () => {
@@ -683,7 +679,6 @@ describe('importRbx', () => {
           return Promise.resolve({ data: { path }, error: null })
         }),
         remove: originalStorageFrom(bucket).remove,
-        getPublicUrl: originalStorageFrom(bucket).getPublicUrl,
       }))
 
       const parseResult = createMinimalParseResult({

@@ -8,7 +8,7 @@
 
 ### Design Principles
 
-1. **Portable by default**: All cross-references use `file_name` — no DB IDs, no environment-specific URLs. The importer resolves `file_name` to runtime values (asset IDs, public URLs) at import time.
+1. **Portable by default**: All cross-references use `file_name` — no DB IDs, no environment-specific URLs. The importer resolves `file_name` to stable runtime references (asset IDs), and runtime asset URLs are signed on demand.
 2. **No scripts**: Lua/JS execution is excluded from the spec entirely (security by design).
 3. **No raw HTML**: New UI should be expressed through Safe UGC UI card JSON (declarative DSL), where security is guaranteed by closed vocabulary, not by sanitization. Legacy `background_html` is deprecated, rejected on new import, and no longer rendered by the active chat runtime.
 4. **Explicit references**: Assets are referenced by `file_name`, not URI schemes or fuzzy matching.

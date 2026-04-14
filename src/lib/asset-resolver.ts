@@ -42,14 +42,16 @@ export interface AssetResolutionContext {
   assets: CharacterAsset[]
   /** @deprecated Use character_assets.metadata.aliases instead */
   emotionImages?: Record<string, string> | null
-  /** Base URL for constructing public URLs */
+  /** Base URL for constructing fallback public URLs */
   storageBaseUrl: string
   /** Bucket name (default: 'character-assets') */
   bucketName?: string
+  /** Override runtime URL resolution for private or signed asset delivery. */
+  getAssetUrl?: (asset: CharacterAsset) => string | null | undefined
 }
 
 export interface AssetResolutionResult {
-  /** Public URL of the matched asset */
+  /** Runtime URL of the matched asset */
   url: string
   /** Matched asset record */
   asset: CharacterAsset
@@ -58,7 +60,7 @@ export interface AssetResolutionResult {
 }
 
 /**
- * Resolve asset tag to public URL
+ * Resolve asset tag to a runtime asset URL
  *
  * @param tag - Asset tag (e.g., "clothed_smile", "Pequod", "{{img::Pequod}}")
  * @param context - Resolution context with assets and configuration
@@ -298,6 +300,11 @@ function findPrefixMatch(tag: string, assets: CharacterAsset[]): CharacterAsset 
  * Build public URL for asset
  */
 function buildPublicUrl(asset: CharacterAsset, context: AssetResolutionContext): string {
+  const customUrl = context.getAssetUrl?.(asset)
+  if (typeof customUrl === 'string' && customUrl.length > 0) {
+    return customUrl
+  }
+
   const bucketName = context.bucketName || 'character-assets'
   const baseUrl = context.storageBaseUrl.replace(/\/$/, '')
   const path = asset.storage_path.replace(/^\//, '')
@@ -345,8 +352,8 @@ export function extractAssetTags(text: string): string[] {
 // ============================================================================
 
 export interface AssetUrlMapOptions {
-  /** Supabase storage instance for generating public URLs */
-  getPublicUrl: (storagePath: string) => string
+  /** Runtime URL resolver for a storage path. Can return signed or public URLs. */
+  getAssetUrl: (storagePath: string) => string | null | undefined
 }
 
 /**
@@ -361,7 +368,7 @@ export interface AssetUrlMapOptions {
  *
  * @param assets - Character assets from database
  * @param options - Configuration options
- * @returns Flat map of asset key → public URL
+ * @returns Flat map of asset key → runtime URL
  */
 export function buildAssetUrlMap(
   assets: CharacterAsset[],
@@ -370,33 +377,33 @@ export function buildAssetUrlMap(
   const urlMap: Record<string, string> = {}
 
   // Hoisted outside loop for performance (avoids creating new function per asset)
-  const registerKey = (key: string | null | undefined, publicUrl: string) => {
+  const registerKey = (key: string | null | undefined, assetUrl: string) => {
     if (!key) return
 
     // Register original key
-    urlMap[key] = publicUrl
+    urlMap[key] = assetUrl
 
     // Register normalized key
     const normalized = normalizeAssetKey(key)
     if (normalized && normalized !== key) {
-      urlMap[normalized] = publicUrl
+      urlMap[normalized] = assetUrl
     }
     const looseNormalized = normalizeAssetKeyLoose(key)
     if (looseNormalized && looseNormalized !== normalized && looseNormalized !== key) {
-      urlMap[looseNormalized] = publicUrl
+      urlMap[looseNormalized] = assetUrl
     }
 
     // Register fuzzy key (underscores removed) for RisuAI compatibility
     // Handles cases like "lifting_skirt" matching "liftingskirt"
-    registerLegacyCompatibleAssetUrlKeys(urlMap, key, publicUrl)
+    registerLegacyCompatibleAssetUrlKeys(urlMap, key, assetUrl)
 
     // Register base filename (without path)
     const baseName = key.split('/').pop()
     if (baseName && baseName !== key) {
-      urlMap[baseName] = publicUrl
+      urlMap[baseName] = assetUrl
       const normalizedBase = normalizeAssetKey(baseName)
       if (normalizedBase && normalizedBase !== baseName) {
-        urlMap[normalizedBase] = publicUrl
+        urlMap[normalizedBase] = assetUrl
       }
       const looseBase = normalizeAssetKeyLoose(baseName)
       if (
@@ -405,25 +412,28 @@ export function buildAssetUrlMap(
         looseBase !== baseName &&
         looseBase !== key
       ) {
-        urlMap[looseBase] = publicUrl
+        urlMap[looseBase] = assetUrl
       }
-      registerLegacyCompatibleAssetUrlKeys(urlMap, baseName, publicUrl)
+      registerLegacyCompatibleAssetUrlKeys(urlMap, baseName, assetUrl)
     }
   }
 
   for (const asset of assets) {
-    const publicUrl = options.getPublicUrl(asset.storage_path)
+    const assetUrl = options.getAssetUrl(asset.storage_path)
+    if (!assetUrl) {
+      continue
+    }
 
     // Register file_name, display_name, and canonical_name
-    registerKey(asset.file_name, publicUrl)
-    registerKey(asset.display_name, publicUrl)
-    registerKey(asset.canonical_name, publicUrl)
+    registerKey(asset.file_name, assetUrl)
+    registerKey(asset.display_name, assetUrl)
+    registerKey(asset.canonical_name, assetUrl)
 
     // Register all aliases from metadata
     const metadata = asset.metadata as AssetMetadata | null
     if (metadata?.aliases && Array.isArray(metadata.aliases)) {
       for (const alias of metadata.aliases) {
-        registerKey(alias, publicUrl)
+        registerKey(alias, assetUrl)
       }
     }
   }

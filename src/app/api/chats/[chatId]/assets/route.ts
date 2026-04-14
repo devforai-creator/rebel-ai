@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { createSignedAssetUrlMap } from '@/lib/assets/signed-asset-url'
 import { buildAssetUrlMap, normalizeAssetKey } from '@/lib/asset-resolver'
 import type { PostgrestError } from '@supabase/supabase-js'
 
@@ -38,6 +40,7 @@ function normalizeAssetMetadata(metadata: unknown): { aliases?: string[] } | nul
 export async function GET(_req: Request, { params }: { params: Promise<{ chatId: string }> }) {
   const { chatId } = await params
   const supabase = await createClient()
+  const adminSupabase = createAdminClient()
 
   const {
     data: { user },
@@ -70,8 +73,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
   // Fetch character assets, module data, and global variables in parallel
   const [characterAssets, moduleData, { data: globalVars, error: globalVarsError }] =
     await Promise.all([
-      fetchCharacterAssetsWithRetry(supabase, chat.character_id),
-      fetchModuleData(supabase, user.id, chat.character_id),
+      fetchCharacterAssetsWithRetry(adminSupabase, chat.character_id),
+      fetchModuleData(adminSupabase, chat.character_id),
       supabase
         .from('global_variables')
         .select('key, value')
@@ -95,12 +98,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
     {} as Record<string, unknown>,
   )
 
-  // Build file_name → public URL mapping
-  const assetUrlMap = buildAssetUrlMap(characterAssets || [], {
-    getPublicUrl: (storagePath: string) => {
-      const { data } = supabase.storage.from('character-assets').getPublicUrl(storagePath)
-      return data.publicUrl
+  const characterAssetUrlMapByPath = await createSignedAssetUrlMap(
+    adminSupabase,
+    'character-assets',
+    (characterAssets || []).map((asset) => asset.storage_path),
+    {
+      logContext: '[Chat Assets] Failed to sign character assets',
     },
+  )
+
+  // Build file_name → signed URL mapping
+  const assetUrlMap = buildAssetUrlMap(characterAssets || [], {
+    getAssetUrl: (storagePath: string) => characterAssetUrlMapByPath[storagePath],
   })
 
   // Merge module asset URLs into assetUrlMap
@@ -116,8 +125,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
   const assetIdToUrl = new Map<string, string>()
 
   for (const asset of characterAssets || []) {
-    const { data } = supabase.storage.from('character-assets').getPublicUrl(asset.storage_path)
-    const assetUrl = data.publicUrl
+    const assetUrl = characterAssetUrlMapByPath[asset.storage_path]
+    if (!assetUrl) continue
     assetIdToUrl.set(asset.id, assetUrl)
 
     const name = (asset as { canonical_name?: string | null }).canonical_name
@@ -227,14 +236,21 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
     }
   }
 
-  return NextResponse.json({
-    characterAssets: characterAssets || [],
-    assetUrlMap,
-    imageCommandUrlMap,
-    moduleRegex,
-    moduleAssetSummary,
-    globalVariables: globalVariables || {},
-  })
+  return NextResponse.json(
+    {
+      characterAssets: characterAssets || [],
+      assetUrlMap,
+      imageCommandUrlMap,
+      moduleRegex,
+      moduleAssetSummary,
+      globalVariables: globalVariables || {},
+    },
+    {
+      headers: {
+        'Cache-Control': 'private, no-store',
+      },
+    },
+  )
 }
 
 async function fetchCharacterAssetsWithRetry(
@@ -307,7 +323,6 @@ async function fetchCharacterAssetsWithRetry(
 
 async function fetchModuleData(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
   characterId: string,
 ) {
   const { data: characterModules } = await supabase
@@ -343,7 +358,7 @@ async function fetchModuleData(
   )
 
   const moduleAssets =
-    moduleIds.length > 0 ? await fetchModuleAssetsWithRetry(supabase, userId, moduleIds) : []
+    moduleIds.length > 0 ? await fetchModuleAssetsWithRetry(supabase, moduleIds) : []
 
   const moduleAssetsByModuleId: Record<string, string[]> = {}
   for (const asset of moduleAssets) {
@@ -352,16 +367,6 @@ async function fetchModuleData(
     }
     moduleAssetsByModuleId[asset.module_id].push(asset.file_name)
   }
-
-  const moduleAssetUrls: Record<string, string> =
-    moduleAssets.length > 0
-      ? buildAssetUrlMap(moduleAssets, {
-          getPublicUrl: (storagePath: string) => {
-            const { data } = supabase.storage.from('module-assets').getPublicUrl(storagePath)
-            return data.publicUrl
-          },
-        })
-      : {}
 
   type ModuleAssetSummary = {
     moduleId: string
@@ -381,6 +386,20 @@ async function fetchModuleData(
   }> = []
 
   const moduleAssetSummary: ModuleAssetSummary[] = []
+  const moduleAssetUrlMapByPath = await createSignedAssetUrlMap(
+    supabase,
+    'module-assets',
+    moduleAssets.map((asset) => asset.storage_path),
+    {
+      logContext: '[Chat Assets] Failed to sign module assets',
+    },
+  )
+  const moduleAssetUrls: Record<string, string> =
+    moduleAssets.length > 0
+      ? buildAssetUrlMap(moduleAssets, {
+          getAssetUrl: (storagePath: string) => moduleAssetUrlMapByPath[storagePath],
+        })
+      : {}
 
   for (const cm of characterModules) {
     const modules = cm.modules as {
@@ -451,7 +470,6 @@ async function fetchModuleData(
 
 async function fetchModuleAssetsWithRetry(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
   moduleIds: string[],
 ): Promise<ModuleAssetRecord[]> {
   let lastError: PostgrestError | null = null
@@ -467,7 +485,6 @@ async function fetchModuleAssetsWithRetry(
         const { data, error } = await supabase
           .from('module_assets')
           .select('id, module_id, file_name, storage_path, display_name, metadata, display_order')
-          .eq('user_id', userId)
           .in('module_id', moduleIds)
           .order('module_id', { ascending: true })
           .order('display_order', { ascending: true })

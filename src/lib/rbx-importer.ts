@@ -50,7 +50,7 @@ interface ImportRbxOptions {
  *
  * Flow:
  * 1. Create character record (1:1 from manifest, no transformation)
- * 2. Upload character assets → build file_name → asset_id / URL maps
+ * 2. Upload character assets → build file_name → asset_id map
  * 3. Resolve image_commands (file_name → asset_id)
  * 4. Update character metadata with resolved references
  * 5. Create modules with lorebook and regex
@@ -128,7 +128,7 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
     characterId = charRecord.id
 
     // ── Step 2: Upload character assets ──
-    const { uploaded, avatarUrl, failedAssets, failedAssetSamples } = await uploadCharacterAssets(
+    const { uploaded, failedAssets, failedAssetSamples } = await uploadCharacterAssets(
       supabase,
       userId,
       characterId!,
@@ -137,12 +137,10 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
     )
     uploadedCharacterAssetPaths = uploaded.map((asset) => asset.storagePath)
 
-    // ── Step 3: Build file_name → asset_id / URL maps ──
+    // ── Step 3: Build file_name → asset_id map ──
     const fileNameToAssetId = new Map<string, string>()
-    const fileNameToUrl = new Map<string, string>()
     for (const asset of uploaded) {
       fileNameToAssetId.set(asset.fileName, asset.assetId)
-      fileNameToUrl.set(asset.fileName, asset.publicUrl)
     }
 
     // ── Step 4: Resolve image_commands ──
@@ -160,7 +158,6 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
 
     // ── Step 5: Update character metadata with resolved references ──
     const characterUpdate: CharacterUpdate = {
-      avatar_url: avatarUrl,
       metadata: sanitizeMetadataForDb(
         buildCharacterMetadataForImport(char.metadata, {
           imageCommands: resolvedImageCommands,

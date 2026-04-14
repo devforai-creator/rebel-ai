@@ -20,8 +20,8 @@ As of `2026-04-14`, the repo is in a stronger state than the earlier review cycl
 - `npm run build` passed during the gate
 - the weighted gate score is `3.65 / 5.00` (`B`)
 
-That still does not make the repo ready for broader public production. The current gate is blocked
-by three concrete issues:
+That still does not make the repo ready for broader public production. The original gate was
+blocked by three concrete issues. `P0-1` closed on `2026-04-14`; the remaining blockers are:
 
 - asset delivery still depends on public-read Supabase buckets
 - `zod` is used as a direct runtime dependency without a top-level manifest declaration
@@ -37,6 +37,10 @@ by three concrete issues:
 ## P0
 
 ### P0-1. Remove Public-Read Asset Delivery
+
+Status:
+
+- Done on `2026-04-14`
 
 Scope:
 
@@ -66,6 +70,21 @@ Current evidence as of `2026-04-14`:
   `supabase/migrations/51_module_assets.sql` create public buckets and public-read policies
 - `src/lib/rbx-import-assets.ts` and `src/app/api/chats/[chatId]/assets/route.ts` use
   `getPublicUrl()`
+
+Completion evidence:
+
+- `supabase/migrations/73_private_asset_delivery.sql` closes `character-assets` and
+  `module-assets` and removes the public-read storage policies
+- `src/app/api/chats/[chatId]/assets/route.ts`,
+  `src/lib/assets/signed-asset-url.ts`, and `src/lib/assets/character-avatar.ts` now resolve
+  authenticated signed URLs at runtime instead of public bucket URLs
+- `src/lib/rbx-importer.ts` and `src/lib/rbx-import-assets.ts` stop persisting storage delivery
+  URLs into character records during import
+- regression coverage was added in `src/app/api/chats/[chatId]/assets/route.test.ts`,
+  `src/lib/asset-resolver.test.ts`, and `src/lib/assets/character-avatar.test.ts`
+- `npm run test`, `npm run typecheck`, and `npm run build` passed; `npm run ops:smoke` reached the
+  deployed app and returned `WARN` only because `/api/internal/triage` reported one pre-existing
+  failed job from `2026-04-11`
 
 ### P0-2. Make Direct Dependency Contracts Mechanical
 

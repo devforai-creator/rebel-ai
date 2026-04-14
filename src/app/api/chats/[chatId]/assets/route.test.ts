@@ -1,10 +1,15 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const createClientMock = vi.fn()
+const createAdminClientMock = vi.fn()
 const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: () => createClientMock(),
+}))
+
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: () => createAdminClientMock(),
 }))
 
 type TableName =
@@ -35,6 +40,7 @@ type AssetRouteFixture = {
   moduleAssetsRows?: Array<Record<string, unknown>>
   globalVarsRows?: Array<Record<string, unknown>>
   globalVarsError?: { message: string; code?: string } | null
+  signedUrlError?: { message: string } | null
   tableResolvers?: Partial<
     Record<
       'character_assets' | 'module_assets',
@@ -117,8 +123,18 @@ class RouteSupabaseMock {
 
   storage = {
     from: vi.fn((bucket: string) => ({
-      getPublicUrl: (path: string) => ({
-        data: { publicUrl: `https://cdn.test/${bucket}/${path}` },
+      createSignedUrls: vi.fn(async (paths: string[]) => {
+        if (this.fixture.signedUrlError) {
+          return { data: null, error: this.fixture.signedUrlError }
+        }
+
+        return {
+          data: paths.map((path) => ({
+            path,
+            signedUrl: `https://cdn.test/${bucket}/${path}`,
+          })),
+          error: null,
+        }
       }),
     })),
   }
@@ -302,6 +318,7 @@ function buildSupabase(fixture: Partial<AssetRouteFixture> & { user: { id: strin
   })
 
   createClientMock.mockResolvedValue(supabase)
+  createAdminClientMock.mockReturnValue(supabase)
   return supabase
 }
 
@@ -314,6 +331,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
     vi.resetModules()
     vi.useRealTimers()
     createClientMock.mockReset()
+    createAdminClientMock.mockReset()
     consoleErrorSpy.mockClear()
   })
 
@@ -435,6 +453,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store')
     expect(body.globalVariables).toEqual({ scene: 2 })
     expect(body.assetUrlMap['joy_pose']).toBe(
       'https://cdn.test/character-assets/char-1/2.hero-relaxed.webp',

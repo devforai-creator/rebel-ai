@@ -1,4 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  applyCharacterAvatarUrlMap,
+  resolveCharacterAvatarUrlMap,
+} from '@/lib/assets/character-avatar'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import EmptyState from '@/app/dashboard/components/EmptyState'
@@ -43,6 +48,7 @@ const CHARACTER_CARD_FIELDS = `
 
 export default async function CharactersPage() {
   const supabase = await createClient()
+  const adminSupabase = createAdminClient()
 
   const {
     data: { user },
@@ -94,6 +100,12 @@ export default async function CharactersPage() {
 
   const starterCharacters = (starterResult.data ?? []) as CharacterListItem[]
   const myCharacters = (myResult.data ?? []) as CharacterListItem[]
+  const avatarUrlMap = await resolveCharacterAvatarUrlMap(adminSupabase, [
+    ...starterCharacters,
+    ...myCharacters,
+  ])
+  const starterCharactersWithAvatar = applyCharacterAvatarUrlMap(starterCharacters, avatarUrlMap)
+  const myCharactersWithAvatar = applyCharacterAvatarUrlMap(myCharacters, avatarUrlMap)
   const activeJobs = (jobsResult.data ?? []) as ImportJob[]
   const recentJobs = (recentJobsResult.data ?? []) as ImportJobWithResult[]
 
@@ -253,7 +265,7 @@ export default async function CharactersPage() {
         )}
 
         {/* Starter Characters Section */}
-        {starterCharacters && starterCharacters.length > 0 && (
+        {starterCharactersWithAvatar.length > 0 && (
           <div className="mb-12">
             <div className="flex items-center mb-6">
               <div className="flex items-center gap-2">
@@ -268,7 +280,7 @@ export default async function CharactersPage() {
               Ready-to-use characters you can start chatting with right away
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {starterCharacters.map((character) => (
+              {starterCharactersWithAvatar.map((character) => (
                 <CharacterCard key={character.id} character={character} isStarter={true} />
               ))}
             </div>
@@ -278,9 +290,9 @@ export default async function CharactersPage() {
         {/* My Characters Section */}
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">My Characters</h2>
-          {myCharacters && myCharacters.length > 0 ? (
+          {myCharactersWithAvatar.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {myCharacters.map((character) => (
+              {myCharactersWithAvatar.map((character) => (
                 <CharacterCard key={character.id} character={character} isStarter={false} />
               ))}
             </div>

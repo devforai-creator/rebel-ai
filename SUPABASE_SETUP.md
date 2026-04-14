@@ -91,6 +91,9 @@ In Supabase Dashboard, open `Settings -> API` and copy:
 
 You will use these in `.env.local` or your deployment environment.
 
+Storage note: keep `character-assets` and `module-assets` private. The app now serves those files
+through authenticated signed URLs, not public bucket reads.
+
 ## 4. Configure Authentication URLs
 
 Open `Authentication -> URL Configuration` and set:

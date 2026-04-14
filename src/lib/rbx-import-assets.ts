@@ -16,7 +16,6 @@ export interface UploadedAsset {
   fileName: string
   assetId: string
   storagePath: string
-  publicUrl: string
 }
 
 export interface AssetFailureSample {
@@ -35,7 +34,6 @@ export type ImportRbxSupabaseLike = {
         options?: { contentType?: string; upsert?: boolean },
       ) => PromiseLike<unknown>
       remove?: (paths: string[]) => PromiseLike<unknown>
-      getPublicUrl: (path: string) => { data: { publicUrl: string } }
     }
   }
 }
@@ -48,12 +46,10 @@ export async function uploadCharacterAssets(
   assetFiles: RbxAssetFile[],
 ): Promise<{
   uploaded: UploadedAsset[]
-  avatarUrl: string | null
   failedAssets: number
   failedAssetSamples: AssetFailureSample[]
 }> {
   const uploaded: UploadedAsset[] = []
-  let avatarUrl: string | null = null
   let failedAssets = 0
   const failedAssetSamples: AssetFailureSample[] = []
   let fatalCleanupError: StorageCleanupError | null = null
@@ -128,19 +124,10 @@ export async function uploadCharacterAssets(
           throw error
         }
 
-        const { data: urlData } = supabase.storage
-          .from('character-assets')
-          .getPublicUrl(storagePath)
-
         const result: UploadedAsset = {
           fileName: asset.file_name,
           assetId: assetRecord.id,
           storagePath,
-          publicUrl: urlData.publicUrl,
-        }
-
-        if (asset.asset_type === 'icon') {
-          avatarUrl = urlData.publicUrl
         }
 
         return result
@@ -176,7 +163,7 @@ export async function uploadCharacterAssets(
     throw fatalCleanupError
   }
 
-  return { uploaded, avatarUrl, failedAssets, failedAssetSamples }
+  return { uploaded, failedAssets, failedAssetSamples }
 }
 
 export async function uploadModuleAssets(

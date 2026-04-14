@@ -1,6 +1,8 @@
 import { Suspense } from 'react'
 import LoadingState from '@/app/dashboard/components/LoadingState'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { resolveSingleCharacterAvatarUrl } from '@/lib/assets/character-avatar'
 import { redirect } from 'next/navigation'
 import ChatInterface from './ChatInterface'
 import DeleteChatButton from './DeleteChatButton'
@@ -26,6 +28,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
   const { id } = await params
   const search = await searchParams
   const supabase = await createClient()
+  const adminSupabase = createAdminClient()
 
   const {
     data: { user },
@@ -67,6 +70,15 @@ export default async function ChatPage({ params, searchParams }: Props) {
 
   // Handle Supabase nested select which returns array for single relations
   const character = Array.isArray(chat.characters) ? chat.characters[0] : chat.characters
+  const characterAvatarUrl = await resolveSingleCharacterAvatarUrl(
+    adminSupabase,
+    character
+      ? {
+          id: character.id,
+          avatar_url: character.avatar_url ?? null,
+        }
+      : null,
+  )
 
   const personaPromise: Promise<Persona | null> = (async () => {
     if (!chat.persona_id) return null
@@ -159,7 +171,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
               initialUsageStats={null}
               character={{
                 name: character?.name || 'AI',
-                avatar_url: character?.avatar_url || null,
+                avatar_url: characterAvatarUrl,
                 metadata: character?.metadata || null,
               }}
               initialHistoryCursor={historyCursor}

@@ -144,12 +144,21 @@ describe('resolveAssetTag', () => {
       strategy: 'normalized',
     })
   })
+
+  it('uses the injected asset URL resolver when provided', () => {
+    const result = resolveAssetTag('Smile', {
+      ...context,
+      getAssetUrl: (asset) => `https://signed.test/${asset.storage_path}?token=abc`,
+    })
+
+    expect(result?.url).toBe('https://signed.test/user/Smile.webp?token=abc')
+  })
 })
 
 describe('buildAssetUrlMap / resolveAssetUrl', () => {
   it('registers aliases, normalized keys, and base filenames', () => {
     const urlMap = buildAssetUrlMap(baseAssets, {
-      getPublicUrl: (path) => `https://public/${path}`,
+      getAssetUrl: (path) => `https://public/${path}`,
     })
 
     expect(urlMap['Smile.webp']).toBe('https://public/user/Smile.webp')
@@ -165,7 +174,7 @@ describe('buildAssetUrlMap / resolveAssetUrl', () => {
 
   it('resolves using normalized keys, base filename, and extension fallback', () => {
     const urlMap = buildAssetUrlMap(baseAssets, {
-      getPublicUrl: (path) => `https://public/${path}`,
+      getAssetUrl: (path) => `https://public/${path}`,
     })
 
     // Normalized alias
@@ -190,7 +199,7 @@ describe('buildAssetUrlMap / resolveAssetUrl', () => {
       },
     ]
     const urlMap = buildAssetUrlMap(assets, {
-      getPublicUrl: (path) => `https://public/${path}`,
+      getAssetUrl: (path) => `https://public/${path}`,
     })
 
     expect(resolveAssetUrl('Yu Ha-min_paizuri hard', urlMap)).toBe(
@@ -249,7 +258,7 @@ describe('fuzzy matching (underscore-ignoring)', () => {
       },
     ]
     const urlMap = buildAssetUrlMap(assets, {
-      getPublicUrl: (path) => `https://public/${path}`,
+      getAssetUrl: (path) => `https://public/${path}`,
     })
 
     // Tag without underscore should match filename with underscore
@@ -267,7 +276,7 @@ describe('fuzzy matching (underscore-ignoring)', () => {
       },
     ]
     const urlMap = buildAssetUrlMap(assets, {
-      getPublicUrl: (path) => `https://public/${path}`,
+      getAssetUrl: (path) => `https://public/${path}`,
     })
 
     // Tag with extra underscore should match filename without it
@@ -288,7 +297,7 @@ describe('fuzzy matching (underscore-ignoring)', () => {
       },
     ]
     const urlMap = buildAssetUrlMap(assets, {
-      getPublicUrl: (path) => `https://public/${path}`,
+      getAssetUrl: (path) => `https://public/${path}`,
     })
 
     expect(resolveAssetUrl('(breast grab)', urlMap)).toBe('https://public/user/breast_grab.webp')
@@ -307,7 +316,7 @@ describe('fuzzy matching (underscore-ignoring)', () => {
       },
     ]
     const urlMap = buildAssetUrlMap(assets, {
-      getPublicUrl: (path) => `https://public/${path}`,
+      getAssetUrl: (path) => `https://public/${path}`,
     })
 
     // Tag without extension and with collapsed underscores

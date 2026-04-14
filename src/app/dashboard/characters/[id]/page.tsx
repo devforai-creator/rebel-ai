@@ -1,6 +1,8 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { resolveSingleCharacterAvatarUrl } from '@/lib/assets/character-avatar'
 import Link from 'next/link'
 import CharacterDetailContent from './CharacterDetailContent'
 
@@ -23,6 +25,7 @@ interface Props {
 export default async function CharacterDetailPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
+  const adminSupabase = createAdminClient()
 
   const {
     data: { user },
@@ -45,6 +48,14 @@ export default async function CharacterDetailPage({ params }: Props) {
     redirect('/dashboard/characters')
   }
 
+  const characterWithAvatar = {
+    ...character,
+    avatar_url: await resolveSingleCharacterAvatarUrl(adminSupabase, {
+      id: character.id,
+      avatar_url: character.avatar_url ?? null,
+    }),
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* 헤더 */}
@@ -57,7 +68,9 @@ export default async function CharacterDetailPage({ params }: Props) {
             >
               ← 캐릭터 목록
             </Link>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{character.name}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {characterWithAvatar.name}
+            </h1>
           </div>
         </div>
       </header>
@@ -65,7 +78,7 @@ export default async function CharacterDetailPage({ params }: Props) {
       {/* 메인 콘텐츠 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Suspense fallback={<CharacterDetailFallback />}>
-          <CharacterDetailContent character={character} userId={user.id} />
+          <CharacterDetailContent character={characterWithAvatar} userId={user.id} />
         </Suspense>
       </main>
     </div>

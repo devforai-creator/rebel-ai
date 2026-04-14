@@ -3,9 +3,11 @@ import { readMaybeSingleQuery, readRowsQuery } from '@/lib/supabase/query'
 import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from './message-status'
 import {
   buildProjectedConversationMessages,
-  countTurnConversationMessages,
+  countTurnsWithActiveAssistantMessage,
+  countTurnsWithUserMessage,
   getLowerSequenceBound,
   getTurnMessageIds,
+  loadLatestActiveAssistantMessageId,
   loadProjectedMessagesByIds,
   loadStandaloneSystemMessages,
   loadTurnsForChat,
@@ -325,14 +327,10 @@ export async function loadLatestProjectedAssistantMessage({
   supabase: TurnClient
   chatId: string
 }): Promise<ProjectedTurnMessage | null> {
-  const turns = await loadTurnsForChat({
+  const latestAssistantId = await loadLatestActiveAssistantMessageId({
     supabase,
     chatId,
-    ascending: false,
   })
-
-  const latestAssistantId =
-    turns.find((turn) => !!turn.active_assistant_message_id)?.active_assistant_message_id ?? null
 
   if (!latestAssistantId) {
     return null
@@ -353,32 +351,38 @@ export async function countProjectedChatMessages({
   supabase: TurnClient
   chatId: string
 }): Promise<number> {
-  const [turns, systemCountResult] = await Promise.all([
-    countTurnConversationMessages({
-      supabase,
-      chatId,
-    }).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error)
-      throw new Error(`Failed to count projected chat turns: ${message}`)
-    }),
-    supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('chat_id', chatId)
-      .eq('role', 'system')
-      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-      .neq('message_status', MESSAGE_STATUS_GENERATING),
-  ])
+  let userMessageCount: number
+  let activeAssistantCount: number
+  let systemCountResult: { count: number | null; error: { message: string } | null }
+
+  try {
+    ;[userMessageCount, activeAssistantCount, systemCountResult] = await Promise.all([
+      countTurnsWithUserMessage({
+        supabase,
+        chatId,
+      }),
+      countTurnsWithActiveAssistantMessage({
+        supabase,
+        chatId,
+      }),
+      supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('chat_id', chatId)
+        .eq('role', 'system')
+        .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+        .neq('message_status', MESSAGE_STATUS_GENERATING),
+    ])
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to count projected chat messages: ${message}`)
+  }
 
   if (systemCountResult.error) {
     throw new Error(`Failed to count projected system messages: ${systemCountResult.error.message}`)
   }
 
-  const turnMessageCount = turns.reduce((count, turn) => {
-    return count + (turn.user_message_id ? 1 : 0) + (turn.active_assistant_message_id ? 1 : 0)
-  }, 0)
-
-  return turnMessageCount + (systemCountResult.count ?? 0)
+  return userMessageCount + activeAssistantCount + (systemCountResult.count ?? 0)
 }
 
 export async function countProjectedConversationMessages({
@@ -388,15 +392,24 @@ export async function countProjectedConversationMessages({
   supabase: TurnClient
   chatId: string
 }): Promise<number> {
-  const turns = await countTurnConversationMessages({
-    supabase,
-    chatId,
-  }).catch((error: unknown) => {
+  let userMessageCount: number
+  let activeAssistantCount: number
+
+  try {
+    ;[userMessageCount, activeAssistantCount] = await Promise.all([
+      countTurnsWithUserMessage({
+        supabase,
+        chatId,
+      }),
+      countTurnsWithActiveAssistantMessage({
+        supabase,
+        chatId,
+      }),
+    ])
+  } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`Failed to count projected conversation messages: ${message}`)
-  })
+  }
 
-  return turns.reduce((count, turn) => {
-    return count + (turn.user_message_id ? 1 : 0) + (turn.active_assistant_message_id ? 1 : 0)
-  }, 0)
+  return userMessageCount + activeAssistantCount
 }

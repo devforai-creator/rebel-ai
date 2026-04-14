@@ -12,6 +12,7 @@
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdevforai-creator%2Frebel-ai&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,CHAT_ADMIN_SECRET,SUMMARY_GENERATION_SECRET,CRON_SECRET,INTERNAL_API_ORIGIN)
 
 [**🚀 Getting Started Guide**](./docs/GETTING_STARTED.md) — _New to RebelAI? Start here!_
+[**🧰 RBX Authoring**](./docs/RBX_AUTHORING_WITH_CLAUDE.md) — _Create `.rbx` packages with the bundled Claude-importable skill_
 [**🧭 Hosting Profiles**](./docs/HOSTING_PROFILES.md) — _Current low-cost path vs future managed public path_
 [**📋 Operating Plan**](./docs/OPERATING_PLAN.md) — _Current operating contract, gates, and scope boundaries_
 [**🩺 Smoke Checks**](./docs/FIRST_CLASS_SMOKE_CHECKS.md) — _Repeatable verification for the current first-class low-cost path_
@@ -71,6 +72,8 @@ RBX is RebelAI's **native** character exchange format and the recommended target
 - **Single spec**: one format, one parser, one importer. No multi-format version branching.
 
 See [`docs/rbx-spec.md`](./docs/rbx-spec.md) for the full format and runtime status.
+
+If you want to create new `.rbx` packages instead of only importing existing ones, use the bundled Claude-importable skill at [`skills/rebelai-rbx.skill`](./skills/rebelai-rbx.skill) and follow [`docs/RBX_AUTHORING_WITH_CLAUDE.md`](./docs/RBX_AUTHORING_WITH_CLAUDE.md).
 
 ### Compatibility Boundaries
 
@@ -152,17 +155,18 @@ Note: the maintainer-operated path currently treats `prefix_live_blocks + episod
 
 ## Documentation Map
 
-| Audience        | Document                                                                 | Purpose                                                           |
-| --------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| Setup           | [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md)                               | Local + Supabase configuration walkthrough                        |
-| Getting started | [`docs/GETTING_STARTED.md`](./docs/GETTING_STARTED.md)                   | First-run guide for a fresh local deployment                      |
-| Hosting         | [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md)                 | Current low-cost profile vs future managed public profile         |
-| Operations      | [`docs/OPERATING_PLAN.md`](./docs/OPERATING_PLAN.md)                     | Current first-class mode, public gates, and scope boundaries      |
-| Smoke checks    | [`docs/FIRST_CLASS_SMOKE_CHECKS.md`](./docs/FIRST_CLASS_SMOKE_CHECKS.md) | Repeatable operator verification for the current first-class mode |
-| Database        | [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)                             | Tables, RLS policies, RPC functions                               |
-| Database ops    | [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md)             | Migration workflow, production pushes, and drift recovery         |
-| Format          | [`docs/rbx-spec.md`](./docs/rbx-spec.md)                                 | RBX package format and runtime contract                           |
-| Security        | [`SECURITY.md`](./SECURITY.md)                                           | Reporting policy, security model, and self-hosting requirements   |
+| Audience        | Document                                                                   | Purpose                                                           |
+| --------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Setup           | [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md)                                 | Local + Supabase configuration walkthrough                        |
+| Getting started | [`docs/GETTING_STARTED.md`](./docs/GETTING_STARTED.md)                     | First-run guide for a fresh local deployment                      |
+| Authoring       | [`docs/RBX_AUTHORING_WITH_CLAUDE.md`](./docs/RBX_AUTHORING_WITH_CLAUDE.md) | Create `.rbx` packages with the bundled Claude skill              |
+| Hosting         | [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md)                   | Current low-cost profile vs future managed public profile         |
+| Operations      | [`docs/OPERATING_PLAN.md`](./docs/OPERATING_PLAN.md)                       | Current first-class mode, public gates, and scope boundaries      |
+| Smoke checks    | [`docs/FIRST_CLASS_SMOKE_CHECKS.md`](./docs/FIRST_CLASS_SMOKE_CHECKS.md)   | Repeatable operator verification for the current first-class mode |
+| Database        | [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)                               | Tables, RLS policies, RPC functions                               |
+| Database ops    | [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md)               | Migration workflow, production pushes, and drift recovery         |
+| Format          | [`docs/rbx-spec.md`](./docs/rbx-spec.md)                                   | RBX package format and runtime contract                           |
+| Security        | [`SECURITY.md`](./SECURITY.md)                                             | Reporting policy, security model, and self-hosting requirements   |
 
 > **Tip:** Keep the public entry points small: setup, schema, security, and the RBX spec should be enough to deploy and extend the project.
 

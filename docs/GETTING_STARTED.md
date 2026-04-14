@@ -74,6 +74,8 @@ Open `http://localhost:3000`.
 5. Open the imported character and start a chat.
 6. Run `npm run ops:smoke:local` to verify the current first-class low-cost operating path before deployment.
 
+If you need to create a new `.rbx` package from scratch rather than import an existing one, use the bundled Claude-importable skill documented in [`RBX_AUTHORING_WITH_CLAUDE.md`](./RBX_AUTHORING_WITH_CLAUDE.md).
+
 ## Optional Setup
 
 ### Admin access

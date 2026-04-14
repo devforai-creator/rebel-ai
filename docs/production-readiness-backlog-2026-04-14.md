@@ -39,19 +39,18 @@ That changes the priority order from the original review:
 
 - gate restoration is no longer the main problem
 - broad UI decomposition is no longer the first blocker
-- most review-era production work is already closed, so the remaining open item is much smaller
+- the remaining review work is now down to small cleanup and documentation deltas
 
 Late `2026-04-14` status:
 
-- `P0-1`, `P0-2`, `P1-1`, `P1-2`, and `P1-3` are complete
-- the only review-scope item still open in this document is `P2-1`
+- `P0-1`, `P0-2`, `P1-1`, `P1-2`, `P1-3`, and `P2-1` are complete
+- the original `2026-04-12` production-readiness review delta tracked in this document is closed
 
 ## Remaining Review Themes
 
-- route-contract cleanup, mutation coverage, typed Supabase seams, limit centralization, and the
-  last useful `ChatInterface` split are complete
-- the remaining review-scope question is whether the last manifest-level dependency noise should be
-  removed or explicitly justified
+- route-contract cleanup, mutation coverage, typed Supabase seams, limit centralization, the last
+  useful `ChatInterface` split, and manifest cleanup are complete
+- any further work now belongs to follow-on docs rather than this review-delta backlog
 
 ## Working Rules
 
@@ -269,8 +268,10 @@ Done when:
 
 Current evidence as of `2026-04-14`:
 
-- `tsx` still appears in `package.json` and `package-lock.json`
-- the current repo search does not show a live script or command using it directly
+- the only remaining review-era manifest noise was a root `tsx` devDependency with no live script,
+  command, or documented workflow using it directly
+- optional `tsx` peer metadata may still appear under transitive tool dependencies, but that is not
+  the same as keeping an unused root dependency installed
 
 ## Not Duplicated Here
 

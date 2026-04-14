@@ -1,6 +1,6 @@
 # DB Hygiene Follow-Up Backlog
 
-Updated: 2026-04-14
+Updated: 2026-04-15
 
 This backlog is the follow-up to the current DB size and retention review.
 
@@ -25,7 +25,7 @@ Observed on 2026-04-14 from the linked remote database:
   - `chat_facts`: `19 MB`
   - `module_assets`: `12 MB`
   - `modules`: `10 MB`
-- top index findings from `index-stats`:
+- top index findings from the initial `index-stats` pass:
   - `character_assets_storage_path_key`: `17 MB`, unused
   - `idx_character_assets_storage_path`: `17 MB`, used
   - `chat_facts_embedding_idx`: `10 MB`, unused
@@ -34,11 +34,29 @@ Observed on 2026-04-14 from the linked remote database:
   - `module_assets_storage_path_key`: `1984 kB`, unused
   - `messages_chat_id_status_sequence_idx`: `1976 kB`, unused
 
+Observed again on 2026-04-15 after the first hygiene pass:
+
+- total database size: about `638 MB`
+- top tables by total size:
+  - `character_assets`: `170 MB`
+  - `messages`: `53 MB`
+  - `chat_facts`: `19 MB`
+  - `chat_generation_jobs`: `12 MB`
+  - `module_assets`: `9888 kB`
+- notable TOAST state:
+  - `chat_generation_jobs` TOAST: `11 MB`
+  - `messages` TOAST: `38 MB`
+- notable before/after deltas from completed work:
+  - `chat_generation_jobs`: `312 MB -> 12 MB`
+  - `messages`: `123 MB -> 53 MB`
+  - `character_assets` indexes: `63 MB -> 29 MB`
+
 Important interpretation:
 
 - the current Free-plan downgrade blocker is not only Storage; the database itself is already above the Free database-size ceiling
 - the biggest unexpected growth source is `chat_generation_jobs`, not `messages`
 - some large indexes look unused or duplicated, but one observation window is not enough to drop them blindly
+- the first hygiene pass removed the biggest low-value storage and duplicate-index wins without touching user-visible chat history
 
 ## Decision
 
@@ -101,6 +119,13 @@ Guardrails:
 - keep whatever the batch and triage flows need for current operation
 - do not remove recent `error` rows until triage coverage is explicitly preserved
 
+Status on 2026-04-15:
+
+- Complete
+- Landed via `9e07e61` (`Add chat job history retention janitor`)
+- Confirmed retention plus physical reclaim reduced `chat_generation_jobs` from about `312 MB` to `12 MB`
+- Current TOAST for this table is about `11 MB`, which is close to the live retained payload floor
+
 ### P0-2. Tighten `debug_info` Retention On `messages`
 
 Scope:
@@ -129,6 +154,13 @@ Guardrails:
 - do not remove `debug_info` from the newest visible assistant state for a chat
 - do not break the current alternate-model api-key resolution behavior
 
+Status on 2026-04-15:
+
+- Complete
+- Landed via `0f73813` (`Tighten assistant debug info retention`) and migration `77_retain_latest_assistant_debug_info.sql`
+- Current rule: only the newest assistant message in a chat retains server `debug_info`; older assistant rows are backfilled to `null`
+- Measured effect: assistant `debug_info` payload reduced from `62 MB` total with `40 MB` stale history to `22 MB` live-only, and `messages` fell from about `123 MB` to `53 MB`
+
 ### P0-3. Audit Large and Possibly Duplicate Indexes Before Dropping Any
 
 Scope:
@@ -156,6 +188,23 @@ Priority candidates to inspect first:
 - `messages_chat_id_status_sequence_idx`
 - `idx_character_assets_display_name`
 - `idx_character_assets_canonical_name`
+
+Status on 2026-04-15:
+
+- First-pass review complete
+- Landed via `3232f4d` (`Drop redundant asset indexes`) and migrations `78_drop_redundant_asset_storage_path_indexes.sql` plus `79_drop_unused_character_asset_name_indexes.sql`
+- Removed after code/stats review:
+  - `idx_character_assets_storage_path`
+  - `idx_module_assets_storage_path`
+  - `idx_character_assets_display_name`
+  - `idx_character_assets_canonical_name`
+- Kept:
+  - `character_assets_storage_path_key` and `module_assets_storage_path_key` because they back the `UNIQUE` constraints
+  - `idx_module_assets_display_name` because it still showed live scans
+- Deferred explicitly:
+  - `messages_chat_id_status_sequence_idx` because it is small and still close to current message projection query shapes
+- Measured effect:
+  - `character_assets` indexes dropped from about `63 MB` to `29 MB`
 
 ## P1
 
@@ -236,11 +285,9 @@ Do not use this backlog to justify:
 
 Start in this order unless new production evidence overrides it:
 
-1. P0-1 `chat_generation_jobs` retention
-2. P0-2 `debug_info` retention tightening
-3. P0-3 index audit
-4. P1-1 asset metadata review
-5. Leave `content_en` and `chat_facts_embedding_idx` deferred until their feature backlogs are active
+1. P1-1 asset metadata review
+2. Revisit the DB query backlog for measured query-shape work
+3. Leave `content_en` and `chat_facts_embedding_idx` deferred until their feature backlogs are active
 
 ## Batch Close Checklist
 
@@ -254,4 +301,4 @@ Before closing a batch:
 
 ## Next Session Start Point
 
-Start with `chat_generation_jobs` retention, not with speculative cleanup on `messages` or `content_en`.
+Start with `P1-1 asset metadata review`, not with new speculative message cleanup or `content_en` trimming.

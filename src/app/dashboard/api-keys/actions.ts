@@ -3,43 +3,15 @@
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createSecret, deleteApiKey as deleteApiKeyRpc, deleteSecret } from '@/lib/supabase/rpc'
 import { revalidatePath } from 'next/cache'
 import { getFormDataErrorMessage, safeParseFormData } from '@/lib/form-data'
 import { PROVIDERS } from '@/lib/providers/catalog'
-import type { ApiServiceTier, Database, Provider, ReasoningEffort } from '@/types/database.types'
+import type { ApiServiceTier, Provider, ReasoningEffort } from '@/types/database.types'
 import { MAX_API_KEY_LENGTH, PROVIDER_RULES } from './providerRules'
-
-type VaultRpcError = { message: string; code?: string | null; details?: string | null }
-type ApiKeyRpcClient = {
-  rpc(
-    fn: 'create_secret',
-    args: Database['public']['Functions']['create_secret']['Args'],
-  ): Promise<{
-    data: Database['public']['Functions']['create_secret']['Returns'] | null
-    error: VaultRpcError | null
-  }>
-  rpc(
-    fn: 'delete_secret',
-    args: Database['public']['Functions']['delete_secret']['Args'],
-  ): Promise<{
-    data: Database['public']['Functions']['delete_secret']['Returns'] | null
-    error: VaultRpcError | null
-  }>
-  rpc(
-    fn: 'delete_api_key',
-    args: Database['public']['Functions']['delete_api_key']['Args'],
-  ): Promise<{
-    data: Database['public']['Functions']['delete_api_key']['Returns'] | null
-    error: VaultRpcError | null
-  }>
-}
 
 const allowedServiceTiers: ApiServiceTier[] = ['standard', 'flex', 'priority', 'batch']
 const allowedReasoningEfforts: ReasoningEffort[] = ['none', 'low', 'medium', 'high']
-
-function createApiKeyRpcClient(): ApiKeyRpcClient {
-  return createAdminClient() as unknown as ApiKeyRpcClient
-}
 
 function buildVaultSecretName(userId: string, provider: Provider): string {
   const timestampSegment = Date.now().toString(36)
@@ -101,7 +73,7 @@ export async function createApiKey(
   formData: FormData,
 ): Promise<ApiKeyFormState> {
   const supabase = await createClient()
-  const adminSupabase = createApiKeyRpcClient()
+  const adminSupabase = createAdminClient()
 
   // 현재 사용자 확인
   const {
@@ -160,7 +132,7 @@ export async function createApiKey(
   // Vault에 API 키 저장 (암호화)
   const vaultSecretName = buildVaultSecretName(user.id, provider)
 
-  const { error: vaultError } = await adminSupabase.rpc('create_secret', {
+  const { error: vaultError } = await createSecret(adminSupabase, {
     secret_name: vaultSecretName,
     secret_value: apiKey,
     requester: user.id,
@@ -210,7 +182,7 @@ export async function createApiKey(
 
   if (error) {
     // 실패 시 Vault에서도 삭제
-    await adminSupabase.rpc('delete_secret', {
+    await deleteSecret(adminSupabase, {
       secret_name: vaultSecretName,
       requester: user.id,
     })
@@ -226,7 +198,7 @@ export async function createApiKey(
 
 export async function deleteApiKey(id: string) {
   const supabase = await createClient()
-  const adminSupabase = createApiKeyRpcClient()
+  const adminSupabase = createAdminClient()
 
   const {
     data: { user },
@@ -236,7 +208,7 @@ export async function deleteApiKey(id: string) {
     return { error: '로그인이 필요합니다' }
   }
 
-  const { error: deleteError } = await adminSupabase.rpc('delete_api_key', {
+  const { error: deleteError } = await deleteApiKeyRpc(adminSupabase, {
     api_key_id: id,
     requester: user.id,
   })

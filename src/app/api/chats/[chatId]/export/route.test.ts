@@ -202,6 +202,33 @@ describe('GET /api/chats/[chatId]/export', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Failed to fetch messages' })
   })
 
+  it('returns 500 when the chat payload shape is invalid', async () => {
+    const chatId = 'chat-invalid'
+    createClientMock.mockResolvedValue(
+      buildSupabase({
+        user: { id: 'user-1' },
+        chats: [
+          {
+            id: chatId,
+            user_id: 'user-1',
+            title: 'Broken Chat',
+            character_id: 'char-1',
+            characters: null,
+          },
+        ],
+      }),
+    )
+    const { GET } = await import('./route')
+
+    const response = await GET(
+      new Request('http://localhost/api/chats/chat-invalid/export'),
+      buildContext(chatId),
+    )
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toEqual({ error: 'Failed to load chat metadata' })
+  })
+
   it('exports chat data with summaries and facts', async () => {
     const chatId = 'chat-1'
     createClientMock.mockResolvedValue(

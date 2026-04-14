@@ -11,6 +11,24 @@ interface ChatWithCharacter {
   characters: { name: string }
 }
 
+function isChatWithCharacter(value: unknown): value is ChatWithCharacter {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const record = value as Record<string, unknown>
+  const characters = record.characters
+
+  return (
+    typeof record.id === 'string' &&
+    (typeof record.title === 'string' || record.title === null) &&
+    typeof record.character_id === 'string' &&
+    !!characters &&
+    typeof characters === 'object' &&
+    typeof (characters as Record<string, unknown>).name === 'string'
+  )
+}
+
 export async function GET(req: Request, { params }: { params: Promise<{ chatId: string }> }) {
   const { chatId } = await params
 
@@ -44,7 +62,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ chatId: 
     return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
   }
 
-  const typedChat = chat as unknown as ChatWithCharacter
+  if (!isChatWithCharacter(chat)) {
+    console.error('[Chat export] Invalid chat payload shape', {
+      chatId,
+      payload: chat,
+    })
+    return NextResponse.json({ error: 'Failed to load chat metadata' }, { status: 500 })
+  }
+
+  const typedChat = chat
 
   let allMessages: Array<{
     id: string

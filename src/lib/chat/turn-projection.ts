@@ -1,4 +1,5 @@
 import type { SanitizedMessage } from '@/lib/chat-summaries'
+import { readMaybeSingleQuery, readRowsQuery } from '@/lib/supabase/query'
 import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from './message-status'
 import {
   buildProjectedConversationMessages,
@@ -38,15 +39,14 @@ export async function loadGenerationTranscript({
     throw new Error('Chat turn not found')
   }
 
-  const turnsResult = await (supabase
-    .from('chat_turns')
-    .select('id, turn_index, user_message_id, active_assistant_message_id')
-    .eq('chat_id', chatId)
-    .lte('turn_index', targetTurn.data.turn_index)
-    .order('turn_index', { ascending: true }) as unknown as Promise<{
-    data: PersistedTurnRow[]
-    error: { message: string } | null
-  }>)
+  const turnsResult = await readRowsQuery<PersistedTurnRow>(
+    supabase
+      .from('chat_turns')
+      .select('id, turn_index, user_message_id, active_assistant_message_id')
+      .eq('chat_id', chatId)
+      .lte('turn_index', targetTurn.data.turn_index)
+      .order('turn_index', { ascending: true }),
+  )
 
   if (turnsResult.error) {
     throw new Error(`Failed to load chat turns: ${turnsResult.error.message}`)
@@ -133,20 +133,16 @@ export async function loadProjectedChatWindow({
   }
 
   const [turnsResult, boundaryTurnResult] = await Promise.all([
-    turnsQuery as unknown as Promise<{
-      data: PersistedTurnRow[] | null
-      error: { message: string } | null
-    }>,
+    readRowsQuery<PersistedTurnRow>(turnsQuery),
     typeof beforeTurnIndex === 'number'
-      ? (supabase
-          .from('chat_turns')
-          .select('id, turn_index, user_message_id, active_assistant_message_id')
-          .eq('chat_id', chatId)
-          .eq('turn_index', beforeTurnIndex)
-          .maybeSingle() as unknown as Promise<{
-          data: PersistedTurnRow | null
-          error: { code: string; message: string } | null
-        }>)
+      ? readMaybeSingleQuery<PersistedTurnRow>(
+          supabase
+            .from('chat_turns')
+            .select('id, turn_index, user_message_id, active_assistant_message_id')
+            .eq('chat_id', chatId)
+            .eq('turn_index', beforeTurnIndex)
+            .maybeSingle(),
+        )
       : Promise.resolve({
           data: null,
           error: null,

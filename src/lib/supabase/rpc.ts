@@ -34,6 +34,18 @@ export function getDecryptedSecret(
   return callTypedRpc(client, 'get_decrypted_secret', args)
 }
 
+export function createSecret(client: RpcClient, args: RpcFunctions['create_secret']['Args']) {
+  return callTypedRpc(client, 'create_secret', args)
+}
+
+export function deleteSecret(client: RpcClient, args: RpcFunctions['delete_secret']['Args']) {
+  return callTypedRpc(client, 'delete_secret', args)
+}
+
+export function deleteApiKey(client: RpcClient, args: RpcFunctions['delete_api_key']['Args']) {
+  return callTypedRpc(client, 'delete_api_key', args)
+}
+
 export function recordServiceHealthStatus(
   client: RpcClient,
   args: RpcFunctions['record_service_health_status']['Args'],

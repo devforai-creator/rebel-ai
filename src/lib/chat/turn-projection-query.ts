@@ -1,4 +1,5 @@
 import type { ChatTurn } from '@/types/database.types'
+import { readRowsQuery } from '@/lib/supabase/query'
 import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from './message-status'
 import type {
   PersistedTurnRow,
@@ -136,14 +137,13 @@ export async function loadTurnsForChat({
   chatId: string
   ascending: boolean
 }): Promise<PersistedTurnRow[]> {
-  const turnsResult = await (supabase
-    .from('chat_turns')
-    .select('id, turn_index, user_message_id, active_assistant_message_id')
-    .eq('chat_id', chatId)
-    .order('turn_index', { ascending }) as unknown as Promise<{
-    data: PersistedTurnRow[] | null
-    error: { message: string } | null
-  }>)
+  const turnsResult = await readRowsQuery<PersistedTurnRow>(
+    supabase
+      .from('chat_turns')
+      .select('id, turn_index, user_message_id, active_assistant_message_id')
+      .eq('chat_id', chatId)
+      .order('turn_index', { ascending }),
+  )
 
   if (turnsResult.error) {
     throw new Error(`Failed to load chat turns: ${turnsResult.error.message}`)
@@ -159,13 +159,14 @@ export async function countTurnConversationMessages({
   supabase: TurnClient
   chatId: string
 }): Promise<Array<Pick<ChatTurn, 'user_message_id' | 'active_assistant_message_id'>>> {
-  const turnsResult = await (supabase
-    .from('chat_turns')
-    .select('user_message_id, active_assistant_message_id')
-    .eq('chat_id', chatId) as unknown as Promise<{
-    data: Array<Pick<ChatTurn, 'user_message_id' | 'active_assistant_message_id'>> | null
-    error: { message: string } | null
-  }>)
+  const turnsResult = await readRowsQuery<
+    Pick<ChatTurn, 'user_message_id' | 'active_assistant_message_id'>
+  >(
+    supabase
+      .from('chat_turns')
+      .select('user_message_id, active_assistant_message_id')
+      .eq('chat_id', chatId),
+  )
 
   if (turnsResult.error) {
     throw new Error(turnsResult.error.message)

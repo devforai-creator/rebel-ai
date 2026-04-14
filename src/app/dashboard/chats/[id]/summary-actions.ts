@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { generateFactEmbedding } from '@/lib/embeddings'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
 import { resolveSummaryModelPreference } from '@/lib/chat/summary-model-preference'
+import { readApiErrorMessage } from '@/lib/http/api-contract'
 import { getDefaultModelForProvider } from '@/lib/llm/default-model'
 
 /**
@@ -459,7 +460,10 @@ async function triggerSummaryRegeneration({
   }
 
   if (!response.ok) {
-    const text = await response.text()
+    const text = await readApiErrorMessage(
+      response,
+      'An error occurred during summary regeneration.',
+    )
     console.error('[Summary Actions] Summaries endpoint returned an error', {
       status: response.status,
       body: text,

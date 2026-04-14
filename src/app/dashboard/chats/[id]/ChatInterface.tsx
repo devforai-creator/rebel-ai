@@ -5,6 +5,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { toast } from 'sonner'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import type { CharacterAsset } from '@/lib/asset-resolver'
+import { readApiErrorMessage } from '@/lib/http/api-contract'
 import { useAutosizeTextArea } from '@/hooks/useAutosizeTextArea'
 import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 
@@ -363,7 +364,7 @@ export default function ChatInterface({
         })
 
         if (!response.ok) {
-          const errorText = await response.text()
+          const errorText = await readApiErrorMessage(response, 'Failed to save variables')
           throw new Error(errorText || 'Failed to save variables')
         }
       } catch (error) {

@@ -363,7 +363,7 @@ describe('POST /api/chats/[chatId]/variables', () => {
     })
   })
 
-  it('returns 500 when the request body cannot be parsed', async () => {
+  it('returns 400 when the request body cannot be parsed', async () => {
     createClientMock.mockResolvedValue(
       buildSupabase({
         user: { id: 'user-1' },
@@ -380,11 +380,8 @@ describe('POST /api/chats/[chatId]/variables', () => {
     )
     const body = await response.json()
 
-    expect(response.status).toBe(500)
-    expect(body).toEqual({ error: 'Internal server error' })
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      '[Variables API] Unexpected error:',
-      expect.objectContaining({ message: 'bad body' }),
-    )
+    expect(response.status).toBe(400)
+    expect(body).toMatchObject({ error: 'Invalid request body' })
+    expect(consoleErrorSpy).not.toHaveBeenCalled()
   })
 })

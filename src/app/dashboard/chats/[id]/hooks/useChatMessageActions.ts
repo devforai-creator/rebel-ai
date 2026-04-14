@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { deleteMessage, editMessage } from '../message-actions'
 import type { DebugInfo, DisplayMessage } from '../utils'
 import type { UseQueuedChatReturn } from './useQueuedChat'
+import { readApiErrorMessage } from '@/lib/http/api-contract'
 
 type UseChatMessageActionsArgs = {
   combinedMessages: DisplayMessage[]
@@ -205,7 +206,7 @@ export function useChatMessageActions({
         })
 
         if (!response.ok) {
-          const errorText = await response.text()
+          const errorText = await readApiErrorMessage(response, 'Failed to translate message')
           toast.error(errorText || 'Failed to translate message')
           return
         }

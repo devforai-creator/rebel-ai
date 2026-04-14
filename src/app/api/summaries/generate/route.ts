@@ -4,6 +4,8 @@ import { hasMemoryUpdateWork, updateMemoryState } from '@/lib/chat-memory'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
 import type { ApiServiceTier, Database } from '@/types/database.types'
 import { buildLanguageModel } from '@/lib/llm/model-factory'
+import { createApiErrorResponse, parseJsonRequest } from '@/lib/http/api-contract'
+import { z } from 'zod'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300 // 5 minute timeout (summary generation can take time)
@@ -28,14 +30,16 @@ interface RegeneratePayload {
   metaRanges?: SummaryRangePayload[]
 }
 
-interface GenerateSummariesRequest {
-  chatId: string
-  userId: string
-  provider: string
-  modelName: string
-  apiKeyId: string
-  regenerate?: RegeneratePayload
-}
+const generateSummariesRequestSchema = z.object({
+  chatId: z.string().min(1),
+  userId: z.string().min(1),
+  provider: z.string().min(1),
+  modelName: z.string().min(1),
+  apiKeyId: z.string().min(1),
+  regenerate: z.unknown().optional(),
+})
+
+type GenerateSummariesRequest = z.output<typeof generateSummariesRequestSchema>
 
 type VaultRpcClient = {
   rpc: (
@@ -55,54 +59,36 @@ export async function POST(request: NextRequest) {
 
     if (!summarySecret) {
       console.error('[Summaries API] SUMMARY_GENERATION_SECRET not configured')
-      return NextResponse.json(
-        { error: 'Server misconfigured' },
-        {
-          status: 500,
-          headers: {
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
-          },
+      return createApiErrorResponse('Server misconfigured', 500, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
         },
-      )
+      })
     }
 
     if (authHeader !== `Bearer ${summarySecret}`) {
       console.error('[Summaries API] Invalid authorization')
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        {
-          status: 401,
-          headers: {
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
-          },
+      return createApiErrorResponse('Unauthorized', 401, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
         },
-      )
+      })
     }
 
     // 2. Parse request body
-    const body = (await request.json()) as GenerateSummariesRequest
-    const { chatId, userId, provider, modelName, apiKeyId, regenerate } = body
+    const parsed = await parseJsonRequest(request, generateSummariesRequestSchema)
+    if (!parsed.success) {
+      return parsed.response
+    }
+    const { chatId, userId, provider, modelName, apiKeyId, regenerate } =
+      parsed.data as GenerateSummariesRequest
 
     logSummariesApiDebug('[Summaries API] Request received', {
       chatId,
       provider,
       modelName,
-      hasRegenerate: !!regenerate,
-      regenerateCounts: regenerate
-        ? {
-            chunkRanges: regenerate.chunkRanges?.length ?? 0,
-            factRanges: regenerate.factRanges?.length ?? 0,
-            metaRanges: regenerate.metaRanges?.length ?? 0,
-          }
-        : undefined,
+      hasRegenerate: typeof regenerate === 'object' && regenerate !== null,
     })
-
-    if (!chatId || !userId || !provider || !modelName || !apiKeyId) {
-      return NextResponse.json(
-        { error: 'Missing required fields: chatId, userId, provider, modelName, apiKeyId' },
-        { status: 400 },
-      )
-    }
 
     const normalizedRegenerate = sanitizeRegeneratePayload(regenerate)
 
@@ -261,34 +247,29 @@ export async function POST(request: NextRequest) {
       })
     } catch (error) {
       console.error('[Summaries API] Summary generation failed:', error)
-      const message = error instanceof Error ? error.message : 'Unknown summary generation failure'
-
-      return NextResponse.json(
-        { error: 'Summary generation failed', details: message },
-        { status: 500 },
-      )
+      return createApiErrorResponse('Summary generation failed', 500)
     }
 
     return NextResponse.json({ success: true, message: 'Summary generation completed' })
   } catch (error) {
     console.error('[Summaries API] Unexpected error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createApiErrorResponse('Internal server error', 500)
   }
 }
 
-function sanitizeRegeneratePayload(
-  input?: RegeneratePayload | null,
-): RegeneratePayload | undefined {
-  if (!input) {
+function sanitizeRegeneratePayload(input?: unknown): RegeneratePayload | undefined {
+  if (!input || typeof input !== 'object') {
     return undefined
   }
 
-  const chunkRanges = normalizeRangeArray(input.chunkRanges)
+  const regenerate = input as RegeneratePayload
+
+  const chunkRanges = normalizeRangeArray(regenerate.chunkRanges)
   const chunkKeys = new Set(chunkRanges.map((range) => `${range.startSeq}-${range.endSeq}`))
-  const factRanges = normalizeRangeArray(input.factRanges).filter(
+  const factRanges = normalizeRangeArray(regenerate.factRanges).filter(
     (range) => !chunkKeys.has(`${range.startSeq}-${range.endSeq}`),
   )
-  const metaRanges = normalizeRangeArray(input.metaRanges)
+  const metaRanges = normalizeRangeArray(regenerate.metaRanges)
 
   if (!chunkRanges.length && !factRanges.length && !metaRanges.length) {
     return undefined

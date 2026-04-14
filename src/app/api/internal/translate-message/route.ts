@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { translateMessageForUser, type TranslationResult } from '@/lib/chat/translation-service'
+import { createApiErrorResponse, parseJsonRequest } from '@/lib/http/api-contract'
+import { z } from 'zod'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 const TRANSLATE_ROUTE_DEBUG_ENABLED = process.env.TRANSLATE_ROUTE_DEBUG === 'true'
+
+const translateMessageRequestSchema = z.object({
+  messageId: z.string().min(1),
+  userId: z.string().min(1),
+})
 
 function logTranslateRouteDebug(...args: unknown[]): void {
   if (TRANSLATE_ROUTE_DEBUG_ENABLED) {
@@ -17,22 +24,21 @@ export async function POST(req: NextRequest) {
 
   if (!adminSecret) {
     console.error('[Translate] CHAT_ADMIN_SECRET not configured')
-    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
+    return createApiErrorResponse('Server misconfigured', 500)
   }
 
   const authHeader = req.headers.get('authorization')
   if (!authHeader || authHeader !== `Bearer ${adminSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return createApiErrorResponse('Unauthorized', 401)
   }
 
-  const { messageId, userId } = (await req.json()) as {
-    messageId: string
-    userId: string
+  const parsed = await parseJsonRequest(req, translateMessageRequestSchema, {
+    invalidBodyMessage: 'Missing messageId or userId',
+  })
+  if (!parsed.success) {
+    return parsed.response
   }
-
-  if (!messageId || !userId) {
-    return NextResponse.json({ error: 'Missing messageId or userId' }, { status: 400 })
-  }
+  const { messageId, userId } = parsed.data
 
   const supabase = createAdminClient()
 
@@ -47,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     if (messageError || !message) {
       console.error('[Translate] Message not found:', messageId)
-      return NextResponse.json({ error: 'Message not found' }, { status: 404 })
+      return createApiErrorResponse('Message not found', 404)
     }
 
     // Skip if already translated
@@ -71,22 +77,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, skipped: true, reason: 'no_api_key' })
       case 'invalid_api_key':
         console.error('[Translate] API key not found or inactive:', translationResult.apiKeyId)
-        return NextResponse.json({ error: 'Invalid configuration' }, { status: 400 })
+        return createApiErrorResponse('Invalid configuration', 400)
       case 'save_error':
         console.error('[Translate] Failed to save translation:', translationResult.error)
-        return NextResponse.json({ error: 'Failed to save translation' }, { status: 500 })
+        return createApiErrorResponse('Failed to save translation', 500)
       case 'vault_error':
       case 'translation_error':
         console.error('[Translate] Error:', translationResult.error)
-        return NextResponse.json({ error: 'Translation failed' }, { status: 500 })
+        return createApiErrorResponse('Translation failed', 500)
       case 'success':
         logTranslateRouteDebug('[Translate] Successfully translated message:', messageId)
         return NextResponse.json({ success: true, content_en: translationResult.content })
       default:
-        return NextResponse.json({ error: 'Translation failed' }, { status: 500 })
+        return createApiErrorResponse('Translation failed', 500)
     }
   } catch (error) {
     console.error('[Translate] Error:', error)
-    return NextResponse.json({ error: 'Translation failed' }, { status: 500 })
+    return createApiErrorResponse('Translation failed', 500)
   }
 }

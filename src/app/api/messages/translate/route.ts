@@ -2,9 +2,15 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkUserRateLimit } from '@/lib/chat/rate-limiter'
 import { translateMessageForUser, type TranslationResult } from '@/lib/chat/translation-service'
+import { createApiErrorResponse, parseJsonRequest } from '@/lib/http/api-contract'
+import { z } from 'zod'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
+
+const translateRequestSchema = z.object({
+  messageId: z.string().min(1),
+})
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -13,24 +19,25 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return new Response('Unauthorized', { status: 401 })
+    return createApiErrorResponse('Unauthorized', 401)
   }
 
   // Rate limiting
   const { allowed, retryAfter } = await checkUserRateLimit(user.id)
   if (!allowed) {
-    return new Response('Too many requests', {
-      status: 429,
+    return createApiErrorResponse('Too many requests', 429, {
+      retryAfter,
       headers: { 'Retry-After': String(retryAfter ?? 60) },
     })
   }
 
-  const body = await request.json()
-  const { messageId } = body as { messageId: string }
-
-  if (!messageId) {
-    return new Response('Missing messageId', { status: 400 })
+  const parsed = await parseJsonRequest(request, translateRequestSchema, {
+    invalidBodyMessage: 'Missing messageId',
+  })
+  if (!parsed.success) {
+    return parsed.response
   }
+  const { messageId } = parsed.data
 
   // 1. Fetch the message to translate
   const { data: message, error: messageError } = await supabase
@@ -40,11 +47,11 @@ export async function POST(request: Request) {
     .single()
 
   if (messageError || !message) {
-    return new Response('Message not found', { status: 404 })
+    return createApiErrorResponse('Message not found', 404)
   }
 
   if (message.user_id !== user.id) {
-    return new Response('Forbidden', { status: 403 })
+    return createApiErrorResponse('Forbidden', 403)
   }
 
   let translationResult: TranslationResult
@@ -59,27 +66,27 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('[Translate] Translation failed:', error)
-    return new Response('Failed to translate message', { status: 500 })
+    return createApiErrorResponse('Failed to translate message', 500)
   }
 
   switch (translationResult.status) {
     case 'missing_profile':
-      return new Response('Configuration error', { status: 400 })
+      return createApiErrorResponse('Configuration error', 400)
     case 'missing_api_key':
-      return new Response('Translation not configured', { status: 400 })
+      return createApiErrorResponse('Translation not configured', 400)
     case 'invalid_api_key':
-      return new Response('Invalid API key configuration', { status: 400 })
+      return createApiErrorResponse('Invalid API key configuration', 400)
     case 'vault_error':
-      return new Response('Failed to decrypt API key', { status: 500 })
+      return createApiErrorResponse('Failed to decrypt API key', 500)
     case 'save_error':
       console.error('[Translate] Update failed:', translationResult.error)
-      return new Response('Failed to save translation', { status: 500 })
+      return createApiErrorResponse('Failed to save translation', 500)
     case 'translation_error':
       console.error('[Translate] Translation failed:', translationResult.error)
-      return new Response('Failed to translate message', { status: 500 })
+      return createApiErrorResponse('Failed to translate message', 500)
     case 'success':
       return Response.json({ success: true, content_en: translationResult.content })
     default:
-      return new Response('Failed to translate message', { status: 500 })
+      return createApiErrorResponse('Failed to translate message', 500)
   }
 }

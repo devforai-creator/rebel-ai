@@ -151,6 +151,14 @@ function createRequest(body: Record<string, unknown>) {
   })
 }
 
+function createRawRequest(rawBody: string) {
+  return new Request('http://localhost:3000/api/messages/translate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: rawBody,
+  })
+}
+
 describe('POST /api/messages/translate', () => {
   beforeEach(() => {
     restoreEnv()
@@ -172,7 +180,7 @@ describe('POST /api/messages/translate', () => {
 
     expect(response.status).toBe(429)
     expect(response.headers.get('Retry-After')).toBe('30')
-    expect(await response.text()).toBe('Too many requests')
+    await expect(response.json()).resolves.toMatchObject({ error: 'Too many requests' })
   })
 
   it('returns 401 for unauthenticated users', async () => {
@@ -181,7 +189,7 @@ describe('POST /api/messages/translate', () => {
     const response = await POST(createRequest({ messageId: 'msg-1' }))
 
     expect(response.status).toBe(401)
-    expect(await response.text()).toBe('Unauthorized')
+    await expect(response.json()).resolves.toMatchObject({ error: 'Unauthorized' })
   })
 
   it('returns 400 when messageId is missing', async () => {
@@ -190,7 +198,7 @@ describe('POST /api/messages/translate', () => {
     const response = await POST(createRequest({}))
 
     expect(response.status).toBe(400)
-    expect(await response.text()).toBe('Missing messageId')
+    await expect(response.json()).resolves.toMatchObject({ error: 'Missing messageId' })
   })
 
   it('returns 404 when message not found', async () => {
@@ -204,7 +212,7 @@ describe('POST /api/messages/translate', () => {
     const response = await POST(createRequest({ messageId: 'nonexistent' }))
 
     expect(response.status).toBe(404)
-    expect(await response.text()).toBe('Message not found')
+    await expect(response.json()).resolves.toMatchObject({ error: 'Message not found' })
   })
 
   it('returns 403 when message belongs to different user', async () => {
@@ -225,7 +233,7 @@ describe('POST /api/messages/translate', () => {
     const response = await POST(createRequest({ messageId: 'msg-1' }))
 
     expect(response.status).toBe(403)
-    expect(await response.text()).toBe('Forbidden')
+    await expect(response.json()).resolves.toMatchObject({ error: 'Forbidden' })
   })
 
   it('returns 400 when translation not enabled', async () => {
@@ -247,7 +255,7 @@ describe('POST /api/messages/translate', () => {
     const response = await POST(createRequest({ messageId: 'msg-1' }))
 
     expect(response.status).toBe(400)
-    expect(await response.text()).toContain('Translation not configured')
+    await expect(response.json()).resolves.toMatchObject({ error: 'Translation not configured' })
   })
 
   it('returns 400 when API key not found', async () => {
@@ -270,7 +278,18 @@ describe('POST /api/messages/translate', () => {
     const response = await POST(createRequest({ messageId: 'msg-1' }))
 
     expect(response.status).toBe(400)
-    expect(await response.text()).toContain('Invalid API key configuration')
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'Invalid API key configuration',
+    })
+  })
+
+  it('returns 400 for malformed JSON', async () => {
+    hoistedMocks.createClientMock.mockReturnValue(createMockSupabase({ user: { id: 'user-1' } }))
+
+    const response = await POST(createRawRequest('{ invalid-json'))
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({ error: 'Invalid request body' })
   })
 
   it('successfully translates message and updates DB', async () => {

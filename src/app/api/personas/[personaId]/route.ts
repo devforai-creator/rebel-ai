@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createApiErrorResponse, parseJsonRequest } from '@/lib/http/api-contract'
+import { z } from 'zod'
 
 export const runtime = 'nodejs'
 
@@ -9,6 +11,40 @@ interface RouteContext {
 
 const MAX_NAME_LENGTH = 100
 const MAX_DESCRIPTION_LENGTH = 5000
+
+const personaUpdateSchema = z
+  .object({
+    name: z
+      .string({ error: 'Name must be a string' })
+      .transform((value) => value.trim())
+      .refine((value) => value.length > 0, 'Name cannot be empty')
+      .refine(
+        (value) => value.length <= MAX_NAME_LENGTH,
+        `Name must be ${MAX_NAME_LENGTH} characters or less`,
+      )
+      .optional(),
+    description: z
+      .union([z.string(), z.null()], {
+        error: 'Description must be a string or null',
+      })
+      .transform((value) => {
+        if (value === null) {
+          return null
+        }
+
+        const trimmed = value.trim()
+        return trimmed.length > 0 ? trimmed : null
+      })
+      .refine(
+        (value) => value === null || value.length <= MAX_DESCRIPTION_LENGTH,
+        `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`,
+      )
+      .optional(),
+  })
+  .strict()
+  .refine((value) => value.name !== undefined || value.description !== undefined, {
+    message: 'Nothing to update',
+  })
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
@@ -36,15 +72,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
 
-    const body = await request.json().catch(() => null)
-    if (!body || typeof body !== 'object') {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
+    const parsed = await parseJsonRequest(request, personaUpdateSchema, {
+      invalidBodyMessage: (error) => error.issues[0]?.message ?? 'Invalid payload',
+    })
+    if (!parsed.success) {
+      return parsed.response
     }
-
-    const { name, description } = body as {
-      name?: unknown
-      description?: unknown
-    }
+    const { name, description } = parsed.data
 
     const updateData: {
       name?: string
@@ -52,47 +86,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     } = {}
 
     if (name !== undefined) {
-      if (typeof name !== 'string') {
-        return NextResponse.json({ error: 'Name must be a string' }, { status: 400 })
-      }
-
-      const trimmedName = name.trim()
-      if (trimmedName.length === 0) {
-        return NextResponse.json({ error: 'Name cannot be empty' }, { status: 400 })
-      }
-
-      if (trimmedName.length > MAX_NAME_LENGTH) {
-        return NextResponse.json(
-          { error: `Name must be ${MAX_NAME_LENGTH} characters or less` },
-          { status: 400 },
-        )
-      }
-
-      updateData.name = trimmedName
+      updateData.name = name
     }
 
     if (description !== undefined) {
-      if (description === null) {
-        updateData.description = null
-      } else if (typeof description === 'string') {
-        const trimmed = description.trim()
-
-        if (trimmed.length > MAX_DESCRIPTION_LENGTH) {
-          return NextResponse.json(
-            { error: `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less` },
-            { status: 400 },
-          )
-        }
-
-        // Empty strings are treated as null to satisfy DB constraint (>= 1 char when not null)
-        updateData.description = trimmed.length > 0 ? trimmed : null
-      } else {
-        return NextResponse.json({ error: 'Description must be a string or null' }, { status: 400 })
-      }
-    }
-
-    if (!('name' in updateData) && !('description' in updateData)) {
-      return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+      updateData.description = description
     }
 
     const { data: persona, error: updateError } = await supabase
@@ -115,6 +113,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ persona })
   } catch (error) {
     console.error('[Persona API] Unexpected error', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createApiErrorResponse('Internal server error', 500)
   }
 }

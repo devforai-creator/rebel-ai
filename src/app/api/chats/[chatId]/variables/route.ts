@@ -6,13 +6,19 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createApiErrorResponse, parseJsonRequest } from '@/lib/http/api-contract'
 import type { Json } from '@/types/database.types'
+import { z } from 'zod'
 
 export const runtime = 'nodejs'
 
 interface Context {
   params: Promise<{ chatId: string }>
 }
+
+const variablesRequestSchema = z.object({
+  variables: z.record(z.string(), z.unknown()),
+})
 
 function isJsonValue(value: unknown): value is Json {
   if (value === null) {
@@ -67,11 +73,13 @@ export async function POST(request: NextRequest, context: Context) {
     }
 
     // Parse request body
-    const { variables } = await request.json()
-
-    if (!variables || typeof variables !== 'object') {
-      return NextResponse.json({ error: 'Invalid variables format' }, { status: 400 })
+    const parsed = await parseJsonRequest(request, variablesRequestSchema, {
+      invalidBodyMessage: 'Invalid variables format',
+    })
+    if (!parsed.success) {
+      return parsed.response
     }
+    const { variables } = parsed.data
 
     const entries: Array<{ user_id: string; chat_id: string; key: string; value: Json }> = []
 
@@ -141,6 +149,6 @@ export async function POST(request: NextRequest, context: Context) {
     })
   } catch (error) {
     console.error('[Variables API] Unexpected error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createApiErrorResponse('Internal server error', 500)
   }
 }

@@ -1,0 +1,157 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createSupabaseMock } from '@/tests/mocks/supabase'
+
+const createClientMock = vi.fn()
+const revalidatePathMock = vi.fn()
+
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: () => createClientMock(),
+}))
+
+vi.mock('next/cache', () => ({
+  revalidatePath: (...args: unknown[]) => revalidatePathMock(...args),
+}))
+
+function buildSupabase({
+  user,
+  chats,
+  personas,
+}: {
+  user: { id: string } | null
+  chats?: Array<Record<string, unknown>>
+  personas?: Array<Record<string, unknown>>
+}) {
+  const supabase = createSupabaseMock({
+    tables: {
+      chats: {
+        rows: chats ?? [],
+        primaryKeys: ['id'],
+      },
+      personas: {
+        rows: personas ?? [],
+        primaryKeys: ['id'],
+      },
+    },
+  })
+
+  Object.assign(supabase, {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user }, error: null }),
+    },
+  })
+
+  return supabase
+}
+
+function getChatRows(supabase: ReturnType<typeof buildSupabase>) {
+  return supabase.state.chats as Array<Record<string, unknown>>
+}
+
+describe('chat actions', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    createClientMock.mockReset()
+    revalidatePathMock.mockReset()
+  })
+
+  it('returns login required when updating persona without a session', async () => {
+    createClientMock.mockResolvedValue(buildSupabase({ user: null }))
+    const { updateChatPersona } = await import('./actions')
+
+    await expect(updateChatPersona('chat-1', 'persona-1')).resolves.toEqual({
+      error: 'Login required',
+    })
+  })
+
+  it('updates the chat persona after ownership checks pass', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      chats: [{ id: 'chat-1', user_id: 'user-1', persona_id: null, model_config: null }],
+      personas: [{ id: 'persona-1', user_id: 'user-1', name: 'Scout' }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { updateChatPersona } = await import('./actions')
+
+    await expect(updateChatPersona('chat-1', 'persona-1')).resolves.toEqual({ success: true })
+    expect(getChatRows(supabase)).toEqual([
+      {
+        id: 'chat-1',
+        user_id: 'user-1',
+        persona_id: 'persona-1',
+        model_config: null,
+      },
+    ])
+    expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/chats/chat-1')
+  })
+
+  it('returns persona access error when the persona is not owned by the user', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      chats: [{ id: 'chat-1', user_id: 'user-1', persona_id: null }],
+      personas: [{ id: 'persona-1', user_id: 'user-2', name: 'Other' }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { updateChatPersona } = await import('./actions')
+
+    await expect(updateChatPersona('chat-1', 'persona-1')).resolves.toEqual({
+      error: 'Persona not found or access denied',
+    })
+  })
+
+  it('stores null model_config when the normalized config is not persistable', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      chats: [
+        { id: 'chat-1', user_id: 'user-1', model_config: { memory: { mode: 'summary_window' } } },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { updateChatModelConfig } = await import('./actions')
+
+    await expect(updateChatModelConfig('chat-1', {})).resolves.toEqual({ success: true })
+    expect(getChatRows(supabase)[0]).toMatchObject({
+      id: 'chat-1',
+      model_config: null,
+    })
+    expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/chats/chat-1')
+  })
+
+  it('normalizes and persists non-default model config', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      chats: [{ id: 'chat-1', user_id: 'user-1', model_config: null }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { updateChatModelConfig } = await import('./actions')
+
+    const input = {
+      alternateModels: {
+        enabled: true,
+        primaryApiKeyId: 'primary-key',
+        secondaryApiKeyId: 'secondary-key',
+      },
+      memory: {
+        mode: 'prefix_live_blocks',
+        sealEveryMessages: 12.7,
+        retainTailMessages: 5.2,
+      },
+    }
+
+    await expect(updateChatModelConfig('chat-1', input)).resolves.toEqual({ success: true })
+    expect(getChatRows(supabase)[0]).toMatchObject({
+      id: 'chat-1',
+      model_config: {
+        alternateModels: {
+          enabled: true,
+          primaryApiKeyId: 'primary-key',
+          secondaryApiKeyId: 'secondary-key',
+        },
+        memory: {
+          mode: 'prefix_live_blocks',
+          sealEveryMessages: 12,
+          retainTailMessages: 5,
+        },
+      },
+    })
+  })
+})

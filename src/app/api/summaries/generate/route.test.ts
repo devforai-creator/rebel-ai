@@ -247,7 +247,7 @@ describe('POST /api/summaries/generate', () => {
 
     expect(response.status).toBe(400)
     const body = await response.json()
-    expect(body.error).toContain('Missing required fields')
+    expect(body.error).toBe('Invalid request body')
   })
 
   it('returns 404 when chat lookup returns an error', async () => {
@@ -545,7 +545,7 @@ describe('POST /api/summaries/generate', () => {
     )
   })
 
-  it('returns 500 with error details when summary generation throws Error', async () => {
+  it('returns 500 without exposing internal error details when summary generation throws Error', async () => {
     currentSupabase = createSupabaseMock({})
     updateMemoryStateMock.mockRejectedValueOnce(new Error('summary pipeline failed'))
     const { POST } = await import('./route')
@@ -556,11 +556,11 @@ describe('POST /api/summaries/generate', () => {
     const body = await response.json()
     expect(body).toEqual({
       error: 'Summary generation failed',
-      details: 'summary pipeline failed',
     })
+    expect(body).not.toHaveProperty('details')
   })
 
-  it('returns 500 with unknown details when summary generation throws non-Error', async () => {
+  it('returns 500 without details when summary generation throws non-Error', async () => {
     currentSupabase = createSupabaseMock({})
     updateMemoryStateMock.mockRejectedValueOnce('boom')
     const { POST } = await import('./route')
@@ -571,17 +571,17 @@ describe('POST /api/summaries/generate', () => {
     const body = await response.json()
     expect(body).toEqual({
       error: 'Summary generation failed',
-      details: 'Unknown summary generation failure',
     })
+    expect(body).not.toHaveProperty('details')
   })
 
-  it('returns 500 for malformed JSON body', async () => {
+  it('returns 400 for malformed JSON body', async () => {
     const { POST } = await import('./route')
 
     const response = await POST(buildRawRequest('{ invalid-json', 'Bearer summary-secret'))
 
-    expect(response.status).toBe(500)
+    expect(response.status).toBe(400)
     const body = await response.json()
-    expect(body.error).toBe('Internal server error')
+    expect(body.error).toBe('Invalid request body')
   })
 })

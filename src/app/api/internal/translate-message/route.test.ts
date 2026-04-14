@@ -75,6 +75,17 @@ function buildRequest(body: unknown, auth?: string) {
   })
 }
 
+function buildRawRequest(rawBody: string, auth?: string) {
+  return new NextRequest('http://localhost/api/internal/translate-message', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(auth ? { authorization: auth } : {}),
+    },
+    body: rawBody,
+  })
+}
+
 describe('POST /api/internal/translate-message', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -136,6 +147,17 @@ describe('POST /api/internal/translate-message', () => {
     const response = await POST(buildRequest({ messageId: 'msg-1' }, 'Bearer admin-secret'))
 
     expect(response.status).toBe(400)
+  })
+
+  it('returns 400 for malformed JSON', async () => {
+    process.env.CHAT_ADMIN_SECRET = 'admin-secret'
+    const { POST } = await import('./route')
+
+    const response = await POST(buildRawRequest('{ invalid-json', 'Bearer admin-secret'))
+
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toBe('Invalid request body')
   })
 
   it('returns 404 when message is not found', async () => {

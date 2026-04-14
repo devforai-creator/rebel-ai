@@ -56,3 +56,4 @@ scripts/decoded-*.json
 
 # local audit artifacts
 /audit-report.html
+/docs/reviews/*.html

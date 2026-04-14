@@ -73,6 +73,15 @@ class BaseQuery<T extends Record<string, unknown>> {
     return this
   }
 
+  not(field: keyof T, operator: string, value: unknown) {
+    if (operator === 'is' && value === null) {
+      this.filters.push((row) => row[field] !== null)
+      return this
+    }
+    this.filters.push((row) => row[field] !== value)
+    return this
+  }
+
   gt(field: keyof T, value: number) {
     this.filters.push((row) => Number(row[field]) > value)
     return this
@@ -274,7 +283,10 @@ class MessagesCountQuery {
 class ChatTurnsTable {
   constructor(private readonly mock: SupabaseMock) {}
 
-  select(columns: string) {
+  select(columns: string, options?: { count?: string; head?: boolean }) {
+    if (options?.head) {
+      return new ChatTurnsCountQuery(this.mock)
+    }
     return new ChatTurnsQuery(this.mock, columns)
   }
 }
@@ -282,6 +294,27 @@ class ChatTurnsTable {
 class ChatTurnsQuery extends BaseQuery<ChatTurnRow> {
   constructor(mock: SupabaseMock, columns: string) {
     super(() => mock.chatTurns, mapColumns<ChatTurnRow>(columns))
+  }
+}
+
+class ChatTurnsCountQuery extends BaseQuery<ChatTurnRow> {
+  constructor(mock: SupabaseMock) {
+    super(
+      () => mock.chatTurns,
+      (row) => row,
+    )
+  }
+
+  then<TResult1 = { count: number; error: null }, TResult2 = never>(
+    onfulfilled?:
+      | ((value: { count: number; error: null }) => TResult1 | PromiseLike<TResult1>)
+      | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ) {
+    return Promise.resolve({
+      count: this.materializeRows().length,
+      error: null,
+    }).then(onfulfilled, onrejected)
   }
 }
 

@@ -22,6 +22,10 @@ type QueryBuilder = {
   single: ReturnType<typeof vi.fn>
 }
 
+type RpcCapableSupabaseClient = SupabaseClient & {
+  rpc: ReturnType<typeof vi.fn>
+}
+
 function createQueryBuilder(): QueryBuilder {
   const builder: Partial<QueryBuilder> = {}
 
@@ -41,7 +45,7 @@ function createQueryBuilder(): QueryBuilder {
   return builder as QueryBuilder
 }
 
-function createSupabaseClientMock(builders: QueryBuilder[]) {
+function createSupabaseClientMock(builders: QueryBuilder[], rpcResults?: Record<string, unknown>) {
   const queue = [...builders]
   const fromMock = vi.fn(() => {
     const next = queue.shift()
@@ -50,10 +54,17 @@ function createSupabaseClientMock(builders: QueryBuilder[]) {
     }
     return next
   })
+  const rpcMock = vi.fn(async (name: string) => {
+    if (!rpcResults || !(name in rpcResults)) {
+      throw new Error(`No mock RPC result available for rpc(${name})`)
+    }
+    return { data: rpcResults[name], error: null }
+  })
 
   return {
-    client: { from: fromMock } as unknown as SupabaseClient,
+    client: { from: fromMock, rpc: rpcMock } as unknown as RpcCapableSupabaseClient,
     fromMock,
+    rpcMock,
   }
 }
 
@@ -79,76 +90,48 @@ afterEach(() => {
 })
 
 describe('claimPendingJob', () => {
-  it('claims the oldest pending job and transitions it to processing', async () => {
-    const selectBuilder = createQueryBuilder()
-    const updateBuilder = createQueryBuilder()
+  it('claims the oldest pending job through the atomic RPC', async () => {
+    const claimedJob = { id: 'job-1', payload: { foo: 'bar' } }
 
-    const pendingJob = { id: 'job-1', payload: { foo: 'bar' }, status: 'pending' }
-    const claimedJob = { id: 'job-1', payload: pendingJob.payload }
-
-    selectBuilder.maybeSingle.mockResolvedValue({ data: pendingJob, error: null })
-    updateBuilder.single.mockResolvedValue({ data: claimedJob, error: null })
-
-    const { client } = createSupabaseClientMock([selectBuilder, updateBuilder])
+    const { client, rpcMock, fromMock } = createSupabaseClientMock([], {
+      claim_pending_chat_job: [claimedJob],
+    })
 
     const job = await claimPendingJob(client)
 
     expect(job).toEqual(claimedJob)
-    expect(selectBuilder.select).toHaveBeenCalledWith('id, payload, status')
-    expect(selectBuilder.eq).toHaveBeenCalledWith('status', 'pending')
-    expect(selectBuilder.order).toHaveBeenCalledWith('created_at', { ascending: true })
-    expect(updateBuilder.update).toHaveBeenCalledWith({
-      status: 'processing',
-      lifecycle_stage: 'runner_claimed',
-      failure_stage: null,
-      error: null,
-    })
-    expect(updateBuilder.eq).toHaveBeenNthCalledWith(1, 'id', 'job-1')
-    expect(updateBuilder.eq).toHaveBeenNthCalledWith(2, 'status', 'pending')
+    expect(rpcMock).toHaveBeenCalledWith('claim_pending_chat_job')
+    expect(fromMock).not.toHaveBeenCalled()
     expect(warnSpy).not.toHaveBeenCalled()
   })
 
-  it('returns null when lookup fails', async () => {
-    const selectBuilder = createQueryBuilder()
-    selectBuilder.maybeSingle.mockResolvedValue({
+  it('returns null when the atomic RPC fails', async () => {
+    const rpcMock = vi.fn().mockResolvedValue({
       data: null,
       error: new Error('db unavailable'),
     })
-
-    const { client, fromMock } = createSupabaseClientMock([selectBuilder])
+    const client = { from: vi.fn(), rpc: rpcMock } as unknown as RpcCapableSupabaseClient
 
     const job = await claimPendingJob(client)
 
     expect(job).toBeNull()
-    expect(fromMock).toHaveBeenCalledTimes(1)
+    expect(rpcMock).toHaveBeenCalledWith('claim_pending_chat_job')
     expect(errorSpy).toHaveBeenCalledWith(
-      '[Chat Job Queue] Failed to fetch pending job',
+      '[Chat Job Queue] Failed to claim pending job',
       expect.any(Error),
     )
   })
 
-  it('returns null when row claim fails', async () => {
-    const selectBuilder = createQueryBuilder()
-    const updateBuilder = createQueryBuilder()
-
-    selectBuilder.maybeSingle.mockResolvedValue({
-      data: { id: 'job-2', payload: { foo: 'bar' }, status: 'pending' },
-      error: null,
+  it('returns null when the atomic RPC claims no row', async () => {
+    const { client, rpcMock } = createSupabaseClientMock([], {
+      claim_pending_chat_job: [],
     })
-    updateBuilder.single.mockResolvedValue({
-      data: null,
-      error: new Error('lost race'),
-    })
-
-    const { client } = createSupabaseClientMock([selectBuilder, updateBuilder])
 
     const job = await claimPendingJob(client)
 
     expect(job).toBeNull()
-    expect(warnSpy).toHaveBeenCalledWith('[Chat Job Queue] Failed to claim pending job', {
-      jobId: 'job-2',
-      error: 'lost race',
-    })
+    expect(rpcMock).toHaveBeenCalledWith('claim_pending_chat_job')
+    expect(warnSpy).not.toHaveBeenCalled()
   })
 })
 

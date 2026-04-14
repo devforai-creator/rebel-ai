@@ -227,6 +227,20 @@ Done when:
 - orphaned rows and stale imports have a documented cleanup path if they exist
 - future storage-provider changes do not assume the metadata footprint will solve itself
 
+Status on 2026-04-15:
+
+- Measured, but intentionally deferred
+- Current `character_assets` size is about `170 MB` with about `67 MB` heap, `29 MB` indexes, and about `74 MB` TOAST
+- The large TOAST rows are dominated by imported `metadata`, especially long `Comment` payloads from image-generation provenance
+- Current runtime behavior does not use that raw metadata broadly; the chat asset payload normalizes asset metadata down to `aliases`, while RBX-driven presentation contracts such as `ui_card` and `image_display` live under character-level `character.metadata`
+
+Current decision:
+
+- Do not trim `character_assets.metadata` in the immediate hygiene pass
+- Treat this as a product-decision boundary, not as obvious low-value residue
+- Revisit only after deciding whether asset-level metadata should power future image-display or expression features for RBX characters
+- If the product answer is "no", the likely next move is a compact metadata contract that preserves aliases and any explicitly needed fields while dropping heavyweight provenance blobs such as long `Comment` payloads
+
 ### P1-2. Defer `content_en` Cleanup Until The Bilingual Feature Contract Is Clear
 
 Scope:

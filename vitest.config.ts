@@ -13,8 +13,9 @@ export default defineConfig({
         ...coverageConfigDefaults.exclude,
         'src/tests/mocks/**',
         'tests/__mocks__/**',
-        // Keep the production gate focused on runtime-bearing logic while the
-        // chat-detail client shells are still being decomposed in P2.
+        // Keep the chat-detail client shells and hooks out of the global denominator until
+        // P2 finishes decomposing that page. Their high-risk boundaries are verified
+        // explicitly through the dedicated runtime-boundary test suite in CI.
         'src/app/dashboard/chats/[id]/hooks/**',
         'src/app/dashboard/chats/[id]/components/**',
         'src/app/dashboard/chats/[id]/*.tsx',

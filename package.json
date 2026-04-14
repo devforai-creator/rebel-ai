@@ -21,6 +21,7 @@
     "db:schema:check": "bash scripts/build-hosted-schema.sh --check",
     "db:types": "supabase db push --local --yes && supabase gen types --local --schema public > src/types/database.generated.ts",
     "test": "vitest run",
+    "test:runtime-boundaries": "vitest run src/lib/supabase/admin.test.ts src/lib/supabase/server.test.ts src/lib/chat/turns.test.ts src/app/api/internal/chat-job-runner/model-factory.test.ts 'src/app/dashboard/chats/[id]/hooks/index.test.ts' 'src/app/dashboard/chats/[id]/hooks/useQueuedChat.test.ts'",
     "test:rls": "bash -c 'set -euo pipefail; STATUS=$(supabase status --output json); SUPABASE_URL=$(echo \"$STATUS\" | jq -r .API_URL); SUPABASE_SERVICE_ROLE_KEY=$(echo \"$STATUS\" | jq -r .SERVICE_ROLE_KEY); SUPABASE_ANON_KEY=$(echo \"$STATUS\" | jq -r .ANON_KEY); [[ -z \"$SUPABASE_URL\" || \"$SUPABASE_URL\" == \"null\" ]] && echo \"Error: SUPABASE_URL is null - is supabase running?\" && exit 1; [[ -z \"$SUPABASE_SERVICE_ROLE_KEY\" || \"$SUPABASE_SERVICE_ROLE_KEY\" == \"null\" ]] && echo \"Error: SERVICE_ROLE_KEY is null\" && exit 1; [[ -z \"$SUPABASE_ANON_KEY\" || \"$SUPABASE_ANON_KEY\" == \"null\" ]] && echo \"Error: ANON_KEY is null\" && exit 1; SUPABASE_URL=\"$SUPABASE_URL\" SUPABASE_SERVICE_ROLE_KEY=\"$SUPABASE_SERVICE_ROLE_KEY\" SUPABASE_ANON_KEY=\"$SUPABASE_ANON_KEY\" RLS_TESTS_ENABLED=true vitest run src/lib/rls/'",
     "test:vault": "bash -lc 'set -a && source .env.local && set +a && vitest run tests/security/get_decrypted_secret.test.ts'",
     "chat:jobs": "node scripts/run-chat-jobs.js",

@@ -232,6 +232,10 @@ Completion evidence:
 
 ### P1-3. Add Direct Verification to Excluded and 0% Runtime Boundaries
 
+Status:
+
+- Done on `2026-04-14`
+
 Scope:
 
 - `vitest.config.ts`
@@ -260,6 +264,27 @@ Current evidence as of `2026-04-14`:
   `src/app/dashboard/chats/[id]/components/**`
 - the gate report still lists `src/lib/supabase/admin.ts`, `src/lib/supabase/server.ts`,
   `src/lib/chat/turns.ts`, and `src/app/api/internal/chat-job-runner/model-factory.ts` at `0%`
+
+Completion evidence:
+
+- `src/lib/supabase/admin.test.ts` and `src/lib/supabase/server.test.ts` now directly verify the
+  service-role and SSR Supabase client factories, including missing-env failures and cookie/fetch
+  boundary behavior
+- `src/app/dashboard/chats/[id]/hooks/useQueuedChat.test.ts` adds direct stateful coverage for the
+  previously unverified queued-chat hook, and `src/app/dashboard/chats/[id]/hooks/index.test.ts`
+  verifies the hook barrel exports that feed the chat shell
+- `package.json` now exposes `npm run test:runtime-boundaries`, and `.github/workflows/test.yml`
+  runs that suite in CI before the global coverage pass so excluded chat hooks and re-export-only
+  runtime boundaries stop being invisible risk
+- `vitest.config.ts` keeps the chat-detail shells excluded from the global denominator, but now
+  documents that those paths must stay backed by the dedicated runtime-boundary suite instead of
+  being silently unverified
+- `src/lib/chat/turns.test.ts` and
+  `src/app/api/internal/chat-job-runner/model-factory.test.ts` remain part of the boundary suite;
+  the wrapper files still appear as `0%` under V8 coverage because they are re-export-only seams,
+  so the dedicated suite is the mechanical regression guard for those paths
+- `npm run lint`, `npm run typecheck`, `npm run test:runtime-boundaries`, and
+  `npm run test -- --coverage` all passed after the verification changes
 
 ## P2
 

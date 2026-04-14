@@ -6,6 +6,7 @@ export async function buildSummaryWindowMemoryPlan({
   supabase,
   chatId,
   sanitizedMessages,
+  totalConversationMessages,
   baseSystemPrompt,
   extraDynamicContext,
 }: BuildContextOptions): Promise<MemoryPlan> {
@@ -13,6 +14,7 @@ export async function buildSummaryWindowMemoryPlan({
     supabase,
     chatId,
     sanitizedMessages,
+    totalConversationMessages,
     baseSystemPrompt,
     extraDynamicContext,
   })

@@ -15,6 +15,8 @@ export type MemoryPromptBlock = {
   stability: 'static' | 'sealed' | 'live'
 }
 
+export type MemoryTranscriptCoverage = 'full' | 'window'
+
 export type MemoryPlan = {
   mode: 'summary_window' | 'prefix_live_blocks'
   promptBlocks: MemoryPromptBlock[]
@@ -27,6 +29,8 @@ export type MemoryPlan = {
 
 export type BuildMemoryPlanOptions = BuildContextOptions & {
   modelConfig?: ChatModelConfig | null
+  transcriptCoverage?: MemoryTranscriptCoverage
+  transcriptStartOrdinal?: number
 }
 
 export type UpdateMemoryStateOptions = UpdateSummariesOptions & {

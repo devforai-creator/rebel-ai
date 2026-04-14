@@ -31,6 +31,7 @@ describe('buildSummaryWindowMemoryPlan', () => {
       supabase: {} as never,
       chatId: 'chat-1',
       sanitizedMessages: [{ role: 'assistant', content: 'hello there', messageId: 'msg-2' }],
+      totalConversationMessages: 42,
       baseSystemPrompt: ' BASE ',
       extraDynamicContext: ['Lore'],
     })
@@ -39,6 +40,7 @@ describe('buildSummaryWindowMemoryPlan', () => {
       expect.objectContaining({
         chatId: 'chat-1',
         extraDynamicContext: ['Lore'],
+        totalConversationMessages: 42,
       }),
     )
     expect(result.promptBlocks).toEqual([

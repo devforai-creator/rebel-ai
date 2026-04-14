@@ -17,6 +17,7 @@ import {
   loadProjectedChatMessages,
   loadProjectedConversationMessages,
   loadProjectedConversationRange,
+  loadProjectedConversationTail,
   loadProjectedChatWindow,
 } from './turns'
 
@@ -844,6 +845,31 @@ describe('projected conversation helpers', () => {
     })
 
     expect(result.map((message) => message.id)).toEqual(['user-1', 'assistant-1b'])
+  })
+
+  it('loads the latest projected conversation tail without scanning the full transcript', async () => {
+    const supabase = createTurnProjectionSupabase()
+
+    const result = await loadProjectedConversationTail({
+      supabase,
+      chatId,
+      limitMessages: 3,
+    })
+
+    expect(result.map((message) => message.id)).toEqual(['user-2', 'assistant-2', 'user-3'])
+  })
+
+  it('excludes the regenerated assistant from the projected conversation tail', async () => {
+    const supabase = createTurnProjectionSupabase()
+
+    const result = await loadProjectedConversationTail({
+      supabase,
+      chatId,
+      limitMessages: 2,
+      excludeAssistantForTurnId: 'turn-2',
+    })
+
+    expect(result.map((message) => message.id)).toEqual(['user-2', 'user-3'])
   })
 
   it('counts conversation and visible system messages separately', async () => {

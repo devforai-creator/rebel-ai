@@ -22,9 +22,12 @@ export async function buildMemoryPlan({
   supabase,
   chatId,
   sanitizedMessages,
+  totalConversationMessages,
   baseSystemPrompt,
   extraDynamicContext,
   modelConfig,
+  transcriptCoverage,
+  transcriptStartOrdinal,
 }: BuildMemoryPlanOptions): Promise<MemoryPlan> {
   const memory = resolveChatMemoryConfig(modelConfig)
 
@@ -33,6 +36,7 @@ export async function buildMemoryPlan({
       supabase,
       chatId,
       sanitizedMessages,
+      totalConversationMessages,
       baseSystemPrompt,
       extraDynamicContext,
     })
@@ -44,6 +48,8 @@ export async function buildMemoryPlan({
     baseSystemPrompt,
     extraDynamicContext,
     sanitizedMessages,
+    transcriptCoverage,
+    transcriptStartOrdinal,
   })
 }
 

@@ -83,14 +83,23 @@ export async function buildPrefixLiveBlocksMemoryPlan({
   baseSystemPrompt,
   extraDynamicContext,
   sanitizedMessages,
+  transcriptCoverage = 'full',
+  transcriptStartOrdinal = 1,
 }: Pick<
   BuildMemoryPlanOptions,
-  'supabase' | 'chatId' | 'baseSystemPrompt' | 'extraDynamicContext' | 'sanitizedMessages'
+  | 'supabase'
+  | 'chatId'
+  | 'baseSystemPrompt'
+  | 'extraDynamicContext'
+  | 'sanitizedMessages'
+  | 'transcriptCoverage'
+  | 'transcriptStartOrdinal'
 >): Promise<MemoryPlan> {
   const lastChunkEnd = (await getLastSummaryEnd(supabase, chatId, SUMMARY_LEVEL_CHUNK)) ?? 0
   const staticSystemPrompt = baseSystemPrompt.trim()
   const promptBlocks: MemoryPromptBlock[] = []
   const dynamicBlocks: string[] = []
+  const normalizedTranscriptStartOrdinal = Math.max(1, transcriptStartOrdinal)
 
   if (staticSystemPrompt) {
     promptBlocks.push({
@@ -169,13 +178,20 @@ export async function buildPrefixLiveBlocksMemoryPlan({
     })
   }
 
-  let fallbackMessages = sanitizedMessages.slice(lastChunkEnd).map((message) => ({
+  const liveStartOrdinal = Math.max(lastChunkEnd + 1, normalizedTranscriptStartOrdinal)
+  const liveStartOffset = Math.max(0, liveStartOrdinal - normalizedTranscriptStartOrdinal)
+  let fallbackMessages = sanitizedMessages.slice(liveStartOffset).map((message) => ({
     role: message.role,
     content: message.content,
     ...(typeof message.messageId === 'string' ? { messageId: message.messageId } : {}),
   }))
 
-  if (fallbackMessages.length === 0 && sanitizedMessages.length === 0) {
+  if (
+    fallbackMessages.length === 0 &&
+    sanitizedMessages.length === 0 &&
+    transcriptCoverage === 'full' &&
+    normalizedTranscriptStartOrdinal === 1
+  ) {
     try {
       const conversationMessages = await loadProjectedConversationMessages({
         supabase,

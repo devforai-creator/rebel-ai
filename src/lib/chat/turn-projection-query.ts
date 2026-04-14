@@ -131,18 +131,24 @@ export async function loadTurnsForChat({
   supabase,
   chatId,
   ascending,
+  limit,
 }: {
   supabase: TurnClient
   chatId: string
   ascending: boolean
+  limit?: number
 }): Promise<PersistedTurnRow[]> {
-  const turnsResult = await readRowsQuery<PersistedTurnRow>(
-    supabase
-      .from('chat_turns')
-      .select('id, turn_index, user_message_id, active_assistant_message_id')
-      .eq('chat_id', chatId)
-      .order('turn_index', { ascending }),
-  )
+  let turnsQuery = supabase
+    .from('chat_turns')
+    .select('id, turn_index, user_message_id, active_assistant_message_id')
+    .eq('chat_id', chatId)
+    .order('turn_index', { ascending })
+
+  if (typeof limit === 'number') {
+    turnsQuery = turnsQuery.limit(limit)
+  }
+
+  const turnsResult = await readRowsQuery<PersistedTurnRow>(turnsQuery)
 
   if (turnsResult.error) {
     throw new Error(`Failed to load chat turns: ${turnsResult.error.message}`)

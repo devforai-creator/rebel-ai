@@ -146,11 +146,12 @@ export async function buildContext({
   supabase,
   chatId,
   sanitizedMessages,
+  totalConversationMessages,
   baseSystemPrompt,
   extraDynamicContext,
 }: BuildContextOptions): Promise<BuildContextResult> {
   const trimmedMessages = sanitizedMessages.slice(-CONTEXT_WINDOW)
-  const totalIncludingCurrent = sanitizedMessages.length
+  const totalIncludingCurrent = totalConversationMessages ?? sanitizedMessages.length
 
   // Initialize RAG info (disabled by default)
   const ragInfo: RagResultInfo = {

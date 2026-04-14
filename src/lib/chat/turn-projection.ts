@@ -285,6 +285,49 @@ export async function loadProjectedConversationMessages({
   })
 }
 
+export async function loadProjectedConversationTail({
+  supabase,
+  chatId,
+  limitMessages,
+  excludeAssistantForTurnId = null,
+}: {
+  supabase: TurnClient
+  chatId: string
+  limitMessages: number
+  excludeAssistantForTurnId?: string | null
+}): Promise<ProjectedConversationMessage[]> {
+  if (limitMessages < 1) {
+    return []
+  }
+
+  const turns = await loadTurnsForChat({
+    supabase,
+    chatId,
+    ascending: false,
+    limit: limitMessages,
+  })
+
+  const orderedTurns = turns.slice().sort((a, b) => a.turn_index - b.turn_index)
+  const messageMap = await loadProjectedMessagesByIds({
+    supabase,
+    messageIds: orderedTurns.flatMap((turn) => getTurnMessageIds(turn)),
+  })
+
+  const projectedMessages = buildProjectedConversationMessages({
+    turns: orderedTurns.map((turn) =>
+      turn.id === excludeAssistantForTurnId
+        ? {
+            ...turn,
+            active_assistant_message_id: null,
+          }
+        : turn,
+    ),
+    messageMap,
+  })
+
+  return projectedMessages.slice(-limitMessages)
+}
+
 export async function loadProjectedConversationRange({
   supabase,
   chatId,

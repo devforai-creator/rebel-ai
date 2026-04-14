@@ -175,6 +175,25 @@ export function renderActiveLorebookBlock({
   return `=== Active Lorebook Entries ===\n${sections.join('\n\n')}`
 }
 
+export function lorebookNeedsChatHistory({
+  entries,
+  overrideMap,
+}: {
+  entries: LorebookRuntimeEntry[]
+  overrideMap: Map<string, boolean>
+}): boolean {
+  return entries
+    .filter((entry) => getLorebookOverrideMode(entry, overrideMap) !== 'disabled')
+    .map((entry) =>
+      getLorebookOverrideMode(entry, overrideMap) === 'pinned'
+        ? { ...entry, alwaysActive: true }
+        : entry,
+    )
+    .some(
+      (entry) => !entry.alwaysActive && typeof entry.key === 'string' && entry.key.trim() !== '',
+    )
+}
+
 export async function buildLorebookDynamicContext({
   supabase,
   chatId,

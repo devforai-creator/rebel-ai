@@ -6,9 +6,20 @@ import { CHAT_RUNNER_LIMITS } from '@/lib/chat/runtime-limits'
 import { getGlobalSystemPrompt } from '@/lib/chat/global-system-prompt'
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { applyBilingualContext, isBilingualEnabled } from '@/lib/chat/bilingual-context'
-import { normalizeChatModelConfig } from '@/lib/chat/model-config'
-import { buildLorebookDynamicContext } from '@/lib/lorebook/runtime'
-import { loadGenerationTranscript } from '@/lib/chat/turns'
+import { normalizeChatModelConfig, resolveChatMemoryConfig } from '@/lib/chat/model-config'
+import { getLastSummaryEnd } from '@/lib/chat-summaries/db-helpers'
+import { CONTEXT_WINDOW, SUMMARY_LEVEL_CHUNK } from '@/lib/chat-summaries/config'
+import {
+  loadChatLorebookState,
+  lorebookNeedsChatHistory,
+  renderActiveLorebookBlock,
+} from '@/lib/lorebook/runtime'
+import {
+  countProjectedConversationMessages,
+  loadGenerationTranscript,
+  loadProjectedConversationTail,
+} from '@/lib/chat/turns'
+import type { ProjectedConversationMessage } from '@/lib/chat/turns'
 import { buildSystemPrompt } from './system-prompt-builder'
 import { decryptSecret } from './vault'
 
@@ -24,6 +35,8 @@ type RunnerCharacterRow = Pick<Character, 'id' | 'name' | 'system_prompt'> & {
   post_history_instructions: string | null
 }
 type MemoryPlanResult = Awaited<ReturnType<typeof buildMemoryPlan>>
+type GenerationTranscript = ChatGenerationJobPayload['sanitizedMessages']
+type TranscriptSource = 'payload' | 'payload_tail' | 'db_tail' | 'db_full'
 
 export type LoadedChatJobExecutionContext = {
   apiKeyData: RunnerApiKeyRow
@@ -42,6 +55,91 @@ export type LoadedChatJobExecutionContext = {
   totalInputTokens: number
   staticPromptTokens: number
   debugMetrics: Record<string, DebugMetricValue>
+}
+
+function buildPayloadGenerationTranscript(payload: ChatGenerationJobPayload): {
+  transcript: GenerationTranscript
+  excludedAssistant: boolean
+} {
+  if (!payload.isRegeneration || !payload.regenerateAssistantMessageId) {
+    return {
+      transcript: payload.sanitizedMessages,
+      excludedAssistant: false,
+    }
+  }
+
+  const transcript = payload.sanitizedMessages.filter(
+    (message) => message.messageId !== payload.regenerateAssistantMessageId,
+  )
+
+  return {
+    transcript,
+    excludedAssistant: transcript.length !== payload.sanitizedMessages.length,
+  }
+}
+
+function mapProjectedConversationTail(
+  messages: ProjectedConversationMessage[],
+): GenerationTranscript {
+  return messages.map((message) => ({
+    role: message.role,
+    content: message.content,
+    messageId: message.id,
+  }))
+}
+
+function getTranscriptStartOrdinal(totalMessages: number, transcriptLength: number): number {
+  return transcriptLength > 0
+    ? Math.max(1, totalMessages - transcriptLength + 1)
+    : totalMessages + 1
+}
+
+function takeTranscriptTail({
+  transcript,
+  totalMessages,
+  requiredMessageCount,
+}: {
+  transcript: GenerationTranscript
+  totalMessages: number
+  requiredMessageCount: number
+}): { transcript: GenerationTranscript; transcriptStartOrdinal: number } {
+  const trimmedTranscript =
+    requiredMessageCount > 0
+      ? transcript.slice(-requiredMessageCount)
+      : ([] as GenerationTranscript)
+
+  return {
+    transcript: trimmedTranscript,
+    transcriptStartOrdinal: getTranscriptStartOrdinal(totalMessages, trimmedTranscript.length),
+  }
+}
+
+async function loadConversationTranscriptTail({
+  supabase,
+  chatId,
+  limitMessages,
+  excludeAssistantForTurnId,
+  totalMessages,
+}: {
+  supabase: AdminSupabaseClient
+  chatId: string
+  limitMessages: number
+  excludeAssistantForTurnId: string | null
+  totalMessages: number
+}): Promise<{ transcript: GenerationTranscript; transcriptStartOrdinal: number }> {
+  const tailMessages = await loadProjectedConversationTail({
+    supabase,
+    chatId,
+    limitMessages,
+    excludeAssistantForTurnId,
+  })
+
+  const transcript = mapProjectedConversationTail(tailMessages)
+
+  return {
+    transcript,
+    transcriptStartOrdinal: getTranscriptStartOrdinal(totalMessages, transcript.length),
+  }
 }
 
 export async function loadChatJobExecutionContext({
@@ -152,30 +250,186 @@ export async function loadChatJobExecutionContext({
 
   const defaultSystemPrompt = getGlobalSystemPrompt()
   const normalizedModelConfig = normalizeChatModelConfig(chat.model_config)
+  const memoryConfig = resolveChatMemoryConfig(normalizedModelConfig)
+  const { transcript: payloadTranscript, excludedAssistant: payloadExcludedAssistant } =
+    buildPayloadGenerationTranscript(payload)
+
   let stepStart = performance.now()
-  const generationTranscript = payload.turnId
-    ? await loadGenerationTranscript({
+  const excludeAssistantForTurnId = payload.isRegeneration ? payload.turnId : null
+  const excludeAssistantFromTranscript = excludeAssistantForTurnId !== null
+  const payloadTranscriptCanRepresentGeneration =
+    !excludeAssistantFromTranscript || payloadExcludedAssistant
+  let generationTranscript = payloadTranscript
+  let transcriptSource: TranscriptSource = 'payload'
+  let transcriptStartOrdinal = 1
+  let effectiveConversationMessageCount = payloadTranscript.length
+  let lorebookHistory = payloadTranscript
+  let lorebookEntries: Awaited<ReturnType<typeof loadChatLorebookState>>['entries'] = []
+  let lorebookOverrideMap = new Map<string, boolean>()
+  let lastChunkEnd: number | null = null
+
+  if (payload.turnId) {
+    const totalConversationMessageCount = await countProjectedConversationMessages({
+      supabase,
+      chatId,
+    })
+
+    effectiveConversationMessageCount = Math.max(
+      0,
+      totalConversationMessageCount - (excludeAssistantFromTranscript ? 1 : 0),
+    )
+
+    const lorebookState = await loadChatLorebookState({
+      supabase,
+      chatId,
+      characterId: character.id,
+    })
+    lorebookEntries = lorebookState.entries
+    lorebookOverrideMap = lorebookState.overrideMap
+    const lorebookRequiresHistory = lorebookNeedsChatHistory(lorebookState)
+    const payloadCoversFullConversation =
+      payloadTranscriptCanRepresentGeneration &&
+      payloadTranscript.length >= effectiveConversationMessageCount
+
+    debugMetrics['lorebook_module_count'] = new Set(
+      lorebookState.entries.map((entry) => entry.moduleId),
+    ).size
+    debugMetrics['lorebook_entry_count'] = lorebookState.entries.length
+    debugMetrics['lorebook_override_count'] = lorebookState.overrideMap.size
+    debugMetrics['lorebook_requires_history'] = lorebookRequiresHistory
+
+    let fullConversationTranscript: GenerationTranscript | null = null
+
+    if (lorebookRequiresHistory && !payloadCoversFullConversation) {
+      fullConversationTranscript = await loadGenerationTranscript({
         supabase,
         chatId,
         turnId: payload.turnId,
-        excludeAssistantForTurnId: payload.isRegeneration ? payload.turnId : null,
+        excludeAssistantForTurnId,
         onMetrics(metrics) {
-          debugMetrics['transcript_source'] = 'db'
           debugMetrics['transcript_target_turn_index'] = metrics.targetTurnIndex
           debugMetrics['transcript_turn_count'] = metrics.turnCount
           debugMetrics['transcript_db_message_row_count'] = metrics.fetchedMessageCount
-          debugMetrics['transcript_message_count'] = metrics.transcriptMessageCount
-          debugMetrics['transcript_excluded_assistant'] = metrics.excludedAssistant
         },
       })
-    : payload.sanitizedMessages
+    }
+
+    lorebookHistory = lorebookRequiresHistory
+      ? (fullConversationTranscript ?? payloadTranscript)
+      : []
+    debugMetrics['lorebook_history_source'] = lorebookRequiresHistory
+      ? fullConversationTranscript
+        ? 'db_full'
+        : 'payload'
+      : 'not_needed'
+
+    if (memoryConfig.mode === 'prefix_live_blocks') {
+      lastChunkEnd = (await getLastSummaryEnd(supabase as never, chatId, SUMMARY_LEVEL_CHUNK)) ?? 0
+      debugMetrics['memory_last_chunk_end'] = lastChunkEnd
+    }
+
+    if (fullConversationTranscript) {
+      const requiredMessageCount =
+        memoryConfig.mode === 'summary_window'
+          ? Math.min(effectiveConversationMessageCount, CONTEXT_WINDOW)
+          : Math.max(0, effectiveConversationMessageCount - (lastChunkEnd ?? 0))
+      const resolvedWindow = takeTranscriptTail({
+        transcript: fullConversationTranscript,
+        totalMessages: effectiveConversationMessageCount,
+        requiredMessageCount,
+      })
+      generationTranscript = resolvedWindow.transcript
+      transcriptStartOrdinal = resolvedWindow.transcriptStartOrdinal
+      transcriptSource = 'db_full'
+    } else if (memoryConfig.mode === 'summary_window') {
+      const requiredMessageCount = Math.min(effectiveConversationMessageCount, CONTEXT_WINDOW)
+
+      if (
+        payloadTranscriptCanRepresentGeneration &&
+        payloadTranscript.length >= requiredMessageCount
+      ) {
+        const resolvedWindow = takeTranscriptTail({
+          transcript: payloadTranscript,
+          totalMessages: effectiveConversationMessageCount,
+          requiredMessageCount,
+        })
+        generationTranscript = resolvedWindow.transcript
+        transcriptStartOrdinal = resolvedWindow.transcriptStartOrdinal
+        transcriptSource =
+          requiredMessageCount === payloadTranscript.length ? 'payload' : 'payload_tail'
+      } else {
+        const resolvedWindow = await loadConversationTranscriptTail({
+          supabase,
+          chatId,
+          limitMessages: requiredMessageCount,
+          excludeAssistantForTurnId,
+          totalMessages: effectiveConversationMessageCount,
+        })
+        generationTranscript = resolvedWindow.transcript
+        transcriptStartOrdinal = resolvedWindow.transcriptStartOrdinal
+        transcriptSource = 'db_tail'
+      }
+    } else {
+      const requiredMessageCount = Math.max(
+        0,
+        effectiveConversationMessageCount - (lastChunkEnd ?? 0),
+      )
+
+      if (
+        payloadTranscriptCanRepresentGeneration &&
+        payloadTranscript.length >= requiredMessageCount
+      ) {
+        const resolvedWindow = takeTranscriptTail({
+          transcript: payloadTranscript,
+          totalMessages: effectiveConversationMessageCount,
+          requiredMessageCount,
+        })
+        generationTranscript = resolvedWindow.transcript
+        transcriptStartOrdinal = resolvedWindow.transcriptStartOrdinal
+        transcriptSource =
+          requiredMessageCount === payloadTranscript.length ? 'payload' : 'payload_tail'
+      } else {
+        const resolvedWindow = await loadConversationTranscriptTail({
+          supabase,
+          chatId,
+          limitMessages: requiredMessageCount,
+          excludeAssistantForTurnId,
+          totalMessages: effectiveConversationMessageCount,
+        })
+        generationTranscript = resolvedWindow.transcript
+        transcriptStartOrdinal = resolvedWindow.transcriptStartOrdinal
+        transcriptSource = 'db_tail'
+      }
+    }
+  } else {
+    const lorebookState = await loadChatLorebookState({
+      supabase,
+      chatId,
+      characterId: character.id,
+    })
+    const lorebookRequiresHistory = lorebookNeedsChatHistory(lorebookState)
+
+    lorebookEntries = lorebookState.entries
+    lorebookOverrideMap = lorebookState.overrideMap
+    lorebookHistory = lorebookRequiresHistory ? payloadTranscript : []
+
+    debugMetrics['lorebook_module_count'] = new Set(
+      lorebookState.entries.map((entry) => entry.moduleId),
+    ).size
+    debugMetrics['lorebook_entry_count'] = lorebookState.entries.length
+    debugMetrics['lorebook_override_count'] = lorebookState.overrideMap.size
+    debugMetrics['lorebook_requires_history'] = lorebookRequiresHistory
+    debugMetrics['lorebook_history_source'] = lorebookRequiresHistory ? 'payload' : 'not_needed'
+  }
   timings['5b_load_generation_transcript'] = performance.now() - stepStart
 
-  if (!payload.turnId) {
-    debugMetrics['transcript_source'] = 'payload'
-    debugMetrics['transcript_message_count'] = generationTranscript.length
-    debugMetrics['transcript_excluded_assistant'] = false
-  }
+  debugMetrics['transcript_source'] = transcriptSource
+  debugMetrics['transcript_message_count'] = generationTranscript.length
+  debugMetrics['transcript_total_message_count'] = effectiveConversationMessageCount
+  debugMetrics['transcript_start_ordinal'] = transcriptStartOrdinal
+  debugMetrics['transcript_excluded_assistant'] =
+    payloadExcludedAssistant ||
+    (excludeAssistantFromTranscript && transcriptSource.startsWith('db'))
 
   stepStart = performance.now()
   const systemPrompt = await buildSystemPrompt({
@@ -187,18 +441,10 @@ export async function loadChatJobExecutionContext({
   timings['6_build_system_prompt'] = performance.now() - stepStart
 
   stepStart = performance.now()
-  const lorebookDynamicContext = await buildLorebookDynamicContext({
-    supabase,
-    chatId,
-    characterId: character.id,
-    chatHistory: generationTranscript,
-    onMetrics(metrics) {
-      debugMetrics['lorebook_module_count'] = metrics.moduleCount
-      debugMetrics['lorebook_entry_count'] = metrics.entryCount
-      debugMetrics['lorebook_override_count'] = metrics.overrideCount
-      debugMetrics['lorebook_has_context'] = metrics.hasContext
-      debugMetrics['lorebook_context_chars'] = metrics.contextCharCount
-    },
+  const lorebookDynamicContext = renderActiveLorebookBlock({
+    entries: lorebookEntries,
+    overrideMap: lorebookOverrideMap,
+    chatHistory: lorebookHistory,
   })
   timings['6b_build_lorebook_context'] = performance.now() - stepStart
   debugMetrics['lorebook_has_context'] = lorebookDynamicContext !== null
@@ -217,9 +463,13 @@ export async function loadChatJobExecutionContext({
     supabase,
     chatId,
     sanitizedMessages: generationTranscript,
+    totalConversationMessages: effectiveConversationMessageCount,
     baseSystemPrompt: systemPrompt,
     extraDynamicContext: lorebookDynamicContext ? [lorebookDynamicContext] : undefined,
     modelConfig: normalizedModelConfig,
+    transcriptCoverage:
+      generationTranscript.length >= effectiveConversationMessageCount ? 'full' : 'window',
+    transcriptStartOrdinal,
   })
   const finalSystemPrompt = fallbackSystemPrompt
   timings['7_build_context'] = performance.now() - stepStart

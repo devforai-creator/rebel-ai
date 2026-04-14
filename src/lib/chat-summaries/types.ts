@@ -40,6 +40,7 @@ export interface BuildContextOptions {
   supabase: ServerSupabaseClient
   chatId: string
   sanitizedMessages: SanitizedMessage[]
+  totalConversationMessages?: number
   baseSystemPrompt: string
   /** Optional dynamic context blocks appended after the static prompt (e.g., lorebook). */
   extraDynamicContext?: string[]

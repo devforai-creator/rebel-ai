@@ -227,4 +227,41 @@ describe('buildPrefixLiveBlocksMemoryPlan', () => {
       },
     ])
   })
+
+  it('does not fall back to DB when an explicit empty live window is provided', async () => {
+    const supabase = createPrefixModeSupabaseStub({
+      lastChunkEnd: 4,
+      liveMessages: [
+        { role: 'user', content: 'sealed user 1' },
+        { role: 'assistant', content: 'sealed assistant 1' },
+        { role: 'user', content: 'sealed user 2' },
+        { role: 'assistant', content: 'sealed assistant 2' },
+      ],
+    })
+
+    const result = await buildPrefixLiveBlocksMemoryPlan({
+      supabase,
+      chatId: 'chat-1',
+      sanitizedMessages: [],
+      transcriptCoverage: 'window',
+      transcriptStartOrdinal: 5,
+      baseSystemPrompt: 'STATIC PROMPT',
+    })
+
+    expect(result.fallbackMessages).toEqual([])
+    expect(result.promptBlocks).toEqual([
+      {
+        role: 'system',
+        content: 'STATIC PROMPT',
+        cachePreference: 'prefer-cache',
+        stability: 'static',
+      },
+      {
+        role: 'system',
+        content: '=== Previous Conversation Summary ===\n[Summary 1-4]\nsealed',
+        cachePreference: 'prefer-cache',
+        stability: 'sealed',
+      },
+    ])
+  })
 })

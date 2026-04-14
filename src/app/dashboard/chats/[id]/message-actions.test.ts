@@ -150,4 +150,34 @@ describe('message actions', () => {
     ])
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/chats/chat-1')
   })
+
+  it('deletes the owning turn when deleting a user message', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      messages: [
+        {
+          id: 'msg-1',
+          chat_id: 'chat-1',
+          role: 'user',
+          turn_id: 'turn-1',
+          chats: { user_id: 'user-1' },
+        },
+      ],
+      turns: [
+        {
+          id: 'turn-1',
+          active_assistant_message_id: null,
+        },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { deleteMessage } = await import('./message-actions')
+
+    await expect(deleteMessage('msg-1')).resolves.toEqual({
+      success: true,
+      chatId: 'chat-1',
+    })
+    expect(getTurnRows(supabase)).toEqual([])
+    expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/chats/chat-1')
+  })
 })

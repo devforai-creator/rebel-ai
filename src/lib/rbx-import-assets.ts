@@ -34,6 +34,7 @@ export type ImportRbxSupabaseLike = {
         file: Uint8Array,
         options?: { contentType?: string; upsert?: boolean },
       ) => PromiseLike<unknown>
+      remove?: (paths: string[]) => PromiseLike<unknown>
       getPublicUrl: (path: string) => { data: { publicUrl: string } }
     }
   }

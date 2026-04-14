@@ -25,6 +25,10 @@ export function sanitizeMetadataForDb(metadata: Record<string, unknown>): Json {
   return JSON.parse(sanitized) as Json
 }
 
+export function sanitizeJsonArrayForDb(items: Array<Record<string, unknown>>): Json[] {
+  return items.map((item) => sanitizeMetadataForDb(item))
+}
+
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }

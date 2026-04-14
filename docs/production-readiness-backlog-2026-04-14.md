@@ -169,6 +169,18 @@ Current evidence as of `2026-04-14`:
   `turn-projection-query.ts`, `chat-job-runner/vault.ts`, `api-keys/actions.ts`, and
   `chats/[chatId]/export/route.ts`
 
+Follow-on priority after the first adapter batches:
+
+1. `src/app/dashboard/chats/[id]/message-actions.ts`
+2. `src/lib/rbx-importer.ts`
+3. `src/app/dashboard/characters/[id]/lorebook/page.tsx`
+4. `src/app/dashboard/chats/[id]/hooks/useChatSummariesState.ts`
+5. `src/lib/chat/job-payload.ts`
+6. external interop seams that may remain acceptable if kept narrow:
+   `src/lib/llm/google-cache.ts`, `src/lib/security/re2-regex.ts`
+7. framework-bound Supabase seams to revisit only if they still cause churn:
+   `src/lib/supabase/client.ts`, `src/lib/supabase/server.ts`, `src/middleware.ts`
+
 ### P1-2. Centralize Remaining Chat and Runner Limits
 
 Scope:

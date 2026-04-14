@@ -27,7 +27,7 @@ import {
   type ImportRbxSupabaseClient,
   type ImportRbxSupabaseLike,
 } from './rbx-import-assets'
-import { sanitizeMetadataForDb } from './rbx-import-helpers'
+import { sanitizeJsonArrayForDb, sanitizeMetadataForDb } from './rbx-import-helpers'
 import { rollbackImportFailure, type CreatedModule } from './rbx-import-rollback'
 
 // ============================================================================
@@ -60,7 +60,7 @@ interface ImportRbxOptions {
  */
 export async function importRbx(options: ImportRbxOptions): Promise<RbxImportResult> {
   const { userId, parseResult } = options
-  const supabase = options.supabaseClient as unknown as ImportRbxSupabaseClient
+  const supabase = options.supabaseClient as ImportRbxSupabaseClient
   const { manifest, characterAssets, moduleAssets, missingAssets } = parseResult
   const suuValidation = validateSuuImportMetadata(manifest.character.metadata)
   const validationWarnings = suuValidation.warnings.map(formatSuuImportValidationIssue)
@@ -125,7 +125,7 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
     if (charError || !charRecord) {
       throw new Error(`Failed to create character: ${charError?.message || 'Unknown error'}`)
     }
-    characterId = charRecord.id as string
+    characterId = charRecord.id
 
     // ── Step 2: Upload character assets ──
     const { uploaded, avatarUrl, failedAssets, failedAssetSamples } = await uploadCharacterAssets(
@@ -199,8 +199,8 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
         user_id: userId,
         name: mod.name,
         description: mod.description,
-        lorebook: mod.lorebook as unknown as Json[],
-        regex: mod.regex as unknown as Json[],
+        lorebook: sanitizeJsonArrayForDb(mod.lorebook),
+        regex: sanitizeJsonArrayForDb(mod.regex),
         hide_icon: mod.hide_icon,
         assets: moduleAssetsMetadata,
       }
@@ -216,7 +216,7 @@ export async function importRbx(options: ImportRbxOptions): Promise<RbxImportRes
         )
       }
 
-      const moduleId = moduleRecord.id as string
+      const moduleId = moduleRecord.id
       const createdModule: CreatedModule = {
         id: moduleId,
         uploadedAssetPaths: [],

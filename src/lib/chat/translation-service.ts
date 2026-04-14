@@ -1,9 +1,10 @@
 import { generateText } from 'ai'
 import { buildLanguageModel } from '@/lib/llm/model-factory'
 import { getDefaultModelForProvider } from '@/lib/models'
+import { getDecryptedSecret } from '@/lib/supabase/rpc'
 import { TRANSLATION_SYSTEM_PROMPT } from '@/lib/chat/bilingual-context'
 import type { createAdminClient } from '@/lib/supabase/admin'
-import type { ApiKey, ApiKeyUpdate, Database, MessageUpdate, Profile } from '@/types/database.types'
+import type { ApiKey, ApiKeyUpdate, MessageUpdate, Profile } from '@/types/database.types'
 
 type TranslationSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'from'>
 type TranslationAdminSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'rpc'>
@@ -12,15 +13,6 @@ type TranslationApiKeyRow = Pick<
   ApiKey,
   'id' | 'provider' | 'vault_secret_name' | 'model_preference' | 'service_tier'
 >
-type VaultRpcClient = {
-  rpc: (
-    fn: 'get_decrypted_secret',
-    args: Database['public']['Functions']['get_decrypted_secret']['Args'],
-  ) => Promise<{
-    data: Database['public']['Functions']['get_decrypted_secret']['Returns'] | null
-    error: { message: string; code?: string | null; details?: string | null } | null
-  }>
-}
 
 export type TranslationResult =
   | { status: 'success'; content: string }
@@ -142,12 +134,11 @@ async function decryptSecret({
   secretName: string
   requester: string
 }): Promise<string> {
-  const rpcArgs: Database['public']['Functions']['get_decrypted_secret']['Args'] = {
+  const rpcArgs = {
     secret_name: secretName,
     requester,
   }
-  const adminRpc = supabase as unknown as VaultRpcClient
-  const { data, error } = await adminRpc.rpc('get_decrypted_secret', rpcArgs)
+  const { data, error } = await getDecryptedSecret(supabase, rpcArgs)
 
   if (error) {
     console.error('[Translate] Vault decryption failed:', error)

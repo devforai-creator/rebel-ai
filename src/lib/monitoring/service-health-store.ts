@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { recordServiceHealthStatus } from '@/lib/supabase/rpc'
 import type { Database, Json } from '@/types/database.types'
 import type { TriggerStats } from '@/lib/monitoring/trigger-tracker'
 
@@ -12,16 +13,6 @@ export const SERVICE_HEALTH_LABELS = [
 export type ServiceHealthLabel = (typeof SERVICE_HEALTH_LABELS)[number]
 
 type ServiceHealthSnapshotRow = Database['public']['Tables']['service_health_status']['Row']
-
-type ServiceHealthRpcClient = {
-  rpc(
-    fn: 'record_service_health_status',
-    args: Database['public']['Functions']['record_service_health_status']['Args'],
-  ): Promise<{
-    data: Database['public']['Functions']['record_service_health_status']['Returns'] | null
-    error: { message: string; code?: string | null; details?: string | null } | null
-  }>
-}
 
 type ServiceHealthReader = Pick<ReturnType<typeof createAdminClient>, 'from'>
 
@@ -63,8 +54,8 @@ export async function persistServiceHealthRecord({
     return
   }
 
-  const admin = createAdminClient() as unknown as ServiceHealthRpcClient
-  const { error } = await admin.rpc('record_service_health_status', {
+  const admin = createAdminClient()
+  const { error } = await recordServiceHealthStatus(admin, {
     p_service_label: label,
     p_was_success: wasSuccess,
     p_error_message: errorMessage ?? undefined,

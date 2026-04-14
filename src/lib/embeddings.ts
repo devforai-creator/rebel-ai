@@ -1,20 +1,12 @@
 import 'server-only'
 import { VoyageAIClient } from 'voyageai'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getDecryptedSecret } from '@/lib/supabase/rpc'
 import { getDefaultModelForProvider } from '@/lib/models'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ApiKey, Database, Profile } from '@/types/database.types'
 
 type ServerSupabaseClient = SupabaseClient<Database>
-type VaultRpcClient = {
-  rpc: (
-    fn: 'get_decrypted_secret',
-    args: Database['public']['Functions']['get_decrypted_secret']['Args'],
-  ) => Promise<{
-    data: Database['public']['Functions']['get_decrypted_secret']['Returns'] | null
-    error: { message: string; code?: string | null; details?: string | null } | null
-  }>
-}
 
 /** Default embedding model from registry - change in registry.ts to update */
 const VOYAGE_EMBEDDING_MODEL = getDefaultModelForProvider('voyage_embeddings')
@@ -95,8 +87,7 @@ export async function generateFactEmbedding(
     secret_name: apiKey.vault_secret_name,
     requester: userId,
   }
-  const adminRpc = adminClient as unknown as VaultRpcClient
-  const { data: secret, error: decryptError } = await adminRpc.rpc('get_decrypted_secret', rpcArgs)
+  const { data: secret, error: decryptError } = await getDecryptedSecret(adminClient, rpcArgs)
 
   if (decryptError || typeof secret !== 'string' || secret.trim().length === 0) {
     console.error('[Embeddings] Failed to retrieve Voyage API key', {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hasMemoryUpdateWork, updateMemoryState } from '@/lib/chat-memory'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
+import { getDecryptedSecret } from '@/lib/supabase/rpc'
 import type { ApiServiceTier, Database } from '@/types/database.types'
 import { buildLanguageModel } from '@/lib/llm/model-factory'
 import { createApiErrorResponse, parseJsonRequest } from '@/lib/http/api-contract'
@@ -40,16 +41,6 @@ const generateSummariesRequestSchema = z.object({
 })
 
 type GenerateSummariesRequest = z.output<typeof generateSummariesRequestSchema>
-
-type VaultRpcClient = {
-  rpc: (
-    fn: 'get_decrypted_secret',
-    args: Database['public']['Functions']['get_decrypted_secret']['Args'],
-  ) => Promise<{
-    data: Database['public']['Functions']['get_decrypted_secret']['Returns'] | null
-    error: { message: string; code?: string | null; details?: string | null } | null
-  }>
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -186,10 +177,8 @@ export async function POST(request: NextRequest) {
       requester: userId,
     }
 
-    const adminRpc = supabase as unknown as VaultRpcClient
-
-    const { data: decryptedKey, error: decryptError } = await adminRpc.rpc(
-      'get_decrypted_secret',
+    const { data: decryptedKey, error: decryptError } = await getDecryptedSecret(
+      supabase,
       decryptArgs,
     )
 

@@ -1,17 +1,8 @@
 import type { Database } from '@/types/database.types'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getDecryptedSecret } from '@/lib/supabase/rpc'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
-
-type VaultRpcClient = {
-  rpc: (
-    fn: 'get_decrypted_secret',
-    args: Database['public']['Functions']['get_decrypted_secret']['Args'],
-  ) => Promise<{
-    data: Database['public']['Functions']['get_decrypted_secret']['Returns'] | null
-    error: { message: string; code?: string | null; details?: string | null } | null
-  }>
-}
 
 export async function decryptSecret({
   supabase,
@@ -26,8 +17,7 @@ export async function decryptSecret({
     secret_name: secretName,
     requester,
   }
-  const adminRpc = supabase as unknown as VaultRpcClient
-  const { data, error } = await adminRpc.rpc('get_decrypted_secret', rpcArgs)
+  const { data, error } = await getDecryptedSecret(supabase, rpcArgs)
 
   if (error) {
     console.error('[Chat Job Runner] Vault decryption RPC failed', {

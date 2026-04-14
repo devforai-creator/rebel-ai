@@ -190,19 +190,32 @@ function parseInFilterValue(value: unknown): unknown[] | null {
 
 function matchesFilter<Row extends Record<string, unknown>>(row: Row, filter: Filter<Row>) {
   const value = row[filter.field as keyof Row] as unknown
+  const numericValue = Number(value)
+  const numericFilterValue = Number(filter.value)
+  const hasNumericComparison = Number.isFinite(numericValue) && Number.isFinite(numericFilterValue)
+  const comparableValue = String(value)
+  const comparableFilterValue = String(filter.value)
   switch (filter.op) {
     case 'eq':
       return value === filter.value
     case 'neq':
       return value !== filter.value
     case 'gt':
-      return Number(value) > Number(filter.value)
+      return hasNumericComparison
+        ? numericValue > numericFilterValue
+        : comparableValue > comparableFilterValue
     case 'gte':
-      return Number(value) >= Number(filter.value)
+      return hasNumericComparison
+        ? numericValue >= numericFilterValue
+        : comparableValue >= comparableFilterValue
     case 'lt':
-      return Number(value) < Number(filter.value)
+      return hasNumericComparison
+        ? numericValue < numericFilterValue
+        : comparableValue < comparableFilterValue
     case 'lte':
-      return Number(value) <= Number(filter.value)
+      return hasNumericComparison
+        ? numericValue <= numericFilterValue
+        : comparableValue <= comparableFilterValue
     case 'in':
       return Array.isArray(filter.value) && filter.value.includes(value)
     case 'not':

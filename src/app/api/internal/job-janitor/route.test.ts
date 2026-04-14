@@ -13,6 +13,7 @@ function restoreEnv() {
 }
 
 const createAdminClientMock = vi.fn(() => ({ admin: true }))
+const pruneHistoricalChatJobsMock = vi.fn()
 const resetStuckProcessingJobsMock = vi.fn()
 const resetStuckImportProcessingJobsMock = vi.fn()
 
@@ -21,6 +22,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 }))
 
 vi.mock('@/lib/chat/job-queue', () => ({
+  pruneHistoricalChatJobs: (...args: unknown[]) => pruneHistoricalChatJobsMock(...args),
   resetStuckProcessingJobs: (...args: unknown[]) => resetStuckProcessingJobsMock(...args),
 }))
 
@@ -40,9 +42,14 @@ describe('GET /api/internal/job-janitor', () => {
   beforeEach(() => {
     restoreEnv()
     createAdminClientMock.mockReset()
+    pruneHistoricalChatJobsMock.mockReset()
     resetStuckProcessingJobsMock.mockReset()
     resetStuckImportProcessingJobsMock.mockReset()
     createAdminClientMock.mockReturnValue({ admin: true })
+    pruneHistoricalChatJobsMock.mockResolvedValue({
+      successPruned: 5,
+      errorPruned: 2,
+    })
     resetStuckProcessingJobsMock.mockResolvedValue(2)
     resetStuckImportProcessingJobsMock.mockResolvedValue(1)
   })
@@ -71,7 +78,7 @@ describe('GET /api/internal/job-janitor', () => {
     expect(response.status).toBe(401)
   })
 
-  it('accepts CRON_SECRET bearer auth and runs both janitors', async () => {
+  it('accepts CRON_SECRET bearer auth and runs janitors plus historical pruning', async () => {
     process.env.CHAT_ADMIN_SECRET = 'admin-secret'
     process.env.CRON_SECRET = 'cron-secret'
     const { GET } = await import('./route')
@@ -85,6 +92,13 @@ describe('GET /api/internal/job-janitor', () => {
       chatJobs: 2,
       importJobs: 1,
     })
+    expect(body.pruned).toEqual({
+      chatJobHistory: {
+        successPruned: 5,
+        errorPruned: 2,
+      },
+    })
+    expect(pruneHistoricalChatJobsMock).toHaveBeenCalledOnce()
     expect(resetStuckProcessingJobsMock).toHaveBeenCalledOnce()
     expect(resetStuckImportProcessingJobsMock).toHaveBeenCalledOnce()
   })

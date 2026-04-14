@@ -32,11 +32,16 @@ type UpdateAnnouncementInput = Partial<Omit<CreateAnnouncementInput, 'isActive'>
   isActive?: boolean
 }
 
-const adminSupabase = createAdminClient()
 const ADMIN_PATH = '/dashboard/admin/announcements'
 const MAX_MESSAGE_LENGTH = 1500
 
 type AdminContext = { user: User } | { error: string }
+
+function getAdminSupabase() {
+  // Keep the service-role client inside the action boundary so warm runtimes do not
+  // accidentally reuse a stale client instance across requests.
+  return createAdminClient()
+}
 
 async function ensureAdminUser(): Promise<AdminContext> {
   const supabase = await createClient()
@@ -153,6 +158,7 @@ export async function createAnnouncement(
     author_user_id: adminCheck.user.id,
   }
 
+  const adminSupabase = getAdminSupabase()
   const { data, error } = await adminSupabase
     .from('announcements')
     .insert(announcementPayload as never)
@@ -226,6 +232,7 @@ export async function updateAnnouncement(
     updatePayload.is_active = input.isActive
   }
 
+  const adminSupabase = getAdminSupabase()
   const { data, error } = await adminSupabase
     .from('announcements')
     .update(updatePayload as never)
@@ -253,6 +260,7 @@ export async function toggleAnnouncementStatus(
   }
 
   const togglePayload: AnnouncementUpdate = { is_active: nextActive }
+  const adminSupabase = getAdminSupabase()
   const { error } = await adminSupabase
     .from('announcements')
     .update(togglePayload as never)
@@ -274,6 +282,7 @@ export async function deleteAnnouncement(announcementId: string): Promise<BaseRe
     return adminCheck
   }
 
+  const adminSupabase = getAdminSupabase()
   const { error } = await adminSupabase.from('announcements').delete().eq('id', announcementId)
 
   if (error) {

@@ -189,6 +189,10 @@ Completion evidence:
 
 ### P1-2. Enforce Fresh Admin Client Usage
 
+Status:
+
+- Done on `2026-04-14`
+
 Scope:
 
 - `src/lib/supabase/admin.ts`
@@ -211,6 +215,20 @@ Current evidence as of `2026-04-14`:
 - `src/lib/supabase/admin.ts` documents fresh creation as the intended pattern
 - `src/app/dashboard/admin/announcements/actions.ts` still keeps
   `const adminSupabase = createAdminClient()` at module scope
+
+Completion evidence:
+
+- `src/app/dashboard/admin/announcements/actions.ts` now creates the service-role Supabase client
+  inside each server action through a local helper instead of caching it at module scope
+- `eslint.config.mjs` now rejects top-level `createAdminClient()` variable initialization in `src`
+  so runtime code cannot quietly reintroduce module-scope admin-client caching
+- `tests/announcements/admin-actions.test.ts` now asserts that auth failures do not create an admin
+  client and that successful mutations create one fresh admin client per action call
+- `tests/announcements/admin-actions-fresh-client.test.ts` adds an import-time regression check so
+  loading the announcements action module no longer instantiates a service-role client eagerly
+- `npm run lint`, `npm run typecheck`,
+  `npm run test -- tests/announcements/admin-actions.test.ts tests/announcements/admin-actions-fresh-client.test.ts`,
+  and `npm run build` all passed after the change
 
 ### P1-3. Add Direct Verification to Excluded and 0% Runtime Boundaries
 

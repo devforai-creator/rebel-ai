@@ -90,6 +90,7 @@ describe('announcements admin actions', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2025-01-01T00:00:00Z'))
+    createAdminClientMock.mockClear()
     revalidatePathMock.mockClear()
     mockProfileQuery.select.mockReturnThis()
     mockProfileQuery.eq.mockReturnThis()
@@ -114,6 +115,7 @@ describe('announcements admin actions', () => {
     })
 
     expect(result).toEqual({ error: '로그인이 필요합니다.' })
+    expect(createAdminClientMock).not.toHaveBeenCalled()
     expect(mockAdminSupabase.from).not.toHaveBeenCalled()
   })
 
@@ -129,6 +131,7 @@ describe('announcements admin actions', () => {
     })
 
     expect(result).toEqual({ error: '프로필 정보를 불러오지 못했습니다.' })
+    expect(createAdminClientMock).not.toHaveBeenCalled()
     expect(mockAdminSupabase.from).not.toHaveBeenCalled()
   })
 
@@ -144,6 +147,7 @@ describe('announcements admin actions', () => {
     })
 
     expect('error' in result && result.error).toBe('관리자 권한이 필요합니다.')
+    expect(createAdminClientMock).not.toHaveBeenCalled()
     expect(mockAdminSupabase.from).not.toHaveBeenCalled()
   })
 
@@ -238,6 +242,7 @@ describe('announcements admin actions', () => {
     })
 
     expect('announcement' in result && result.announcement?.id).toBe('ann-1')
+    expect(createAdminClientMock).toHaveBeenCalledTimes(1)
     expect(capturedPayload).toMatchObject({
       message: 'trimmed',
       severity: 'info',
@@ -319,6 +324,7 @@ describe('announcements admin actions', () => {
     })
 
     expect('announcement' in result && result.announcement?.id).toBe('ann-2')
+    expect(createAdminClientMock).toHaveBeenCalledTimes(1)
     expect(capturedId).toBe('ann-2')
     expect(capturedPayload).toMatchObject({
       message: 'updated',
@@ -367,6 +373,7 @@ describe('announcements admin actions', () => {
     const result = await toggleAnnouncementStatus('ann-5', false)
 
     expect(result).toEqual({ success: true })
+    expect(createAdminClientMock).toHaveBeenCalledTimes(1)
     expect(capturedPayload).toEqual({ is_active: false })
     expect(capturedId).toBe('ann-5')
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/admin/announcements')
@@ -399,6 +406,7 @@ describe('announcements admin actions', () => {
     const result = await deleteAnnouncement('ann-9')
 
     expect(result).toEqual({ success: true })
+    expect(createAdminClientMock).toHaveBeenCalledTimes(1)
     expect(capturedId).toBe('ann-9')
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/admin/announcements')
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard')

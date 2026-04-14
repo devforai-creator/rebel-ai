@@ -203,6 +203,13 @@ Done when:
 - we know whether the current `ivfflat` strategy and filters are good enough for expected data volume
 - any index or function change is justified by measured plan behavior, not by guesswork
 
+Baseline notes from April 14, 2026:
+
+- Local benchmark, small chat case: 200 `chat_facts` rows in one chat. Inner query used a `Seq Scan` on `chat_facts` plus `top-N heapsort`; `chat_facts_embedding_idx` was not chosen. End-to-end `match_chat_facts(...)` execution was about `9.4ms`, and the inner query itself was about `4.1ms`.
+- Local benchmark, large chat case: 5,000 target-chat facts plus 15,000 same-user facts in another chat. Inner query used `idx_chat_facts_chat_id` followed by filter and `top-N heapsort`; `chat_facts_embedding_idx` was still not chosen. End-to-end `match_chat_facts(...)` execution was about `70.5ms`, and the inner query itself was about `82.8ms`.
+- Current implication: tuning `ivfflat` list counts is not the next move. The production query shape is chat-scoped first, then exact vector distance sort inside that filtered set, so the present global vector index is not acting as the main access path for this function.
+- Current implication: if `chat_facts` growth becomes a real latency problem, the likely next step is a query-shape change or retrieval redesign, not a blind index retune.
+
 ## Not In Scope
 
 Do not use this backlog to justify:

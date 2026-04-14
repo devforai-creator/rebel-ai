@@ -18,16 +18,26 @@ import type {
   TurnClient,
 } from './turn-types'
 
+export type GenerationTranscriptMetrics = {
+  targetTurnIndex: number
+  turnCount: number
+  fetchedMessageCount: number
+  transcriptMessageCount: number
+  excludedAssistant: boolean
+}
+
 export async function loadGenerationTranscript({
   supabase,
   chatId,
   turnId,
   excludeAssistantForTurnId = null,
+  onMetrics,
 }: {
   supabase: TurnClient
   chatId: string
   turnId: string
   excludeAssistantForTurnId?: string | null
+  onMetrics?: (metrics: GenerationTranscriptMetrics) => void
 }): Promise<SanitizedMessage[]> {
   const targetTurn = await supabase
     .from('chat_turns')
@@ -65,6 +75,13 @@ export async function loadGenerationTranscript({
   })
 
   if (messageIds.length === 0) {
+    onMetrics?.({
+      targetTurnIndex: targetTurn.data.turn_index,
+      turnCount: turns.length,
+      fetchedMessageCount: 0,
+      transcriptMessageCount: 0,
+      excludedAssistant: excludeAssistantForTurnId !== null,
+    })
     return []
   }
 
@@ -106,6 +123,14 @@ export async function loadGenerationTranscript({
       }
     }
   }
+
+  onMetrics?.({
+    targetTurnIndex: targetTurn.data.turn_index,
+    turnCount: turns.length,
+    fetchedMessageCount: messagesResult.data?.length ?? 0,
+    transcriptMessageCount: transcript.length,
+    excludedAssistant: excludeAssistantForTurnId !== null,
+  })
 
   return transcript
 }

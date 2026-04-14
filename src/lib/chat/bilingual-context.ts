@@ -21,6 +21,17 @@ interface BilingualContextOptions {
   chatId: string
   messages: SanitizedMessage[]
   recentKoreanCount?: number
+  onMetrics?: (metrics: BilingualContextMetrics) => void
+}
+
+export type BilingualContextMetrics = {
+  totalMessages: number
+  recentMessagesKept: number
+  translationCandidateCount: number
+  fetchedTranslationRowCount: number
+  translatedCount: number
+  untranslatedCandidateCount: number
+  queryExecuted: boolean
 }
 
 /**
@@ -39,13 +50,32 @@ export async function applyBilingualContext({
   chatId,
   messages,
   recentKoreanCount = DEFAULT_RECENT_KOREAN_COUNT,
+  onMetrics,
 }: BilingualContextOptions): Promise<SanitizedMessage[]> {
   if (messages.length === 0) {
+    onMetrics?.({
+      totalMessages: 0,
+      recentMessagesKept: 0,
+      translationCandidateCount: 0,
+      fetchedTranslationRowCount: 0,
+      translatedCount: 0,
+      untranslatedCandidateCount: 0,
+      queryExecuted: false,
+    })
     return messages
   }
 
   // If all messages are "recent", no translation needed
   if (messages.length <= recentKoreanCount) {
+    onMetrics?.({
+      totalMessages: messages.length,
+      recentMessagesKept: messages.length,
+      translationCandidateCount: 0,
+      fetchedTranslationRowCount: 0,
+      translatedCount: 0,
+      untranslatedCandidateCount: 0,
+      queryExecuted: false,
+    })
     return messages
   }
 
@@ -58,6 +88,15 @@ export async function applyBilingualContext({
     )
 
   if (translationIds.length === 0) {
+    onMetrics?.({
+      totalMessages: messages.length,
+      recentMessagesKept: recentKoreanCount,
+      translationCandidateCount: 0,
+      fetchedTranslationRowCount: 0,
+      translatedCount: 0,
+      untranslatedCandidateCount: 0,
+      queryExecuted: false,
+    })
     return messages
   }
 
@@ -70,6 +109,15 @@ export async function applyBilingualContext({
 
   if (error) {
     console.error('[BilingualContext] Failed to fetch translations:', error)
+    onMetrics?.({
+      totalMessages: messages.length,
+      recentMessagesKept: recentKoreanCount,
+      translationCandidateCount: translationIds.length,
+      fetchedTranslationRowCount: 0,
+      translatedCount: 0,
+      untranslatedCandidateCount: translationIds.length,
+      queryExecuted: true,
+    })
     return messages // Fallback to original messages
   }
 
@@ -77,6 +125,15 @@ export async function applyBilingualContext({
 
   if (dbMessages.length === 0) {
     // No translations available yet
+    onMetrics?.({
+      totalMessages: messages.length,
+      recentMessagesKept: recentKoreanCount,
+      translationCandidateCount: translationIds.length,
+      fetchedTranslationRowCount: 0,
+      translatedCount: 0,
+      untranslatedCandidateCount: translationIds.length,
+      queryExecuted: true,
+    })
     return messages
   }
 
@@ -112,6 +169,16 @@ export async function applyBilingualContext({
       }
     }
   }
+
+  onMetrics?.({
+    totalMessages: messages.length,
+    recentMessagesKept: recentKoreanCount,
+    translationCandidateCount: translationIds.length,
+    fetchedTranslationRowCount: dbMessages.length,
+    translatedCount: translationMap.size,
+    untranslatedCandidateCount: Math.max(translationIds.length - translationMap.size, 0),
+    queryExecuted: true,
+  })
 
   return result
 }

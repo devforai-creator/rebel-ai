@@ -13,6 +13,7 @@ import { buildSystemPrompt } from './system-prompt-builder'
 import { decryptSecret } from './vault'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
+type DebugMetricValue = string | number | boolean | null
 type RunnerApiKeyRow = Pick<ApiKey, 'vault_secret_name' | 'service_tier' | 'reasoning_effort'>
 type RunnerChatRow = Pick<
   Chat,
@@ -40,6 +41,7 @@ export type LoadedChatJobExecutionContext = {
   anthropicPlaceholderAdded: boolean
   totalInputTokens: number
   staticPromptTokens: number
+  debugMetrics: Record<string, DebugMetricValue>
 }
 
 export async function loadChatJobExecutionContext({
@@ -52,6 +54,7 @@ export async function loadChatJobExecutionContext({
   timings: Record<string, number>
 }): Promise<LoadedChatJobExecutionContext> {
   const { chatId, userId, apiKeyId, provider } = payload
+  const debugMetrics: Record<string, DebugMetricValue> = {}
 
   const apiKeyQueryStart = performance.now()
   const apiKeyQueryPromise = supabase
@@ -149,16 +152,32 @@ export async function loadChatJobExecutionContext({
 
   const defaultSystemPrompt = getGlobalSystemPrompt()
   const normalizedModelConfig = normalizeChatModelConfig(chat.model_config)
+  let stepStart = performance.now()
   const generationTranscript = payload.turnId
     ? await loadGenerationTranscript({
         supabase,
         chatId,
         turnId: payload.turnId,
         excludeAssistantForTurnId: payload.isRegeneration ? payload.turnId : null,
+        onMetrics(metrics) {
+          debugMetrics['transcript_source'] = 'db'
+          debugMetrics['transcript_target_turn_index'] = metrics.targetTurnIndex
+          debugMetrics['transcript_turn_count'] = metrics.turnCount
+          debugMetrics['transcript_db_message_row_count'] = metrics.fetchedMessageCount
+          debugMetrics['transcript_message_count'] = metrics.transcriptMessageCount
+          debugMetrics['transcript_excluded_assistant'] = metrics.excludedAssistant
+        },
       })
     : payload.sanitizedMessages
+  timings['5b_load_generation_transcript'] = performance.now() - stepStart
 
-  let stepStart = performance.now()
+  if (!payload.turnId) {
+    debugMetrics['transcript_source'] = 'payload'
+    debugMetrics['transcript_message_count'] = generationTranscript.length
+    debugMetrics['transcript_excluded_assistant'] = false
+  }
+
+  stepStart = performance.now()
   const systemPrompt = await buildSystemPrompt({
     character,
     persona,
@@ -173,11 +192,21 @@ export async function loadChatJobExecutionContext({
     chatId,
     characterId: character.id,
     chatHistory: generationTranscript,
+    onMetrics(metrics) {
+      debugMetrics['lorebook_module_count'] = metrics.moduleCount
+      debugMetrics['lorebook_entry_count'] = metrics.entryCount
+      debugMetrics['lorebook_override_count'] = metrics.overrideCount
+      debugMetrics['lorebook_has_context'] = metrics.hasContext
+      debugMetrics['lorebook_context_chars'] = metrics.contextCharCount
+    },
   })
   timings['6b_build_lorebook_context'] = performance.now() - stepStart
+  debugMetrics['lorebook_has_context'] = lorebookDynamicContext !== null
+  debugMetrics['lorebook_context_chars'] = lorebookDynamicContext?.length ?? 0
 
   stepStart = performance.now()
   const {
+    mode,
     dynamicContext,
     fallbackMessages: rawRecentMessages,
     fallbackSystemPrompt,
@@ -194,18 +223,47 @@ export async function loadChatJobExecutionContext({
   })
   const finalSystemPrompt = fallbackSystemPrompt
   timings['7_build_context'] = performance.now() - stepStart
+  debugMetrics['memory_mode'] = mode
+  debugMetrics['memory_recent_message_count'] = rawRecentMessages.length
+  debugMetrics['memory_prompt_block_count'] = promptBlocks.length
+  debugMetrics['memory_dynamic_context_chars'] = dynamicContext?.length ?? 0
+  debugMetrics['rag_enabled'] = ragInfo?.enabled ?? false
+  debugMetrics['rag_result_count'] = ragInfo?.results?.length ?? 0
 
   stepStart = performance.now()
   const bilingualEnabled = await isBilingualEnabled(supabase, userId)
+  timings['7a_bilingual_flag_query'] = performance.now() - stepStart
+  debugMetrics['bilingual_enabled'] = bilingualEnabled
+
+  stepStart = performance.now()
   const recentMessages = bilingualEnabled
     ? await applyBilingualContext({
         supabase,
         chatId,
         messages: rawRecentMessages,
         recentKoreanCount: 4,
+        onMetrics(metrics) {
+          debugMetrics['bilingual_total_messages'] = metrics.totalMessages
+          debugMetrics['bilingual_recent_messages_kept'] = metrics.recentMessagesKept
+          debugMetrics['bilingual_translation_candidates'] = metrics.translationCandidateCount
+          debugMetrics['bilingual_translation_rows_fetched'] = metrics.fetchedTranslationRowCount
+          debugMetrics['bilingual_translated_messages'] = metrics.translatedCount
+          debugMetrics['bilingual_untranslated_candidates'] = metrics.untranslatedCandidateCount
+          debugMetrics['bilingual_query_executed'] = metrics.queryExecuted
+        },
       })
     : rawRecentMessages
   timings['7b_bilingual_context'] = performance.now() - stepStart
+
+  if (!bilingualEnabled) {
+    debugMetrics['bilingual_total_messages'] = rawRecentMessages.length
+    debugMetrics['bilingual_recent_messages_kept'] = rawRecentMessages.length
+    debugMetrics['bilingual_translation_candidates'] = 0
+    debugMetrics['bilingual_translation_rows_fetched'] = 0
+    debugMetrics['bilingual_translated_messages'] = 0
+    debugMetrics['bilingual_untranslated_candidates'] = 0
+    debugMetrics['bilingual_query_executed'] = false
+  }
 
   const { messages: anthropicConversationMessages, placeholderAdded: anthropicPlaceholderAdded } =
     provider === 'anthropic'
@@ -220,6 +278,10 @@ export async function loadChatJobExecutionContext({
   if (totalInputTokens > CHAT_RUNNER_LIMITS.maxTotalInputTokens) {
     throw new Error(`Input context too large (${totalInputTokens.toLocaleString()} tokens)`)
   }
+
+  debugMetrics['anthropic_placeholder_added'] = anthropicPlaceholderAdded
+  debugMetrics['estimated_total_input_tokens'] = totalInputTokens
+  debugMetrics['estimated_static_prompt_tokens'] = estimateTokens(staticSystemPrompt)
 
   return {
     apiKeyData,
@@ -237,6 +299,7 @@ export async function loadChatJobExecutionContext({
     anthropicPlaceholderAdded,
     totalInputTokens,
     staticPromptTokens: estimateTokens(staticSystemPrompt),
+    debugMetrics,
   }
 }
 

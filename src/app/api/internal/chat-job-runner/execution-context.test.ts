@@ -83,6 +83,7 @@ describe('loadChatJobExecutionContext', () => {
     decryptSecretMock.mockReset()
 
     buildMemoryPlanMock.mockResolvedValue({
+      mode: 'summary_window',
       dynamicContext: 'DYNAMIC',
       fallbackMessages: [{ role: 'user', content: 'Hello' }],
       fallbackSystemPrompt: 'FINAL',
@@ -140,6 +141,18 @@ describe('loadChatJobExecutionContext', () => {
     expect(result.totalInputTokens).toBeGreaterThan(0)
     expect(result.staticPromptTokens).toBeGreaterThan(0)
     expect(result.dynamicContextTokens).toBeGreaterThan(0)
+    expect(result.debugMetrics).toEqual(
+      expect.objectContaining({
+        transcript_source: 'payload',
+        transcript_message_count: payload.sanitizedMessages.length,
+        lorebook_context_chars: 4,
+        memory_mode: 'summary_window',
+        memory_recent_message_count: 1,
+        memory_prompt_block_count: 1,
+        bilingual_enabled: false,
+        bilingual_query_executed: false,
+      }),
+    )
     expect(buildSystemPromptMock).toHaveBeenCalledWith(
       expect.objectContaining({
         defaultSystemPrompt: 'GLOBAL',
@@ -157,8 +170,10 @@ describe('loadChatJobExecutionContext', () => {
       expect.objectContaining({
         '1_api_key_query': expect.any(Number),
         '2_chat_query': expect.any(Number),
+        '5b_load_generation_transcript': expect.any(Number),
         '6_build_system_prompt': expect.any(Number),
         '7_build_context': expect.any(Number),
+        '7a_bilingual_flag_query': expect.any(Number),
         '7b_bilingual_context': expect.any(Number),
       }),
     )
@@ -175,7 +190,16 @@ describe('loadChatJobExecutionContext', () => {
       sanitizedMessages: [{ role: 'user', content: 'Ignored' }],
     })
 
-    loadGenerationTranscriptMock.mockResolvedValueOnce(transcript)
+    loadGenerationTranscriptMock.mockImplementationOnce(async ({ onMetrics }) => {
+      onMetrics?.({
+        targetTurnIndex: 7,
+        turnCount: 7,
+        fetchedMessageCount: 5,
+        transcriptMessageCount: transcript.length,
+        excludedAssistant: true,
+      })
+      return transcript
+    })
 
     const result = await loadChatJobExecutionContext({
       supabase: supabase as never,
@@ -196,6 +220,16 @@ describe('loadChatJobExecutionContext', () => {
       }),
     )
     expect(result.generationTranscript).toEqual(transcript)
+    expect(result.debugMetrics).toEqual(
+      expect.objectContaining({
+        transcript_source: 'db',
+        transcript_target_turn_index: 7,
+        transcript_turn_count: 7,
+        transcript_db_message_row_count: 5,
+        transcript_message_count: transcript.length,
+        transcript_excluded_assistant: true,
+      }),
+    )
   })
 
   it('fails in loading_context before provider execution when the token budget is too large', async () => {
@@ -203,6 +237,7 @@ describe('loadChatJobExecutionContext', () => {
     const supabase = createChatJobRunnerSupabaseMock()
 
     buildMemoryPlanMock.mockResolvedValueOnce({
+      mode: 'summary_window',
       dynamicContext: null,
       fallbackMessages: [{ role: 'user', content: 'Hello' }],
       fallbackSystemPrompt: 'x'.repeat(CHAT_RUNNER_LIMITS.maxTotalInputTokens * 4),

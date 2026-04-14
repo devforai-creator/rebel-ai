@@ -42,6 +42,15 @@ type BuildLorebookDynamicContextOptions = {
   chatId: string
   characterId: string
   chatHistory: SanitizedMessage[]
+  onMetrics?: (metrics: LorebookDynamicContextMetrics) => void
+}
+
+export type LorebookDynamicContextMetrics = {
+  moduleCount: number
+  entryCount: number
+  overrideCount: number
+  hasContext: boolean
+  contextCharCount: number
 }
 
 export async function loadChatLorebookState({
@@ -171,6 +180,7 @@ export async function buildLorebookDynamicContext({
   chatId,
   characterId,
   chatHistory,
+  onMetrics,
 }: BuildLorebookDynamicContextOptions): Promise<string | null> {
   const { entries, overrideMap } = await loadChatLorebookState({
     supabase,
@@ -178,11 +188,21 @@ export async function buildLorebookDynamicContext({
     characterId,
   })
 
-  return renderActiveLorebookBlock({
+  const context = renderActiveLorebookBlock({
     entries,
     overrideMap,
     chatHistory,
   })
+
+  onMetrics?.({
+    moduleCount: new Set(entries.map((entry) => entry.moduleId)).size,
+    entryCount: entries.length,
+    overrideCount: overrideMap.size,
+    hasContext: context !== null,
+    contextCharCount: context?.length ?? 0,
+  })
+
+  return context
 }
 
 function extractLorebookEntries(characterModules: CharacterModuleRow[]): LorebookRuntimeEntry[] {

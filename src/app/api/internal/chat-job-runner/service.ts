@@ -20,11 +20,33 @@ import { consumeStreamingResponseStage } from './streaming-response-stage'
 
 const CHAT_JOB_RUNNER_DEBUG_ENABLED = process.env.CHAT_JOB_RUNNER_DEBUG === 'true'
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
+type DebugMetricValue = string | number | boolean | null
 
 function logChatJobRunnerDebug(...args: unknown[]): void {
   if (CHAT_JOB_RUNNER_DEBUG_ENABLED) {
     console.debug(...args)
   }
+}
+
+function formatTimingsForDebug(timings: Record<string, number>): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(timings)
+      .map(([key, value]) => [key, Math.round(value)] as const)
+      .sort(([a], [b]) => a.localeCompare(b)),
+  )
+}
+
+function formatMetricsForDebug(
+  metrics: Record<string, DebugMetricValue>,
+): Record<string, DebugMetricValue> {
+  return Object.fromEntries(
+    Object.entries(metrics)
+      .map(([key, value]) => [
+        key,
+        typeof value === 'number' ? Math.round(value * 100) / 100 : value,
+      ])
+      .sort(([a], [b]) => String(a).localeCompare(String(b))),
+  )
 }
 
 export async function processChatJobs(limit: number = 1) {
@@ -39,7 +61,27 @@ export async function processChatJobs(limit: number = 1) {
   processed.push(...batchResults)
 
   for (let index = 0; index < jobLimit; index += 1) {
-    const job = await claimPendingJob(supabase)
+    const claimMetrics: Record<string, DebugMetricValue> = {}
+    const claimStart = performance.now()
+    const job = await claimPendingJob(supabase, {
+      onMetrics(metrics) {
+        claimMetrics['queue_fetch_ms'] = metrics.fetchDurationMs
+        claimMetrics['queue_update_ms'] = metrics.updateDurationMs
+        claimMetrics['queue_fetched_pending_row'] = metrics.fetchedPendingRow
+        claimMetrics['queue_claimed'] = metrics.claimed
+      },
+    })
+    const claimDurationMs = performance.now() - claimStart
+
+    logChatJobRunnerDebug('[Chat Job Runner] Queue claim result', {
+      iteration: index + 1,
+      jobId: job?.id ?? null,
+      metrics: formatMetricsForDebug({
+        ...claimMetrics,
+        queue_claim_total_ms: claimDurationMs,
+      }),
+    })
+
     if (!job) {
       break
     }
@@ -126,6 +168,7 @@ async function executeJob({
       anthropicPlaceholderAdded,
       totalInputTokens,
       staticPromptTokens,
+      debugMetrics,
     } = await loadChatJobExecutionContext({
       supabase,
       payload,
@@ -154,6 +197,7 @@ async function executeJob({
         anthropicPlaceholderAdded,
         totalInputTokens,
         staticPromptTokens,
+        debugMetrics,
       },
       timings,
       logDebug: logChatJobRunnerDebug,
@@ -227,11 +271,13 @@ async function executeJob({
     logChatJobRunnerDebug('[Chat Job Runner] Performance timings (ms)', {
       chatId,
       requestId: payload.requestId,
-      timings: Object.fromEntries(
-        Object.entries(timings)
-          .map(([key, value]) => [key, Math.round(value)] as const)
-          .sort(([a], [b]) => a.localeCompare(b)),
-      ),
+      timings: formatTimingsForDebug(timings),
+    })
+
+    logChatJobRunnerDebug('[Chat Job Runner] Context metrics', {
+      chatId,
+      requestId: payload.requestId,
+      metrics: formatMetricsForDebug(debugMetrics),
     })
 
     return { status: 'success' }

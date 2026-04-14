@@ -102,6 +102,7 @@ function buildContext(
     anthropicPlaceholderAdded: false,
     totalInputTokens: 1200,
     staticPromptTokens: 600,
+    debugMetrics: {},
     ...overrides,
   }
 }

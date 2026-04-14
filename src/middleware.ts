@@ -30,6 +30,8 @@ export async function middleware(request: NextRequest) {
     request,
   })
 
+  // Supabase SSR returns a more specific generic signature than the middleware alias uses.
+  // Keep the cast at the factory boundary instead of leaking it into auth logic below.
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

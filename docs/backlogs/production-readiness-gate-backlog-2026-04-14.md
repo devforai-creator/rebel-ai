@@ -290,6 +290,10 @@ Completion evidence:
 
 ### P2-1. Split Remaining Hot Paths by Operational Boundary
 
+Status:
+
+- Done on `2026-04-14`
+
 Scope:
 
 - `src/app/api/chats/[chatId]/assets/route.ts`
@@ -310,6 +314,26 @@ Done when:
 Current evidence as of `2026-04-14`:
 
 - the gate action plan flagged these three files as the next structural split targets
+
+Completion evidence:
+
+- `src/app/api/chats/[chatId]/assets/route.ts` now stays focused on auth, ownership, signing, and
+  response shaping while `src/app/api/chats/[chatId]/assets/asset-queries.ts` owns storage/module
+  reads and `src/app/api/chats/[chatId]/assets/asset-payload.ts` owns payload transformation logic
+- `src/lib/chat-memory/index.ts` now acts as a mode dispatcher while
+  `src/lib/chat-memory/summary-window.ts` owns the summary-window path and
+  `src/lib/chat-memory/prefix-live-blocks.ts` owns prefix-live-block planning and mutation work
+- `src/app/dashboard/chats/[id]/summary-actions.ts` now stays at the action-orchestration layer,
+  with `summary-action-support.ts` handling owned-chat context and path revalidation and
+  `summary-regeneration.ts` isolating regeneration payload/model resolution and trigger calls
+- direct seam coverage was added in
+  `src/app/api/chats/[chatId]/assets/asset-payload.test.ts`,
+  `src/app/dashboard/chats/[id]/summary-regeneration.test.ts`, and
+  `src/lib/chat-memory/summary-window.test.ts`, while existing route/action/memory tests were
+  updated to exercise the new split modules
+- `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build` all passed after the
+  refactor; the build initially failed because `summary-action-support.ts` used a `'use server'`
+  file with a sync export, and that boundary was corrected to `server-only`
 
 ### P2-2. Reconcile Docs and Defaults with a Closed-by-Default Operating Model
 

@@ -43,6 +43,28 @@ Current interpretation:
 - chat UI still performs repeated request-path work around job polling, latest-message reconciliation, and usage-stat refresh
 - the chat request path still dispatches through an extra internal trigger hop before runner execution
 
+## 2026-04-14 Session Outcome
+
+Completed this session:
+
+- `P0-1 scheduler inventory` is closed for the current maintainer deployment profile.
+- The high Vercel cron count in the dashboard was historical usage from the earlier Pro period, not current ongoing pressure.
+- The active scheduler setup now runs chat/import/janitor work every `5 minutes`, and storage janitor once per day.
+- `P0-2 polling relaxation` is complete.
+- The default chat poll cadence was relaxed from `800ms / 1.5x / 5s max` to `2s / 1.8x / 8s max`.
+- Hidden tabs now slow polling down further, and recent streaming progress also raises the minimum delay.
+- `P0-3 usage stats` is complete.
+- Chat usage stats are now opt-in at the account level, lazy-loaded, and completely hidden when disabled.
+- `P1-1 post-completion fetch consolidation` is complete enough for the low-complexity pass.
+- The chat UI now skips the completion-time `/messages/latest` fallback when realtime has already delivered the visible assistant reply, while preserving the fallback path when realtime has not yet caught up.
+
+Decision taken at the end of this session:
+
+- Stop here for now and observe post-deploy Vercel usage before doing more structural optimization.
+- Do not immediately pursue higher-complexity refactors just because more optimizations exist on paper.
+- In particular, defer response-shape expansion on `/api/chat`, trigger-hop removal, and broader polling/realtime responsibility changes until new production evidence shows the current low-complexity pass was insufficient.
+- If another low-complexity follow-up is needed later, the first candidate should be reducing the non-batch double-read in [src/app/api/chat/jobs/[id]/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/jobs/[id]/route.ts).
+
 ## Decision
 
 Do not optimize for invocation count first.
@@ -68,9 +90,9 @@ If invocation count falls as a side effect, that is useful but secondary.
 ## Current Pressure Themes
 
 - repeated chat polling paths are likely doing more work than the current single-user profile needs
-- usage stats are fetched eagerly even when that information is not always needed
+- usage stats were previously fetched eagerly even when that information was not always needed
 - chat runner dispatch currently pays an extra internal function hop
-- cron/scheduler activity is high relative to the current personal deployment footprint
+- the remaining likely pressure is route orchestration and repeated chat-path function work, not the currently configured external scheduler cadence
 - DB work was reduced in the previous backlog, but Vercel CPU pressure likely remains in route orchestration and repeated JSON/request handling
 
 ## P0
@@ -226,12 +248,11 @@ Do not use this backlog to justify:
 
 Start in this order unless new production evidence overrides it:
 
-1. P0-1 scheduler inventory
-2. P0-2 polling relaxation
-3. P0-3 usage-stats lazy fetch
-4. P0-4 trigger-hop measurement
-5. P1-1 post-completion fetch consolidation
-6. P1-2 scheduler cadence tuning
+1. Observe post-deploy Vercel usage instead of opening another speculative optimization batch immediately
+2. P0-4 trigger-hop measurement
+3. Lightweight cleanup of `/api/chat/jobs/[id]` for the non-batch path if polling pressure still looks high
+4. P1-2 scheduler cadence tuning only if the external scheduler profile changes
+5. P1-3 route-level operator notes if another session needs to continue this work
 
 ## Batch Close Checklist
 
@@ -245,4 +266,8 @@ Before closing a batch:
 
 ## Next Session Start Point
 
-Start with P0-1, not with another generic dashboard review.
+Do not start with another code change by default.
+
+Start by checking whether the deployed low-complexity changes materially lowered `Fluid Active CPU`.
+
+If the updated usage still looks tight, continue with `P0-4 trigger-hop measurement` before considering more invasive chat-path refactors.

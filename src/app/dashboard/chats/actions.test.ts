@@ -1,0 +1,276 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createSupabaseMock } from '@/tests/mocks/supabase'
+
+const createClientMock = vi.fn()
+const redirectMock = vi.fn()
+const revalidatePathMock = vi.fn()
+
+const hoistedMocks = vi.hoisted(() => ({
+  buildTurnGraphForMessagesMock: vi.fn(),
+  fromRisuFormatMock: vi.fn(),
+  getMessageCountMock: vi.fn(),
+  parseRisuChatJsonMock: vi.fn(),
+}))
+
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: () => createClientMock(),
+}))
+
+vi.mock('next/navigation', () => ({
+  redirect: (...args: unknown[]) => redirectMock(...args),
+}))
+
+vi.mock('next/cache', () => ({
+  revalidatePath: (...args: unknown[]) => revalidatePathMock(...args),
+}))
+
+vi.mock('@/lib/chat/turns', () => ({
+  buildTurnGraphForMessages: (...args: unknown[]) =>
+    hoistedMocks.buildTurnGraphForMessagesMock(...args),
+}))
+
+vi.mock('@/lib/chat/risu-converter', () => ({
+  fromRisuFormat: (...args: unknown[]) => hoistedMocks.fromRisuFormatMock(...args),
+  getMessageCount: (...args: unknown[]) => hoistedMocks.getMessageCountMock(...args),
+  parseRisuChatJson: (...args: unknown[]) => hoistedMocks.parseRisuChatJsonMock(...args),
+}))
+
+function buildSupabase({
+  user,
+  chats,
+  characters,
+  turns,
+  messages,
+}: {
+  user: { id: string } | null
+  chats?: Array<Record<string, unknown>>
+  characters?: Array<Record<string, unknown>>
+  turns?: Array<Record<string, unknown>>
+  messages?: Array<Record<string, unknown>>
+}) {
+  const supabase = createSupabaseMock({
+    tables: {
+      chats: {
+        rows: chats ?? [],
+        primaryKeys: ['id'],
+        transformInsert: (row, current) => ({
+          id: `chat-${current.length + 1}`,
+          ...row,
+        }),
+      },
+      characters: {
+        rows: characters ?? [],
+        primaryKeys: ['id'],
+      },
+      chat_turns: {
+        rows: turns ?? [],
+        primaryKeys: ['id'],
+      },
+      messages: {
+        rows: messages ?? [],
+        primaryKeys: ['id'],
+      },
+    },
+  })
+
+  Object.assign(supabase, {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({ data: { user }, error: null }),
+    },
+  })
+
+  const baseFrom = supabase.from.bind(supabase)
+  supabase.from = ((table: string) => {
+    if (table !== 'characters') {
+      return baseFrom(table)
+    }
+
+    return {
+      select() {
+        let characterId: string | null = null
+        let ownerId: string | null = null
+
+        const builder = {
+          eq(field: string, value: unknown) {
+            if (field === 'id') {
+              characterId = String(value)
+            }
+            return builder
+          },
+          or(clause: string) {
+            const ownerMatch = clause.match(/^user_id\.eq\.(.+),user_id\.is\.null$/)
+            ownerId = ownerMatch?.[1] ?? null
+            return builder
+          },
+          async single() {
+            const rows = (supabase.state.characters as Array<Record<string, unknown>>).filter(
+              (row) => row.id === characterId && (row.user_id === ownerId || row.user_id === null),
+            )
+            const character = rows[0] ?? null
+
+            return {
+              data: character
+                ? {
+                    id: character.id,
+                    name: character.name,
+                  }
+                : null,
+              error: character ? null : { code: 'PGRST116', message: 'No rows found' },
+            }
+          },
+        }
+
+        return builder
+      },
+    }
+  }) as typeof supabase.from
+
+  return supabase
+}
+
+function getChatRows(supabase: ReturnType<typeof buildSupabase>) {
+  return supabase.state.chats as Array<Record<string, unknown>>
+}
+
+function getTurnRows(supabase: ReturnType<typeof buildSupabase>) {
+  return supabase.state.chatTurns as Array<Record<string, unknown>>
+}
+
+function getMessageRows(supabase: ReturnType<typeof buildSupabase>) {
+  return supabase.state.messages as Array<Record<string, unknown>>
+}
+
+describe('dashboard chats actions', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    createClientMock.mockReset()
+    redirectMock.mockReset()
+    revalidatePathMock.mockReset()
+    hoistedMocks.buildTurnGraphForMessagesMock.mockReset()
+    hoistedMocks.fromRisuFormatMock.mockReset()
+    hoistedMocks.getMessageCountMock.mockReset()
+    hoistedMocks.parseRisuChatJsonMock.mockReset()
+  })
+
+  it('returns login required when deleting a chat without a session', async () => {
+    createClientMock.mockResolvedValue(buildSupabase({ user: null }))
+    const { deleteChat } = await import('./actions')
+
+    await expect(deleteChat('chat-1')).resolves.toEqual({ error: 'Login required' })
+  })
+
+  it('deletes an owned chat, revalidates, and skips redirect when requested', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      chats: [{ id: 'chat-1', user_id: 'user-1', character_id: 'char-1', title: 'Chat' }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { deleteChat } = await import('./actions')
+
+    await expect(deleteChat('chat-1', false)).resolves.toEqual({ success: true })
+    expect(getChatRows(supabase)).toEqual([])
+    expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/characters/char-1')
+    expect(redirectMock).not.toHaveBeenCalled()
+  })
+
+  it('redirects after deleting an owned chat by default', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      chats: [{ id: 'chat-1', user_id: 'user-1', character_id: 'char-1' }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { deleteChat } = await import('./actions')
+
+    await expect(deleteChat('chat-1')).resolves.toEqual({ success: true })
+    expect(redirectMock).toHaveBeenCalledWith('/dashboard/characters/char-1')
+  })
+
+  it('returns a validation error when imported chat data has no messages', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      characters: [{ id: 'char-1', user_id: 'user-1', name: 'Scout' }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    hoistedMocks.parseRisuChatJsonMock.mockReturnValue({ data: {} })
+    hoistedMocks.getMessageCountMock.mockReturnValue(0)
+    const { importChat } = await import('./actions')
+
+    await expect(importChat('char-1', '{"data":{}}')).resolves.toEqual({
+      success: false,
+      error: 'No messages to import',
+    })
+  })
+
+  it('returns the parser error when the imported JSON is invalid', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      characters: [{ id: 'char-1', user_id: 'user-1', name: 'Scout' }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    hoistedMocks.parseRisuChatJsonMock.mockImplementation(() => {
+      throw new Error('Invalid JSON format')
+    })
+    const { importChat } = await import('./actions')
+
+    await expect(importChat('char-1', '{bad json')).resolves.toEqual({
+      success: false,
+      error: 'Invalid JSON format',
+    })
+  })
+
+  it('imports a chat, stores generated turns/messages, and revalidates the character page', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      characters: [{ id: 'char-1', user_id: 'user-1', name: 'Scout' }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    hoistedMocks.parseRisuChatJsonMock.mockReturnValue({ data: {} })
+    hoistedMocks.getMessageCountMock.mockReturnValue(2)
+    hoistedMocks.fromRisuFormatMock.mockReturnValue([
+      {
+        id: 'imported-1',
+        role: 'user',
+        content: 'Hello',
+        created_at: '2026-04-14T00:00:00.000Z',
+        model_used: null,
+        prompt_tokens: null,
+        completion_tokens: null,
+      },
+    ])
+    hoistedMocks.buildTurnGraphForMessagesMock.mockReturnValue({
+      turns: [{ id: 'turn-1', chat_id: 'chat-1', user_message_id: 'msg-1' }],
+      messages: [{ id: 'msg-1', chat_id: 'chat-1', role: 'user', content: 'Hello' }],
+    })
+    const { importChat } = await import('./actions')
+
+    await expect(importChat('char-1', '{"data":{}}', 'Imported from test')).resolves.toEqual({
+      success: true,
+      chatId: 'chat-1',
+      messageCount: 2,
+    })
+    expect(getChatRows(supabase)).toEqual([
+      {
+        id: 'chat-1',
+        user_id: 'user-1',
+        character_id: 'char-1',
+        title: 'Imported from test',
+      },
+    ])
+    expect(getTurnRows(supabase)).toEqual([
+      {
+        id: 'turn-1',
+        chat_id: 'chat-1',
+        user_message_id: 'msg-1',
+      },
+    ])
+    expect(getMessageRows(supabase)).toEqual([
+      {
+        id: 'msg-1',
+        chat_id: 'chat-1',
+        role: 'user',
+        content: 'Hello',
+      },
+    ])
+    expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/characters/char-1')
+  })
+})

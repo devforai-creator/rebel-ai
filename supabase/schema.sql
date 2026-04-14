@@ -6308,3 +6308,26 @@ where message.id = ranked.id
   and ranked.recency_rank > 1
   and message.debug_info is not null;
 
+
+
+-- >>> 78_drop_redundant_asset_storage_path_indexes.sql
+
+-- character_assets.storage_path and module_assets.storage_path already have
+-- unique constraints backed by btree indexes. The extra non-unique indexes on
+-- the same column duplicate storage and write-maintenance cost without adding
+-- a different access path.
+
+drop index if exists public.idx_character_assets_storage_path;
+drop index if exists public.idx_module_assets_storage_path;
+
+
+
+-- >>> 79_drop_unused_character_asset_name_indexes.sql
+
+-- character_assets name matching currently happens after loading the asset list
+-- into application memory. These historical name indexes have shown no usage
+-- in the current observation window and duplicate write/storage overhead.
+
+drop index if exists public.idx_character_assets_display_name;
+drop index if exists public.idx_character_assets_canonical_name;
+

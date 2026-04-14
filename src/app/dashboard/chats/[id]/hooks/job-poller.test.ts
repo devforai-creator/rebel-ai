@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { CHAT_JOB_POLLER_LIMITS } from '@/lib/chat/runtime-limits'
 import { pollJobStatus, JobPollerDeps, JobPollerConfig } from './job-poller'
 
 describe('pollJobStatus', () => {
@@ -32,6 +33,18 @@ describe('pollJobStatus', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('keeps the default poller config aligned with the shared runtime limits', async () => {
+    const { DEFAULT_JOB_POLLER_CONFIG } = await import('./job-poller')
+
+    expect(DEFAULT_JOB_POLLER_CONFIG).toEqual({
+      timeoutMs: CHAT_JOB_POLLER_LIMITS.timeoutMs,
+      initialDelayMs: CHAT_JOB_POLLER_LIMITS.initialDelayMs,
+      maxDelayMs: CHAT_JOB_POLLER_LIMITS.maxDelayMs,
+      backoffMultiplier: CHAT_JOB_POLLER_LIMITS.backoffMultiplier,
+      slowProgressThresholdMs: CHAT_JOB_POLLER_LIMITS.slowProgressThresholdMs,
+    })
   })
 
   describe('success case', () => {

@@ -1,12 +1,7 @@
 import crypto from 'crypto'
 import { buildInternalApiUrlForEdge } from '@/lib/internal-api-origin'
 import type { Database } from '@/types/database.types'
-
-const USER_RATE_LIMIT_WINDOW_SECONDS = 60
-const USER_RATE_LIMIT_MAX_REQUESTS = 30
-const ANON_RATE_LIMIT_WINDOW_SECONDS = 60
-const ANON_RATE_LIMIT_MAX_REQUESTS = 10
-const MAX_ANON_RATE_LIMIT_IDENTIFIER_LENGTH = 256
+import { CHAT_RATE_LIMITS } from './runtime-limits'
 
 interface RateLimitResult {
   allowed: boolean
@@ -34,8 +29,8 @@ type ChatAdminResponse<T> = {
 export async function checkUserRateLimit(userId: string): Promise<RateLimitResult> {
   const rateLimitArgs = {
     target_user_id: userId,
-    window_seconds: USER_RATE_LIMIT_WINDOW_SECONDS,
-    max_requests: USER_RATE_LIMIT_MAX_REQUESTS,
+    window_seconds: CHAT_RATE_LIMITS.userWindowSeconds,
+    max_requests: CHAT_RATE_LIMITS.userMaxRequests,
   } satisfies Database['public']['Functions']['check_chat_rate_limit']['Args']
 
   const rateLimitData = await callChatAdmin<Array<{
@@ -53,7 +48,7 @@ export async function checkUserRateLimit(userId: string): Promise<RateLimitResul
   const retryAfter =
     typeof rateLimiterPayload?.retry_after === 'number'
       ? Math.max(1, rateLimiterPayload.retry_after)
-      : USER_RATE_LIMIT_WINDOW_SECONDS
+      : CHAT_RATE_LIMITS.userWindowSeconds
 
   return { allowed, retryAfter: allowed ? null : retryAfter }
 }
@@ -63,8 +58,8 @@ export async function checkAnonRateLimit(identifier: string): Promise<RateLimitR
 
   const rateLimitArgs = {
     identifier: normalizedIdentifier,
-    window_seconds: ANON_RATE_LIMIT_WINDOW_SECONDS,
-    max_requests: ANON_RATE_LIMIT_MAX_REQUESTS,
+    window_seconds: CHAT_RATE_LIMITS.anonWindowSeconds,
+    max_requests: CHAT_RATE_LIMITS.anonMaxRequests,
   } satisfies Database['public']['Functions']['check_anon_rate_limit']['Args']
 
   const rateLimitData = await callChatAdmin<Array<{
@@ -82,7 +77,7 @@ export async function checkAnonRateLimit(identifier: string): Promise<RateLimitR
   const retryAfter =
     typeof rateLimiterPayload?.retry_after === 'number'
       ? Math.max(1, rateLimiterPayload.retry_after)
-      : ANON_RATE_LIMIT_WINDOW_SECONDS
+      : CHAT_RATE_LIMITS.anonWindowSeconds
 
   return { allowed, retryAfter: allowed ? null : retryAfter }
 }
@@ -94,11 +89,11 @@ export function buildClientIdentifier(identifier: string): string {
   }
 
   const hashed = hashString(normalized)
-  if (hashed.length <= MAX_ANON_RATE_LIMIT_IDENTIFIER_LENGTH) {
+  if (hashed.length <= CHAT_RATE_LIMITS.maxAnonRateLimitIdentifierLength) {
     return hashed
   }
 
-  return hashed.slice(0, MAX_ANON_RATE_LIMIT_IDENTIFIER_LENGTH)
+  return hashed.slice(0, CHAT_RATE_LIMITS.maxAnonRateLimitIdentifierLength)
 }
 
 function hashString(input: string): string {

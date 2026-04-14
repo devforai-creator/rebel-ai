@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { buildClientIdentifier } from '@/lib/chat/rate-limiter'
+import { CHAT_REQUEST_LIMITS } from '@/lib/chat/runtime-limits'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
 import { getDefaultModelForProvider } from '@/lib/llm/default-model'
 
@@ -1010,7 +1011,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'a'.repeat(262_145) }],
+        messages: [{ role: 'user', content: 'a'.repeat(CHAT_REQUEST_LIMITS.maxMessageBytes + 1) }],
       }),
     })
 
@@ -1263,7 +1264,7 @@ describe('POST /api/chat', () => {
       method: 'POST',
       body: '{}',
       headers: {
-        'content-length': '5308417',
+        'content-length': String(CHAT_REQUEST_LIMITS.maxRequestBodyBytes + 1),
         'content-type': 'application/json',
       },
     })

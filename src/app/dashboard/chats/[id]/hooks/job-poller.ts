@@ -4,6 +4,7 @@
  */
 
 import { formatChatJobFailureMessage } from '@/lib/chat/job-lifecycle'
+import { CHAT_JOB_POLLER_LIMITS } from '@/lib/chat/runtime-limits'
 
 export interface JobPollerDeps {
   fetchJobStatus: (jobId: string) => Promise<{
@@ -34,11 +35,11 @@ export interface JobPollerConfig {
 }
 
 export const DEFAULT_JOB_POLLER_CONFIG: JobPollerConfig = {
-  timeoutMs: 10 * 60 * 1000,
-  initialDelayMs: 800,
-  maxDelayMs: 5000,
-  backoffMultiplier: 1.5,
-  slowProgressThresholdMs: 30_000,
+  timeoutMs: CHAT_JOB_POLLER_LIMITS.timeoutMs,
+  initialDelayMs: CHAT_JOB_POLLER_LIMITS.initialDelayMs,
+  maxDelayMs: CHAT_JOB_POLLER_LIMITS.maxDelayMs,
+  backoffMultiplier: CHAT_JOB_POLLER_LIMITS.backoffMultiplier,
+  slowProgressThresholdMs: CHAT_JOB_POLLER_LIMITS.slowProgressThresholdMs,
 }
 
 export type JobPollerResult =

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkUserRateLimit } from '@/lib/chat/rate-limiter'
+import { CHAT_REPROCESS_LIMITS } from '@/lib/chat/runtime-limits'
 import { streamText } from 'ai'
 import { buildLanguageModel } from '@/lib/llm/model-factory'
 import { getDefaultModelForProvider } from '@/lib/models'
@@ -10,7 +11,6 @@ import { z } from 'zod'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const STREAM_UPDATE_INTERVAL_MS = 200
 const SUPPORT_TIER_HEADER = 'X-RebelAI-Support-Tier'
 const REPROCESS_SUPPORT_TIER = 'experimental'
 
@@ -208,7 +208,7 @@ export async function POST(request: Request) {
       const now = Date.now()
 
       // Update DB every 200ms
-      if (now - lastUpdateAt >= STREAM_UPDATE_INTERVAL_MS) {
+      if (now - lastUpdateAt >= CHAT_REPROCESS_LIMITS.streamUpdateIntervalMs) {
         enqueueMessageUpdate(fullText)
         lastUpdateAt = now
       }

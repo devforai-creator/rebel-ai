@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { CHAT_RATE_LIMITS } from './runtime-limits'
 
 const internalApiUrl = 'https://internal.test/api/internal/chat-admin'
 
@@ -47,7 +48,7 @@ describe('rate limiter', () => {
     const longIdentifier = 'a'.repeat(2048)
     const hashed = buildClientIdentifier(longIdentifier)
     expect(hashed.startsWith('ua:')).toBe(true)
-    expect(hashed.length).toBeLessThanOrEqual(256)
+    expect(hashed.length).toBeLessThanOrEqual(CHAT_RATE_LIMITS.maxAnonRateLimitIdentifierLength)
   })
 
   it('calls chat-admin for user rate limit with auth header', async () => {
@@ -103,7 +104,7 @@ describe('rate limiter', () => {
     const { checkUserRateLimit } = await import('./rate-limiter')
 
     const result = await checkUserRateLimit('user-123')
-    expect(result).toEqual({ allowed: false, retryAfter: 60 })
+    expect(result).toEqual({ allowed: false, retryAfter: CHAT_RATE_LIMITS.userWindowSeconds })
   })
 
   it('clamps anon retryAfter to at least one second', async () => {
@@ -131,7 +132,7 @@ describe('rate limiter', () => {
     const { checkAnonRateLimit } = await import('./rate-limiter')
 
     const result = await checkAnonRateLimit('203.0.113.99')
-    expect(result).toEqual({ allowed: false, retryAfter: 60 })
+    expect(result).toEqual({ allowed: false, retryAfter: CHAT_RATE_LIMITS.anonWindowSeconds })
   })
 
   it('adds Vercel protection bypass header when configured', async () => {

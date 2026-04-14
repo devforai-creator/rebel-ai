@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import { CHAT_JOB_PAYLOAD_VERSION, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { checkUserRateLimit, checkAnonRateLimit } from '@/lib/chat/rate-limiter'
+import { CHAT_REQUEST_LIMITS } from '@/lib/chat/runtime-limits'
 import {
   ACTIVE_CHAT_JOB_CONFLICT_MESSAGE,
   ACTIVE_QUEUE_JOB_STATUSES,
@@ -27,10 +28,6 @@ import { extractClientIdentifier, parseDeclaredContentLength } from './request-m
 export const runtime = 'nodejs'
 export const maxDuration = 60 // 60 second timeout
 
-// Increased to 256KB to support characters with large first message templates
-// (e.g., RisuAI First Message Selector with multiple variations)
-const MAX_MESSAGE_BYTES = 262_144 // 256KB per message
-const MAX_CHAT_REQUEST_BODY_BYTES = 5_308_416 // ~5MB to cap parsing cost even when platform limits are loose
 const CHAT_API_DEBUG_ENABLED = process.env.CHAT_API_DEBUG === 'true'
 
 function logChatApiDebug(...args: unknown[]): void {
@@ -80,7 +77,7 @@ export async function POST(req: Request) {
     const declaredContentLength = parseDeclaredContentLength(req.headers.get('content-length'))
     if (
       typeof declaredContentLength === 'number' &&
-      declaredContentLength > MAX_CHAT_REQUEST_BODY_BYTES
+      declaredContentLength > CHAT_REQUEST_LIMITS.maxRequestBodyBytes
     ) {
       return createErrorResponse('Request body exceeds allowed size', 413)
     }
@@ -186,7 +183,7 @@ export async function POST(req: Request) {
       }
 
       const byteLength = textEncoder.encode(lastMessage.content).length
-      if (byteLength > MAX_MESSAGE_BYTES) {
+      if (byteLength > CHAT_REQUEST_LIMITS.maxMessageBytes) {
         return createErrorResponse('Message exceeds allowed size', 400)
       }
     }

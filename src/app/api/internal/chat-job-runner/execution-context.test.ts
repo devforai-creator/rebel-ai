@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CHAT_DELIVERY_MODE_STREAMING } from '@/lib/chat/delivery-mode'
 import { CHAT_JOB_PAYLOAD_VERSION, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
+import { CHAT_RUNNER_LIMITS } from '@/lib/chat/runtime-limits'
 import { createChatJobRunnerSupabaseMock } from '@/tests/mocks/supabase'
 
 const buildMemoryPlanMock = vi.fn()
@@ -204,9 +205,9 @@ describe('loadChatJobExecutionContext', () => {
     buildMemoryPlanMock.mockResolvedValueOnce({
       dynamicContext: null,
       fallbackMessages: [{ role: 'user', content: 'Hello' }],
-      fallbackSystemPrompt: 'x'.repeat(500_000),
+      fallbackSystemPrompt: 'x'.repeat(CHAT_RUNNER_LIMITS.maxTotalInputTokens * 4),
       promptBlocks: [],
-      staticSystemPrompt: 'x'.repeat(500_000),
+      staticSystemPrompt: 'x'.repeat(CHAT_RUNNER_LIMITS.maxTotalInputTokens * 4),
       ragInfo: null,
     })
 

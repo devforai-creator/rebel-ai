@@ -1178,6 +1178,7 @@ export type Database = {
           chunk_summary_prompt: string | null
           created_at: string
           display_name: string | null
+          enable_chat_usage_stats: boolean
           enable_episodic_rag: boolean
           fact_extraction_prompt: string | null
           id: string
@@ -1196,6 +1197,7 @@ export type Database = {
           chunk_summary_prompt?: string | null
           created_at?: string
           display_name?: string | null
+          enable_chat_usage_stats?: boolean
           enable_episodic_rag?: boolean
           fact_extraction_prompt?: string | null
           id: string
@@ -1214,6 +1216,7 @@ export type Database = {
           chunk_summary_prompt?: string | null
           created_at?: string
           display_name?: string | null
+          enable_chat_usage_stats?: boolean
           enable_episodic_rag?: boolean
           fact_extraction_prompt?: string | null
           id?: string
@@ -1445,13 +1448,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      claim_pending_chat_job: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          id: string
-          payload: Json
-        }[]
-      }
       check_anon_rate_limit: {
         Args: {
           identifier: string
@@ -1474,6 +1470,13 @@ export type Database = {
           allowed: boolean
           remaining: number
           retry_after: number
+        }[]
+      }
+      claim_pending_chat_job: {
+        Args: never
+        Returns: {
+          id: string
+          payload: Json
         }[]
       }
       create_secret:
@@ -1544,17 +1547,17 @@ export type Database = {
         Returns: string
       }
       list_current_user_modules: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           asset_count: number
           created_at: string
-          description: string | null
+          description: string
           hide_icon: boolean
           id: string
           lorebook_count: number
           name: string
           regex_count: number
-          source_file: string | null
+          source_file: string
           updated_at: string
         }[]
       }

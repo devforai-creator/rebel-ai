@@ -419,6 +419,30 @@ describe('account actions', () => {
     ])
   })
 
+  it('updates chat usage settings as a simple profile toggle', async () => {
+    const supabase = buildSupabase()
+    createClientMock.mockResolvedValue(supabase)
+    const { updateChatUsageSettings } = await import('./actions')
+
+    const result = await updateChatUsageSettings(
+      { error: null, success: false },
+      buildFormData({
+        enable_chat_usage_stats: 'true',
+      }),
+    )
+
+    expect(result).toEqual({ error: null, success: true })
+    expect(supabase.state.profileUpdateCalls).toEqual([
+      {
+        table: 'profiles',
+        payload: {
+          enable_chat_usage_stats: true,
+        },
+        filters: [['id', 'user-1']],
+      },
+    ])
+  })
+
   it('normalizes blank summary model selection to null', async () => {
     const supabase = buildSupabase()
     createClientMock.mockResolvedValue(supabase)

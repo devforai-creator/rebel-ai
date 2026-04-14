@@ -201,6 +201,7 @@ export interface ChatInterfaceProps {
   preselectedApiKeyId?: string
   initialModelConfig?: ChatModelConfig | null
   initialUsageStats: LatestMessageTokenStats | null
+  usageStatsEnabled: boolean
   character: ChatCharacter
   initialHistoryCursor: number | null
   hasMoreHistory: boolean

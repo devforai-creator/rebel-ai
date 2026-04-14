@@ -5,11 +5,13 @@ import {
   deleteAccount as deleteAccountImpl,
 } from './account-security-actions'
 import {
+  updateChatUsageSettings as updateChatUsageSettingsImpl,
   updateRagSettings as updateRagSettingsImpl,
   updateReprocessSettings as updateReprocessSettingsImpl,
   updateSummaryModelPreference as updateSummaryModelPreferenceImpl,
   updateSummaryPrompts as updateSummaryPromptsImpl,
   updateTranslationModelPreference as updateTranslationModelPreferenceImpl,
+  type ChatUsageSettingsState,
   type RagSettingsState,
   type ReprocessSettingsState,
   type SummaryModelPreferenceState,
@@ -17,6 +19,7 @@ import {
 } from './account-settings-actions'
 
 export type {
+  ChatUsageSettingsState,
   RagSettingsState,
   ReprocessSettingsState,
   SummaryModelPreferenceState,
@@ -33,6 +36,13 @@ export async function updateSummaryPrompts(
 
 export async function updateRagSettings(prevState: RagSettingsState, formData: FormData) {
   return updateRagSettingsImpl(prevState, formData)
+}
+
+export async function updateChatUsageSettings(
+  prevState: ChatUsageSettingsState,
+  formData: FormData,
+) {
+  return updateChatUsageSettingsImpl(prevState, formData)
 }
 
 export async function updateSummaryModelPreference(

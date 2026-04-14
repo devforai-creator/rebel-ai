@@ -33,6 +33,7 @@ export default function ChatInterface({
   preselectedApiKeyId,
   initialModelConfig,
   initialUsageStats,
+  usageStatsEnabled,
   character,
   initialHistoryCursor,
   hasMoreHistory,
@@ -73,13 +74,20 @@ export default function ChatInterface({
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
 
   // State
-  const { latestUsage, fetchLatestUsage, handleUsageRealtime } = useChatUsageStats({
-    chatId,
-    initialUsageStats,
-  })
-
   // Developer mode state
   const [statsExpanded, setStatsExpanded] = useState(false)
+
+  const {
+    latestUsage,
+    isLoading: usageStatsLoading,
+    fetchLatestUsage,
+    handleUsageRealtime,
+  } = useChatUsageStats({
+    chatId,
+    initialUsageStats,
+    enabled: usageStatsEnabled,
+    active: statsExpanded,
+  })
 
   // Debug info and persisted IDs tracking
   const debugInfoMap = useRef<Map<string, DebugInfo>>(new Map())
@@ -250,6 +258,8 @@ export default function ChatInterface({
         onSelectMemoryMode={handleSelectMemoryMode}
         onToggleAnthropicBatchMode={handleToggleAnthropicBatchMode}
         latestUsage={latestUsage}
+        usageStatsEnabled={usageStatsEnabled}
+        usageStatsLoading={usageStatsLoading}
         statsExpanded={statsExpanded}
         onToggleStats={() => setStatsExpanded(!statsExpanded)}
         isDeveloper={isDeveloper}

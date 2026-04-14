@@ -12,8 +12,12 @@ import {
 } from '@/lib/http/api-contract'
 import { listModuleAssetStoragePaths, removeStorageObjects } from '@/lib/assets/storage-cleanup'
 import { createClient } from '@/lib/supabase/server'
+import type { Database } from '@/types/database.types'
 
 export const runtime = 'nodejs'
+
+type ModuleSummaryRow =
+  Database['public']['Functions']['list_current_user_modules']['Returns'][number]
 
 /**
  * GET - List all modules for authenticated user
@@ -25,23 +29,15 @@ export async function GET() {
     if (!auth.success) {
       return auth.response
     }
-    const { user } = auth
 
-    const { data: modules, error: fetchError } = await supabase
-      .from('modules')
-      .select(
-        'id, name, description, source_file, hide_icon, created_at, updated_at, lorebook, regex, assets',
-      )
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+    const { data: modules, error: fetchError } = await supabase.rpc('list_current_user_modules')
 
     if (fetchError) {
       console.error('[Modules API] Failed to fetch modules:', fetchError)
       return createApiErrorResponse('Failed to fetch modules', 500)
     }
 
-    // Add counts for each module
-    const modulesWithCounts = (modules || []).map((mod) => ({
+    const modulesWithCounts = ((modules ?? []) as ModuleSummaryRow[]).map((mod) => ({
       id: mod.id,
       name: mod.name,
       description: mod.description,
@@ -50,9 +46,9 @@ export async function GET() {
       created_at: mod.created_at,
       updated_at: mod.updated_at,
       counts: {
-        lorebook: Array.isArray(mod.lorebook) ? mod.lorebook.length : 0,
-        regex: Array.isArray(mod.regex) ? mod.regex.length : 0,
-        assets: Array.isArray(mod.assets) ? mod.assets.length : 0,
+        lorebook: mod.lorebook_count,
+        regex: mod.regex_count,
+        assets: mod.asset_count,
       },
     }))
 

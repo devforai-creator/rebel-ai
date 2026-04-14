@@ -15,6 +15,26 @@ function buildSupabase(options: {
   storageRemoveError?: { message: string } | null
 }) {
   const supabase = createSupabaseMock({
+    rpc: {
+      list_current_user_modules: () =>
+        [...(options.modules ?? [])]
+          .filter((module) => module.user_id === options.user?.id)
+          .sort((left, right) =>
+            String(right.created_at ?? '').localeCompare(String(left.created_at ?? '')),
+          )
+          .map((module) => ({
+            id: module.id,
+            name: module.name,
+            description: module.description ?? null,
+            source_file: module.source_file ?? null,
+            hide_icon: Boolean(module.hide_icon),
+            created_at: String(module.created_at ?? ''),
+            updated_at: String(module.updated_at ?? ''),
+            lorebook_count: Array.isArray(module.lorebook) ? module.lorebook.length : 0,
+            regex_count: Array.isArray(module.regex) ? module.regex.length : 0,
+            asset_count: Array.isArray(module.assets) ? module.assets.length : 0,
+          })),
+    },
     tables: {
       modules: {
         rows: options.modules ?? [],
@@ -30,6 +50,7 @@ function buildSupabase(options: {
       ...supabase.state,
       storageRemoveCalls: [] as Array<{ bucket: string; paths: string[] }>,
     },
+    rpc: vi.fn(supabase.rpc),
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: options.user }, error: null }),
     },
@@ -129,6 +150,7 @@ describe('/api/modules', () => {
       const body = await response.json()
 
       expect(response.status).toBe(200)
+      expect(supabase.rpc).toHaveBeenCalledWith('list_current_user_modules')
       expect(body.modules).toHaveLength(2)
       expect(body.modules[0].id).toBe('mod-2') // ordered desc by created_at
       expect(body.modules[0].counts).toEqual({

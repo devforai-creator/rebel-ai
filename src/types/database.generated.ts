@@ -1543,6 +1543,21 @@ export type Database = {
         Args: { requester?: string; secret_name: string }
         Returns: string
       }
+      list_current_user_modules: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          asset_count: number
+          created_at: string
+          description: string | null
+          hide_icon: boolean
+          id: string
+          lorebook_count: number
+          name: string
+          regex_count: number
+          source_file: string | null
+          updated_at: string
+        }[]
+      }
       match_chat_facts: {
         Args: {
           chat_id: string

@@ -3,30 +3,18 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronRight, ChevronDown, Folder, FileText, Edit, Trash2 } from 'lucide-react'
-import type { LorebookEntry } from '@/types/risuai.types'
 import { groupLorebookByFolder } from '@/lib/lorebook-renderer'
+import type { LorebookEntry } from '@/types/risuai.types'
 import { updateLorebookEntryAlwaysActive } from './actions'
-
-interface CharacterModule {
-  id: string
-  enabled: boolean
-  priority: number
-  module_id: string
-  modules: {
-    id: string
-    name: string
-    lorebook: unknown
-  } | null
-}
+import {
+  buildCharacterLorebookEntries,
+  type CharacterLorebookEntry,
+  type CharacterModuleWithLorebook,
+} from './lorebook-data'
 
 interface LorebookManagerProps {
   characterId: string
-  characterModules: CharacterModule[]
-}
-
-interface CharacterLorebookEntry extends LorebookEntry {
-  moduleId: string
-  moduleName: string
+  characterModules: CharacterModuleWithLorebook[]
 }
 
 export default function LorebookManager({ characterId, characterModules }: LorebookManagerProps) {
@@ -34,31 +22,12 @@ export default function LorebookManager({ characterId, characterModules }: Loreb
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['__root__']))
   const [editingEntry, setEditingEntry] = useState<string | null>(null)
 
-  // Collect all lorebook entries from active modules
-  const allEntries: CharacterLorebookEntry[] = []
-  for (const cm of characterModules) {
-    if (cm.modules?.lorebook && Array.isArray(cm.modules.lorebook)) {
-      const moduleEntries = cm.modules.lorebook as LorebookEntry[]
-      for (const entry of moduleEntries) {
-        allEntries.push({
-          ...entry,
-          moduleId: cm.module_id,
-          moduleName: cm.modules?.name ?? 'Unknown Module',
-        })
-      }
-    }
-  }
+  const allEntries = buildCharacterLorebookEntries(characterModules)
 
-  // Helper to get lorebook count safely
-  const getLorebookCount = (lorebook: unknown): number => {
-    if (Array.isArray(lorebook)) {
-      return lorebook.length
-    }
-    return 0
-  }
+  const getLorebookCount = (lorebook: LorebookEntry[]): number => lorebook.length
 
   // Group by folder
-  const folderMap = groupLorebookByFolder(allEntries) as Map<string, CharacterLorebookEntry[]>
+  const folderMap = groupLorebookByFolder(allEntries)
 
   const toggleFolder = (folderKey: string) => {
     setExpandedFolders((prev) => {
@@ -109,7 +78,7 @@ export default function LorebookManager({ characterId, characterModules }: Loreb
                 />
                 <span>{cm.modules?.name ?? 'Unknown Module'}</span>
                 <span className="text-xs text-muted-foreground">
-                  ({getLorebookCount(cm.modules?.lorebook)}개 항목)
+                  ({getLorebookCount(cm.modules?.lorebook ?? [])}개 항목)
                 </span>
               </div>
               <span className="text-xs text-muted-foreground">우선순위: {cm.priority}</span>

@@ -27,10 +27,20 @@ export type SummaryEntry = Pick<
 
 export type FactEntry = Pick<ChatFacts, 'id' | 'start_seq' | 'end_seq' | 'facts' | 'created_at'>
 
-type RealtimeCollectionPayload<T extends { id: string }> = {
-  eventType: 'INSERT' | 'UPDATE' | 'DELETE'
-  new: T
-  old: Pick<T, 'id'>
+type RealtimeCollectionPayload<T extends { id: string }> =
+  | {
+      eventType: 'INSERT' | 'UPDATE'
+      new: T
+      old: Partial<Pick<T, 'id'>>
+    }
+  | {
+      eventType: 'DELETE'
+      old: Pick<T, 'id'>
+    }
+
+type StatsResponse = {
+  messageCount?: number
+  summaryCount?: number
 }
 
 type UseChatSummariesStateArgs = {
@@ -73,6 +83,10 @@ export function applyRealtimeCollectionChange<T extends { id: string }>(
   previousItems: T[],
   payload: RealtimeCollectionPayload<T>,
 ): T[] {
+  if (payload.eventType === 'DELETE') {
+    return previousItems.filter((item) => item.id !== payload.old.id)
+  }
+
   if (payload.eventType === 'INSERT') {
     if (previousItems.some((item) => item.id === payload.new.id)) {
       return previousItems
@@ -85,7 +99,89 @@ export function applyRealtimeCollectionChange<T extends { id: string }>(
     return previousItems.map((item) => (item.id === payload.new.id ? payload.new : item))
   }
 
-  return previousItems.filter((item) => item.id !== payload.old.id)
+  return previousItems
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function hasStringId(value: unknown): value is { id: string } {
+  return isRecord(value) && typeof value.id === 'string'
+}
+
+function isSummaryEntry(value: unknown): value is SummaryEntry {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.level === 'number' &&
+    typeof value.start_seq === 'number' &&
+    typeof value.end_seq === 'number' &&
+    typeof value.summary === 'string' &&
+    typeof value.created_at === 'string'
+  )
+}
+
+function isFactEntry(value: unknown): value is FactEntry {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.start_seq === 'number' &&
+    typeof value.end_seq === 'number' &&
+    typeof value.facts === 'string' &&
+    typeof value.created_at === 'string'
+  )
+}
+
+export function parseStatsResponse(value: unknown): StatsResponse | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const result: StatsResponse = {}
+
+  if (typeof value.messageCount === 'number') {
+    result.messageCount = value.messageCount
+  }
+
+  if (typeof value.summaryCount === 'number') {
+    result.summaryCount = value.summaryCount
+  }
+
+  return result
+}
+
+export function parseRealtimeCollectionPayload<T extends { id: string }>(
+  payload: unknown,
+  isEntry: (value: unknown) => value is T,
+): RealtimeCollectionPayload<T> | null {
+  if (
+    !isRecord(payload) ||
+    !isRecord(payload.old) ||
+    !('eventType' in payload) ||
+    (payload.eventType !== 'INSERT' &&
+      payload.eventType !== 'UPDATE' &&
+      payload.eventType !== 'DELETE')
+  ) {
+    return null
+  }
+
+  if (payload.eventType === 'DELETE') {
+    return hasStringId(payload.old)
+      ? {
+          eventType: 'DELETE',
+          old: { id: payload.old.id },
+        }
+      : null
+  }
+
+  return isEntry(payload.new)
+    ? {
+        eventType: payload.eventType,
+        new: payload.new,
+        old: hasStringId(payload.old) ? { id: payload.old.id } : {},
+      }
+    : null
 }
 
 export function useChatSummariesState({
@@ -125,11 +221,11 @@ export function useChatSummariesState({
         throw new Error('Failed to fetch stats')
       }
 
-      const data = (await response.json()) as Record<string, unknown>
-      if (typeof data.messageCount === 'number') {
+      const data = parseStatsResponse(await response.json())
+      if (typeof data?.messageCount === 'number') {
         setMessageCount(data.messageCount)
       }
-      if (typeof data.summaryCount === 'number' && data.summaryCount !== summaries.length) {
+      if (typeof data?.summaryCount === 'number' && data.summaryCount !== summaries.length) {
         refreshPanel()
       }
     } catch {
@@ -181,11 +277,13 @@ export function useChatSummariesState({
             filter: `chat_id=eq.${chatId}`,
           },
           (payload) => {
+            const nextPayload = parseRealtimeCollectionPayload(payload, isSummaryEntry)
+            if (!nextPayload) {
+              return
+            }
+
             setSummaries((previousItems) =>
-              applyRealtimeCollectionChange(
-                previousItems,
-                payload as unknown as RealtimeCollectionPayload<SummaryEntry>,
-              ),
+              applyRealtimeCollectionChange(previousItems, nextPayload),
             )
           },
         )
@@ -198,12 +296,12 @@ export function useChatSummariesState({
             filter: `chat_id=eq.${chatId}`,
           },
           (payload) => {
-            setFacts((previousItems) =>
-              applyRealtimeCollectionChange(
-                previousItems,
-                payload as unknown as RealtimeCollectionPayload<FactEntry>,
-              ),
-            )
+            const nextPayload = parseRealtimeCollectionPayload(payload, isFactEntry)
+            if (!nextPayload) {
+              return
+            }
+
+            setFacts((previousItems) => applyRealtimeCollectionChange(previousItems, nextPayload))
           },
         )
         .subscribe()

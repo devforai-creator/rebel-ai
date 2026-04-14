@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
+import { normalizeCharacterModulesWithLorebook } from './lorebook-data'
 import LorebookManager from './LorebookManager'
 
 export default async function CharacterLorebookPage({
@@ -55,20 +56,7 @@ export default async function CharacterLorebookPage({
     .eq('character_id', character.id)
     .order('priority', { ascending: false })
 
-  // Type assertion for Supabase join result
-  type CharacterModuleRow = {
-    id: string
-    enabled: boolean
-    priority: number
-    module_id: string
-    modules: {
-      id: string
-      name: string
-      lorebook: unknown
-    } | null
-  }
-
-  const typedModules = (characterModules ?? []) as unknown as CharacterModuleRow[]
+  const typedModules = normalizeCharacterModulesWithLorebook(characterModules)
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

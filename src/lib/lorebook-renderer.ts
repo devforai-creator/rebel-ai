@@ -125,8 +125,8 @@ export function renderLorebook(options: RenderLorebookOptions): RenderedLorebook
  * Get lorebook entries by folder
  * Useful for UI rendering
  */
-export function groupLorebookByFolder(entries: LorebookEntry[]): Map<string, LorebookEntry[]> {
-  const folderMap = new Map<string, LorebookEntry[]>()
+export function groupLorebookByFolder<T extends LorebookEntry>(entries: T[]): Map<string, T[]> {
+  const folderMap = new Map<string, T[]>()
 
   // Find all folder entries first
   const folders = entries.filter((e) => e.mode === 'folder')

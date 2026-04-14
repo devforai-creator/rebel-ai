@@ -73,6 +73,7 @@ export function useQueuedChat({
   const [sending, setSending] = useState(false)
   const [pendingJobId, setPendingJobId] = useState<string | null>(null)
   const pendingJobIdRef = useRef<string | null>(null)
+  const pendingAssistantVisibleRef = useRef(false)
   const pendingRegenerationTargetIdRef = useRef<string | null>(null)
   const lastStreamProgressAtRef = useRef<number | null>(null)
   const [isPageVisible, setIsPageVisible] = useState(
@@ -136,6 +137,7 @@ export function useQueuedChat({
         isVisibleMessageStatus(assistantMessage.message_status) &&
         assistantMessage.id !== pendingRegenerationTargetIdRef.current
       ) {
+        pendingAssistantVisibleRef.current = true
         setStreamingDraft(null)
       }
     },
@@ -144,6 +146,7 @@ export function useQueuedChat({
 
   const startStreamingDraft = useCallback(
     (jobId: string, regenerateAssistantMessageId: string | null) => {
+      pendingAssistantVisibleRef.current = false
       lastStreamProgressAtRef.current = null
       const isBatchMode = deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
       setStreamingDraft({
@@ -164,6 +167,7 @@ export function useQueuedChat({
 
   const clearPendingJob = useCallback(() => {
     pendingJobIdRef.current = null
+    pendingAssistantVisibleRef.current = false
     lastStreamProgressAtRef.current = null
     setPendingJobId(null)
   }, [])
@@ -239,7 +243,9 @@ export function useQueuedChat({
           },
           getLastProgressAt: () => lastStreamProgressAtRef.current,
           onSuccess: async () => {
-            await appendAssistantMessage()
+            if (!pendingAssistantVisibleRef.current) {
+              await appendAssistantMessage()
+            }
             await fetchLatestUsage()
             clearPendingJob()
             setStreamingDraft(null)

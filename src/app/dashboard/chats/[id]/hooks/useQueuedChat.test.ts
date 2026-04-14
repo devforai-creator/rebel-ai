@@ -2,7 +2,7 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { FormEvent } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { toastErrorMock, toastInfoMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn(),
@@ -61,11 +61,38 @@ function createHookParams(overrides: Partial<Parameters<typeof useQueuedChat>[0]
   }
 }
 
+function createJsonResponse(payload: unknown) {
+  return {
+    ok: true,
+    json: vi.fn(async () => payload),
+    text: vi.fn(async () => JSON.stringify(payload)),
+  }
+}
+
+async function flushChatRequestStart() {
+  await act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
+async function flushPendingPollCycle() {
+  await act(async () => {
+    await vi.runOnlyPendingTimersAsync()
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
 describe('useQueuedChat', () => {
   beforeEach(() => {
     toastErrorMock.mockReset()
     toastInfoMock.mockReset()
     vi.unstubAllGlobals()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('rejects reload requests for assistant messages that are not persisted yet', () => {
@@ -167,5 +194,157 @@ describe('useQueuedChat', () => {
     expect(result.current.messages.map((message) => message.id)).toEqual(['user-1'])
     expect(debugInfoMap.current.has('assistant-1')).toBe(false)
     expect(persistedMessageIds.current.has('assistant-1')).toBe(false)
+  })
+
+  it('skips the assistant fallback fetch when realtime already delivered the visible reply', async () => {
+    vi.useFakeTimers()
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      value: false,
+    })
+
+    const fetchLatestUsage = vi.fn(async () => {})
+    const latestUser = createMessage({
+      id: 'user-2',
+      role: 'user',
+      content: 'queued hello',
+      sequence: 2,
+    })
+    const assistantMessage = createMessage({
+      id: 'assistant-1',
+      role: 'assistant',
+      content: 'assistant reply',
+      sequence: 3,
+    })
+    const fetchMock = vi.fn(async (input: unknown) => {
+      const url = String(input)
+      if (url === '/api/chat') {
+        return createJsonResponse({ jobId: 'job-1' })
+      }
+      if (url === '/api/chats/chat-1/messages/latest') {
+        return createJsonResponse(latestUser)
+      }
+      if (url === '/api/chat/jobs/job-1') {
+        return createJsonResponse({ status: 'success' })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() =>
+      useQueuedChat(
+        createHookParams({
+          initialMessages: [createMessage({ id: 'user-1', content: 'existing message' })],
+          selectedApiKeyId: 'key-1',
+          fetchLatestUsage,
+        }),
+      ),
+    )
+
+    act(() => {
+      result.current.handleInputChange({
+        target: { value: 'queued hello' },
+      } as Parameters<typeof result.current.handleInputChange>[0])
+    })
+
+    act(() => {
+      result.current.handleSubmit({
+        preventDefault: vi.fn(),
+      } as unknown as FormEvent<HTMLFormElement>)
+    })
+
+    await flushChatRequestStart()
+
+    act(() => {
+      result.current.handleRealtimeMessageChange({
+        eventType: 'INSERT',
+        old: null,
+        new: assistantMessage,
+      } as MessageChangePayload)
+    })
+
+    await flushPendingPollCycle()
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      '/api/chat',
+      '/api/chats/chat-1/messages/latest',
+      '/api/chat/jobs/job-1',
+    ])
+    expect(fetchLatestUsage).toHaveBeenCalledOnce()
+    expect(result.current.isLoading).toBe(false)
+    expect(result.current.messages.map((message) => message.id)).toContain('assistant-1')
+  })
+
+  it('keeps the latest assistant fallback fetch when realtime has not delivered the reply yet', async () => {
+    vi.useFakeTimers()
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      value: false,
+    })
+
+    const fetchLatestUsage = vi.fn(async () => {})
+    const latestUser = createMessage({
+      id: 'user-2',
+      role: 'user',
+      content: 'queued hello',
+      sequence: 2,
+    })
+    const latestAssistant = createMessage({
+      id: 'assistant-1',
+      role: 'assistant',
+      content: 'assistant reply',
+      sequence: 3,
+    })
+    let latestFetchCount = 0
+    const fetchMock = vi.fn(async (input: unknown) => {
+      const url = String(input)
+      if (url === '/api/chat') {
+        return createJsonResponse({ jobId: 'job-1' })
+      }
+      if (url === '/api/chats/chat-1/messages/latest') {
+        latestFetchCount += 1
+        return createJsonResponse(latestFetchCount === 1 ? latestUser : latestAssistant)
+      }
+      if (url === '/api/chat/jobs/job-1') {
+        return createJsonResponse({ status: 'success' })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() =>
+      useQueuedChat(
+        createHookParams({
+          initialMessages: [createMessage({ id: 'user-1', content: 'existing message' })],
+          selectedApiKeyId: 'key-1',
+          fetchLatestUsage,
+        }),
+      ),
+    )
+
+    act(() => {
+      result.current.handleInputChange({
+        target: { value: 'queued hello' },
+      } as Parameters<typeof result.current.handleInputChange>[0])
+    })
+
+    act(() => {
+      result.current.handleSubmit({
+        preventDefault: vi.fn(),
+      } as unknown as FormEvent<HTMLFormElement>)
+    })
+
+    await flushChatRequestStart()
+    await flushPendingPollCycle()
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      '/api/chat',
+      '/api/chats/chat-1/messages/latest',
+      '/api/chat/jobs/job-1',
+      '/api/chats/chat-1/messages/latest',
+    ])
+    expect(fetchLatestUsage).toHaveBeenCalledOnce()
+    expect(result.current.isLoading).toBe(false)
+    expect(result.current.messages.map((message) => message.id)).toContain('assistant-1')
   })
 })

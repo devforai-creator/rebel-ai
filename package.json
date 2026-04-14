@@ -10,9 +10,10 @@
     "dev:local": "node scripts/run-local-dev.js",
     "build": "next build",
     "start": "next start",
+    "check:dependencies": "node scripts/check-direct-dependencies.js",
     "lint": "eslint src tests scripts",
     "typecheck": "next typegen && tsc --noEmit",
-    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test",
+    "verify": "npm run format:check && npm run check:dependencies && npm run lint && npm run typecheck && npm run test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
@@ -39,6 +40,7 @@
     "@ai-sdk/deepseek": "^1.0.35",
     "@ai-sdk/google": "^2.0.62",
     "@ai-sdk/openai": "^2.0.99",
+    "@ai-sdk/provider": "^2.0.1",
     "@google/generative-ai": "^0.24.1",
     "@safe-ugc-ui/react": "^2.3.0",
     "@safe-ugc-ui/types": "^2.3.0",
@@ -57,7 +59,8 @@
     "remark-gfm": "^4.0.1",
     "sonner": "^2.0.7",
     "swr": "^2.4.1",
-    "voyageai": "^0.0.8"
+    "voyageai": "^0.0.8",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@next/bundle-analyzer": "^16.1.1",

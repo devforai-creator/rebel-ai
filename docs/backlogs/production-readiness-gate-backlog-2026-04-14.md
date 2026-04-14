@@ -21,11 +21,12 @@ As of `2026-04-14`, the repo is in a stronger state than the earlier review cycl
 - the weighted gate score is `3.65 / 5.00` (`B`)
 
 That still does not make the repo ready for broader public production. The original gate was
-blocked by three concrete issues. `P0-1` closed on `2026-04-14`; the remaining blockers are:
+blocked by three concrete issues. `P0-1` and `P0-2` closed on `2026-04-14`; the remaining
+highest-priority gaps are:
 
-- asset delivery still depends on public-read Supabase buckets
-- `zod` is used as a direct runtime dependency without a top-level manifest declaration
 - API route parsing, auth, and error contracts are still inconsistent across the surface
+- admin-client lifetime rules are still not enforced mechanically
+- excluded and `0%` runtime boundaries still need direct verification
 
 ## Working Rules
 
@@ -88,6 +89,10 @@ Completion evidence:
 
 ### P0-2. Make Direct Dependency Contracts Mechanical
 
+Status:
+
+- Done on `2026-04-14`
+
 Scope:
 
 - `package.json`
@@ -111,6 +116,16 @@ Current evidence as of `2026-04-14`:
 - direct imports exist in `src/types/rbx.types.ts`, `src/lib/http/api-contract.ts`,
   `src/app/api/chat/route.ts`, `src/app/dashboard/api-keys/actions.ts`, and other runtime files
 - the gate confirmed `npm ls zod --depth=0` is empty
+
+Completion evidence:
+
+- `package.json` and `package-lock.json` now declare both `zod` and `@ai-sdk/provider` at the root
+  because both packages were directly imported from repo-owned source files
+- `scripts/check-direct-dependencies.js` adds an AST-based guard that fails on undeclared bare
+  imports across `src`, `tests`, and `scripts`
+- `.github/workflows/test.yml` now runs `npm run check:dependencies` immediately after `npm ci`
+- `npm ci`, `npm run check:dependencies`, `npm run typecheck`, `npm run test`, and `npm run build`
+  all passed after the manifest update
 
 ## P1
 

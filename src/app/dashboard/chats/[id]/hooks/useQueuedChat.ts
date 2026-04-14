@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { toast } from 'sonner'
 import type { Message } from '@/types/database.types'
@@ -8,6 +8,7 @@ import {
   CHAT_DELIVERY_MODE_STREAMING,
   type ChatDeliveryMode,
 } from '@/lib/chat/delivery-mode'
+import { CHAT_JOB_POLLER_LIMITS } from '@/lib/chat/runtime-limits'
 import type { AssistantStreamBroadcastPayload } from '@/lib/chat/assistant-stream'
 import {
   DisplayMessage,
@@ -19,7 +20,11 @@ import {
 } from '../utils'
 import { isVisibleMessageStatus } from '@/lib/chat/message-status'
 import { resolveAlternateApiKeyId } from '@/lib/chat/alternate-models'
-import { pollJobStatus as pollJobStatusPure, DEFAULT_JOB_POLLER_CONFIG } from './job-poller'
+import {
+  pollJobStatus as pollJobStatusPure,
+  DEFAULT_JOB_POLLER_CONFIG,
+  resolveAdaptivePollDelay,
+} from './job-poller'
 import { reconcileAssistantMessage } from './reconcile-assistant-message'
 
 export interface UseQueuedChatParams {
@@ -70,8 +75,26 @@ export function useQueuedChat({
   const pendingJobIdRef = useRef<string | null>(null)
   const pendingRegenerationTargetIdRef = useRef<string | null>(null)
   const lastStreamProgressAtRef = useRef<number | null>(null)
+  const [isPageVisible, setIsPageVisible] = useState(
+    () => typeof document === 'undefined' || !document.hidden,
+  )
   const [streamingDraft, setStreamingDraft] = useState<StreamingAssistantDraft | null>(null)
   const [error, setError] = useState<Error | null>(null)
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return
+    }
+
+    const syncPageVisibility = () => {
+      setIsPageVisible(!document.hidden)
+    }
+
+    document.addEventListener('visibilitychange', syncPageVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', syncPageVisibility)
+    }
+  }, [])
 
   const handleInputChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(event.target.value)
@@ -242,7 +265,22 @@ export function useQueuedChat({
             toast.info(message, { duration: 8000 })
           },
           now: () => Date.now(),
-          sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+          sleep: (ms) => {
+            const delayMs =
+              deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
+                ? ms
+                : resolveAdaptivePollDelay({
+                    baseDelayMs: ms,
+                    isPageVisible,
+                    lastProgressAt: lastStreamProgressAtRef.current,
+                    now: Date.now(),
+                    hiddenTabMinDelayMs: CHAT_JOB_POLLER_LIMITS.hiddenTabMinDelayMs,
+                    recentStreamWindowMs: CHAT_JOB_POLLER_LIMITS.recentStreamWindowMs,
+                    recentStreamMinDelayMs: CHAT_JOB_POLLER_LIMITS.recentStreamMinDelayMs,
+                  })
+
+            return new Promise((resolve) => setTimeout(resolve, delayMs))
+          },
         },
         deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
           ? {
@@ -259,7 +297,7 @@ export function useQueuedChat({
         throw result.error
       }
     },
-    [appendAssistantMessage, clearPendingJob, deliveryMode, fetchLatestUsage],
+    [appendAssistantMessage, clearPendingJob, deliveryMode, fetchLatestUsage, isPageVisible],
   )
 
   const handleRealtimeMessageChange = useCallback(

@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { CHAT_JOB_POLLER_LIMITS } from '@/lib/chat/runtime-limits'
-import { pollJobStatus, JobPollerDeps, JobPollerConfig } from './job-poller'
+import {
+  pollJobStatus,
+  resolveAdaptivePollDelay,
+  JobPollerDeps,
+  JobPollerConfig,
+} from './job-poller'
 
 describe('pollJobStatus', () => {
   const SHORT_CONFIG: JobPollerConfig = {
@@ -311,5 +316,62 @@ describe('pollJobStatus', () => {
 
       expect(result.outcome).toBe('timeout')
     })
+  })
+})
+
+describe('resolveAdaptivePollDelay', () => {
+  it('returns the base delay when no adaptive guardrail applies', () => {
+    expect(
+      resolveAdaptivePollDelay({
+        baseDelayMs: 2000,
+        isPageVisible: true,
+        lastProgressAt: null,
+        now: 10_000,
+      }),
+    ).toBe(2000)
+  })
+
+  it('slows polling down in hidden tabs', () => {
+    expect(
+      resolveAdaptivePollDelay({
+        baseDelayMs: 2000,
+        isPageVisible: false,
+        lastProgressAt: null,
+        now: 10_000,
+      }),
+    ).toBe(CHAT_JOB_POLLER_LIMITS.hiddenTabMinDelayMs)
+  })
+
+  it('slows polling down when streaming progress is still fresh', () => {
+    expect(
+      resolveAdaptivePollDelay({
+        baseDelayMs: 2000,
+        isPageVisible: true,
+        lastProgressAt: 9000,
+        now: 10_000,
+      }),
+    ).toBe(CHAT_JOB_POLLER_LIMITS.recentStreamMinDelayMs)
+  })
+
+  it('keeps the largest delay when hidden tab and fresh streaming progress overlap', () => {
+    expect(
+      resolveAdaptivePollDelay({
+        baseDelayMs: 2000,
+        isPageVisible: false,
+        lastProgressAt: 9000,
+        now: 10_000,
+      }),
+    ).toBe(CHAT_JOB_POLLER_LIMITS.hiddenTabMinDelayMs)
+  })
+
+  it('ignores stale streaming progress', () => {
+    expect(
+      resolveAdaptivePollDelay({
+        baseDelayMs: 3500,
+        isPageVisible: true,
+        lastProgressAt: 1000,
+        now: 10_000,
+      }),
+    ).toBe(3500)
   })
 })

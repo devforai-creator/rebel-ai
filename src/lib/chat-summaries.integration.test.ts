@@ -297,12 +297,23 @@ class ChatTurnsQuery extends BaseQuery<ChatTurnRow> {
   }
 }
 
-class ChatTurnsCountQuery extends BaseQuery<ChatTurnRow> {
-  constructor(mock: SupabaseMock) {
-    super(
-      () => mock.chatTurns,
-      (row) => row,
-    )
+class ChatTurnsCountQuery {
+  constructor(private readonly mock: SupabaseMock) {}
+
+  private predicates: Array<(row: ChatTurnRow) => boolean> = []
+
+  eq(field: keyof ChatTurnRow, value: unknown) {
+    this.predicates.push((row) => row[field] === value)
+    return this
+  }
+
+  not(field: keyof ChatTurnRow, operator: string, value: unknown) {
+    if (operator === 'is' && value === null) {
+      this.predicates.push((row) => row[field] !== null)
+      return this
+    }
+    this.predicates.push((row) => row[field] !== value)
+    return this
   }
 
   then<TResult1 = { count: number; error: null }, TResult2 = never>(
@@ -312,7 +323,9 @@ class ChatTurnsCountQuery extends BaseQuery<ChatTurnRow> {
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ) {
     return Promise.resolve({
-      count: this.materializeRows().length,
+      count: this.mock.chatTurns.filter((row) =>
+        this.predicates.every((predicate) => predicate(row)),
+      ).length,
       error: null,
     }).then(onfulfilled, onrejected)
   }

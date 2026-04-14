@@ -131,6 +131,10 @@ Completion evidence:
 
 ### P1-1. Standardize Route Contracts and Auth Wrappers
 
+Status:
+
+- Done on `2026-04-14`
+
 Scope:
 
 - `src/lib/http/api-contract.ts`
@@ -157,6 +161,31 @@ Current evidence as of `2026-04-14`:
   `src/app/api/chats/[chatId]/variables/route.ts` import `src/lib/http/api-contract.ts`
 - `src/app/api/modules/route.ts`, `src/app/api/chats/[chatId]/system-prompt/route.ts`, and
   `src/app/api/announcements/route.ts` still keep manual response patterns
+
+Completion evidence:
+
+- `src/lib/http/api-contract.ts` now provides shared helpers for authenticated-user checks,
+  bearer-token checks, invalid JSON/schema responses, and unexpected route failures
+- `src/app/api/modules/route.ts`,
+  `src/app/api/chats/[chatId]/system-prompt/route.ts`,
+  `src/app/api/announcements/route.ts`,
+  `src/app/api/internal/chat-admin/route.ts`,
+  `src/app/api/characters/import/storage/route.ts`,
+  `src/app/api/messages/translate/route.ts`,
+  `src/app/api/chats/[chatId]/variables/route.ts`,
+  `src/app/api/internal/translate-message/route.ts`, and
+  `src/app/api/summaries/generate/route.ts` now share the same parse/auth/error helpers instead
+  of hand-rolled `request.json()` casting and ad-hoc response branches
+- `src/app/api/announcements/route.test.ts` was added, and existing route coverage in
+  `src/app/api/characters/import/storage/route.test.ts`,
+  `src/app/api/messages/translate/route.test.ts`,
+  `src/app/api/internal/chat-admin/route.test.ts`,
+  `src/app/api/internal/translate-message/route.test.ts`,
+  `src/app/api/chats/[chatId]/variables/route.test.ts`, and
+  `src/app/api/summaries/generate/route.test.ts` now exercises malformed payload and auth-failure
+  branches against the shared envelope
+- targeted route tests, the full `npm run test` suite, and `npm run build` all passed after the
+  contract cleanup
 
 ### P1-2. Enforce Fresh Admin Client Usage
 

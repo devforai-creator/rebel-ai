@@ -5,7 +5,11 @@
  * DELETE /api/modules?id={id} - Delete a module
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import {
+  createApiErrorResponse,
+  createUnexpectedRouteErrorResponse,
+  requireAuthenticatedUser,
+} from '@/lib/http/api-contract'
 import { listModuleAssetStoragePaths, removeStorageObjects } from '@/lib/assets/storage-cleanup'
 import { createClient } from '@/lib/supabase/server'
 
@@ -17,14 +21,11 @@ export const runtime = 'nodejs'
 export async function GET() {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await requireAuthenticatedUser(supabase)
+    if (!auth.success) {
+      return auth.response
     }
+    const { user } = auth
 
     const { data: modules, error: fetchError } = await supabase
       .from('modules')
@@ -36,7 +37,7 @@ export async function GET() {
 
     if (fetchError) {
       console.error('[Modules API] Failed to fetch modules:', fetchError)
-      return NextResponse.json({ error: 'Failed to fetch modules' }, { status: 500 })
+      return createApiErrorResponse('Failed to fetch modules', 500)
     }
 
     // Add counts for each module
@@ -55,36 +56,32 @@ export async function GET() {
       },
     }))
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       modules: modulesWithCounts,
     })
   } catch (error) {
-    console.error('[Modules API] Unexpected error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createUnexpectedRouteErrorResponse('[Modules API] Unexpected error:', error)
   }
 }
 
 /**
  * DELETE - Delete a module by ID
  */
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: Request) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await requireAuthenticatedUser(supabase)
+    if (!auth.success) {
+      return auth.response
     }
+    const { user } = auth
 
     const { searchParams } = new URL(request.url)
     const moduleId = searchParams.get('id')
 
     if (!moduleId) {
-      return NextResponse.json({ error: 'Missing module ID' }, { status: 400 })
+      return createApiErrorResponse('Missing module ID', 400)
     }
 
     const moduleAssetPaths = await listModuleAssetStoragePaths(supabase, moduleId).catch(
@@ -107,7 +104,7 @@ export async function DELETE(request: NextRequest) {
 
     if (deleteError) {
       console.error('[Modules API] Failed to delete module:', deleteError)
-      return NextResponse.json({ error: 'Failed to delete module' }, { status: 500 })
+      return createApiErrorResponse('Failed to delete module', 500)
     }
 
     let warning: string | undefined
@@ -128,13 +125,12 @@ export async function DELETE(request: NextRequest) {
         'Module deleted, but some asset cleanup failed. The storage janitor can remove leftovers.'
     }
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       message: 'Module deleted successfully',
       ...(warning ? { warning } : {}),
     })
   } catch (error) {
-    console.error('[Modules API] Unexpected error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createUnexpectedRouteErrorResponse('[Modules API] Unexpected error:', error)
   }
 }

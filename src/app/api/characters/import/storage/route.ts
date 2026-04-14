@@ -1,7 +1,12 @@
 import { z } from 'zod'
-import { after, NextRequest, NextResponse } from 'next/server'
+import { after } from 'next/server'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
 import { createClient } from '@/lib/supabase/server'
+import {
+  createApiErrorResponse,
+  parseJsonRequest,
+  requireAuthenticatedUser,
+} from '@/lib/http/api-contract'
 import {
   IMPORT_UPLOAD_BUCKET,
   MAX_IMPORT_UPLOAD_BYTES,
@@ -23,38 +28,34 @@ const ImportStorageSchema = z.object({
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-export async function POST(request: NextRequest) {
-  const parsed = ImportStorageSchema.safeParse(await request.json().catch(() => null))
-
+export async function POST(request: Request) {
+  const parsed = await parseJsonRequest(request, ImportStorageSchema)
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    return parsed.response
   }
 
   const { path, fileName, fileType, fileSize } = parsed.data
 
   if (!fileName.toLowerCase().endsWith('.rbx')) {
-    return NextResponse.json({ error: 'Supported files: .rbx only' }, { status: 400 })
+    return createApiErrorResponse('Supported files: .rbx only', 400)
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-
-  if (userError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await requireAuthenticatedUser(supabase)
+  if (!auth.success) {
+    return auth.response
   }
+  const { user } = auth
 
   if (!path.startsWith(`${user.id}/`)) {
-    return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    return createApiErrorResponse('Access denied', 403)
   }
 
   // Early size gate — client reports fileSize, runner re-checks after download.
   // This catches obvious over-limit uploads before we even enqueue.
   if (fileSize && fileSize > MAX_IMPORT_UPLOAD_BYTES) {
     await cleanupStagedUpload(supabase, path)
-    return NextResponse.json(
+    return Response.json(
       {
         error: `File size (${(fileSize / 1024 / 1024).toFixed(1)}MB) exceeds the ${MAX_IMPORT_UPLOAD_MB}MB server limit. Self-hosters can raise NEXT_PUBLIC_IMPORT_MAX_UPLOAD_MB.`,
       },
@@ -72,12 +73,12 @@ export async function POST(request: NextRequest) {
   if (activeJobsError) {
     console.error('[Character Import][storage] Failed to inspect active jobs:', activeJobsError)
     await cleanupStagedUpload(supabase, path)
-    return NextResponse.json({ error: 'Failed to inspect active imports' }, { status: 500 })
+    return createApiErrorResponse('Failed to inspect active imports', 500)
   }
 
   if ((activeJobs?.length ?? 0) > 0) {
     await cleanupStagedUpload(supabase, path)
-    return NextResponse.json(
+    return Response.json(
       {
         error: ACTIVE_IMPORT_JOB_CONFLICT_MESSAGE,
         existingJobId: activeJobs?.[0]?.id ?? null,
@@ -104,16 +105,16 @@ export async function POST(request: NextRequest) {
     await cleanupStagedUpload(supabase, path)
 
     if (isUniqueViolation(jobError)) {
-      return NextResponse.json({ error: ACTIVE_IMPORT_JOB_CONFLICT_MESSAGE }, { status: 409 })
+      return createApiErrorResponse(ACTIVE_IMPORT_JOB_CONFLICT_MESSAGE, 409)
     }
 
     console.error('[Character Import][storage] Failed to enqueue job:', jobError)
-    return NextResponse.json({ error: 'Failed to enqueue import job' }, { status: 500 })
+    return createApiErrorResponse('Failed to enqueue import job', 500)
   }
 
   scheduleCharacterImportRunner(job.id)
 
-  return NextResponse.json({
+  return Response.json({
     jobId: job.id,
     status: job.status,
   })

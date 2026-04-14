@@ -1,5 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import {
+  createApiErrorResponse,
+  createUnexpectedRouteErrorResponse,
+  parseJsonRequest,
+  requireAuthenticatedUser,
+} from '@/lib/http/api-contract'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
@@ -12,19 +17,15 @@ const systemPromptSchema = z.object({
   systemPrompt: z.unknown(),
 })
 
-export async function POST(request: NextRequest, context: Context) {
+export async function POST(request: Request, context: Context) {
   try {
     const { chatId } = await context.params
     const supabase = await createClient()
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await requireAuthenticatedUser(supabase)
+    if (!auth.success) {
+      return auth.response
     }
+    const { user } = auth
 
     const { data: chat, error: chatError } = await supabase
       .from('chats')
@@ -34,15 +35,15 @@ export async function POST(request: NextRequest, context: Context) {
       .single()
 
     if (chatError || !chat) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+      return createApiErrorResponse('Chat not found', 404)
     }
 
-    const parsed = systemPromptSchema.safeParse(await request.json().catch(() => null))
-
+    const parsed = await parseJsonRequest(request, systemPromptSchema, {
+      invalidBodyMessage: 'Missing systemPrompt',
+    })
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Missing systemPrompt' }, { status: 400 })
+      return parsed.response
     }
-
     const rawPrompt = parsed.data.systemPrompt
     let normalizedPrompt: string | null = null
 
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest, context: Context) {
     } else if (rawPrompt === null) {
       normalizedPrompt = null
     } else {
-      return NextResponse.json({ error: 'Invalid systemPrompt' }, { status: 400 })
+      return createApiErrorResponse('Invalid systemPrompt', 400)
     }
 
     const { error: updateError } = await supabase
@@ -67,12 +68,11 @@ export async function POST(request: NextRequest, context: Context) {
         userId: user.id,
         error: updateError.message,
       })
-      return NextResponse.json({ error: 'Failed to update system prompt' }, { status: 500 })
+      return createApiErrorResponse('Failed to update system prompt', 500)
     }
 
-    return NextResponse.json({ success: true })
+    return Response.json({ success: true })
   } catch (error) {
-    console.error('[System Prompt API] Unexpected error', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createUnexpectedRouteErrorResponse('[System Prompt API] Unexpected error', error)
   }
 }

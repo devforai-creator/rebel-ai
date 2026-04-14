@@ -228,7 +228,10 @@ describe('POST /api/characters/import/storage', () => {
     const response = await POST(buildRequest('{') as never)
 
     expect(response.status).toBe(400)
-    expect(await response.json()).toEqual({ error: 'Invalid request body' })
+    expect(await response.json()).toEqual({
+      error: 'Invalid request body',
+      code: 'invalid_json',
+    })
     expect(createClientMock).not.toHaveBeenCalled()
   })
 

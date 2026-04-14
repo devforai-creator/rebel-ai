@@ -4,9 +4,14 @@
  * POST /api/chats/[chatId]/variables - Save module toggle values
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createApiErrorResponse, parseJsonRequest } from '@/lib/http/api-contract'
+import {
+  createApiErrorResponse,
+  createUnexpectedRouteErrorResponse,
+  parseJsonRequest,
+  requireAuthenticatedUser,
+} from '@/lib/http/api-contract'
 import type { Json } from '@/types/database.types'
 import { z } from 'zod'
 
@@ -49,16 +54,11 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const { chatId } = await context.params
     const supabase = await createClient()
-
-    // Verify authentication
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await requireAuthenticatedUser(supabase)
+    if (!auth.success) {
+      return auth.response
     }
+    const { user } = auth
 
     // Verify chat ownership
     const { data: chat, error: chatError } = await supabase
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest, context: Context) {
       .single()
 
     if (chatError || !chat) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+      return createApiErrorResponse('Chat not found', 404)
     }
 
     // Parse request body
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest, context: Context) {
 
     for (const [key, value] of Object.entries(variables)) {
       if (!isJsonValue(value)) {
-        return NextResponse.json({ error: 'Invalid variable value' }, { status: 400 })
+        return createApiErrorResponse('Invalid variable value', 400)
       }
 
       entries.push({
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest, context: Context) {
 
       if (upsertError) {
         console.error('[Variables API] Upsert failed:', upsertError)
-        return NextResponse.json({ error: 'Failed to save variables' }, { status: 500 })
+        return createApiErrorResponse('Failed to save variables', 500)
       }
     } else {
       // No entries submitted: clear everything for this chat
@@ -117,10 +117,10 @@ export async function POST(request: NextRequest, context: Context) {
 
       if (deleteAllError) {
         console.error('[Variables API] Failed to clear variables:', deleteAllError)
-        return NextResponse.json({ error: 'Failed to save variables' }, { status: 500 })
+        return createApiErrorResponse('Failed to save variables', 500)
       }
 
-      return NextResponse.json({
+      return Response.json({
         success: true,
         count: 0,
       })
@@ -139,16 +139,15 @@ export async function POST(request: NextRequest, context: Context) {
 
       if (deleteError) {
         console.error('[Variables API] Cleanup delete failed:', deleteError)
-        return NextResponse.json({ error: 'Failed to save variables' }, { status: 500 })
+        return createApiErrorResponse('Failed to save variables', 500)
       }
     }
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       count: entries.length,
     })
   } catch (error) {
-    console.error('[Variables API] Unexpected error:', error)
-    return createApiErrorResponse('Internal server error', 500)
+    return createUnexpectedRouteErrorResponse('[Variables API] Unexpected error:', error)
   }
 }

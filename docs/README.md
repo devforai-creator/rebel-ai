@@ -32,6 +32,7 @@ This directory now separates day-to-day operating docs from review artifacts and
 
 ## Backlogs
 
+- [backlogs/db-hygiene-followup-2026-04-14.md](./backlogs/db-hygiene-followup-2026-04-14.md)
 - [backlogs/db-query-audit-backlog-2026-04-14.md](./backlogs/db-query-audit-backlog-2026-04-14.md)
 - [backlogs/FIRST_CLASS_HARDENING_BACKLOG.md](./backlogs/FIRST_CLASS_HARDENING_BACKLOG.md)
 - [backlogs/production-audit-backlog-2026-04-12.md](./backlogs/production-audit-backlog-2026-04-12.md)

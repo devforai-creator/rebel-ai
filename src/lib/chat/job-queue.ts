@@ -1,16 +1,12 @@
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/database.types'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from './delivery-mode'
-import {
-  CHAT_JOB_LIFECYCLE_STAGE_RUNNER_CLAIMED,
-  CHAT_JOB_LIFECYCLE_STAGE_TIMED_OUT,
-} from './job-lifecycle'
+import { CHAT_JOB_LIFECYCLE_STAGE_TIMED_OUT } from './job-lifecycle'
 
 export type RawChatJobRecord = { id: string; payload: unknown }
-type ChatJobQueueSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'from'>
+type ChatJobQueueSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'from' | 'rpc'>
 type ChatGenerationJobRow = Database['public']['Tables']['chat_generation_jobs']['Row']
 type ChatGenerationJobUpdate = Database['public']['Tables']['chat_generation_jobs']['Update']
-type PendingJobRow = Pick<ChatGenerationJobRow, 'id' | 'payload' | 'status'>
 type StuckJobRow = Pick<ChatGenerationJobRow, 'id' | 'chat_id' | 'created_at' | 'delivery_mode'>
 
 const FALLBACK_TIMEOUT_MS = 10 * 60 * 1000
@@ -32,70 +28,36 @@ export async function claimPendingJob(
     onMetrics?: (metrics: ClaimPendingJobMetrics) => void
   },
 ): Promise<RawChatJobRecord | null> {
-  const fetchStart = performance.now()
-  const { data: nextJob, error } = await supabase
-    .from('chat_generation_jobs')
-    .select<'id, payload, status'>('id, payload, status')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle<PendingJobRow>()
-  const fetchDurationMs = performance.now() - fetchStart
+  const claimStart = performance.now()
+  const { data, error } = await supabase.rpc('claim_pending_chat_job')
+  const claimDurationMs = performance.now() - claimStart
+  const claimedRows = Array.isArray(data) ? (data as RawChatJobRecord[]) : []
+  const claimedJob = claimedRows[0] ?? null
 
   if (error) {
     options?.onMetrics?.({
-      fetchDurationMs,
-      updateDurationMs: 0,
+      fetchDurationMs: 0,
+      updateDurationMs: claimDurationMs,
       fetchedPendingRow: false,
       claimed: false,
     })
-    console.error('[Chat Job Queue] Failed to fetch pending job', error)
+    console.error('[Chat Job Queue] Failed to claim pending job', error)
     return null
   }
 
-  if (!nextJob) {
+  if (!claimedJob) {
     options?.onMetrics?.({
-      fetchDurationMs,
-      updateDurationMs: 0,
+      fetchDurationMs: 0,
+      updateDurationMs: claimDurationMs,
       fetchedPendingRow: false,
       claimed: false,
-    })
-    return null
-  }
-
-  const claimUpdate: ChatGenerationJobUpdate = {
-    status: 'processing',
-    lifecycle_stage: CHAT_JOB_LIFECYCLE_STAGE_RUNNER_CLAIMED,
-    failure_stage: null,
-    error: null,
-  }
-  const updateStart = performance.now()
-  const { data: claimedJob, error: claimError } = await supabase
-    .from('chat_generation_jobs')
-    .update(claimUpdate as never)
-    .eq('id', nextJob.id)
-    .eq('status', 'pending')
-    .select('id, payload')
-    .single<RawChatJobRecord>()
-  const updateDurationMs = performance.now() - updateStart
-
-  if (claimError || !claimedJob) {
-    options?.onMetrics?.({
-      fetchDurationMs,
-      updateDurationMs,
-      fetchedPendingRow: true,
-      claimed: false,
-    })
-    console.warn('[Chat Job Queue] Failed to claim pending job', {
-      jobId: nextJob.id,
-      error: claimError?.message,
     })
     return null
   }
 
   options?.onMetrics?.({
-    fetchDurationMs,
-    updateDurationMs,
+    fetchDurationMs: 0,
+    updateDurationMs: claimDurationMs,
     fetchedPendingRow: true,
     claimed: true,
   })

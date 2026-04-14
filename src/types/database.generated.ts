@@ -1445,6 +1445,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_pending_chat_job: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          payload: Json
+        }[]
+      }
       check_anon_rate_limit: {
         Args: {
           identifier: string

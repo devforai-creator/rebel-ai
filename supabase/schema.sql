@@ -6182,7 +6182,6 @@ drop policy if exists "Module assets: public read access" on storage.objects;
 -- >>> 74_atomic_chat_job_claim.sql
 
 -- Atomically claim the next pending chat generation job for the runner.
--- This removes the select-then-update race between concurrent runners.
 
 create index if not exists chat_generation_jobs_pending_created_idx
   on public.chat_generation_jobs (created_at)
@@ -6272,3 +6271,4 @@ $$;
 
 revoke all on function public.list_current_user_modules() from public, anon;
 grant execute on function public.list_current_user_modules() to authenticated, service_role;
+

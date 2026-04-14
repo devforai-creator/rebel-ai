@@ -32,6 +32,7 @@ function createSupabaseStub(options?: {
   chatOwnerId?: string | null
   chatOwnerError?: StubError | null
   profileEnableRag?: boolean
+  profileApiKeyId?: string | null
   profileError?: StubError | null
   ragFactsData?: Array<{
     start_seq: number
@@ -44,9 +45,8 @@ function createSupabaseStub(options?: {
   const latestSequence = options?.latestSequence
   const latestSequenceError = options?.latestSequenceError ?? null
 
-  const chatTurnsQuery = {
-    select: () => chatTurnsQuery,
-    eq: () => chatTurnsQuery,
+  const chatTurnsRowsQuery = {
+    eq: () => chatTurnsRowsQuery,
     then<TResult1 = { data: unknown; error: StubError | null }, TResult2 = never>(
       onfulfilled?:
         | ((value: { data: unknown; error: StubError | null }) => TResult1 | PromiseLike<TResult1>)
@@ -67,6 +67,24 @@ function createSupabaseStub(options?: {
         error: null,
       }).then(onfulfilled, onrejected)
     },
+  }
+
+  const chatTurnsCountQuery = {
+    eq: () => chatTurnsCountQuery,
+    not: async () => {
+      if (latestSequenceError) {
+        return { count: null, error: latestSequenceError }
+      }
+      return {
+        count: latestSequence ?? 0,
+        error: null,
+      }
+    },
+  }
+
+  const chatTurnsQuery = {
+    select: (_columns?: string, options?: { count?: string; head?: boolean }) =>
+      options?.count === 'exact' && options?.head ? chatTurnsCountQuery : chatTurnsRowsQuery,
   }
 
   const summaryQuery = {
@@ -109,7 +127,10 @@ function createSupabaseStub(options?: {
         return { data: null, error: options.profileError }
       }
       return {
-        data: { enable_episodic_rag: options?.profileEnableRag ?? false },
+        data: {
+          enable_episodic_rag: options?.profileEnableRag ?? false,
+          voyage_embedding_api_key_id: options?.profileApiKeyId ?? 'voyage-key-1',
+        },
         error: null,
       }
     },
@@ -440,5 +461,16 @@ describe('buildContext branches', () => {
     expect(result.ragInfo?.enabled).toBe(true)
     expect(result.ragInfo?.results[0]?.preview.endsWith('...')).toBe(true)
     expect(result.ragInfo?.results[1]?.preview.endsWith('...')).toBe(false)
+    expect(generateFactEmbeddingMock).toHaveBeenCalledWith(
+      expect.any(String),
+      'user-1',
+      supabase,
+      expect.objectContaining({
+        profileSettings: expect.objectContaining({
+          enable_episodic_rag: true,
+          voyage_embedding_api_key_id: 'voyage-key-1',
+        }),
+      }),
+    )
   })
 })

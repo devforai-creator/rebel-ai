@@ -187,6 +187,7 @@ export interface SearchRelevantFactsOptions {
   userId: string
   recentMessages: SanitizedMessage[]
   topK?: number
+  profileSettings?: import('@/lib/embeddings').FactEmbeddingProfileSettings | null
 }
 
 // Fact row type (similarity is optional - only present when returned from RAG search)

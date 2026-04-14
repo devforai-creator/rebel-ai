@@ -1,5 +1,5 @@
 import type { ChatSummary } from '@/types/database.types'
-import { generateFactEmbedding } from '@/lib/embeddings'
+import { generateFactEmbedding, type FactEmbeddingProfileSettings } from '@/lib/embeddings'
 import type {
   SummaryRow,
   FactRow,
@@ -77,6 +77,7 @@ export async function searchRelevantFacts({
   userId,
   recentMessages,
   topK = RAG_TOP_K,
+  profileSettings,
 }: SearchRelevantFactsOptions): Promise<FactRow[]> {
   logRagDebug('[RAG] searchRelevantFacts called', {
     chatId,
@@ -98,7 +99,9 @@ export async function searchRelevantFacts({
     queryMessagesCount: queryMessages.length,
   })
 
-  const queryEmbedding = await generateFactEmbedding(queryText, userId, supabase)
+  const queryEmbedding = await generateFactEmbedding(queryText, userId, supabase, {
+    profileSettings,
+  })
 
   if (!queryEmbedding) {
     logRagDebug('[RAG] Query embedding generation failed (returned null)')
@@ -255,9 +258,9 @@ export async function buildContext({
   if (chatOwner?.user_id) {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('enable_episodic_rag')
+      .select('enable_episodic_rag, voyage_embedding_api_key_id')
       .eq('id', chatOwner.user_id)
-      .single()
+      .single<FactEmbeddingProfileSettings>()
 
     if (profileError) {
       console.error('Failed to load profile RAG flag:', profileError.message)
@@ -270,6 +273,7 @@ export async function buildContext({
         chatId,
         userId: chatOwner.user_id,
         recentMessages: trimmedMessages,
+        profileSettings: profile,
       })
 
       // Store RAG results for debug_info

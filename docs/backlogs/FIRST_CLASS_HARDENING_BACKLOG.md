@@ -16,7 +16,7 @@ It exists to harden the current first-class path:
 
 Use this backlog for the next work sessions unless the operating contract changes.
 
-See [OPERATING_PLAN.md](./OPERATING_PLAN.md) for the policy layer. Use this document for execution sequencing.
+See [OPERATING_PLAN.md](../OPERATING_PLAN.md) for the policy layer. Use this document for execution sequencing.
 
 ## Working Rules
 
@@ -41,7 +41,7 @@ Representative evidence:
 - [68_harden_vault_write_helpers.sql](../supabase/migrations/68_harden_vault_write_helpers.sql)
 - [69_service_health_status.sql](../supabase/migrations/69_service_health_status.sql)
 - [72_chat_job_lifecycle_stage.sql](../supabase/migrations/72_chat_job_lifecycle_stage.sql)
-- [OPERATING_PLAN.md](./OPERATING_PLAN.md)
+- [OPERATING_PLAN.md](../OPERATING_PLAN.md)
 
 Still open in practice:
 
@@ -86,8 +86,8 @@ Current status as of 2026-04-11:
 
 Scope:
 
-- [docs/HOSTING_PROFILES.md](./HOSTING_PROFILES.md)
-- [docs/GETTING_STARTED.md](./GETTING_STARTED.md)
+- [docs/HOSTING_PROFILES.md](../HOSTING_PROFILES.md)
+- [docs/GETTING_STARTED.md](../GETTING_STARTED.md)
 - [README.md](../README.md)
 - runner and janitor scripts under [scripts](/home/tmdduq96kr/projects/rebel-ai/scripts)
 
@@ -104,8 +104,8 @@ Done when:
 
 Current status as of 2026-04-11:
 
-- [README.md](../README.md), [HOSTING_PROFILES.md](./HOSTING_PROFILES.md), and [GETTING_STARTED.md](./GETTING_STARTED.md) now reflect the current operating contract
-- [FIRST_CLASS_SMOKE_CHECKS.md](./FIRST_CLASS_SMOKE_CHECKS.md) and `npm run ops:smoke` now provide a dedicated low-cost verification runbook plus passive/active operator checks
+- [README.md](../../README.md), [HOSTING_PROFILES.md](../HOSTING_PROFILES.md), and [GETTING_STARTED.md](../GETTING_STARTED.md) now reflect the current operating contract
+- [FIRST_CLASS_SMOKE_CHECKS.md](../FIRST_CLASS_SMOKE_CHECKS.md) and `npm run ops:smoke` now provide a dedicated low-cost verification runbook plus passive/active operator checks
 - there is still no single browser-based operator page for this; the current surface is script + internal JSON endpoints
 
 ### P0-3. Tighten Experimental Boundaries Around the Core Chat Path
@@ -131,7 +131,7 @@ Done when:
 
 Current status as of 2026-04-11:
 
-- the policy split is documented in [OPERATING_PLAN.md](./OPERATING_PLAN.md)
+- the policy split is documented in [OPERATING_PLAN.md](../OPERATING_PLAN.md)
 - `Anthropic Batch` chat is now gated behind an explicit deployment opt-in (`ANTHROPIC_BATCH_CHAT_ENABLED`) instead of being treated as an ambient supported path whenever an Opus key is present
 - developer/operator chats now resolve to `prefix_live_blocks` as their default UI/runtime memory path and persist that choice into `model_config`, while the system fallback remains `summary_window`
 - provider-specific cache policy now has a manual deployment profile template in [env/profiles/caching.env.example](../env/profiles/caching.env.example), so the low-cost profile can pin `auto` explicitly in deployment settings instead of relying on ambient code defaults
@@ -195,4 +195,4 @@ These are real future tasks, but they are not part of the current first-class ha
 - R2 or other secondary asset backend migration
 - treating multiple public hosting profiles as equal first-class modes
 
-If one of these becomes active work, update [OPERATING_PLAN.md](./OPERATING_PLAN.md) first and then create a separate public-mode backlog.
+If one of these becomes active work, update [OPERATING_PLAN.md](../OPERATING_PLAN.md) first and then create a separate public-mode backlog.

@@ -4,7 +4,7 @@ Updated: 2026-04-12
 
 This document turns the latest production-readiness gate review into execution batches.
 
-It is intentionally narrower than [production-audit-backlog-2026-04-12.md](/home/tmdduq96kr/projects/rebel-ai/docs/production-audit-backlog-2026-04-12.md):
+It is intentionally narrower than [production-audit-backlog-2026-04-12.md](../backlogs/production-audit-backlog-2026-04-12.md):
 
 - that backlog tracks the broader architectural hardening program
 - this backlog tracks the remaining work needed to close the current review findings cleanly
@@ -151,7 +151,7 @@ Scope:
 
 - [src/app/dashboard/feedback/actions.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/feedback/actions.ts)
 - any remaining server actions that still parse `FormData` manually instead of using shared helpers
-- [docs/review-followups.md](/home/tmdduq96kr/projects/rebel-ai/docs/review-followups.md) once the batch lands
+- [review-followups.md](./review-followups.md) once the batch lands
 
 Why:
 

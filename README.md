@@ -16,6 +16,7 @@
 [**🧭 Hosting Profiles**](./docs/HOSTING_PROFILES.md) — _Current low-cost path vs future managed public path_
 [**📋 Operating Plan**](./docs/OPERATING_PLAN.md) — _Current operating contract, gates, and scope boundaries_
 [**🩺 Smoke Checks**](./docs/FIRST_CLASS_SMOKE_CHECKS.md) — _Repeatable verification for the current first-class low-cost path_
+[**🗂 Docs Map**](./docs/README.md) — _Where operations, plans, reviews, and backlogs now live_
 
 ---
 
@@ -157,6 +158,7 @@ Note: the maintainer-operated path currently treats `prefix_live_blocks + episod
 
 | Audience        | Document                                                                   | Purpose                                                           |
 | --------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Docs index      | [`docs/README.md`](./docs/README.md)                                       | Tree for active docs, plans, reviews, and backlogs                |
 | Setup           | [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md)                                 | Local + Supabase configuration walkthrough                        |
 | Getting started | [`docs/GETTING_STARTED.md`](./docs/GETTING_STARTED.md)                     | First-run guide for a fresh local deployment                      |
 | Authoring       | [`docs/RBX_AUTHORING_WITH_CLAUDE.md`](./docs/RBX_AUTHORING_WITH_CLAUDE.md) | Create `.rbx` packages with the bundled Claude skill              |

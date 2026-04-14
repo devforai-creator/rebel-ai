@@ -5,7 +5,8 @@ Updated: 2026-04-14
 This document re-baselines the `2026-04-12` production-readiness gate against the current repo
 state.
 
-It intentionally keeps only the remaining review-driven work. Completed batches from
+It tracks the review-driven work from the `2026-04-12` gate and records completed batches inline.
+Completed batches from
 [production-readiness-followups-2026-04-12.md](./production-readiness-followups-2026-04-12.md) and
 [production-audit-backlog-2026-04-12.md](./production-audit-backlog-2026-04-12.md) are not copied
 forward.
@@ -27,7 +28,7 @@ As of `2026-04-14`, the repo is in a better state than the `2026-04-12` review s
 - the chat runner is already stage-split and the orchestration shell is down to `248` lines in
   `src/app/api/internal/chat-job-runner/service.ts`
 - the largest chat UI surfaces have already shrunk materially:
-  - `src/app/dashboard/chats/[id]/ChatInterface.tsx`: `564` lines
+  - `src/app/dashboard/chats/[id]/ChatInterface.tsx`: `365` lines
   - `src/app/dashboard/chats/[id]/ChatSummariesPanel.tsx`: `370` lines
   - `src/app/dashboard/chats/[id]/LorebookPanel.tsx`: `270` lines
   - `src/app/dashboard/chats/[id]/components/MessageList.tsx`: `164` lines
@@ -38,17 +39,19 @@ That changes the priority order from the original review:
 
 - gate restoration is no longer the main problem
 - broad UI decomposition is no longer the first blocker
-- the highest remaining friction is now route-contract inconsistency, untested mutation surfaces,
-  and weakly typed Supabase/RPC seams
+- most review-era production work is already closed, so the remaining open item is much smaller
+
+Late `2026-04-14` status:
+
+- `P0-1`, `P0-2`, `P1-1`, `P1-2`, and `P1-3` are complete
+- the only review-scope item still open in this document is `P2-1`
 
 ## Remaining Review Themes
 
-- secondary and internal routes still do not follow one shared request/response contract
-- malformed JSON and schema mismatch handling still varies by route
-- several mutation-heavy chat server actions still sit at `0%` coverage
-- runtime Supabase and RPC boundaries still rely on `as unknown as` in production code
-- chat and runner limits are narrower than before but still spread across several files
-- the main chat shell is improved enough to be a later batch, not an immediate blocker
+- route-contract cleanup, mutation coverage, typed Supabase seams, limit centralization, and the
+  last useful `ChatInterface` split are complete
+- the remaining review-scope question is whether the last manifest-level dependency noise should be
+  removed or explicitly justified
 
 ## Working Rules
 
@@ -238,7 +241,9 @@ Done when:
 
 Current evidence as of `2026-04-14`:
 
-- `ChatInterface.tsx` is down to `564` lines and no longer the same level of structural risk
+- `ChatInterface.tsx` is down to `365` lines and now mostly composes hooks plus layout
+- asset loading, runtime variable persistence, usage refresh, and realtime wiring live in explicit
+  hooks under `src/app/dashboard/chats/[id]/hooks/`
 - `MessageList.tsx` is `164` lines and `MessageBubble.tsx` is `143` lines, so row rendering is not
   the next bottleneck
 

@@ -1,3 +1,4 @@
+import type { CharacterAsset } from '@/lib/asset-resolver'
 import type { Message, ApiKey } from '@/types/database.types'
 import type { ChatModelConfig } from '@/lib/chat/model-config'
 import type { ChatDeliveryMode } from '@/lib/chat/delivery-mode'
@@ -176,15 +177,7 @@ export interface ChatCharacter {
 /**
  * Character asset data
  */
-export interface ChatCharacterAsset {
-  id: string
-  file_name: string
-  storage_path: string
-  display_name?: string | null
-  canonical_name?: string | null
-  display_order?: number | null
-  metadata: Record<string, unknown> | null
-}
+export type ChatCharacterAsset = CharacterAsset
 
 /**
  * Asset data loaded client-side to reduce SSR payload

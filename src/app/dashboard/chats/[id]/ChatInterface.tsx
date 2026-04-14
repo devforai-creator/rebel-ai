@@ -1,24 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { RealtimeChannel } from '@supabase/supabase-js'
-import { toast } from 'sonner'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
-import type { CharacterAsset } from '@/lib/asset-resolver'
-import { readApiErrorMessage } from '@/lib/http/api-contract'
 import { useAutosizeTextArea } from '@/hooks/useAutosizeTextArea'
-import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 
 // Local imports
-import {
-  type ChatInterfaceProps,
-  type ChatAssetData,
-  type InlineUiCardRegistry,
-  type LatestMessageTokenStats,
-  type MessageChangePayload,
-  type DebugInfo,
-  shouldRefreshTokenStats,
-} from './utils'
+import { type ChatInterfaceProps, type InlineUiCardRegistry, type DebugInfo } from './utils'
 import {
   useChatInterfaceSettings,
   useQueuedChat,
@@ -26,23 +13,11 @@ import {
   useChatDebugModal,
   useChatHistory,
   combineHistoryWithLiveMessages,
+  useChatRealtimeSubscription,
+  useChatRuntimeVariables,
+  useChatUsageStats,
 } from './hooks'
 import { MessageList, TokenStatsPanel, DebugModal } from './components'
-import {
-  CHAT_ASSISTANT_STREAM_EVENT,
-  getChatAssistantStreamChannelName,
-  type AssistantStreamBroadcastPayload,
-} from '@/lib/chat/assistant-stream'
-
-// Default empty asset data
-const EMPTY_ASSET_DATA: ChatAssetData = {
-  characterAssets: [],
-  assetUrlMap: {},
-  imageCommandUrlMap: {},
-  moduleRegex: [],
-  moduleAssetSummary: [],
-  globalVariables: {},
-}
 
 function isValidInlineUiCard(raw: unknown): raw is Record<string, unknown> {
   if (!raw || typeof raw !== 'object') return false
@@ -63,53 +38,11 @@ export default function ChatInterface({
   hasMoreHistory,
   isDeveloper = false,
 }: ChatInterfaceProps) {
-  // Client-side asset loading to reduce SSR payload
-  const [assetData, setAssetData] = useState<ChatAssetData>(EMPTY_ASSET_DATA)
-
-  useEffect(() => {
-    let cancelled = false
-
-    const loadAssets = async () => {
-      try {
-        const response = await fetch(`/api/chats/${chatId}/assets`, { cache: 'no-store' })
-        if (!response.ok) {
-          console.error('[ChatInterface] Failed to load assets:', response.status)
-          return
-        }
-        const data = await response.json()
-        if (cancelled) return
-        const globalVariables = data.globalVariables ?? {}
-        setAssetData({
-          characterAssets: data.characterAssets ?? [],
-          assetUrlMap: data.assetUrlMap ?? {},
-          imageCommandUrlMap: data.imageCommandUrlMap ?? {},
-          moduleRegex: data.moduleRegex ?? [],
-          moduleAssetSummary: data.moduleAssetSummary ?? [],
-          globalVariables,
-        })
-        setRuntimeVariables(globalVariables)
-      } catch (error) {
-        console.error('[ChatInterface] Error loading assets:', error)
-      }
-    }
-
-    void loadAssets()
-    return () => {
-      cancelled = true
-    }
-  }, [chatId])
+  const { assetData, runtimeVariables, handleUiCardAction } = useChatRuntimeVariables(chatId)
 
   // Destructure for easier access
   const { characterAssets, assetUrlMap, imageCommandUrlMap, moduleRegex, moduleAssetSummary } =
     assetData
-
-  // Runtime variables state (merged with character's default_variables)
-  const [runtimeVariables, setRuntimeVariables] = useState<Record<string, unknown>>({})
-  const runtimeVariablesRef = useRef<Record<string, unknown>>({})
-
-  useEffect(() => {
-    runtimeVariablesRef.current = runtimeVariables
-  }, [runtimeVariables])
 
   const {
     selectedApiKeyId,
@@ -140,8 +73,10 @@ export default function ChatInterface({
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
 
   // State
-  const [latestUsage, setLatestUsage] = useState<LatestMessageTokenStats | null>(initialUsageStats)
-  const supabase = useMemo(() => createSupabaseClient(), [])
+  const { latestUsage, fetchLatestUsage, handleUsageRealtime } = useChatUsageStats({
+    chatId,
+    initialUsageStats,
+  })
 
   // Developer mode state
   const [statsExpanded, setStatsExpanded] = useState(false)
@@ -165,59 +100,6 @@ export default function ChatInterface({
     debugInfoMap.current = map
     persistedMessageIds.current = idSet
   }, [initialMessages])
-
-  // Fetch latest usage stats
-  const fetchLatestUsage = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/chats/${chatId}/stats`, { cache: 'no-store' })
-      if (!response.ok) return
-
-      const data = (await response.json()) as Record<string, unknown>
-      const parseNumberOrNull = (value: unknown): number | null =>
-        typeof value === 'number' && Number.isFinite(value) ? value : null
-
-      const latestRaw = data.latestMessage
-      const latestMessage: LatestMessageTokenStats | null =
-        latestRaw && typeof latestRaw === 'object'
-          ? (() => {
-              const raw = latestRaw as Record<string, unknown>
-              return {
-                id: typeof raw.id === 'string' ? raw.id : null,
-                createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : null,
-                total: typeof raw.total === 'number' ? raw.total : null,
-                prompt: typeof raw.prompt === 'number' ? raw.prompt : null,
-                completion: typeof raw.completion === 'number' ? raw.completion : null,
-                cachedPrompt: typeof raw.cachedPrompt === 'number' ? raw.cachedPrompt : null,
-                cacheHit: typeof raw.cacheHit === 'boolean' ? raw.cacheHit : false,
-                cacheKey: typeof raw.cacheKey === 'string' ? raw.cacheKey : null,
-                cacheRetention: typeof raw.cacheRetention === 'string' ? raw.cacheRetention : null,
-                costUsd: parseNumberOrNull(raw.costUsd),
-                promptCostUsd: parseNumberOrNull(raw.promptCostUsd),
-                completionCostUsd: parseNumberOrNull(raw.completionCostUsd),
-                cachedPromptCostUsd: parseNumberOrNull(raw.cachedPromptCostUsd),
-                reasoningCostUsd: parseNumberOrNull(raw.reasoningCostUsd),
-              }
-            })()
-          : null
-
-      setLatestUsage(latestMessage)
-    } catch (error) {
-      console.error('Failed to load chat usage stats', error)
-    }
-  }, [chatId])
-
-  useEffect(() => {
-    void fetchLatestUsage()
-  }, [fetchLatestUsage])
-
-  const handleUsageRealtime = useCallback(
-    (payload: MessageChangePayload) => {
-      if (shouldRefreshTokenStats(payload)) {
-        void fetchLatestUsage()
-      }
-    },
-    [fetchLatestUsage],
-  )
 
   const { historyMessages, historyHasMore, isHistoryLoading, loadOlderMessages } = useChatHistory({
     chatId,
@@ -255,58 +137,19 @@ export default function ChatInterface({
     persistedMessageIds,
   })
 
-  // Realtime subscription
-  useEffect(() => {
-    let isActive = true
-    let channel: RealtimeChannel | null = null
+  const handleMessageRealtime = useCallback(
+    (payload: Parameters<typeof handleRealtimeMessageChange>[0]) => {
+      handleUsageRealtime(payload)
+      handleRealtimeMessageChange(payload)
+    },
+    [handleRealtimeMessageChange, handleUsageRealtime],
+  )
 
-    const setupChannel = async () => {
-      await supabase.auth.getSession()
-      if (!isActive) return
-
-      channel = supabase
-        .channel(getChatAssistantStreamChannelName(chatId), {
-          config: {
-            broadcast: { self: true },
-            presence: { key: `token-stats-${chatId}` },
-          },
-        })
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'messages',
-            filter: `chat_id=eq.${chatId}`,
-          },
-          (payload) => {
-            const messagePayload = payload as MessageChangePayload
-            handleUsageRealtime(messagePayload)
-            handleRealtimeMessageChange(messagePayload)
-          },
-        )
-        .on('broadcast', { event: CHAT_ASSISTANT_STREAM_EVENT }, (payload) => {
-          const streamPayload = payload.payload as AssistantStreamBroadcastPayload
-          handleAssistantStreamEvent(streamPayload)
-        })
-        .subscribe()
-    }
-
-    void setupChannel()
-
-    return () => {
-      isActive = false
-      if (channel) {
-        void supabase.removeChannel(channel)
-      }
-    }
-  }, [
+  useChatRealtimeSubscription({
     chatId,
-    supabase,
-    handleAssistantStreamEvent,
-    handleUsageRealtime,
-    handleRealtimeMessageChange,
-  ])
+    onMessageChange: handleMessageRealtime,
+    onAssistantStreamEvent: handleAssistantStreamEvent,
+  })
 
   useAutosizeTextArea(composerRef, input, { minHeight: 96, maxHeight: 600 })
 
@@ -350,53 +193,6 @@ export default function ChatInterface({
     if (Object.keys(raw.views as Record<string, unknown>).length === 0) return null
     return raw
   }, [character.metadata])
-
-  const persistRuntimeVariables = useCallback(
-    async (nextVariables: Record<string, unknown>) => {
-      const sanitized = Object.fromEntries(
-        Object.entries(nextVariables).filter(([, value]) => typeof value !== 'undefined'),
-      )
-      try {
-        const response = await fetch(`/api/chats/${chatId}/variables`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ variables: sanitized }),
-        })
-
-        if (!response.ok) {
-          const errorText = await readApiErrorMessage(response, 'Failed to save variables')
-          throw new Error(errorText || 'Failed to save variables')
-        }
-      } catch (error) {
-        console.error('[TriggerClick] Failed to persist variables', error)
-        toast.error('변수 저장 실패')
-      }
-    },
-    [chatId],
-  )
-
-  // Handle ui_card Button/Toggle actions → variable mutations
-  // SUU's onAction contract:
-  //   Button: onAction('button', actionId)         — actionId is the card's `action` field
-  //   Toggle: onAction('toggle', actionId, { value: boolean }) — actionId is the `onToggle` field
-  const handleUiCardAction = useCallback(
-    (type: string, actionId: string, payload?: unknown) => {
-      const nextVars: Record<string, unknown> = { ...runtimeVariablesRef.current }
-
-      if (type === 'toggle' && payload && typeof payload === 'object' && 'value' in payload) {
-        // Toggle: set the variable to the new boolean value from the renderer
-        nextVars[actionId] = (payload as { value: boolean }).value
-      } else {
-        // Button: set the actionId variable to true (activate)
-        nextVars[actionId] = true
-      }
-
-      runtimeVariablesRef.current = nextVars
-      setRuntimeVariables(nextVars)
-      void persistRuntimeVariables(nextVars)
-    },
-    [persistRuntimeVariables],
-  )
 
   const {
     editingMessageId,
@@ -472,7 +268,7 @@ export default function ChatInterface({
             messages={combinedMessages}
             streamingDraft={streamingDraft}
             character={character}
-            characterAssets={characterAssets as CharacterAsset[]}
+            characterAssets={characterAssets}
             assetUrlMap={assetUrlMap}
             imageCommandUrlMap={imageCommandUrlMap}
             editingMessageId={editingMessageId}
@@ -546,7 +342,7 @@ export default function ChatInterface({
         characterName={character.name}
         moduleAssetSummary={moduleAssetSummary}
         characterAssetCount={characterAssets.length}
-        characterAssets={characterAssets as CharacterAsset[]}
+        characterAssets={characterAssets}
         imageCommandUrlMap={imageCommandUrlMap}
         mode={debugModal.mode}
         onClose={closeDebugModal}

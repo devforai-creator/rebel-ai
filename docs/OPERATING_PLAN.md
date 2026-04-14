@@ -12,6 +12,7 @@ Status: first-class now
 - The product is operated as a personal, closed deployment.
 - The real first-class environment is the low-cost profile the maintainer actually runs and can reproduce locally.
 - Keep one storage/backend path only. Do not add R2 or another asset backend until there is measured pressure that the current path cannot absorb.
+- `character-assets` and `module-assets` stay private by default. Asset delivery for the supported path is authenticated or signed at runtime, not anonymous public bucket reads.
 - For maintainer-operated chats, the active first-class memory profile is `prefix_live_blocks + episodic RAG` because that is the path the maintainer actually uses and should keep verifying.
 - The code-level fallback remains `summary_window` when memory settings are missing or public-safe defaults are needed.
 - Treat `RBX + SUU`, authenticated chat, and background job execution as the supported core.
@@ -27,6 +28,7 @@ Primary evidence:
 - `RBX + SUU` is already the native, reduced-surface path: [rbx-parser.ts](../src/lib/rbx-parser.ts), [suu-import-validation.ts](../src/lib/suu-import-validation.ts), [message-renderer.tsx](../src/app/dashboard/chats/[id]/utils/message-renderer.tsx)
 - Low-cost deployment is already documented as a supported profile: [HOSTING_PROFILES.md](./HOSTING_PROFILES.md)
 - Signup is intentionally closed in the current auth flow: [actions.ts](../src/app/auth/actions.ts)
+- Private asset delivery is now the live storage contract: [73_private_asset_delivery.sql](../supabase/migrations/73_private_asset_delivery.sql), [route.ts](../src/app/api/chats/[chatId]/assets/route.ts), [character-avatar.ts](../src/lib/assets/character-avatar.ts)
 
 ## 2. Future Public Mode
 
@@ -37,6 +39,7 @@ Status: target mode, not first-class yet
 - When public traffic is accepted, the default public profile becomes `Vercel Pro + Supabase Pro`.
 - The public product default memory profile stays `summary_window` at first. `prefix_live_blocks` and episodic RAG remain opt-in until they are proven stable enough for outside users.
 - Public mode should still keep one official storage/backend path first. Do not combine public launch with an R2 migration.
+- Public opening does not imply public asset buckets. Keep `character-assets` and `module-assets` private unless there is an explicit written decision to reopen anonymous reads and the operator checks are updated with that new contract.
 - Public mode should optimize for operator simplicity, not lowest cost.
 
 Why this is a future mode:

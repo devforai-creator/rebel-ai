@@ -337,6 +337,10 @@ Completion evidence:
 
 ### P2-2. Reconcile Docs and Defaults with a Closed-by-Default Operating Model
 
+Status:
+
+- Done on `2026-04-14`
+
 Scope:
 
 - `docs/OPERATING_PLAN.md`
@@ -363,6 +367,24 @@ Current evidence as of `2026-04-14`:
 - the gate found a mismatch between the stated closed/private posture and public asset delivery
 - the action plan explicitly calls for more conservative security and operating defaults before any
   broader public opening
+
+Completion evidence:
+
+- `docs/OPERATING_PLAN.md`, `docs/HOSTING_PROFILES.md`, and `SUPABASE_SETUP.md` now state the live
+  storage contract directly: `character-assets` and `module-assets` stay private by default and
+  runtime delivery uses signed or authenticated URLs rather than anonymous public bucket reads
+- `SUPABASE_SETUP.md` now documents storage-schema verification explicitly with
+  `supabase db diff --linked --schema storage` whenever a migration touches buckets or storage
+  policy, closing the old blind spot where `--schema public` alone could miss drift
+- `.env.example` no longer turns optional profile overrides on by accident; developer-email,
+  prompt-cache, and backfill examples are now commented so the copied default stays closer to the
+  real closed-by-default operating posture
+- `scripts/first-class-smoke-check.js` and `docs/FIRST_CLASS_SMOKE_CHECKS.md` now treat the
+  closed-signup page as part of the passive operator contract, so `npm run ops:smoke` checks that
+  `/auth/signup` still advertises the explicit closed-signup state instead of silently drifting
+  toward open registration UX
+- `scripts/first-class-smoke-check.test.js`, `npm run lint`, and `npm run format:check` all passed
+  after the doc/default reconciliation changes
 
 ## Suggested Execution Order
 

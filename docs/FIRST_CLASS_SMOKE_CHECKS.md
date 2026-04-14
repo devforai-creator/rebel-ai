@@ -17,6 +17,7 @@ It is not a public-launch checklist. It is the smallest repeatable operator chec
 
 The runbook verifies the parts that tend to drift first on the low-cost profile:
 
+- closed-signup status page
 - internal health snapshot
 - internal triage snapshot
 - storage janitor dry-run
@@ -74,6 +75,7 @@ Origin resolution order:
 
 `npm run ops:smoke` calls:
 
+- `GET /auth/signup`
 - `GET /api/internal/health`
 - `GET /api/internal/triage`
 - `GET /api/internal/storage-janitor?dryRun=1&olderThanDays=1&maxDelete=10`
@@ -87,6 +89,7 @@ Interpretation:
 The script exits non-zero on either `WARN` or `FAIL`. That is intentional. A degraded system is still a failed smoke check.
 
 The passive janitor probe checks that dry-run dispatch is accepted quickly. It does not wait for a full storage scan to finish.
+The signup probe checks that the deployment still presents the explicit closed-signup notice instead of silently reopening registration UX.
 
 ## Active Runner Probe
 
@@ -138,6 +141,7 @@ npm run ops:smoke:local:active
 
 4. Manually verify one end-to-end chat if the deployment is meant to be actively used today.
    Send a message from the UI, then confirm the resulting job moves through `/api/chat/jobs/[jobId]` and appears clean in `/api/internal/triage`.
+5. If the change touched storage delivery or bucket policy, verify one signed asset loads in the UI and that the equivalent anonymous `/storage/v1/object/public/...` URL does not return `200`.
 
 `npm run dev:local` forces `INTERNAL_API_ORIGIN=http://127.0.0.1:3000` for that dev process only. Keep the deployed `INTERNAL_API_ORIGIN` in `.env.local` if you want; you no longer need to swap files just to run local smoke checks.
 
@@ -157,6 +161,7 @@ SMOKE_CHECK_APP_ORIGIN=https://your-app.example.com npm run ops:smoke:active
 
 3. If either returns `WARN` or `FAIL`, inspect:
 
+- `/auth/signup` if the contract may have drifted toward open registration
 - `/api/internal/triage` first for recent failed jobs and degraded services
 - `/api/internal/health` for durable service status
 - `/api/chat/jobs/[jobId]` for a specific failed job
@@ -166,9 +171,11 @@ SMOKE_CHECK_APP_ORIGIN=https://your-app.example.com npm run ops:smoke:active
 Run this after:
 
 - changing deployment environment variables
+- changing signup or public-access assumptions
 - changing scheduler or cron wiring
 - changing `INTERNAL_API_ORIGIN`
 - modifying runner, janitor, or internal auth behavior
+- modifying signed asset delivery or bucket privacy
 - rolling out a new low-cost host setup
 
 ## Related Docs

@@ -69,6 +69,15 @@ describe('chat job payload parsing', () => {
     expect(parsed).toBeNull()
   })
 
+  it('rejects payloads with unsupported providers', () => {
+    const parsed = parseChatJobPayload({
+      ...basePayload,
+      provider: 'bogus-provider',
+    })
+
+    expect(parsed).toBeNull()
+  })
+
   it('normalizes regenerateAssistantMessageId to null when not a string', () => {
     const parsed = parseChatJobPayload({
       ...basePayload,

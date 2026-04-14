@@ -242,6 +242,26 @@ describe('google-cache', () => {
         })
       })
 
+      it('ignores malformed usageMetadata payloads', async () => {
+        vi.spyOn(console, 'log').mockImplementation(() => {})
+
+        mockCreate.mockResolvedValue({
+          name: 'cachedContents/bad-metadata',
+          ttl: '30s',
+          usageMetadata: { totalTokenCount: 'oops' },
+        })
+
+        const result = await createGoogleCache(baseConfig)
+
+        expect(result).toEqual({
+          success: true,
+          cacheName: 'cachedContents/bad-metadata',
+          cachedTokenCount: 0,
+          expireTime: undefined,
+          ttl: '30s',
+        })
+      })
+
       it('uses default TTL of 20 seconds when not specified', async () => {
         vi.spyOn(console, 'log').mockImplementation(() => {})
 

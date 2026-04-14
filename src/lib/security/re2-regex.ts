@@ -19,7 +19,11 @@ export type Re2CompileResult =
     })
   | Re2Failure
 
-export type Re2ExecArray = RegExpExecArray
+export type Re2ExecArray = Array<string | undefined> & {
+  index: number
+  input: string
+  groups?: Record<string, string>
+}
 
 const RE2_FLAG_ORDER = ['g', 'i', 'm', 's', 'u', 'y'] as const
 const RE2_ALLOWED_FLAGS = new Set(RE2_FLAG_ORDER)
@@ -108,25 +112,31 @@ function collectMatchGroups(
   matcher: ReturnType<RE2JS['matcher']>,
   input: string,
 ): Re2ExecArray {
-  const groupCount = matcher.groupCount()
-  const values = Array.from({ length: groupCount + 1 }, (_, index) => {
-    const value = matcher.group(index)
-    return value === null ? undefined : value
-  }) as unknown as Re2ExecArray
-
-  values.index = matcher.start()
-  values.input = input
+  const values: Re2ExecArray = Object.assign(
+    Array.from({ length: matcher.groupCount() + 1 }, (_, index) => {
+      const value = matcher.group(index)
+      return value === null ? undefined : value
+    }),
+    {
+      index: matcher.start(),
+      input,
+    },
+  )
 
   const namedGroups = compiled.namedGroups()
-  if (Object.keys(namedGroups).length > 0) {
-    values.groups = Object.fromEntries(
-      Object.entries(namedGroups)
-        .map(([name, index]) => {
-          const value = matcher.group(index)
-          return value === null ? null : [name, value]
-        })
-        .filter((entry): entry is [string, string] => entry !== null),
-    ) as Record<string, string>
+  const groups = Object.entries(namedGroups).reduce<Record<string, string>>(
+    (result, [name, index]) => {
+      const value = matcher.group(index)
+      if (value !== null) {
+        result[name] = value
+      }
+      return result
+    },
+    {},
+  )
+
+  if (Object.keys(groups).length > 0) {
+    values.groups = groups
   }
 
   return values

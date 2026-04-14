@@ -48,6 +48,20 @@ function logGoogleCacheDebug(...args: unknown[]): void {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function getCachedTokenCount(cache: CachedContent): number {
+  const usageMetadata = Reflect.get(cache, 'usageMetadata')
+
+  if (!isRecord(usageMetadata) || typeof usageMetadata.totalTokenCount !== 'number') {
+    return 0
+  }
+
+  return usageMetadata.totalTokenCount
+}
+
 export interface GoogleCacheConfig {
   apiKey: string
   modelName: string
@@ -170,9 +184,7 @@ export async function createGoogleCache(
       }
     }
 
-    // usageMetadata exists in API response but not in type definition
-    const usageMetadata = (cache as unknown as { usageMetadata?: { totalTokenCount?: number } })
-      .usageMetadata
+    const cachedTokenCount = getCachedTokenCount(cache)
 
     // Log actual TTL for debugging storage costs
     logGoogleCacheDebug('[Google Cache] Cache created', {
@@ -180,13 +192,13 @@ export async function createGoogleCache(
       requestedTtlSeconds: ttlSeconds,
       actualTtl: cache.ttl,
       expireTime: cache.expireTime,
-      cachedTokenCount: usageMetadata?.totalTokenCount ?? 0,
+      cachedTokenCount,
     })
 
     return {
       success: true,
       cacheName: cache.name,
-      cachedTokenCount: usageMetadata?.totalTokenCount ?? 0,
+      cachedTokenCount,
       expireTime: cache.expireTime,
       ttl: cache.ttl,
     }

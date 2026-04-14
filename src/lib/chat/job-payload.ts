@@ -25,64 +25,100 @@ export interface ChatGenerationJobPayload {
   regenerateAssistantMessageId: string | null
 }
 
+const CHAT_JOB_PROVIDERS: Provider[] = [
+  'google',
+  'openai',
+  'anthropic',
+  'deepseek',
+  'openrouter',
+  'voyage_embeddings',
+]
+const CHAT_JOB_PROVIDER_SET = new Set<string>(CHAT_JOB_PROVIDERS)
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isProvider(value: unknown): value is Provider {
+  return typeof value === 'string' && CHAT_JOB_PROVIDER_SET.has(value)
+}
+
+function isSanitizedMessage(value: unknown): value is SanitizedMessage {
+  return (
+    isRecord(value) &&
+    (value.role === 'user' || value.role === 'assistant') &&
+    typeof value.content === 'string' &&
+    (typeof value.messageId === 'undefined' ||
+      value.messageId === null ||
+      typeof value.messageId === 'string')
+  )
+}
+
+function serializeSanitizedMessage(message: SanitizedMessage) {
+  return {
+    role: message.role,
+    content: message.content,
+    ...(typeof message.messageId === 'string' ? { messageId: message.messageId } : {}),
+  }
+}
+
 export function serializeChatJobPayload(payload: ChatGenerationJobPayload): Json {
-  return payload as unknown as Json
+  return {
+    version: payload.version,
+    requestId: payload.requestId,
+    chatId: payload.chatId,
+    turnId: payload.turnId,
+    userId: payload.userId,
+    apiKeyId: payload.apiKeyId,
+    provider: payload.provider,
+    modelName: payload.modelName,
+    deliveryMode: payload.deliveryMode,
+    sanitizedMessages: payload.sanitizedMessages.map(serializeSanitizedMessage),
+    isRegeneration: payload.isRegeneration,
+    regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
+  }
 }
 
 export function parseChatJobPayload(payload: unknown): ChatGenerationJobPayload | null {
-  if (!payload || typeof payload !== 'object') {
+  if (!isRecord(payload)) {
     return null
   }
 
-  const candidate = payload as Partial<ChatGenerationJobPayload>
-
   if (
-    candidate.version !== CHAT_JOB_PAYLOAD_VERSION ||
-    typeof candidate.requestId !== 'string' ||
-    typeof candidate.chatId !== 'string' ||
-    typeof candidate.userId !== 'string' ||
-    typeof candidate.apiKeyId !== 'string' ||
-    typeof candidate.provider !== 'string' ||
-    typeof candidate.modelName !== 'string' ||
-    !Array.isArray(candidate.sanitizedMessages) ||
-    typeof candidate.isRegeneration !== 'boolean'
+    payload.version !== CHAT_JOB_PAYLOAD_VERSION ||
+    typeof payload.requestId !== 'string' ||
+    typeof payload.chatId !== 'string' ||
+    typeof payload.userId !== 'string' ||
+    typeof payload.apiKeyId !== 'string' ||
+    !isProvider(payload.provider) ||
+    typeof payload.modelName !== 'string' ||
+    !Array.isArray(payload.sanitizedMessages) ||
+    typeof payload.isRegeneration !== 'boolean'
   ) {
     return null
   }
 
-  const messagesValid = candidate.sanitizedMessages.every(
-    (message) =>
-      message &&
-      typeof message === 'object' &&
-      (message.role === 'user' || message.role === 'assistant') &&
-      typeof message.content === 'string',
-  )
-
-  if (!messagesValid) {
+  if (!payload.sanitizedMessages.every(isSanitizedMessage)) {
     return null
   }
 
   return {
     version: CHAT_JOB_PAYLOAD_VERSION,
-    requestId: candidate.requestId,
-    chatId: candidate.chatId,
-    turnId: typeof candidate.turnId === 'string' ? candidate.turnId : null,
-    userId: candidate.userId,
-    apiKeyId: candidate.apiKeyId,
-    provider: candidate.provider,
-    modelName: candidate.modelName,
-    deliveryMode: isChatDeliveryMode(candidate.deliveryMode)
-      ? candidate.deliveryMode
+    requestId: payload.requestId,
+    chatId: payload.chatId,
+    turnId: typeof payload.turnId === 'string' ? payload.turnId : null,
+    userId: payload.userId,
+    apiKeyId: payload.apiKeyId,
+    provider: payload.provider,
+    modelName: payload.modelName,
+    deliveryMode: isChatDeliveryMode(payload.deliveryMode)
+      ? payload.deliveryMode
       : CHAT_DELIVERY_MODE_STREAMING,
-    sanitizedMessages: candidate.sanitizedMessages.map((message) => ({
-      role: message.role,
-      content: message.content,
-      ...(typeof message.messageId === 'string' ? { messageId: message.messageId } : {}),
-    })),
-    isRegeneration: candidate.isRegeneration,
+    sanitizedMessages: payload.sanitizedMessages.map(serializeSanitizedMessage),
+    isRegeneration: payload.isRegeneration,
     regenerateAssistantMessageId:
-      typeof candidate.regenerateAssistantMessageId === 'string'
-        ? candidate.regenerateAssistantMessageId
+      typeof payload.regenerateAssistantMessageId === 'string'
+        ? payload.regenerateAssistantMessageId
         : null,
   }
 }

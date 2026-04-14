@@ -37,4 +37,5 @@ This directory now separates day-to-day operating docs from review artifacts and
 - [backlogs/production-audit-backlog-2026-04-12.md](./backlogs/production-audit-backlog-2026-04-12.md)
 - [backlogs/production-readiness-backlog-2026-04-14.md](./backlogs/production-readiness-backlog-2026-04-14.md)
 - [backlogs/production-readiness-gate-backlog-2026-04-14.md](./backlogs/production-readiness-gate-backlog-2026-04-14.md)
+- [backlogs/rag-retrieval-followup-2026-04-14.md](./backlogs/rag-retrieval-followup-2026-04-14.md)
 - [backlogs/stability-backlog.md](./backlogs/stability-backlog.md)

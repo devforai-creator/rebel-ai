@@ -137,7 +137,7 @@ If you use hosted Supabase Free, keep imports within the provider's current stor
 
 This low-cost profile is the current maintainer-operated first-class path while signup remains closed. If you later decide to serve outside users, freeze one public profile first instead of treating low-cost and managed public hosting as equal defaults.
 
-After changing env vars, scheduler wiring, or host assumptions, run the passive smoke check against the deployed origin:
+After deploying a change that touched env vars, scheduler wiring, or host assumptions, run the passive smoke check against the deployed origin. Treat this as post-deploy verification, not as a replacement for CI:
 
 ```bash
 SMOKE_CHECK_APP_ORIGIN=https://your-app.example.com npm run ops:smoke

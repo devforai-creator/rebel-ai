@@ -72,7 +72,7 @@ Done when:
 - regression tests cover delete-success / insert-failure explicitly
 - follow-up cleanup such as orphan-module deletion only runs after the new link set is durably in place
 
-### P0-3. Turn Deployed Smoke Checks into a Real Gate
+### P0-3. Turn Deployed Smoke Checks into a Real Post-Deploy Gate
 
 Scope:
 
@@ -85,13 +85,14 @@ Why:
 
 - the repo already has an explicit smoke-check contract for changes that touch internal routes, runners, env wiring, and signed asset delivery
 - today that contract is still mostly manual, so the most deployment-specific regressions can slip past otherwise strong CI
+- the current ambiguity is not whether smoke exists, but whether it is a local/pre-deploy check or a deployed/post-deploy release gate
 
 Done when:
 
-- the repo has one explicit place where deployed smoke verification is required before closing high-risk changes
+- the repo has one explicit place where deployed smoke verification is required after deploy and before closing high-risk changes
 - the gate is mechanical enough that “forgot to run it” stops being a normal failure mode
 - the chosen mechanism is documented clearly, including how secrets and target origin are supplied
-- the gate distinguishes passive and active checks so operators do not accidentally consume live work during routine verification
+- the gate distinguishes local rehearsal from deployed verification, and passive from active checks, so operators do not accidentally consume live work during routine verification
 
 ### P0-4. Repair Runtime-Contract Drift in Schema and Product Docs
 

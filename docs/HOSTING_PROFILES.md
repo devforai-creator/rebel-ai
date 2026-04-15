@@ -65,5 +65,5 @@ For the current repo operating contract, this should be treated as advanced or e
 - Realtime and storage quotas vary by provider plan. Check the provider docs before advertising a public instance.
 - If you intentionally reopen public signup or public bucket reads later, treat that as an operating-mode change and update the operator docs and smoke checks in the same change.
 - If you change hosting assumptions, test chat generation, background job pickup, summary generation, RBX import, and `GET /api/internal/health` before calling the setup production-ready.
-- For the current first-class low-cost path, use [`FIRST_CLASS_SMOKE_CHECKS.md`](./FIRST_CLASS_SMOKE_CHECKS.md) and `npm run ops:smoke` as the default post-change verification flow.
+- For the current first-class low-cost path, use [`FIRST_CLASS_SMOKE_CHECKS.md`](./FIRST_CLASS_SMOKE_CHECKS.md) and `npm run ops:smoke` as the default post-deploy verification flow. Treat local smoke as rehearsal, not as the final gate for high-risk deployed changes.
 - See [`OPERATING_PLAN.md`](./OPERATING_PLAN.md) for the current first-class mode and the remaining public-opening gates.

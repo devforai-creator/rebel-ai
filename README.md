@@ -202,7 +202,7 @@ The chat entry point (`/api/chat`) maintains a job queue in Node.js Runtime whil
 > **TIP:** To verify scheduled execution, check the logs for whichever scheduler you use. On Vercel Pro, look for `/api/internal/chat-job-runner/trigger` → `/api/internal/chat-job-runner`. For urgent cases, run `npm run chat:jobs` to drain jobs immediately.
 
 - **Health check**: Call `GET /api/internal/health` (requires `Authorization: Bearer ${CHAT_ADMIN_SECRET}` header) to inspect recent success/failure times and consecutive failure counts for runner/broadcast/summary services. The route prefers durable database-backed snapshots and returns `healthSource: durable` when that path is active, falling back to in-memory stats only when admin DB access is unavailable. If response `status` is `degraded`, one of the trigger, runner, broadcast, or summary stages has consecutive failures.
-- **Operator smoke checks**: Use `npm run ops:smoke:local` / `npm run ops:smoke:local:active` against a local `npm run dev:local` session, or `npm run ops:smoke` / `npm run ops:smoke:active` against a deployed origin. See [`docs/FIRST_CLASS_SMOKE_CHECKS.md`](./docs/FIRST_CLASS_SMOKE_CHECKS.md).
+- **Operator smoke checks**: Use `npm run ops:smoke:local` / `npm run ops:smoke:local:active` against a local `npm run dev:local` session as rehearsal, then run `npm run ops:smoke` / `npm run ops:smoke:active` against the deployed origin after deploy for post-deploy verification. See [`docs/FIRST_CLASS_SMOKE_CHECKS.md`](./docs/FIRST_CLASS_SMOKE_CHECKS.md).
 
 ### Optional Deployment Env Profiles
 

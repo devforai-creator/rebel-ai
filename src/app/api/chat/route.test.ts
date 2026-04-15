@@ -925,7 +925,8 @@ describe('POST /api/chat', () => {
     createAdminClientMock.mockReturnValue({})
     fetchMock.mockClear()
     persistChatJobLifecycleStageMock.mockReset()
-    triggerMessageTranslationMock.mockClear()
+    triggerMessageTranslationMock.mockReset()
+    triggerMessageTranslationMock.mockImplementation(() => undefined)
     currentAdminMock = null
     adminRpcCalls = []
     global.fetch = fetchMock as typeof global.fetch
@@ -1530,6 +1531,30 @@ describe('POST /api/chat', () => {
     expect(init?.method).toBe('GET')
     expect(headers.get('authorization')).toBe('Bearer test-chat-admin-secret')
     expect(headers.get('x-vercel-protection-bypass')).toBe('vercel-bypass-secret')
+  })
+
+  it('still returns 202 when the translation trigger throws synchronously', async () => {
+    triggerMessageTranslationMock.mockImplementation(() => {
+      throw new Error('translation trigger escaped')
+    })
+    createSupabaseMock(buildDefaultAuthenticatedFixture())
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        messages: [{ role: 'user', content: 'keep chat acceptance stable' }],
+      }),
+    })
+
+    const response = await POST(request)
+
+    expect(response.status).toBe(202)
+    await flushMicrotasks()
+
+    expect(triggerMessageTranslationMock).toHaveBeenCalled()
+    expect(findFetchCallByPathname('/api/internal/chat-job-runner/trigger')).toBeDefined()
   })
 
   it('enqueues Anthropic Batch mode for supported Opus keys', async () => {

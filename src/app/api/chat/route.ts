@@ -382,8 +382,18 @@ export async function POST(req: Request) {
     const jobId = enqueueResult.jobId
 
     if (insertedUserMessageId) {
-      // Fire-and-forget: trigger background translation for user message
-      triggerMessageTranslation(insertedUserMessageId, user.id)
+      try {
+        // Fire-and-forget: translation is experimental and must not affect core chat acceptance.
+        triggerMessageTranslation(insertedUserMessageId, user.id)
+      } catch (error) {
+        console.error('[Chat API] Translation trigger escaped the fire-and-forget boundary', {
+          chatId,
+          jobId,
+          messageId: insertedUserMessageId,
+          userId: user.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
 
     scheduleChatJobRunnerTrigger({

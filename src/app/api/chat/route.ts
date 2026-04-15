@@ -19,6 +19,7 @@ import {
   isChatDeliveryMode,
 } from '@/lib/chat/delivery-mode'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
+import { dispatchNonBlockingSupportEffect, SUPPORT_TIER_FEATURES } from '@/lib/support-tier'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { scheduleChatJobRunnerTrigger } from './background-trigger'
@@ -382,18 +383,17 @@ export async function POST(req: Request) {
     const jobId = enqueueResult.jobId
 
     if (insertedUserMessageId) {
-      try {
-        // Fire-and-forget: translation is experimental and must not affect core chat acceptance.
-        triggerMessageTranslation(insertedUserMessageId, user.id)
-      } catch (error) {
-        console.error('[Chat API] Translation trigger escaped the fire-and-forget boundary', {
+      dispatchNonBlockingSupportEffect({
+        feature: SUPPORT_TIER_FEATURES.MESSAGE_TRANSLATION_TRIGGER,
+        execute: () => triggerMessageTranslation(insertedUserMessageId, user.id),
+        context: {
           chatId,
           jobId,
           messageId: insertedUserMessageId,
           userId: user.id,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
+        },
+        logPrefix: '[Chat API]',
+      })
     }
 
     scheduleChatJobRunnerTrigger({

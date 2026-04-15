@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  CHAT_MEMORY_MODE_SUPPORT_TIERS,
   buildOperatorDefaultChatModelConfig,
   DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
   DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
@@ -127,6 +128,13 @@ describe('resolveChatMemoryConfig', () => {
         retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
       },
     )
+  })
+
+  it('marks summary_window as fallback and prefix_live_blocks as core', () => {
+    expect(CHAT_MEMORY_MODE_SUPPORT_TIERS).toEqual({
+      summary_window: 'fallback',
+      prefix_live_blocks: 'core',
+    })
   })
 })
 

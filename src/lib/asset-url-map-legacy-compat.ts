@@ -1,7 +1,11 @@
 import { normalizeAssetKey } from './asset-uri'
+import { SUPPORT_TIER_FEATURES } from './support-tier'
 
 const LEGACY_IMAGE_EXTENSIONS = ['.png', '.webp', '.jpg', '.jpeg', '.gif', '.avif']
 const LOOSE_IMAGE_EXTENSION_REGEX = /\.(png|webp|jpg|jpeg|gif|avif|mp4|webm)$/i
+
+export const LEGACY_ASSET_URL_COMPATIBILITY_SUPPORT =
+  SUPPORT_TIER_FEATURES.LEGACY_ASSET_URL_COMPATIBILITY
 
 export function registerLegacyCompatibleAssetUrlKeys(
   urlMap: Record<string, string>,

@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  LEGACY_ASSET_URL_COMPATIBILITY_SUPPORT,
   registerLegacyCompatibleAssetUrlKeys,
   resolveLegacyCompatibleAssetUrl,
 } from './asset-url-map-legacy-compat'
 
 describe('registerLegacyCompatibleAssetUrlKeys', () => {
+  it('is explicitly marked as a removal-candidate compatibility layer', () => {
+    expect(LEGACY_ASSET_URL_COMPATIBILITY_SUPPORT.tier).toBe('removal')
+  })
+
   it('registers fuzzy keys for legacy imported asset names', () => {
     const urlMap: Record<string, string> = {}
 

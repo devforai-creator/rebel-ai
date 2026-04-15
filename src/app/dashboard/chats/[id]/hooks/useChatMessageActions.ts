@@ -11,6 +11,7 @@ import { deleteMessage, editMessage } from '../message-actions'
 import type { DebugInfo, DisplayMessage } from '../utils'
 import type { UseQueuedChatReturn } from './useQueuedChat'
 import { readApiErrorMessage } from '@/lib/http/api-contract'
+import { SUPPORT_TIER_HEADER, SUPPORT_TIERS } from '@/lib/support-tier'
 
 type UseChatMessageActionsArgs = {
   combinedMessages: DisplayMessage[]
@@ -166,7 +167,8 @@ export function useChatMessageActions({
           body: JSON.stringify({ messageId }),
         })
 
-        const isExperimental = response.headers.get('X-RebelAI-Support-Tier') === 'experimental'
+        const isExperimental =
+          response.headers.get(SUPPORT_TIER_HEADER) === SUPPORT_TIERS.EXPERIMENTAL
 
         if (!response.ok) {
           const errorText = await response.text()

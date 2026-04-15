@@ -260,6 +260,12 @@ Done when:
 - we have an explicit product decision for bilingual-mode retention
 - any cleanup plan is based on actual feature posture, not guesswork
 
+Status on 2026-04-15:
+
+- Measured, and still deferred
+- `content_en` currently occupies about `2070 kB` across `1936` rows in `messages`
+- That is small relative to about `18 MB` of primary `content` and about `38 MB` of total `messages` TOAST, so it is not a meaningful storage-pressure source right now
+
 Current decision:
 
 - do nothing to `content_en` in the immediate hygiene pass

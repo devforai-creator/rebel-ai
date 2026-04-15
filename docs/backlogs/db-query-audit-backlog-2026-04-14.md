@@ -1,6 +1,11 @@
 # DB Query Audit Backlog
 
-Updated: 2026-04-14
+Updated: 2026-04-15
+
+Status:
+
+- Non-RAG batches in this backlog are closed as of `2026-04-15`
+- Remaining RAG follow-up work continues in [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/rag-retrieval-followup-2026-04-14.md)
 
 This document turns the current DB and query-path review into execution batches.
 
@@ -74,6 +79,12 @@ Notes:
 - prefer additive instrumentation, not permanent verbose debug logging
 - row counts matter as much as latency for this batch
 
+Status on 2026-04-15:
+
+- Complete
+- Landed via `876fd46` (`Instrument chat job DB hot paths`)
+- Queue claim, transcript load, lorebook/context build, and related hot-path timings are now emitted behind the runner debug switch
+
 ### P0-2. Replace App-Side Count and Latest Helpers With SQL-Shaped Reads
 
 Scope:
@@ -93,6 +104,12 @@ Done when:
 - count-oriented helpers no longer require loading all conversation turns into application memory
 - latest-assistant and latest-message lookups do not scan the whole turn history for common cases
 - regression tests still prove message-visibility and projection semantics
+
+Status on 2026-04-15:
+
+- Complete
+- Landed via `2293031` (`Switch turn projection helpers to exact counts`)
+- The helper paths this batch targeted no longer depend on loading full turn history just to derive counts/latest values
 
 ### P0-3. Shrink Chat Transcript Loading to the Real Execution Need
 
@@ -119,6 +136,12 @@ Guardrail:
 - do not change chat semantics to get the win
 - preserve regeneration correctness and prompt-building output shape
 
+Status on 2026-04-15:
+
+- Complete
+- Landed via `8a2a479` (`Reduce transcript reloads in chat runner`)
+- The main chat runner transcript path was reduced without reopening regeneration semantics
+
 ### P0-4. Move Queue Claiming to a Database-Atomic Boundary
 
 Scope:
@@ -144,6 +167,12 @@ Suggested direction:
 - prefer a DB function using `FOR UPDATE SKIP LOCKED` or equivalent row-locking semantics
 - add or adjust indexes only after confirming the final query shape
 
+Status on 2026-04-15:
+
+- Complete
+- Landed via `38cacc4` (`Make chat job claiming atomic`)
+- Pending job claiming now happens at the database boundary instead of through the earlier read-then-update pattern
+
 ## P1
 
 ### P1-1. Slim Heavy List Endpoints
@@ -165,6 +194,12 @@ Done when:
 - large JSON blobs are not loaded merely to compute counts
 - any replacement counting logic is explicit and tested
 
+Status on 2026-04-15:
+
+- Complete
+- Landed via `06e0dc5` (`Slim module list queries`)
+- The modules list no longer fetches heavyweight module JSON just to derive counts; this path now uses the narrower module summary RPC shape
+
 ### P1-2. Consolidate RAG and Embedding Metadata Lookups
 
 Scope:
@@ -183,6 +218,12 @@ Done when:
 - one chat request does not repeatedly reload the same RAG opt-in and embedding-key metadata
 - the path remains correct for users with RAG disabled, missing embedding keys, or inactive provider keys
 - tests cover the chosen caching or consolidation boundary
+
+Status on 2026-04-15:
+
+- Initial pass complete for this backlog
+- Landed via `3f00731` (`Cache RAG embedding access metadata`)
+- Remaining retrieval-specific optimization continues in [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/rag-retrieval-followup-2026-04-14.md)
 
 ### P1-3. Validate Vector Search and Fact Lookup With Real Plans
 
@@ -210,6 +251,12 @@ Baseline notes from April 14, 2026:
 - Current implication: tuning `ivfflat` list counts is not the next move. The production query shape is chat-scoped first, then exact vector distance sort inside that filtered set, so the present global vector index is not acting as the main access path for this function.
 - Current implication: if `chat_facts` growth becomes a real latency problem, the likely next step is a query-shape change or retrieval redesign, not a blind index retune.
 
+Status on 2026-04-15:
+
+- Baseline complete for this backlog
+- Landed via `356f46f` (`Document match_chat_facts plan baselines`)
+- The follow-on tuning and retrieval redesign work now belongs to [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/rag-retrieval-followup-2026-04-14.md)
+
 ## Not In Scope
 
 Do not use this backlog to justify:
@@ -223,12 +270,8 @@ Do not use this backlog to justify:
 
 Start in this order unless new production evidence overrides it:
 
-1. P0-1 instrumentation
-2. P0-2 count/latest helper cleanup
-3. P0-3 transcript load reduction
-4. P0-4 atomic queue claim
-5. P1-1 list endpoint slimming
-6. P1-2 and P1-3 RAG follow-up
+1. Continue only with [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/rag-retrieval-followup-2026-04-14.md) for retrieval-specific work
+2. Do not reopen the non-RAG batches in this document unless a new measured regression appears
 
 ## Batch Close Checklist
 
@@ -242,4 +285,4 @@ Before closing a batch:
 
 ## Next Session Start Point
 
-The next session should start with P0-1, not another broad review.
+The next session should start from [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/rag-retrieval-followup-2026-04-14.md), not by reopening the already-closed non-RAG batches here.

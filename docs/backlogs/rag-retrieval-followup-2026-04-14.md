@@ -41,6 +41,7 @@ Current interpretation:
 - It seeds a small fixture and a large fixture in separate transactions
 - Each fixture prints both the inner retrieval query plan and the wrapped `match_chat_facts(...)` plan
 - Both transactions end with `ROLLBACK`, so no benchmark rows are left behind locally
+- The harness also includes a fallback quality smoke that proves an older exact match is still returned when the recent candidate window has no hits
 
 ## Goal
 
@@ -169,6 +170,14 @@ Done when:
 - the new plan is measurably better on the large benchmark
 - retrieval output still passes fixture-based quality checks
 - the change can be explained in one sentence without hand-waving
+
+Status:
+
+- Interim production fix selected on 2026-04-15
+- Current shape: `match_chat_facts` now ranks only the most recent candidate rows first, and falls back to the full chat scan only when that recent window returns no matches above threshold
+- Product trade-off: for chats above roughly `1000` facts, retrieval is now intentionally recency-biased instead of exhaustively ranking the full chat every time
+- Large benchmark improved from about `52.1ms` inner / `52.8ms` wrapper to about `16.8ms` inner / `12.6ms` wrapper
+- The harness now includes a fallback quality smoke where an older exact-match fact still returns even though the recent candidate window contains only non-matches
 
 ### P1-2. Decide Whether Compaction Is Necessary
 

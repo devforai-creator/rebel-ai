@@ -46,6 +46,13 @@ export function deleteApiKey(client: RpcClient, args: RpcFunctions['delete_api_k
   return callTypedRpc(client, 'delete_api_key', args)
 }
 
+export function updateCharacterWithModules(
+  client: RpcClient,
+  args: RpcFunctions['update_character_with_modules']['Args'],
+) {
+  return callTypedRpc(client, 'update_character_with_modules', args)
+}
+
 export function recordServiceHealthStatus(
   client: RpcClient,
   args: RpcFunctions['record_service_health_status']['Args'],

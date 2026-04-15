@@ -50,6 +50,7 @@ type CharactersSupabaseOptions = {
   user?: { id: string } | null
   createCharacterError?: DbError | null
   updateCharacterError?: DbError | null
+  updateCharacterWithModulesError?: DbError | null
   deleteCharacterError?: DbError | null
   insertCharacterModulesError?: DbError | null
   deleteCharacterModulesError?: DbError | null
@@ -346,6 +347,47 @@ function buildSupabase(options: CharactersSupabaseOptions = {}) {
     rpc(name: string, params?: Record<string, unknown>) {
       state.rpcCalls.push({ name, params })
 
+      if (name === 'update_character_with_modules') {
+        if (options.updateCharacterWithModulesError) {
+          return Promise.resolve({ data: null, error: options.updateCharacterWithModulesError })
+        }
+
+        const characterId =
+          typeof params?.p_character_id === 'string' ? params.p_character_id : undefined
+        const requester = typeof params?.p_requester === 'string' ? params.p_requester : undefined
+        const nextModuleIds = Array.isArray(params?.p_module_ids)
+          ? params.p_module_ids.filter((value): value is string => typeof value === 'string')
+          : []
+        const targetCharacter = state.characters.find(
+          (row) => row.id === characterId && row.user_id === requester,
+        )
+
+        if (!targetCharacter) {
+          return Promise.resolve({
+            data: null,
+            error: { message: 'Character not found', code: 'P0002' },
+          })
+        }
+
+        targetCharacter.name = params?.p_name as string
+        targetCharacter.description = params?.p_description as string
+        targetCharacter.system_prompt = params?.p_system_prompt
+        targetCharacter.greeting_message = params?.p_greeting_message ?? null
+        state.characterModules = state.characterModules.filter(
+          (row) => row.character_id !== characterId,
+        )
+        state.characterModules.push(
+          ...nextModuleIds.map((moduleId, index) => ({
+            character_id: targetCharacter.id,
+            module_id: moduleId,
+            enabled: true,
+            priority: nextModuleIds.length - index,
+          })),
+        )
+
+        return Promise.resolve({ data: null, error: null })
+      }
+
       if (name !== 'delete_orphaned_modules') {
         throw new Error(`Unexpected rpc: ${name}`)
       }
@@ -580,8 +622,19 @@ describe('character actions template syntax handling', () => {
     )
 
     expect(result).toBeUndefined()
-    expect(supabase.state.characterUpdateCalls).toHaveLength(1)
-    expect(supabase.state.characterUpdateCalls[0].payload?.greeting_message).toBe('Hello {{user}}')
+    expect(supabase.state.rpcCalls[0]).toEqual({
+      name: 'update_character_with_modules',
+      params: {
+        p_character_id: 'char-1',
+        p_name: 'Test Character',
+        p_description: 'Test description',
+        p_system_prompt: 'Plain prompt',
+        p_greeting_message: 'Hello {{user}}',
+        p_module_ids: [],
+        p_requester: 'user-1',
+      },
+    })
+    expect(supabase.state.characters[0].greeting_message).toBe('Hello {{user}}')
   })
 
   it('returns login required on update when unauthenticated', async () => {
@@ -632,7 +685,7 @@ describe('character actions template syntax handling', () => {
   it('returns a friendly error when character update fails', async () => {
     createClientMock.mockResolvedValue(
       buildSupabase({
-        updateCharacterError: { message: 'update failed', code: '23503' },
+        updateCharacterWithModulesError: { message: 'update failed', code: '23503' },
       }),
     )
     const { updateCharacter } = await import('./actions')
@@ -649,16 +702,20 @@ describe('character actions template syntax handling', () => {
         userId: 'user-1',
         error: 'update failed',
         code: '23503',
+        operation: 'update_character_with_modules',
       }),
     )
   })
 
-  it('returns a module-link error when update relinking fails', async () => {
+  it('preserves existing module links when atomic relinking fails', async () => {
     const supabase = buildSupabase({
       characterModules: [
         { character_id: 'char-1', module_id: 'old-mod', enabled: true, priority: 1 },
       ],
-      insertCharacterModulesError: { message: 'insert failed' },
+      updateCharacterWithModulesError: {
+        message: 'insert failed after unlink inside transaction',
+        code: '23505',
+      },
     })
     createClientMock.mockResolvedValue(supabase)
     validateModuleOwnershipMock.mockResolvedValue({
@@ -675,44 +732,25 @@ describe('character actions template syntax handling', () => {
     )
 
     expect(result).toEqual({
-      error: 'An error occurred while linking modules. Please try again later.',
+      error: 'Failed to update character. Please try again.',
     })
-    expect(supabase.state.characterModuleDeleteCalls).toEqual([
+    expect(supabase.state.characterModules).toEqual([
+      { character_id: 'char-1', module_id: 'old-mod', enabled: true, priority: 1 },
+    ])
+    expect(supabase.state.rpcCalls).toEqual([
       {
-        filters: [['character_id', 'char-1']],
+        name: 'update_character_with_modules',
+        params: {
+          p_character_id: 'char-1',
+          p_name: 'Test Character',
+          p_description: 'Test description',
+          p_system_prompt: 'Plain prompt',
+          p_greeting_message: 'Hello there',
+          p_module_ids: ['mod-1'],
+          p_requester: 'user-1',
+        },
       },
     ])
-    expect(supabase.state.characterModuleInsertPayloads).toEqual([
-      [{ character_id: 'char-1', module_id: 'mod-1', enabled: true, priority: 1 }],
-    ])
-    expect(supabase.state.rpcCalls).toEqual([])
-  })
-
-  it('returns an unlink error when clearing previous module links fails', async () => {
-    const supabase = buildSupabase({
-      characterModules: [
-        { character_id: 'char-1', module_id: 'old-mod', enabled: true, priority: 1 },
-      ],
-      deleteCharacterModulesError: { message: 'delete links failed', code: '23503' },
-    })
-    createClientMock.mockResolvedValue(supabase)
-    const { updateCharacter } = await import('./actions')
-
-    const result = await updateCharacter('char-1', buildCharacterFormData())
-
-    expect(result).toEqual({
-      error: 'An error occurred while unlinking existing modules. Please try again later.',
-    })
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      '[Character] Failed to clear existing module links during update',
-      expect.objectContaining({
-        characterId: 'char-1',
-        userId: 'user-1',
-        error: 'delete links failed',
-        code: '23503',
-      }),
-    )
-    expect(supabase.state.rpcCalls).toEqual([])
   })
 
   it('updates a character, relinks modules, cleans up orphans, revalidates, and redirects', async () => {
@@ -736,27 +774,33 @@ describe('character actions template syntax handling', () => {
     )
 
     expect(result).toBeUndefined()
-    expect(supabase.state.characterUpdateCalls).toEqual([
+    expect(supabase.state.characterModules).toEqual([
       {
-        payload: {
-          name: 'Test Character',
-          description: 'Test description',
-          system_prompt: 'Plain prompt',
-          greeting_message: 'Hello there',
-        },
-        filters: [
-          ['id', 'char-1'],
-          ['user_id', 'user-1'],
-        ],
+        character_id: 'char-1',
+        module_id: 'mod-3',
+        enabled: true,
+        priority: 2,
+      },
+      {
+        character_id: 'char-1',
+        module_id: 'mod-1',
+        enabled: true,
+        priority: 1,
       },
     ])
-    expect(supabase.state.characterModuleInsertPayloads).toEqual([
-      [
-        { character_id: 'char-1', module_id: 'mod-3', enabled: true, priority: 2 },
-        { character_id: 'char-1', module_id: 'mod-1', enabled: true, priority: 1 },
-      ],
-    ])
     expect(supabase.state.rpcCalls).toEqual([
+      {
+        name: 'update_character_with_modules',
+        params: {
+          p_character_id: 'char-1',
+          p_name: 'Test Character',
+          p_description: 'Test description',
+          p_system_prompt: 'Plain prompt',
+          p_greeting_message: 'Hello there',
+          p_module_ids: ['mod-3', 'mod-1'],
+          p_requester: 'user-1',
+        },
+      },
       {
         name: 'delete_orphaned_modules',
         params: {
@@ -789,13 +833,20 @@ describe('character actions template syntax handling', () => {
 
     expect(result).toBeUndefined()
     expect(validateModuleOwnershipMock).not.toHaveBeenCalled()
-    expect(supabase.state.characterModuleDeleteCalls).toEqual([
-      {
-        filters: [['character_id', 'char-1']],
-      },
-    ])
-    expect(supabase.state.characterModuleInsertPayloads).toHaveLength(0)
+    expect(supabase.state.characterModules).toEqual([])
     expect(supabase.state.rpcCalls).toEqual([
+      {
+        name: 'update_character_with_modules',
+        params: {
+          p_character_id: 'char-1',
+          p_name: 'Test Character',
+          p_description: 'Test description',
+          p_system_prompt: 'Plain prompt',
+          p_greeting_message: 'Hello there',
+          p_module_ids: [],
+          p_requester: 'user-1',
+        },
+      },
       {
         name: 'delete_orphaned_modules',
         params: {

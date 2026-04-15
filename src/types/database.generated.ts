@@ -1500,6 +1500,18 @@ export type Database = {
         Args: { module_ids: string[]; requester?: string }
         Returns: number
       }
+      update_character_with_modules: {
+        Args: {
+          p_character_id: string
+          p_description: string
+          p_greeting_message: string | null
+          p_module_ids?: string[]
+          p_name: string
+          p_requester?: string
+          p_system_prompt: string
+        }
+        Returns: undefined
+      }
       delete_secret:
         | { Args: { secret_name: string }; Returns: undefined }
         | {

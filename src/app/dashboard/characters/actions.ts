@@ -7,6 +7,7 @@ import { listCharacterAssetStoragePaths, removeStorageObjects } from '@/lib/asse
 import { getFormDataErrorMessage, safeParseFormData } from '@/lib/form-data'
 import { cleanupOrphanedModules, listCharacterModuleIds } from '@/lib/modules/orphan-cleanup'
 import { validateModuleOwnership } from '@/lib/modules/ownership'
+import { updateCharacterWithModules } from '@/lib/supabase/rpc'
 import { createClient } from '@/lib/supabase/server'
 
 const characterFormSchema = z.object({
@@ -153,16 +154,15 @@ export async function updateCharacter(id: string, formData: FormData) {
     authorizedModuleIds = validIds
   }
 
-  const { error } = await supabase
-    .from('characters')
-    .update({
-      name: parsedForm.data.name,
-      description: parsedForm.data.description,
-      system_prompt: parsedForm.data.system_prompt,
-      greeting_message: normalizeNullableText(parsedForm.data.greeting_message),
-    })
-    .eq('id', id)
-    .eq('user_id', user.id)
+  const { error } = await updateCharacterWithModules(supabase, {
+    p_character_id: id,
+    p_name: parsedForm.data.name,
+    p_description: parsedForm.data.description,
+    p_system_prompt: parsedForm.data.system_prompt,
+    p_greeting_message: normalizeNullableText(parsedForm.data.greeting_message),
+    p_module_ids: authorizedModuleIds,
+    p_requester: user.id,
+  })
 
   if (error) {
     console.error('[Character] Failed to update character', {
@@ -170,42 +170,9 @@ export async function updateCharacter(id: string, formData: FormData) {
       userId: user.id,
       error: error.message,
       code: error.code,
+      operation: 'update_character_with_modules',
     })
     return { error: 'Failed to update character. Please try again.' }
-  }
-
-  const { error: unlinkError } = await supabase
-    .from('character_modules')
-    .delete()
-    .eq('character_id', id)
-
-  if (unlinkError) {
-    console.error('[Character] Failed to clear existing module links during update', {
-      characterId: id,
-      userId: user.id,
-      error: unlinkError.message,
-      code: unlinkError.code,
-    })
-    return { error: 'An error occurred while unlinking existing modules. Please try again later.' }
-  }
-
-  if (authorizedModuleIds.length > 0) {
-    const rows = authorizedModuleIds.map((moduleId, index) => ({
-      character_id: id,
-      module_id: moduleId,
-      enabled: true,
-      priority: authorizedModuleIds.length - index,
-    }))
-
-    const { error: moduleInsertError } = await supabase.from('character_modules').insert(rows)
-
-    if (moduleInsertError) {
-      console.error('[Character] Failed to link modules during update', {
-        characterId: id,
-        error: moduleInsertError.message,
-      })
-      return { error: 'An error occurred while linking modules. Please try again later.' }
-    }
   }
 
   await cleanupOrphanedModules(supabase, previousModuleIds, {

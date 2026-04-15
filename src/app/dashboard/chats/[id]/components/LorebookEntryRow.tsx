@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react'
 import { Ban, CircleDashed, KeyRound, Pin } from 'lucide-react'
-import type { LorebookEntry } from '@/types/risuai.types'
+import type { LorebookEntry } from '@/types/lorebook.types'
 import type { LorebookOverrideMode } from '../utils/lorebook-panel'
 import {
   formatKeywordPreview,

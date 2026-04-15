@@ -1,4 +1,4 @@
-import type { LorebookEntry } from '@/types/risuai.types'
+import type { LorebookEntry } from '@/types/lorebook.types'
 import {
   computeLorebookEntryFingerprint,
   getLorebookOverrideKeyV2,

@@ -1,7 +1,8 @@
 /**
- * Compatibility-only RisuAI <-> RebelAI chat conversion utilities.
+ * Compatibility-only chat JSON conversion utilities for the observed
+ * Risu-style export shape used by archived import/export workflows.
  *
- * Keep this module for archived chat import/export and migration workflows.
+ * Keep this module for legacy chat portability and migration workflows.
  * It is not part of the first-class RBX/SUU product surface.
  */
 
@@ -24,7 +25,7 @@ interface RebelAIExportData {
 }
 
 /**
- * Convert RebelAI messages to RisuAI format
+ * Convert RebelAI messages to the supported chat JSON compatibility format
  */
 export function toRisuFormat(
   messages: RebelMessage[],
@@ -88,11 +89,11 @@ export function toRisuFormat(
 }
 
 /**
- * Convert RisuAI format to RebelAI message array
+ * Convert the supported chat JSON compatibility format to RebelAI messages
  */
 export function fromRisuFormat(risuChat: RisuChat): RebelMessage[] {
   if (!isValidRisuChat(risuChat)) {
-    throw new Error('Invalid RisuAI chat format')
+    throw new Error('Invalid compatible chat JSON format')
   }
 
   return risuChat.data.message.map((msg, index) => ({
@@ -107,7 +108,7 @@ export function fromRisuFormat(risuChat: RisuChat): RebelMessage[] {
 }
 
 /**
- * Validate RisuAI chat format
+ * Validate the supported chat JSON compatibility format
  */
 export function isValidRisuChat(data: unknown): data is RisuChat {
   if (!data || typeof data !== 'object') {
@@ -152,7 +153,7 @@ export function isValidRisuChat(data: unknown): data is RisuChat {
 }
 
 /**
- * Validate RisuAI message
+ * Validate an individual compatibility-format message
  */
 function isValidRisuMessage(data: unknown): data is RisuMessage {
   if (!data || typeof data !== 'object') {
@@ -208,7 +209,7 @@ export function parseRisuChatJson(jsonString: string): RisuChat {
   }
 
   if (!isValidRisuChat(parsed)) {
-    throw new Error('Invalid RisuAI chat format: missing required fields')
+    throw new Error('Invalid compatible chat JSON format: missing required fields')
   }
 
   return parsed

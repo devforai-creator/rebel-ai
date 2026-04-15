@@ -1,6 +1,6 @@
 /**
- * Legacy compatibility types retained for lorebook rendering and a small amount
- * of plain-text system-prompt context assembly. The former preset/module
+ * Lorebook types retained for lorebook rendering and a small amount of
+ * plain-text system-prompt context assembly. The former preset/module
  * template runtime has been retired from the active product surface.
  */
 

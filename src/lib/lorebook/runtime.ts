@@ -1,6 +1,6 @@
 import { renderLorebook } from '@/lib/lorebook-renderer'
 import type { SanitizedMessage, ServerSupabaseClient } from '@/lib/chat-summaries/types'
-import type { LorebookEntry } from '@/types/risuai.types'
+import type { LorebookEntry } from '@/types/lorebook.types'
 import {
   computeLorebookEntryFingerprint,
   getLorebookOverrideKeyV2,

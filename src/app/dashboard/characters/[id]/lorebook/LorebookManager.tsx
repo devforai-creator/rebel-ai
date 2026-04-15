@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronRight, ChevronDown, Folder, FileText, Edit, Trash2 } from 'lucide-react'
 import { groupLorebookByFolder } from '@/lib/lorebook-renderer'
-import type { LorebookEntry } from '@/types/risuai.types'
+import type { LorebookEntry } from '@/types/lorebook.types'
 import { updateLorebookEntryAlwaysActive } from './actions'
 import {
   buildCharacterLorebookEntries,

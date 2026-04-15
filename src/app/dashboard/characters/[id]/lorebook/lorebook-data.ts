@@ -1,5 +1,5 @@
 import type { CharacterModule } from '@/types/database.types'
-import type { LorebookEntry } from '@/types/risuai.types'
+import type { LorebookEntry } from '@/types/lorebook.types'
 
 type CharacterModuleBase = Pick<CharacterModule, 'id' | 'enabled' | 'priority' | 'module_id'>
 

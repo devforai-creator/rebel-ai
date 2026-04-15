@@ -47,6 +47,21 @@ export interface BuildContextOptions {
 }
 
 // RAG result info for debug_info
+export interface RagDiagnosticsInfo {
+  recentMessagesCount?: number
+  queryMessagesCount?: number
+  queryTextChars?: number
+  fallbackFactsQueryMs?: number
+  fallbackFactsLoadedCount?: number
+  embeddingMs?: number | null
+  matchRpcMs?: number | null
+  totalRetrievalMs?: number | null
+  candidateFactCount?: number | null
+  resultCount?: number
+  usedResultCount?: number
+  skippedReason?: string | null
+}
+
 export interface RagResultInfo {
   enabled: boolean
   threshold: number
@@ -56,6 +71,7 @@ export interface RagResultInfo {
     similarity: number
     preview: string
   }>
+  diagnostics?: RagDiagnosticsInfo
 }
 
 export interface BuildContextResult {
@@ -188,6 +204,11 @@ export interface SearchRelevantFactsOptions {
   recentMessages: SanitizedMessage[]
   topK?: number
   profileSettings?: import('@/lib/embeddings').FactEmbeddingProfileSettings | null
+}
+
+export interface SearchRelevantFactsResult {
+  facts: FactRow[]
+  diagnostics: RagDiagnosticsInfo
 }
 
 // Fact row type (similarity is optional - only present when returned from RAG search)

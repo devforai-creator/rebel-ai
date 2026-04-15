@@ -72,7 +72,8 @@ RBX is RebelAI's **native** character exchange format and the recommended target
 - **Declarative UI**: `ui_card` and `image_display` integrate with Safe UGC UI instead of expanding raw HTML rendering.
 - **Single spec**: one format, one parser, one importer. No multi-format version branching.
 
-See [`docs/rbx-spec.md`](./docs/rbx-spec.md) for the full format and runtime status.
+See [`docs/rbx-spec.md`](./docs/rbx-spec.md) for the RBX notes and current implementation
+references.
 
 If you want to create new `.rbx` packages instead of only importing existing ones, use the bundled Claude-importable skill at [`skills/rebelai-rbx.skill`](./skills/rebelai-rbx.skill) and follow [`docs/RBX_AUTHORING_WITH_CLAUDE.md`](./docs/RBX_AUTHORING_WITH_CLAUDE.md).
 
@@ -167,10 +168,11 @@ Note: the maintainer-operated path currently treats `prefix_live_blocks + episod
 | Smoke checks    | [`docs/FIRST_CLASS_SMOKE_CHECKS.md`](./docs/FIRST_CLASS_SMOKE_CHECKS.md)   | Repeatable operator verification for the current first-class mode |
 | Database        | [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)                               | Tables, RLS policies, RPC functions                               |
 | Database ops    | [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md)               | Migration workflow, production pushes, and drift recovery         |
-| Format          | [`docs/rbx-spec.md`](./docs/rbx-spec.md)                                   | RBX package format and runtime contract                           |
+| Format          | [`docs/rbx-spec.md`](./docs/rbx-spec.md)                                   | RBX notes and implementation entrypoint                           |
 | Security        | [`SECURITY.md`](./SECURITY.md)                                             | Reporting policy, security model, and self-hosting requirements   |
 
-> **Tip:** Keep the public entry points small: setup, schema, security, and the RBX spec should be enough to deploy and extend the project.
+> **Tip:** Keep the public entry points small: setup, schema, security, and the RBX notes should
+> be enough to deploy and extend the project.
 
 For database bootstrapping, treat `supabase/migrations/` as the source of truth. `supabase/schema.sql` is the generated hosted bootstrap snapshot and should be regenerated after migration changes. Use SQL Editor for first-time hosted bootstrap only, not for ongoing production schema changes. See [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md) for the operational workflow.
 

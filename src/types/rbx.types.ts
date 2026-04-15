@@ -2,7 +2,7 @@
  * RBX Format Type Definitions
  *
  * Zod schemas and TypeScript types for the .rbx (Rebel eXchange) character format.
- * See docs/rbx-spec.md for the full specification.
+ * See docs/rbx-spec.md for the repository entrypoint and implementation references.
  */
 
 import { z } from 'zod'

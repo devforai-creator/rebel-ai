@@ -5,7 +5,7 @@
  * .rbx uses direct Zod validation on manifest.json with no legacy decode
  * layer, URI resolution step, or version-branching import logic.
  *
- * See docs/rbx-spec.md for the full specification.
+ * See docs/rbx-spec.md for the repository entrypoint and implementation references.
  */
 
 import JSZip from 'jszip'

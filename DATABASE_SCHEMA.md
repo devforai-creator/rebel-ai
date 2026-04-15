@@ -987,4 +987,4 @@ ORDER BY cm.priority DESC;
 
 - `SUPABASE_SETUP.md` - Initial setup instructions
 - `SECURITY.md` - Current security boundaries and operational safeguards
-- `docs/rbx-spec.md` - RBX package format and runtime contract
+- `docs/rbx-spec.md` - RBX notes and implementation entrypoint

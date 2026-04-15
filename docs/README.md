@@ -13,7 +13,7 @@ This directory now separates day-to-day operating docs from review artifacts and
 
 ## Reference
 
-- [rbx-spec.md](./rbx-spec.md): RBX package and runtime contract
+- [rbx-spec.md](./rbx-spec.md): RBX notes and implementation entrypoint
 - [RBX_AUTHORING_WITH_CLAUDE.md](./RBX_AUTHORING_WITH_CLAUDE.md): RBX authoring workflow with the bundled skill
 
 ## Product Plans And Notes

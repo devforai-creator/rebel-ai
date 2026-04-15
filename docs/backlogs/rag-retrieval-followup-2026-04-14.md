@@ -1,6 +1,6 @@
 # RAG Retrieval Follow-Up Backlog
 
-Updated: 2026-04-14
+Updated: 2026-04-15
 
 This backlog is the follow-up to [db-query-audit-backlog-2026-04-14.md](./db-query-audit-backlog-2026-04-14.md).
 
@@ -32,6 +32,15 @@ Current interpretation:
 - the expensive step is not "finding vectors globally"
 - the expensive step is "taking the target chat's fact set, computing distance inside it, then sorting"
 - changing `ivfflat` knobs alone is unlikely to move the real bottleneck
+
+## Local Rerun Recipe
+
+- Run `npm run benchmark:rag:retrieval`
+- The harness lives in [scripts/rag-retrieval-benchmark.sql](/home/tmdduq96kr/projects/rebel-ai/scripts/rag-retrieval-benchmark.sql)
+- The command runs [run-rag-retrieval-benchmark.js](/home/tmdduq96kr/projects/rebel-ai/scripts/run-rag-retrieval-benchmark.js), which pipes that SQL file into the local Supabase Postgres container
+- It seeds a small fixture and a large fixture in separate transactions
+- Each fixture prints both the inner retrieval query plan and the wrapped `match_chat_facts(...)` plan
+- Both transactions end with `ROLLBACK`, so no benchmark rows are left behind locally
 
 ## Goal
 
@@ -116,6 +125,12 @@ Done when:
 - logs include candidate row counts or enough query metadata to reason about scaling
 - at least one large-chat fixture path is easy to rerun locally
 
+Status:
+
+- Complete on 2026-04-15
+- Retrieval debug output now records fallback fact load timing, embedding timing, RPC timing, total retrieval timing, result counts, and skip reasons
+- Candidate fact counts are also recorded when `RAG_DEBUG=true`
+
 ### P0-2. Add A Repeatable Retrieval Benchmark Harness
 
 Scope:
@@ -128,6 +143,12 @@ Done when:
 - small and large retrieval cases can be rerun without rebuilding the setup from scratch
 - the benchmark clearly distinguishes function wrapper time from inner query plan behavior
 - the harness leaves no local benchmark data behind, or cleans it up deterministically
+
+Status:
+
+- Complete on 2026-04-15
+- Use `npm run benchmark:rag:retrieval` to rerun the small and large fixtures locally
+- The harness is self-cleaning via transaction rollback
 
 ## P1
 
@@ -175,8 +196,8 @@ Each candidate batch should close with:
 
 Start with this order:
 
-1. P0-1 retrieval cost visibility
-2. P0-2 repeatable benchmark harness
-3. one P1-1 prototype query-shape change
+1. one P1-1 prototype query-shape change
+2. rerun `npm run benchmark:rag:retrieval`
+3. compare the new large-case plan against the baseline before touching indexes
 
 If that first prototype does not materially improve the large benchmark, stop and choose between hybrid retrieval and fact compaction before writing more code.

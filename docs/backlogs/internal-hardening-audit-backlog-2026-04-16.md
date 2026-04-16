@@ -29,9 +29,22 @@ The 2026-04-16 audit clusters into these repeated themes:
 - the chat detail shell is still a large change surface and remains partially outside the global coverage denominator
 - some server-side correctness still depends on trusting queued payload context more than the canonical DB transcript
 
+## Status Snapshot
+
+Current status after the 2026-04-16 hardening sessions:
+
+- Completed: `P0-1`, `P0-2`, `P0-4`, `P1-2`, `P1-3`
+- In progress: `P1-1`
+- Still open: `P0-3`
+- Lower-priority carry item: `P2-1`
+
+Use the next review pass to confirm the completed items stay closed and to decide whether `P1-1`, `P0-3`, or `P2-1` should be the next real work item.
+
 ## P0
 
 ### P0-1. Fully Isolate Translation Trigger from the Core Chat Success Path
+
+Status: completed on 2026-04-16
 
 Scope:
 
@@ -54,6 +67,8 @@ Done when:
 
 ### P0-2. Make Character Module Relinking Atomic
 
+Status: completed on 2026-04-16
+
 Scope:
 
 - [src/app/dashboard/characters/actions.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/actions.ts)
@@ -73,6 +88,8 @@ Done when:
 - follow-up cleanup such as orphan-module deletion only runs after the new link set is durably in place
 
 ### P0-3. Turn Deployed Smoke Checks into a Real Post-Deploy Gate
+
+Status: open
 
 Scope:
 
@@ -95,6 +112,8 @@ Done when:
 - the gate distinguishes local rehearsal from deployed verification, and passive from active checks, so operators do not accidentally consume live work during routine verification
 
 ### P0-4. Repair Runtime-Contract Drift in Schema and Product Docs
+
+Status: completed on 2026-04-16
 
 Scope:
 
@@ -119,6 +138,20 @@ Done when:
 
 ### P1-1. Reduce the Blast Radius of the Chat Detail Shell
 
+Status: in progress
+
+Shipped slices on 2026-04-16:
+
+- split `DebugModal` into smaller adjacent sections
+- extracted `queued-chat-api` and `queued-chat-runtime` helpers from `useQueuedChat`
+- extracted chat metadata-view derivation into `useChatMetadataViews`
+- extracted the composer UI into `ChatComposer`
+
+Carry-forward focus:
+
+- only continue if the next slice is still a low-risk seam
+- prefer transcript/message-pane or other UI-shell splits before touching the deeper queued-chat state machine again
+
 Scope:
 
 - [src/app/dashboard/chats/[id]/ChatInterface.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/ChatInterface.tsx)
@@ -141,6 +174,8 @@ Done when:
 
 ### P1-2. Tighten the Transcript-Source Contract in the Chat Runner
 
+Status: completed on 2026-04-16
+
 Scope:
 
 - [src/app/api/internal/chat-job-runner/execution-context.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/execution-context.ts)
@@ -160,6 +195,8 @@ Done when:
 - the supported core does not depend on undocumented payload assumptions
 
 ### P1-3. Close the API Key Create Rollback Gap
+
+Status: completed on 2026-04-16
 
 Scope:
 
@@ -181,6 +218,13 @@ Done when:
 ## P2
 
 ### P2-1. Converge Docs and Defaults Around One Day-to-Day Operating Profile
+
+Status: lower-priority carry item
+
+Note:
+
+- `P0-4` already reclassified the doc roles and made the current maintainer-operated low-cost profile explicit
+- the remaining work here is readability and emphasis polishing, not a contract blocker
 
 Scope:
 

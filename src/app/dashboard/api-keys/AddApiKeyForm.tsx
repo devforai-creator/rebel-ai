@@ -128,7 +128,14 @@ export default function AddApiKeyForm() {
 
         {formState.warning && (
           <InlineFeedback tone="warning" className="mb-4">
-            {formState.warning}
+            <div className="space-y-1">
+              <p>{formState.warning}</p>
+              {formState.cleanupReference && (
+                <p className="text-xs font-mono break-all">
+                  정리 참조 ID: {formState.cleanupReference}
+                </p>
+              )}
+            </div>
           </InlineFeedback>
         )}
 

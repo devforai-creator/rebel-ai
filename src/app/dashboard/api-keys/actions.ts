@@ -251,7 +251,8 @@ export async function createApiKey(
       return {
         error: 'API 키 등록 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
         success: false,
-        warning: `API 키 등록은 실패했고 Vault 정리도 완료되지 않았습니다. 수동 정리가 필요할 수 있습니다. 정리 참조 ID: ${cleanupReference}`,
+        warning:
+          'API 키 등록에 실패했습니다. 다시 시도해주세요. 문제가 계속되면 관리자에게 참조 ID를 전달해주세요.',
         rollbackFailed: true,
         cleanupReference,
       }

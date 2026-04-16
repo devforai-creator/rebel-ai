@@ -59,3 +59,17 @@ export function recordServiceHealthStatus(
 ) {
   return callTypedRpc(client, 'record_service_health_status', args)
 }
+
+export function checkChatRateLimit(
+  client: RpcClient,
+  args: RpcFunctions['check_chat_rate_limit']['Args'],
+) {
+  return callTypedRpc(client, 'check_chat_rate_limit', args)
+}
+
+export function checkAnonRateLimitRpc(
+  client: RpcClient,
+  args: RpcFunctions['check_anon_rate_limit']['Args'],
+) {
+  return callTypedRpc(client, 'check_anon_rate_limit', args)
+}

@@ -13,6 +13,7 @@ import {
   createChatTurn,
   loadGenerationTranscript,
   loadLatestProjectedAssistantMessage,
+  loadLatestProjectedConversationMessage,
   loadLatestProjectedMessage,
   loadProjectedChatMessages,
   loadProjectedConversationMessages,
@@ -485,12 +486,14 @@ describe('chat turn projections', () => {
   it('loads all projected messages and projected counters from active variants only', async () => {
     const supabase = createTurnProjectionSupabase()
 
-    const [messages, latestMessage, latestAssistant, messageCount] = await Promise.all([
-      loadProjectedChatMessages({ supabase, chatId }),
-      loadLatestProjectedMessage({ supabase, chatId }),
-      loadLatestProjectedAssistantMessage({ supabase, chatId }),
-      countProjectedChatMessages({ supabase, chatId }),
-    ])
+    const [messages, latestMessage, latestConversationMessage, latestAssistant, messageCount] =
+      await Promise.all([
+        loadProjectedChatMessages({ supabase, chatId }),
+        loadLatestProjectedMessage({ supabase, chatId }),
+        loadLatestProjectedConversationMessage({ supabase, chatId }),
+        loadLatestProjectedAssistantMessage({ supabase, chatId }),
+        countProjectedChatMessages({ supabase, chatId }),
+      ])
 
     expect(messages.map((message) => message.id)).toEqual([
       'system-1',
@@ -504,6 +507,7 @@ describe('chat turn projections', () => {
       'system-4',
     ])
     expect(latestMessage?.id).toBe('system-4')
+    expect(latestConversationMessage?.id).toBe('user-3')
     expect(latestAssistant?.id).toBe('assistant-2')
     expect(messageCount).toBe(9)
   })

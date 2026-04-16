@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse, after } from 'next/server'
-import { buildInternalApiUrl } from '@/lib/internal-api-origin'
 import {
   recordChatRunnerTriggerFailure,
   recordChatRunnerTriggerSuccess,
   getChatRunnerTriggerStats,
 } from '@/lib/chat/runner-trigger-monitor'
+import { processChatJobs } from '../service'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
-
-/** Seconds to wait for the runner request to be delivered before aborting.
- *  The runner route responds with a fast 202 dispatch ack. */
-const RUNNER_DELIVERY_TIMEOUT_S = 10
 
 export async function GET(req: NextRequest) {
   const adminSecret = process.env.CHAT_ADMIN_SECRET
@@ -41,46 +37,17 @@ export async function GET(req: NextRequest) {
   }
 
   const limit = resolveBatchLimit()
-  const endpoint = buildInternalApiUrl('/api/internal/chat-job-runner')
-  const headers = buildAuthHeaders(adminSecret)
-
-  // Use after() to guarantee the fetch is delivered after 202 is sent.
-  // Abort after RUNNER_DELIVERY_TIMEOUT_S — the runner continues independently
-  // once Vercel's router accepts the request.
   after(async () => {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), RUNNER_DELIVERY_TIMEOUT_S * 1000)
     try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ limit, dispatch: true }),
-        signal: controller.signal,
-      })
-
-      if (!response.ok) {
-        const text = await response.text()
-        const error = new Error(
-          `Runner dispatch failed (${response.status}): ${text || 'Unknown error'}`,
-        )
-        await recordChatRunnerTriggerFailure(error, { attempt: 1, status: response.status })
-        console.error('[Chat Job Runner Trigger] Runner dispatch failed', {
-          status: response.status,
-          body: text,
-        })
-        return
-      }
-
+      const result = await processChatJobs(limit)
       await recordChatRunnerTriggerSuccess({
         attempt: 1,
-        status: response.status,
-        processedCount: null,
+        status: 202,
+        processedCount: result.processedCount,
       })
     } catch (error) {
       await recordChatRunnerTriggerFailure(error, { attempt: 1 })
-      console.error('[Chat Job Runner Trigger] Failed to invoke runner', error)
-    } finally {
-      clearTimeout(timer)
+      console.error('[Chat Job Runner Trigger] Failed to process queued jobs', error)
     }
   })
 
@@ -103,17 +70,4 @@ function resolveBatchLimit(): number {
     return 1
   }
   return Math.min(Math.trunc(raw), 10)
-}
-
-function buildAuthHeaders(adminSecret: string): HeadersInit {
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${adminSecret}`,
-  }
-
-  if (process.env.VERCEL_AUTOMATION_BYPASS_SECRET) {
-    headers['x-vercel-protection-bypass'] = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
-  }
-
-  return headers
 }

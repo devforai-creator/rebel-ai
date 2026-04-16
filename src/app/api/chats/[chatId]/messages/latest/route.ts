@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { loadLatestProjectedMessage } from '@/lib/chat/turns'
+import { loadLatestProjectedConversationMessage } from '@/lib/chat/turns'
 import { NextRequest } from 'next/server'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ chatId: string }> }) {
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ chat
       return new Response('Chat not found', { status: 404 })
     }
 
-    const message = await loadLatestProjectedMessage({
+    const message = await loadLatestProjectedConversationMessage({
       supabase,
       chatId,
     })

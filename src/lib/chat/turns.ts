@@ -13,6 +13,7 @@ export {
   countProjectedConversationMessages,
   loadGenerationTranscript,
   loadLatestProjectedAssistantMessage,
+  loadLatestProjectedConversationMessage,
   loadLatestProjectedMessage,
   loadProjectedChatMessages,
   loadProjectedChatWindow,

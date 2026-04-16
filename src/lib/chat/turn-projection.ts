@@ -363,6 +363,45 @@ export async function loadLatestProjectedMessage({
   return messages[messages.length - 1] ?? null
 }
 
+export async function loadLatestProjectedConversationMessage({
+  supabase,
+  chatId,
+}: {
+  supabase: TurnClient
+  chatId: string
+}): Promise<ProjectedTurnMessage | null> {
+  const latestTurnResult = await readMaybeSingleQuery<PersistedTurnRow>(
+    supabase
+      .from('chat_turns')
+      .select('id, turn_index, user_message_id, active_assistant_message_id')
+      .eq('chat_id', chatId)
+      .order('turn_index', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  )
+
+  if (latestTurnResult.error && latestTurnResult.error.code !== 'PGRST116') {
+    throw new Error(`Failed to load latest chat turn: ${latestTurnResult.error.message}`)
+  }
+
+  const latestTurn = latestTurnResult.data
+  if (!latestTurn) {
+    return null
+  }
+
+  const preferredMessageId = latestTurn.active_assistant_message_id ?? latestTurn.user_message_id
+  if (!preferredMessageId) {
+    return null
+  }
+
+  const messageMap = await loadProjectedMessagesByIds({
+    supabase,
+    messageIds: [preferredMessageId],
+  })
+
+  return messageMap.get(preferredMessageId) ?? null
+}
+
 export async function loadLatestProjectedAssistantMessage({
   supabase,
   chatId,

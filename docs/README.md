@@ -13,6 +13,7 @@ Keep human-facing docs short and directional. Exact runtime behavior should come
 
 ## Active Docs And Runbooks
 
+- [SUPPORT_BOUNDARIES.md](./SUPPORT_BOUNDARIES.md): stable doctrine for `core / fallback / experimental / removal` plus experimental forbidden zones
 - [HOSTING_PROFILES.md](./HOSTING_PROFILES.md): supported hosting profiles and current default mode
 - [OPERATING_PLAN.md](./OPERATING_PLAN.md): maintainer operating note for current mode, support boundaries, and public-opening gates
 - [FIRST_CLASS_SMOKE_CHECKS.md](./FIRST_CLASS_SMOKE_CHECKS.md): repeatable operator verification

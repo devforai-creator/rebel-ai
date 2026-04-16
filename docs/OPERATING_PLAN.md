@@ -5,6 +5,7 @@ It captures the current supported mode, boundary decisions, and public-opening g
 It is not the exact source of truth for schema or route-level behavior.
 
 It exists to keep one real first-class path, prevent mode sprawl, and define the gates that must close before public signup opens.
+For the stable doctrine behind `core / fallback / experimental / removal`, see [SUPPORT_BOUNDARIES.md](./SUPPORT_BOUNDARIES.md).
 
 ## 1. Current Operating Mode
 

@@ -8,7 +8,6 @@ const DEFAULT_SOURCE_DIRS = ['src']
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'])
 const BROWSER_SUPABASE_CLIENT_SPECIFIER = '@/lib/supabase/client'
 const ALLOWED_RUNTIME_IMPORTERS = [
-  'src/app/dashboard/characters/CharacterImport.tsx',
   'src/app/dashboard/chats/[id]/hooks/useChatRealtimeSubscription.ts',
   'src/app/dashboard/chats/[id]/hooks/useChatSummariesState.ts',
 ]

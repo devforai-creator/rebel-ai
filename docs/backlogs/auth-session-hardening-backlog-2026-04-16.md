@@ -39,13 +39,10 @@ Already true:
 
 Still open in practice:
 
-- browser-authenticated import upload admission
 - browser-authenticated realtime for chat and summaries
 
 Representative current runtime call sites:
 
-- [src/app/dashboard/characters/CharacterImport.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterImport.tsx)
-- [src/app/dashboard/characters/character-ui-logic.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/character-ui-logic.ts)
 - [src/app/dashboard/chats/[id]/hooks/useChatRealtimeSubscription.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/hooks/useChatRealtimeSubscription.ts)
 - [src/app/dashboard/chats/[id]/hooks/useChatSummariesState.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/hooks/useChatSummariesState.ts)
 
@@ -111,6 +108,8 @@ Current evidence as of `2026-04-17`:
 
 ### P0-3. Replace Browser Storage Upload Admission With A Server-Issued Upload Contract
 
+Status: Completed on 2026-04-17
+
 Scope:
 
 - [src/app/dashboard/characters/CharacterImport.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterImport.tsx)
@@ -131,11 +130,12 @@ Done when:
 - the job-enqueue path accepts only server-verifiable upload references
 - tests cover invalid upload reference, unauthorized upload admission, and happy path behavior
 
-Current evidence as of `2026-04-16`:
+Current evidence as of `2026-04-17`:
 
-- [src/app/dashboard/characters/character-ui-logic.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/character-ui-logic.ts)
-  still performs `supabase.auth.getUser()` and direct storage upload in the browser before job
-  enqueue
+- [src/app/dashboard/characters/CharacterImport.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterImport.tsx)
+  now uses plain `fetch` for contract issuance, direct signed upload, and enqueue
+- [src/app/api/characters/import/storage/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/characters/import/storage/route.ts)
+  now issues server-authenticated signed upload contracts and verifies signed upload references
 
 ## P1
 

@@ -30,17 +30,16 @@ Most authenticated route handlers and server actions already rely on server-side
 ownership scoping. The remaining browser-authenticated Supabase usage is concentrated in a small
 set of runtime paths:
 
-- [src/app/dashboard/characters/CharacterImport.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterImport.tsx)
-- [src/app/dashboard/characters/character-ui-logic.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/character-ui-logic.ts)
 - [src/app/dashboard/chats/[id]/hooks/useChatRealtimeSubscription.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/hooks/useChatRealtimeSubscription.ts)
 - [src/app/dashboard/chats/[id]/hooks/useChatSummariesState.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/hooks/useChatSummariesState.ts)
 
 In practice, those paths mean:
 
-- import admission still performs authenticated browser-side storage upload
 - chat and summary updates still depend on client-side realtime subscriptions
 - new chat creation has already moved behind a server action, reducing one browser-authenticated
   write path
+- import admission now uses a server-issued signed upload contract rather than a browser-authenticated
+  Supabase client
 
 The current gap is not "auth is missing." The gap is that the browser still owns a reusable
 authenticated session for those paths, so a future XSS bug would have a larger blast radius than
@@ -52,8 +51,8 @@ There are four structural constraints.
 
 ### 1. Browser-owned auth still exists on meaningful write paths
 
-Import admission still uses a browser-side authenticated Supabase client for real work, not just
-passive rendering. Realtime remains a separate browser-authenticated exception.
+Realtime remains the primary browser-authenticated exception. Import admission has already moved to
+a server-issued contract plus direct signed upload.
 
 ### 2. `HttpOnly` cutover is blocked by those browser flows
 
@@ -128,19 +127,13 @@ Expected performance impact:
 
 ### Phase 2. Move import admission to a server-issued upload contract
 
-Current import admission still depends on browser auth to upload directly to storage.
-
-Immediate targets:
+Completed:
 
 - [src/app/dashboard/characters/CharacterImport.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterImport.tsx)
-- [src/app/dashboard/characters/character-ui-logic.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/character-ui-logic.ts)
-
-Recommended direction:
-
-- browser requests an authenticated upload contract from the server
-- server returns a constrained upload path or signed upload URL
-- browser uploads directly to storage using that server-issued contract
-- browser then calls the existing job-enqueue path with a server-verifiable upload reference
+  now requests an upload contract from the server and uploads with a signed URL
+- [src/app/api/characters/import/storage/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/characters/import/storage/route.ts)
+  now issues the signed upload contract and verifies the enqueue reference with a server-signed
+  ticket
 
 Expected performance impact:
 

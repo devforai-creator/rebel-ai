@@ -7,7 +7,6 @@ import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { cx } from '@/app/dashboard/components/classNames'
 import { MAX_IMPORT_UPLOAD_MB } from '@/lib/import/constants'
-import { createClient } from '@/lib/supabase/client'
 import {
   characterImportStatusCopy,
   getCharacterImportErrorMessage,
@@ -47,7 +46,6 @@ export default function CharacterImport() {
 
     const result = await startCharacterImportJob({
       selectedFile,
-      supabase: createClient(),
       fetchImpl: fetch,
     })
 

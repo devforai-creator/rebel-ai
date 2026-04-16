@@ -134,6 +134,40 @@ describe('resolveTranscriptSourcePlan', () => {
   })
 })
 
+describe('resolveLorebookHistoryPlan', () => {
+  it('marks lorebook history as not needed when no history-dependent entries are active', async () => {
+    const { resolveLorebookHistoryPlan } = await import('./execution-context')
+
+    expect(
+      resolveLorebookHistoryPlan({
+        hasPersistedTurn: true,
+        lorebookRequiresHistory: false,
+        payloadCoversFullConversation: false,
+        fullConversationTranscriptLoaded: false,
+      }),
+    ).toEqual({
+      source: 'not_needed',
+      reason: 'history_not_needed',
+    })
+  })
+
+  it('marks payload history as provisional when no persisted turn exists yet', async () => {
+    const { resolveLorebookHistoryPlan } = await import('./execution-context')
+
+    expect(
+      resolveLorebookHistoryPlan({
+        hasPersistedTurn: false,
+        lorebookRequiresHistory: true,
+        payloadCoversFullConversation: true,
+        fullConversationTranscriptLoaded: false,
+      }),
+    ).toEqual({
+      source: 'payload',
+      reason: 'no_persisted_turn',
+    })
+  })
+})
+
 describe('loadChatJobExecutionContext', () => {
   beforeEach(() => {
     buildMemoryPlanMock.mockReset()
@@ -222,6 +256,9 @@ describe('loadChatJobExecutionContext', () => {
         transcript_source: 'payload',
         transcript_source_reason: 'payload_covers_full_conversation',
         transcript_required_message_count: payload.sanitizedMessages.length,
+        lorebook_history_source: 'payload',
+        lorebook_history_source_reason: 'no_persisted_turn',
+        lorebook_history_message_count: payload.sanitizedMessages.length,
         transcript_message_count: payload.sanitizedMessages.length,
         lorebook_context_chars: 4,
         memory_mode: 'summary_window',
@@ -308,6 +345,9 @@ describe('loadChatJobExecutionContext', () => {
         transcript_source: 'db_full',
         transcript_source_reason: 'payload_missing_regeneration_exclusion',
         transcript_required_message_count: 1,
+        lorebook_history_source: 'db_full',
+        lorebook_history_source_reason: 'lorebook_requires_full_history',
+        lorebook_history_message_count: transcript.length,
         transcript_target_turn_index: 7,
         transcript_turn_count: 7,
         transcript_db_message_row_count: 5,
@@ -382,6 +422,9 @@ describe('loadChatJobExecutionContext', () => {
         transcript_source: 'payload_tail',
         transcript_source_reason: 'payload_satisfies_required_window',
         transcript_required_message_count: 20,
+        lorebook_history_source: 'not_needed',
+        lorebook_history_source_reason: 'history_not_needed',
+        lorebook_history_message_count: 0,
         transcript_message_count: 20,
         transcript_total_message_count: 50,
         transcript_start_ordinal: 31,
@@ -461,6 +504,9 @@ describe('loadChatJobExecutionContext', () => {
         transcript_source: 'db_tail',
         transcript_source_reason: 'payload_shorter_than_required_window',
         transcript_required_message_count: 14,
+        lorebook_history_source: 'not_needed',
+        lorebook_history_source_reason: 'history_not_needed',
+        lorebook_history_message_count: 0,
         transcript_message_count: 14,
         transcript_total_message_count: 110,
         transcript_start_ordinal: 97,
@@ -532,6 +578,9 @@ describe('loadChatJobExecutionContext', () => {
         transcript_source: 'db_tail',
         transcript_source_reason: 'payload_missing_regeneration_exclusion',
         transcript_required_message_count: 2,
+        lorebook_history_source: 'not_needed',
+        lorebook_history_source_reason: 'history_not_needed',
+        lorebook_history_message_count: 0,
         transcript_payload_can_represent_generation: false,
         transcript_payload_covers_full_conversation: false,
         transcript_excluded_assistant: true,

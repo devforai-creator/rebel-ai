@@ -20,6 +20,10 @@ function buildVaultSecretName(userId: string, provider: Provider): string {
   return `apikey_${userId}_${timestampSegment}_${provider}`
 }
 
+function buildApiKeyCleanupReference(): string {
+  return `api-key-cleanup-${Date.now().toString(36)}`
+}
+
 const apiKeyFormSchema = z.object({
   provider: z.string().refine((value) => PROVIDERS.includes(value as Provider), {
     message: 'Provider를 선택해주세요.',
@@ -48,11 +52,15 @@ const apiKeyFormSchema = z.object({
     .transform((value) => value?.trim().toLowerCase()),
 })
 
-function parseApiKeyFormData(
-  formData: FormData,
-):
+function parseApiKeyFormData(formData: FormData):
   | { data: z.infer<typeof apiKeyFormSchema> }
-  | { error: string; success: false; warning: null; rollbackFailed: false } {
+  | {
+      error: string
+      success: false
+      warning: null
+      rollbackFailed: false
+      cleanupReference: null
+    } {
   const parsed = safeParseFormData(formData, apiKeyFormSchema)
 
   if (!parsed.success) {
@@ -61,6 +69,7 @@ function parseApiKeyFormData(
       success: false,
       warning: null,
       rollbackFailed: false,
+      cleanupReference: null,
     } satisfies ApiKeyFormState
   }
 
@@ -72,6 +81,7 @@ export type ApiKeyFormState = {
   success: boolean
   warning?: string | null
   rollbackFailed?: boolean
+  cleanupReference?: string | null
 }
 
 export async function createApiKey(
@@ -87,7 +97,13 @@ export async function createApiKey(
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return { error: '로그인이 필요합니다', success: false, warning: null, rollbackFailed: false }
+    return {
+      error: '로그인이 필요합니다',
+      success: false,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
+    }
   }
 
   const parsedForm = parseApiKeyFormData(formData)
@@ -119,6 +135,7 @@ export async function createApiKey(
       success: false,
       warning: null,
       rollbackFailed: false,
+      cleanupReference: null,
     }
   }
 
@@ -131,6 +148,7 @@ export async function createApiKey(
         success: false,
         warning: null,
         rollbackFailed: false,
+        cleanupReference: null,
       }
     }
 
@@ -140,6 +158,7 @@ export async function createApiKey(
         success: false,
         warning: null,
         rollbackFailed: false,
+        cleanupReference: null,
       }
     }
   }
@@ -170,6 +189,7 @@ export async function createApiKey(
         success: false,
         warning: null,
         rollbackFailed: false,
+        cleanupReference: null,
       }
     }
 
@@ -179,6 +199,7 @@ export async function createApiKey(
         success: false,
         warning: null,
         rollbackFailed: false,
+        cleanupReference: null,
       }
     }
 
@@ -187,6 +208,7 @@ export async function createApiKey(
       success: false,
       warning: null,
       rollbackFailed: false,
+      cleanupReference: null,
     }
   }
 
@@ -208,19 +230,30 @@ export async function createApiKey(
     })
 
     if (rollbackError) {
+      const cleanupReference = buildApiKeyCleanupReference()
       console.error('[API Keys] create_api_key rollback failed', {
-        code:
+        cleanupReference,
+        userId: user.id,
+        provider,
+        keyName,
+        vaultSecretName,
+        insertCode:
+          error && typeof error === 'object' && 'code' in error
+            ? ((error as { code?: string | null }).code ?? null)
+            : null,
+        insertMessage: error.message,
+        rollbackCode:
           rollbackError && typeof rollbackError === 'object' && 'code' in rollbackError
             ? ((rollbackError as { code?: string | null }).code ?? null)
             : null,
-        message: rollbackError.message,
+        rollbackMessage: rollbackError.message,
       })
       return {
         error: 'API 키 등록 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
         success: false,
-        warning:
-          'API 키 등록은 실패했고 Vault 정리도 완료되지 않았습니다. 수동 정리가 필요할 수 있습니다.',
+        warning: `API 키 등록은 실패했고 Vault 정리도 완료되지 않았습니다. 수동 정리가 필요할 수 있습니다. 정리 참조 ID: ${cleanupReference}`,
         rollbackFailed: true,
+        cleanupReference,
       }
     }
 
@@ -229,11 +262,18 @@ export async function createApiKey(
       success: false,
       warning: null,
       rollbackFailed: false,
+      cleanupReference: null,
     }
   }
 
   revalidatePath('/dashboard/api-keys')
-  return { success: true, error: null, warning: null, rollbackFailed: false }
+  return {
+    success: true,
+    error: null,
+    warning: null,
+    rollbackFailed: false,
+    cleanupReference: null,
+  }
 }
 
 export async function deleteApiKey(id: string) {

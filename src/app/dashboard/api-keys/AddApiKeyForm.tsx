@@ -40,6 +40,7 @@ const INITIAL_FORM_STATE: ApiKeyFormState = {
   success: false,
   warning: null,
   rollbackFailed: false,
+  cleanupReference: null,
 }
 
 export default function AddApiKeyForm() {

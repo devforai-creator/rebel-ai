@@ -35,6 +35,7 @@ These are useful design notes and transition records, but they should not be tre
 
 - [chat-followups.md](./chat-followups.md)
 - [auth-session-hardening-architecture.md](./auth-session-hardening-architecture.md)
+- [realtime-boundary-checklist.md](./realtime-boundary-checklist.md)
 - [chat-regeneration-architecture.md](./chat-regeneration-architecture.md)
 - [claude-batch-chat-mode-plan.md](./claude-batch-chat-mode-plan.md)
 - [lorebook-prefix-cache-plan.md](./lorebook-prefix-cache-plan.md)
@@ -59,6 +60,7 @@ Backlogs are execution queues, not contract documents.
 - [backlogs/production-audit-backlog-2026-04-12.md](./backlogs/production-audit-backlog-2026-04-12.md)
 - [backlogs/production-readiness-backlog-2026-04-14.md](./backlogs/production-readiness-backlog-2026-04-14.md)
 - [backlogs/production-readiness-gate-backlog-2026-04-14.md](./backlogs/production-readiness-gate-backlog-2026-04-14.md)
+- [backlogs/realtime-boundary-followup-2026-04-17.md](./backlogs/realtime-boundary-followup-2026-04-17.md)
 - [backlogs/rag-retrieval-followup-2026-04-14.md](./backlogs/rag-retrieval-followup-2026-04-14.md)
 - [backlogs/stability-backlog.md](./backlogs/stability-backlog.md)
 - [backlogs/vercel-usage-followup-2026-04-14.md](./backlogs/vercel-usage-followup-2026-04-14.md)

@@ -90,6 +90,50 @@ function buildValidPayload(
   }
 }
 
+describe('resolveTranscriptSourcePlan', () => {
+  it('requires a full DB transcript when lorebook history needs the full conversation', async () => {
+    const { resolveTranscriptSourcePlan } = await import('./execution-context')
+
+    expect(
+      resolveTranscriptSourcePlan({
+        memoryMode: 'summary_window',
+        payloadTranscriptLength: 12,
+        effectiveConversationMessageCount: 40,
+        payloadTranscriptCanRepresentGeneration: true,
+        lorebookRequiresHistory: true,
+        lastChunkEnd: null,
+      }),
+    ).toEqual({
+      requiredMessageCount: 20,
+      payloadCoversFullConversation: false,
+      shouldLoadFullConversationTranscript: true,
+      shouldUsePayloadWindow: false,
+      reason: 'lorebook_requires_full_history',
+    })
+  })
+
+  it('rejects payload transcript reuse when regeneration payload still includes the replaced assistant', async () => {
+    const { resolveTranscriptSourcePlan } = await import('./execution-context')
+
+    expect(
+      resolveTranscriptSourcePlan({
+        memoryMode: 'prefix_live_blocks',
+        payloadTranscriptLength: 8,
+        effectiveConversationMessageCount: 14,
+        payloadTranscriptCanRepresentGeneration: false,
+        lorebookRequiresHistory: false,
+        lastChunkEnd: 10,
+      }),
+    ).toEqual({
+      requiredMessageCount: 4,
+      payloadCoversFullConversation: false,
+      shouldLoadFullConversationTranscript: false,
+      shouldUsePayloadWindow: false,
+      reason: 'payload_missing_regeneration_exclusion',
+    })
+  })
+})
+
 describe('loadChatJobExecutionContext', () => {
   beforeEach(() => {
     buildMemoryPlanMock.mockReset()
@@ -176,6 +220,8 @@ describe('loadChatJobExecutionContext', () => {
     expect(result.debugMetrics).toEqual(
       expect.objectContaining({
         transcript_source: 'payload',
+        transcript_source_reason: 'payload_covers_full_conversation',
+        transcript_required_message_count: payload.sanitizedMessages.length,
         transcript_message_count: payload.sanitizedMessages.length,
         lorebook_context_chars: 4,
         memory_mode: 'summary_window',
@@ -260,6 +306,8 @@ describe('loadChatJobExecutionContext', () => {
     expect(result.debugMetrics).toEqual(
       expect.objectContaining({
         transcript_source: 'db_full',
+        transcript_source_reason: 'payload_missing_regeneration_exclusion',
+        transcript_required_message_count: 1,
         transcript_target_turn_index: 7,
         transcript_turn_count: 7,
         transcript_db_message_row_count: 5,
@@ -332,6 +380,8 @@ describe('loadChatJobExecutionContext', () => {
     expect(result.debugMetrics).toEqual(
       expect.objectContaining({
         transcript_source: 'payload_tail',
+        transcript_source_reason: 'payload_satisfies_required_window',
+        transcript_required_message_count: 20,
         transcript_message_count: 20,
         transcript_total_message_count: 50,
         transcript_start_ordinal: 31,
@@ -409,10 +459,82 @@ describe('loadChatJobExecutionContext', () => {
     expect(result.debugMetrics).toEqual(
       expect.objectContaining({
         transcript_source: 'db_tail',
+        transcript_source_reason: 'payload_shorter_than_required_window',
+        transcript_required_message_count: 14,
         transcript_message_count: 14,
         transcript_total_message_count: 110,
         transcript_start_ordinal: 97,
         memory_last_chunk_end: 96,
+      }),
+    )
+  })
+
+  it('falls back to a DB tail when regeneration payload cannot represent the assistant exclusion', async () => {
+    const { loadChatJobExecutionContext } = await import('./execution-context')
+    const projectedTail = [
+      { id: 'db-msg-1', role: 'user', content: 'db-message-1' },
+      { id: 'db-msg-2', role: 'assistant', content: 'db-message-2' },
+    ]
+    const supabase = createChatJobRunnerSupabaseMock({
+      chat: {
+        id: 'chat-1',
+        user_id: 'user-1',
+        character_id: 'char-1',
+        persona_id: null,
+        custom_system_prompt: null,
+        model_config: {
+          memory: {
+            mode: 'prefix_live_blocks',
+          },
+        },
+      },
+    })
+
+    countProjectedConversationMessagesMock.mockResolvedValueOnce(7)
+    getLastSummaryEndMock.mockResolvedValueOnce(4)
+    loadProjectedConversationTailMock.mockResolvedValueOnce(projectedTail)
+    loadChatLorebookStateMock.mockResolvedValueOnce({
+      entries: [],
+      overrideMap: new Map(),
+    })
+    lorebookNeedsChatHistoryMock.mockReturnValueOnce(false)
+    renderActiveLorebookBlockMock.mockReturnValueOnce(null)
+
+    const result = await loadChatJobExecutionContext({
+      supabase: supabase as never,
+      payload: buildValidPayload({
+        turnId: 'turn-3',
+        isRegeneration: true,
+        regenerateAssistantMessageId: 'assistant-target',
+        sanitizedMessages: [
+          { role: 'user', content: 'payload-1', messageId: 'payload-1' },
+          { role: 'assistant', content: 'payload-2', messageId: 'payload-2' },
+          { role: 'assistant', content: 'payload-target', messageId: 'other-assistant' },
+        ],
+      }),
+      timings: {},
+    })
+
+    expect(loadGenerationTranscriptMock).not.toHaveBeenCalled()
+    expect(loadProjectedConversationTailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatId: 'chat-1',
+        limitMessages: 2,
+        excludeAssistantForTurnId: 'turn-3',
+      }),
+    )
+    expect(result.generationTranscript).toEqual([
+      { role: 'user', content: 'db-message-1', messageId: 'db-msg-1' },
+      { role: 'assistant', content: 'db-message-2', messageId: 'db-msg-2' },
+    ])
+    expect(result.debugMetrics).toEqual(
+      expect.objectContaining({
+        transcript_source: 'db_tail',
+        transcript_source_reason: 'payload_missing_regeneration_exclusion',
+        transcript_required_message_count: 2,
+        transcript_payload_can_represent_generation: false,
+        transcript_payload_covers_full_conversation: false,
+        transcript_excluded_assistant: true,
       }),
     )
   })

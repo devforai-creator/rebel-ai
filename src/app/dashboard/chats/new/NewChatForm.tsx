@@ -4,10 +4,9 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
-import { MESSAGE_STATUS_COMPLETED } from '@/lib/chat/message-status'
-import { createChatTurn } from '@/lib/chat/turns'
 import type { Character, ApiKey, Persona } from '@/types/database.types'
+import { createChat } from '../actions'
+import { getCharacterGreetingOptions } from './greeting-options'
 
 interface Props {
   character: CharacterOption
@@ -34,73 +33,26 @@ export default function NewChatForm({ character, apiKeys, personas }: Props) {
     setError(null)
 
     try {
-      const supabase = createClient()
+      const result = await createChat({
+        characterId,
+        personaId: personaId || null,
+        greetingIndex,
+      })
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        setError('로그인이 필요합니다')
+      if (result.error) {
+        setError(result.error)
         setLoading(false)
         return
       }
 
-      // 채팅 생성
-      const { data: chat, error: chatError } = await supabase
-        .from('chats')
-        .insert({
-          user_id: user.id,
-          character_id: characterId,
-          persona_id: personaId || null,
-          title: `${character.name}와의 대화`,
-        })
-        .select()
-        .single()
-
-      if (chatError) {
-        throw chatError
-      }
-
-      // 첫 인사말이 있으면 추가 (선택된 greeting 사용)
-      if (currentGreeting) {
-        // 페르소나 이름 가져오기
-        const selectedPersona = personas.find((p) => p.id === personaId)
-        const userName = selectedPersona?.name || 'User'
-
-        // {{user}}를 페르소나 이름으로 치환
-        const processedGreeting = currentGreeting.replace(/\{\{user\}\}/g, userName)
-        const greetingMessageId = crypto.randomUUID()
-        const greetingTurnId = crypto.randomUUID()
-
-        await createChatTurn({
-          supabase,
-          chatId: chat.id,
-          userId: user.id,
-          turnId: greetingTurnId,
-          userMessageId: null,
-          activeAssistantMessageId: greetingMessageId,
-        })
-
-        const { error: greetingInsertError } = await supabase.from('messages').insert({
-          id: greetingMessageId,
-          chat_id: chat.id,
-          user_id: user.id,
-          role: 'assistant',
-          content: processedGreeting,
-          turn_id: greetingTurnId,
-          variant_index: 1,
-          supersedes_message_id: null,
-          message_status: MESSAGE_STATUS_COMPLETED,
-        })
-
-        if (greetingInsertError) {
-          throw greetingInsertError
-        }
+      if (!result.chatId) {
+        setError('채팅 생성에 실패했습니다')
+        setLoading(false)
+        return
       }
 
       // 채팅 페이지로 이동 (API 키 ID 전달)
-      router.push(`/dashboard/chats/${chat.id}?apiKey=${apiKeyId}`)
+      router.push(`/dashboard/chats/${result.chatId}?apiKey=${apiKeyId}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : '채팅 생성에 실패했습니다'
       setError(message)
@@ -110,30 +62,7 @@ export default function NewChatForm({ character, apiKeys, personas }: Props) {
 
   const selectedApiKey = apiKeys.find((k) => k.id === apiKeyId)
 
-  // Get all available greetings (main greeting + alternate greetings + "no greeting" option)
-  const allGreetings: (string | null)[] = []
-  if (character.greeting_message) {
-    allGreetings.push(character.greeting_message)
-  }
-  if (
-    character.metadata &&
-    typeof character.metadata === 'object' &&
-    'alternate_greetings' in character.metadata &&
-    Array.isArray(character.metadata.alternate_greetings)
-  ) {
-    const alternates = character.metadata.alternate_greetings
-    // Type guard: ensure all items are strings
-    alternates.forEach((greeting) => {
-      if (typeof greeting === 'string') {
-        allGreetings.push(greeting)
-      }
-    })
-  }
-
-  // Add "no greeting" option if there are any greetings
-  if (allGreetings.length > 0) {
-    allGreetings.push(null)
-  }
+  const allGreetings = getCharacterGreetingOptions(character)
 
   const currentGreeting =
     allGreetings[greetingIndex] !== undefined ? allGreetings[greetingIndex] : null

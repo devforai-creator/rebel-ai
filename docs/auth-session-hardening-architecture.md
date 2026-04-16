@@ -1,6 +1,6 @@
 # Auth Session Hardening Architecture
 
-Updated: 2026-04-16
+Updated: 2026-04-17
 
 This document records the recommended architecture for reducing RebelAI's dependence on a
 browser-readable authenticated session.
@@ -30,7 +30,6 @@ Most authenticated route handlers and server actions already rely on server-side
 ownership scoping. The remaining browser-authenticated Supabase usage is concentrated in a small
 set of runtime paths:
 
-- [src/app/dashboard/chats/new/NewChatForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/new/NewChatForm.tsx)
 - [src/app/dashboard/characters/CharacterImport.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterImport.tsx)
 - [src/app/dashboard/characters/character-ui-logic.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/character-ui-logic.ts)
 - [src/app/dashboard/chats/[id]/hooks/useChatRealtimeSubscription.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/hooks/useChatRealtimeSubscription.ts)
@@ -38,9 +37,10 @@ set of runtime paths:
 
 In practice, those paths mean:
 
-- new chat creation still performs authenticated browser-side DB writes
 - import admission still performs authenticated browser-side storage upload
 - chat and summary updates still depend on client-side realtime subscriptions
+- new chat creation has already moved behind a server action, reducing one browser-authenticated
+  write path
 
 The current gap is not "auth is missing." The gap is that the browser still owns a reusable
 authenticated session for those paths, so a future XSS bug would have a larger blast radius than
@@ -52,8 +52,8 @@ There are four structural constraints.
 
 ### 1. Browser-owned auth still exists on meaningful write paths
 
-`NewChatForm` and import admission still use a browser-side authenticated Supabase client for real
-work, not just passive rendering.
+Import admission still uses a browser-side authenticated Supabase client for real work, not just
+passive rendering. Realtime remains a separate browser-authenticated exception.
 
 ### 2. `HttpOnly` cutover is blocked by those browser flows
 
@@ -114,15 +114,12 @@ This phase should not change product behavior.
 
 Start with flows that have clear server-owned alternatives and low performance sensitivity.
 
-Immediate target:
+Completed:
 
 - [src/app/dashboard/chats/new/NewChatForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/new/NewChatForm.tsx)
-
-Recommended direction:
-
-- replace browser `supabase.auth.getUser()` and direct `.from('chats')` / `.from('messages')`
-  writes with a server action or route handler
-- keep the current user-visible behavior, including initial greeting creation
+  now calls a server action for `chats` and initial greeting `messages` creation
+- browser direct `supabase.auth.getUser()` and direct `.from('chats')` / `.from('messages')`
+  writes have been removed from that flow
 
 Expected performance impact:
 

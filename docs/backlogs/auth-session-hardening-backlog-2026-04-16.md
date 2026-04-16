@@ -1,6 +1,6 @@
 # Auth Session Hardening Backlog
 
-Updated: 2026-04-16
+Updated: 2026-04-17
 
 This document is the execution backlog for phased reduction of RebelAI's browser-readable auth
 session surface.
@@ -39,14 +39,11 @@ Already true:
 
 Still open in practice:
 
-- browser-authenticated chat creation
 - browser-authenticated import upload admission
 - browser-authenticated realtime for chat and summaries
-- no mechanical guard that freezes the current browser auth client exception set
 
 Representative current runtime call sites:
 
-- [src/app/dashboard/chats/new/NewChatForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/new/NewChatForm.tsx)
 - [src/app/dashboard/characters/CharacterImport.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/CharacterImport.tsx)
 - [src/app/dashboard/characters/character-ui-logic.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/characters/character-ui-logic.ts)
 - [src/app/dashboard/chats/[id]/hooks/useChatRealtimeSubscription.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/hooks/useChatRealtimeSubscription.ts)
@@ -55,6 +52,8 @@ Representative current runtime call sites:
 ## P0
 
 ### P0-1. Freeze Browser Auth Client Growth
+
+Status: Completed on 2026-04-16
 
 Scope:
 
@@ -74,12 +73,14 @@ Done when:
   `@/lib/supabase/client` appears
 - the allowlist is documented so future changes are conscious, not accidental
 
-Current evidence as of `2026-04-16`:
+Current evidence as of `2026-04-17`:
 
-- current runtime imports are concentrated in five files rather than spread across the repo
-- there is no mechanical guard preventing more browser-authenticated runtime usage from landing
+- runtime imports of `@/lib/supabase/client` are now pinned to an explicit allowlist in CI
+- new browser-authenticated runtime usage now requires an explicit allowlist change
 
 ### P0-2. Move New Chat Creation Off Browser Supabase CRUD
+
+Status: Completed on 2026-04-17
 
 Scope:
 
@@ -101,10 +102,12 @@ Done when:
 - initial greeting behavior remains correct
 - tests cover unauthenticated, success, and failure branches
 
-Current evidence as of `2026-04-16`:
+Current evidence as of `2026-04-17`:
 
 - [src/app/dashboard/chats/new/NewChatForm.tsx](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/new/NewChatForm.tsx)
-  still creates a browser Supabase client and writes `chats` and `messages` directly
+  now calls a server action instead of creating a browser Supabase client directly
+- [src/app/dashboard/chats/actions.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/actions.ts)
+  owns the authenticated `chats` and greeting `messages` writes for initial chat creation
 
 ### P0-3. Replace Browser Storage Upload Admission With A Server-Issued Upload Contract
 

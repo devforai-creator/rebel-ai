@@ -25,6 +25,7 @@ import {
   DEFAULT_JOB_POLLER_CONFIG,
   resolveAdaptivePollDelay,
 } from './job-poller'
+import { fetchChatJobStatus, fetchLatestChatMessage, requestQueuedChatJob } from './queued-chat-api'
 import { reconcileAssistantMessage } from './reconcile-assistant-message'
 
 export interface UseQueuedChatParams {
@@ -173,18 +174,7 @@ export function useQueuedChat({
   }, [])
 
   const fetchLatestMessage = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/chats/${chatId}/messages/latest`, {
-        cache: 'no-store',
-      })
-      if (!response.ok) {
-        return null
-      }
-      return (await response.json()) as Message & { debug_info?: DebugInfo }
-    } catch (err) {
-      console.error('Failed to fetch latest message:', err)
-      return null
-    }
+    return fetchLatestChatMessage(chatId) as Promise<(Message & { debug_info?: DebugInfo }) | null>
   }, [chatId])
 
   const syncLatestUserMessage = useCallback(async () => {
@@ -227,19 +217,7 @@ export function useQueuedChat({
         jobId,
         {
           fetchJobStatus: async (id) => {
-            try {
-              const response = await fetch(`/api/chat/jobs/${id}`, {
-                cache: 'no-store',
-              })
-              if (!response.ok) {
-                console.warn(`Job status check failed (${response.status}), retrying...`)
-                return null
-              }
-              return await response.json()
-            } catch (err) {
-              console.warn('Job poll network error, retrying...', err)
-              return null
-            }
+            return fetchChatJobStatus(id)
           },
           getLastProgressAt: () => lastStreamProgressAtRef.current,
           onSuccess: async () => {
@@ -399,29 +377,19 @@ export function useQueuedChat({
       setSending(true)
       setError(null)
       try {
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chatId,
-            apiKeyId: resolvedApiKeyId,
-            messages: messagesPayload,
-            deliveryMode,
-            isRegeneration,
-            regenerateAssistantMessageId,
-          }),
+        const data = await requestQueuedChatJob({
+          chatId,
+          apiKeyId: resolvedApiKeyId,
+          messages: messagesPayload,
+          deliveryMode,
+          isRegeneration,
+          regenerateAssistantMessageId,
         })
-
-        if (!response.ok) {
-          const text = await response.text()
-          throw new Error(text || 'Chat request failed.')
-        }
 
         if (!isRegeneration && syncUser) {
           await syncLatestUserMessage()
         }
 
-        const data = (await response.json()) as { jobId: string }
         pendingJobIdRef.current = data.jobId
         setPendingJobId(data.jobId)
         startStreamingDraft(data.jobId, regenerateAssistantMessageId)

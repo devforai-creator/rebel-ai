@@ -20,6 +20,16 @@ Vitest runs in a Node environment with globals enabled. Keep fast unit tests nex
 
 For changes that touch internal routes, queue runners, trigger wiring, janitors, deployment assumptions, or environment-variable contracts, run `npm run ops:smoke` against the active deployment before closing the task. Treat this as post-deploy verification, not as a substitute for pre-deploy CI checks such as lint, tests, or build validation. If the change intentionally affects runner execution paths, prefer `npm run ops:smoke:active`. Purely documentation-only changes and purely presentational UI changes can skip the smoke check.
 
+## Database Workflow
+
+When changing `supabase/migrations/`, `supabase/schema.sql`, RLS policies, RPC functions, or storage policies, follow [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md) exactly.
+
+Do not run `supabase db push --linked` before:
+
+1. `supabase db push --local` or `supabase db reset`
+2. `npm run db:schema`
+3. relevant tests and typechecks
+
 ## Commit & Pull Request Guidelines
 
 Recent history favors short imperative commit subjects such as `Fix ...`, `Switch ...`, and `Revert ...`; an occasional conventional prefix like `fix:` is also acceptable. Keep commits focused and mention migration or environment-variable impact when needed. PRs should include a summary, linked issue if applicable, test evidence, and screenshots or GIFs for dashboard/UI changes. Call out any required updates to `.env.local`, Vercel settings, or Supabase configuration.

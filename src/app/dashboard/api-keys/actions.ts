@@ -185,7 +185,7 @@ export async function createApiKey(
     if (normalizedMessage.includes('quota exceeded')) {
       return {
         error:
-          'API 키 등록 한도를 초과했습니다. 사용하지 않는 키를 삭제하거나 비활성화 후 다시 시도해주세요.',
+          'API 키 등록 한도(최대 20개)를 초과했습니다. 사용하지 않는 키를 삭제한 뒤 다시 시도해주세요.',
         success: false,
         warning: null,
         rollbackFailed: false,

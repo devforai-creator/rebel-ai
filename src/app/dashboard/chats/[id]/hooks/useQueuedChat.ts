@@ -3,11 +3,7 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { toast } from 'sonner'
 import type { Message } from '@/types/database.types'
 import type { AlternateModelsConfig } from '@/lib/chat/model-config'
-import {
-  CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
-  CHAT_DELIVERY_MODE_STREAMING,
-  type ChatDeliveryMode,
-} from '@/lib/chat/delivery-mode'
+import { CHAT_DELIVERY_MODE_STREAMING, type ChatDeliveryMode } from '@/lib/chat/delivery-mode'
 import type { AssistantStreamBroadcastPayload } from '@/lib/chat/assistant-stream'
 import {
   DisplayMessage,

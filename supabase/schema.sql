@@ -5705,7 +5705,7 @@ declare
   secret_id uuid;
   expected_prefix text;
   suffix text;
-  max_keys constant integer := 10;
+  max_keys constant integer := 20;
   current_key_count integer;
 begin
   if effective_requester is null then
@@ -6528,4 +6528,3 @@ $$;
 
 revoke all on function public.update_character_with_modules(uuid, text, text, text, text, uuid[], uuid) from public, anon;
 grant execute on function public.update_character_with_modules(uuid, text, text, text, text, uuid[], uuid) to authenticated, service_role;
-

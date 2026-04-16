@@ -385,6 +385,32 @@ describe('api key actions', () => {
     dateNowSpy.mockRestore()
   })
 
+  it('returns an explicit quota message when Vault rejects create_secret for quota exceeded', async () => {
+    const adminSupabase = createAdminSupabase({
+      createSecretError: {
+        message: 'API key quota exceeded',
+        code: '54013',
+      },
+    })
+    const supabase = buildSupabase()
+    createAdminClientMock.mockReturnValue(adminSupabase)
+    createClientMock.mockResolvedValue(supabase)
+    const { createApiKey } = await import('./actions')
+
+    const result = await createApiKey(INITIAL_STATE, buildApiKeyFormData())
+
+    expect(result).toEqual({
+      error:
+        'API 키 등록 한도(최대 20개)를 초과했습니다. 사용하지 않는 키를 삭제한 뒤 다시 시도해주세요.',
+      success: false,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
+    })
+    expect(supabase.state.insertPayloads).toHaveLength(0)
+    expect(revalidatePathMock).not.toHaveBeenCalled()
+  })
+
   it('returns login required when deleting an API key while unauthenticated', async () => {
     const adminSupabase = createAdminSupabase()
     createAdminClientMock.mockReturnValue(adminSupabase)

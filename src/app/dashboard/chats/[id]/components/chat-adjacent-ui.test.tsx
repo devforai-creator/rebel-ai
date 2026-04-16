@@ -80,4 +80,14 @@ describe('DebugModal', () => {
     expect(html).toContain('No server debug_info stored')
     expect(html).toContain('Close')
   })
+
+  it('renders asset diagnostics mode without the message debug empty-state copy', () => {
+    const html = renderToStaticMarkup(
+      <DebugModal isOpen debugInfo={null} message={null} mode="assets" onClose={vi.fn()} />,
+    )
+
+    expect(html).toContain('Asset Diagnostics')
+    expect(html).toContain('No message selected for unresolved asset checks')
+    expect(html).not.toContain('No server debug_info stored')
+  })
 })

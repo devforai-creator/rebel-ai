@@ -18,7 +18,7 @@ import {
   useChatUsageStats,
   useChatMetadataViews,
 } from './hooks'
-import { MessageList, TokenStatsPanel, DebugModal } from './components'
+import { ChatComposer, MessageList, TokenStatsPanel, DebugModal } from './components'
 
 export default function ChatInterface({
   chatId,
@@ -271,35 +271,13 @@ export default function ChatInterface({
         </div>
       </div>
 
-      {/* Input form */}
-      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
-        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <textarea
-              ref={composerRef}
-              value={input}
-              onChange={handleInputChange}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault()
-                  void handleSubmit()
-                }
-              }}
-              placeholder="Enter your message... (Enter to send, Shift+Enter for new line)"
-              rows={1}
-              className="w-full flex-1 px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white resize-none max-h-[60vh] overflow-y-auto"
-              disabled={isLoading}
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !input.trim()}
-              className="w-full sm:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors sm:self-end"
-            >
-              {isLoading ? 'Sending...' : 'Send'}
-            </button>
-          </div>
-        </form>
-      </div>
+      <ChatComposer
+        composerRef={composerRef}
+        input={input}
+        isLoading={isLoading}
+        onInputChange={handleInputChange}
+        onSubmit={handleSubmit}
+      />
 
       {/* Debug modal */}
       <DebugModal

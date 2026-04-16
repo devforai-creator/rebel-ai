@@ -168,6 +168,8 @@ describe('api key actions', () => {
     expect(result).toEqual({
       error: '로그인이 필요합니다',
       success: false,
+      warning: null,
+      rollbackFailed: false,
     })
   })
 
@@ -188,6 +190,8 @@ describe('api key actions', () => {
     expect(result).toEqual({
       error: 'API 키를 입력해주세요.',
       success: false,
+      warning: null,
+      rollbackFailed: false,
     })
     expect(adminSupabase.rpc).not.toHaveBeenCalled()
     expect(supabase.state.insertPayloads).toHaveLength(0)
@@ -210,6 +214,8 @@ describe('api key actions', () => {
     expect(result).toEqual({
       error: 'Provider를 선택해주세요.',
       success: false,
+      warning: null,
+      rollbackFailed: false,
     })
     expect(adminSupabase.rpc).not.toHaveBeenCalled()
     expect(supabase.state.insertPayloads).toHaveLength(0)
@@ -238,6 +244,8 @@ describe('api key actions', () => {
     expect(result).toEqual({
       error: null,
       success: true,
+      warning: null,
+      rollbackFailed: false,
     })
     expect(adminSupabase.rpc).toHaveBeenCalledWith('create_secret', {
       secret_name: 'apikey_11111111-1111-1111-1111-111111111111_loyw3v28_openai',
@@ -278,6 +286,8 @@ describe('api key actions', () => {
     expect(result).toEqual({
       error: null,
       success: true,
+      warning: null,
+      rollbackFailed: false,
     })
     expect(supabase.state.insertPayloads[0]).toMatchObject({
       provider: 'google',
@@ -304,6 +314,8 @@ describe('api key actions', () => {
     expect(result).toEqual({
       error: 'API 키 등록 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
       success: false,
+      warning: null,
+      rollbackFailed: false,
     })
     expect(adminSupabase.rpc).toHaveBeenNthCalledWith(1, 'create_secret', {
       secret_name: 'apikey_11111111-1111-1111-1111-111111111111_loyw3v28_google',
@@ -314,6 +326,45 @@ describe('api key actions', () => {
       secret_name: 'apikey_11111111-1111-1111-1111-111111111111_loyw3v28_google',
       requester: '11111111-1111-1111-1111-111111111111',
     })
+    dateNowSpy.mockRestore()
+  })
+
+  it('returns an explicit rollback failure signal when Vault cleanup fails after metadata persistence error', async () => {
+    const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
+    const adminSupabase = createAdminSupabase({
+      deleteSecretError: {
+        message: 'vault unavailable',
+        code: 'XX000',
+      },
+    })
+    const supabase = buildSupabase({
+      insertApiKeyError: {
+        message: 'insert failed',
+        code: '23505',
+      },
+    })
+    createAdminClientMock.mockReturnValue(adminSupabase)
+    createClientMock.mockResolvedValue(supabase)
+    const { createApiKey } = await import('./actions')
+
+    const result = await createApiKey(INITIAL_STATE, buildApiKeyFormData())
+
+    expect(result).toEqual({
+      error: 'API 키 등록 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+      success: false,
+      warning:
+        'API 키 등록은 실패했고 Vault 정리도 완료되지 않았습니다. 수동 정리가 필요할 수 있습니다.',
+      rollbackFailed: true,
+    })
+    expect(adminSupabase.rpc).toHaveBeenNthCalledWith(2, 'delete_secret', {
+      secret_name: 'apikey_11111111-1111-1111-1111-111111111111_loyw3v28_google',
+      requester: '11111111-1111-1111-1111-111111111111',
+    })
+    expect(consoleErrorSpy).toHaveBeenCalledWith('[API Keys] create_api_key rollback failed', {
+      code: 'XX000',
+      message: 'vault unavailable',
+    })
+    expect(revalidatePathMock).not.toHaveBeenCalled()
     dateNowSpy.mockRestore()
   })
 

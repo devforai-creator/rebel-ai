@@ -38,6 +38,8 @@ type ReasoningEffortValue = (typeof REASONING_EFFORT_OPTIONS)[number]['value']
 const INITIAL_FORM_STATE: ApiKeyFormState = {
   error: null,
   success: false,
+  warning: null,
+  rollbackFailed: false,
 }
 
 export default function AddApiKeyForm() {
@@ -120,6 +122,12 @@ export default function AddApiKeyForm() {
         {displayError && (
           <InlineFeedback tone="error" className="mb-4">
             {displayError}
+          </InlineFeedback>
+        )}
+
+        {formState.warning && (
+          <InlineFeedback tone="warning" className="mb-4">
+            {formState.warning}
           </InlineFeedback>
         )}
 

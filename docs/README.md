@@ -8,6 +8,7 @@ Keep human-facing docs short and directional. Exact runtime behavior should come
 ## Primary Entry Points
 
 - [README.md](../README.md): top-level landing page and navigation hub
+- [PROJECT_BRIEF.md](./PROJECT_BRIEF.md): shortest stable orientation doc for humans and LLMs
 - [GETTING_STARTED.md](./GETTING_STARTED.md): quickest route from checkout to a working local or closed deployment
 - [FIRST_CLASS_SMOKE_CHECKS.md](./FIRST_CLASS_SMOKE_CHECKS.md): post-deploy verification runbook for the current first-class mode
 

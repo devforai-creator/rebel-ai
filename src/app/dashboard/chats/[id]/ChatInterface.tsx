@@ -5,7 +5,7 @@ import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { useAutosizeTextArea } from '@/hooks/useAutosizeTextArea'
 
 // Local imports
-import { type ChatInterfaceProps, type InlineUiCardRegistry, type DebugInfo } from './utils'
+import { type ChatInterfaceProps, type DebugInfo } from './utils'
 import {
   useChatInterfaceSettings,
   useQueuedChat,
@@ -16,15 +16,9 @@ import {
   useChatRealtimeSubscription,
   useChatRuntimeVariables,
   useChatUsageStats,
+  useChatMetadataViews,
 } from './hooks'
 import { MessageList, TokenStatsPanel, DebugModal } from './components'
-
-function isValidInlineUiCard(raw: unknown): raw is Record<string, unknown> {
-  if (!raw || typeof raw !== 'object') return false
-  if (!('meta' in raw) || !('views' in raw)) return false
-  const views = (raw as Record<string, unknown>).views
-  return typeof views === 'object' && views !== null && Object.keys(views).length > 0
-}
 
 export default function ChatInterface({
   chatId,
@@ -165,42 +159,8 @@ export default function ChatInterface({
     () => combineHistoryWithLiveMessages(historyMessages, messages),
     [historyMessages, messages],
   )
-
-  const defaultVariables = useMemo(() => {
-    return character.metadata?.default_variables as Record<string, unknown> | undefined
-  }, [character.metadata])
-
-  // Merge default variables with runtime variables (runtime takes precedence)
-  const mergedVariables = useMemo(() => {
-    return { ...defaultVariables, ...runtimeVariables }
-  }, [defaultVariables, runtimeVariables])
-
-  // Detect ui_card from character metadata (v1.1 SUU integration)
-  // Passed down to MessageList for per-message inline rendering
-  const uiCard = useMemo(() => {
-    const raw = character.metadata?.ui_card as Record<string, unknown> | null | undefined
-    return isValidInlineUiCard(raw) ? raw : null
-  }, [character.metadata])
-
-  const uiCardRegistry = useMemo(() => {
-    const raw = character.metadata?.ui_cards
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-
-    const entries = Object.entries(raw).filter(
-      ([key, value]) => key.trim().length > 0 && isValidInlineUiCard(value),
-    )
-    if (entries.length === 0) return null
-
-    return Object.fromEntries(entries) as InlineUiCardRegistry
-  }, [character.metadata])
-
-  const imageDisplay = useMemo(() => {
-    const raw = character.metadata?.image_display as Record<string, unknown> | null | undefined
-    if (!raw || typeof raw !== 'object') return null
-    if (!raw.meta || !raw.views || typeof raw.views !== 'object') return null
-    if (Object.keys(raw.views as Record<string, unknown>).length === 0) return null
-    return raw
-  }, [character.metadata])
+  const { defaultVariables, mergedVariables, uiCard, uiCardRegistry, imageDisplay } =
+    useChatMetadataViews(character, runtimeVariables)
 
   const {
     editingMessageId,

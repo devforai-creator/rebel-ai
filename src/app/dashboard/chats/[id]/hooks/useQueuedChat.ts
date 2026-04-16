@@ -8,7 +8,6 @@ import {
   CHAT_DELIVERY_MODE_STREAMING,
   type ChatDeliveryMode,
 } from '@/lib/chat/delivery-mode'
-import { CHAT_JOB_POLLER_LIMITS } from '@/lib/chat/runtime-limits'
 import type { AssistantStreamBroadcastPayload } from '@/lib/chat/assistant-stream'
 import {
   DisplayMessage,
@@ -20,12 +19,15 @@ import {
 } from '../utils'
 import { isVisibleMessageStatus } from '@/lib/chat/message-status'
 import { resolveAlternateApiKeyId } from '@/lib/chat/alternate-models'
-import {
-  pollJobStatus as pollJobStatusPure,
-  DEFAULT_JOB_POLLER_CONFIG,
-  resolveAdaptivePollDelay,
-} from './job-poller'
+import { pollJobStatus as pollJobStatusPure } from './job-poller'
 import { fetchChatJobStatus, fetchLatestChatMessage, requestQueuedChatJob } from './queued-chat-api'
+import {
+  createStreamingAssistantDraft,
+  getQueuedChatPollerConfig,
+  getQueuedChatSlowProgressMessage,
+  resolveQueuedChatPollSleepDelay,
+  updateStreamingDraftFromEvent,
+} from './queued-chat-runtime'
 import { reconcileAssistantMessage } from './reconcile-assistant-message'
 
 export interface UseQueuedChatParams {
@@ -149,19 +151,9 @@ export function useQueuedChat({
     (jobId: string, regenerateAssistantMessageId: string | null) => {
       pendingAssistantVisibleRef.current = false
       lastStreamProgressAtRef.current = null
-      const isBatchMode = deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
-      setStreamingDraft({
-        id: `stream-${jobId}`,
-        jobId,
-        role: 'assistant',
-        content: isBatchMode
-          ? 'Claude Batch 처리 중입니다. 이 모드는 스트리밍 없이 완료 후 한 번에 표시됩니다.'
-          : '',
-        created_at: new Date().toISOString(),
-        streaming: true,
-        replaceMessageId: regenerateAssistantMessageId,
-        deliveryMode,
-      })
+      setStreamingDraft(
+        createStreamingAssistantDraft(jobId, regenerateAssistantMessageId, deliveryMode),
+      )
     },
     [deliveryMode],
   )
@@ -241,40 +233,27 @@ export function useQueuedChat({
             })
           },
           onSlowProgress: (elapsedMs) => {
-            const seconds = Math.round(elapsedMs / 1000)
-            const message =
-              deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
-                ? `Claude Batch is still processing (${seconds}s). It will appear here when finished.`
-                : `Response is taking longer than usual (${seconds}s). Still waiting...`
-            toast.info(message, { duration: 8000 })
+            toast.info(getQueuedChatSlowProgressMessage(deliveryMode, elapsedMs), {
+              duration: 8000,
+            })
           },
           now: () => Date.now(),
           sleep: (ms) => {
-            const delayMs =
-              deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
-                ? ms
-                : resolveAdaptivePollDelay({
-                    baseDelayMs: ms,
-                    isPageVisible,
-                    lastProgressAt: lastStreamProgressAtRef.current,
-                    now: Date.now(),
-                    hiddenTabMinDelayMs: CHAT_JOB_POLLER_LIMITS.hiddenTabMinDelayMs,
-                    recentStreamWindowMs: CHAT_JOB_POLLER_LIMITS.recentStreamWindowMs,
-                    recentStreamMinDelayMs: CHAT_JOB_POLLER_LIMITS.recentStreamMinDelayMs,
-                  })
-
-            return new Promise((resolve) => setTimeout(resolve, delayMs))
+            return new Promise((resolve) =>
+              setTimeout(
+                resolve,
+                resolveQueuedChatPollSleepDelay({
+                  baseDelayMs: ms,
+                  deliveryMode,
+                  isPageVisible,
+                  lastProgressAt: lastStreamProgressAtRef.current,
+                  now: Date.now(),
+                }),
+              ),
+            )
           },
         },
-        deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
-          ? {
-              timeoutMs: 25 * 60 * 60 * 1000,
-              initialDelayMs: 3000,
-              maxDelayMs: 60_000,
-              backoffMultiplier: 1.4,
-              slowProgressThresholdMs: 30_000,
-            }
-          : DEFAULT_JOB_POLLER_CONFIG,
+        getQueuedChatPollerConfig(deliveryMode),
       )
 
       if (result.outcome !== 'success') {
@@ -320,25 +299,7 @@ export function useQueuedChat({
 
     lastStreamProgressAtRef.current = Date.now()
 
-    setStreamingDraft((current) => {
-      if (!current || current.jobId !== payload.jobId) {
-        return {
-          id: `stream-${payload.jobId}`,
-          jobId: payload.jobId,
-          role: 'assistant',
-          content: payload.content,
-          created_at: new Date().toISOString(),
-          streaming: true,
-          replaceMessageId: payload.regenerateAssistantMessageId,
-        }
-      }
-
-      return {
-        ...current,
-        content: payload.content,
-        replaceMessageId: payload.regenerateAssistantMessageId,
-      }
-    })
+    setStreamingDraft((current) => updateStreamingDraftFromEvent(current, payload))
   }, [])
 
   const resolveNextApiKeyId = useCallback(

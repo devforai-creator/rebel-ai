@@ -1,6 +1,7 @@
 # RBX Format Notes
 
 > Lightweight entry point for the current RBX contract.
+> Reference only. The exact accepted RBX contract lives in code and the maintained authoring workflow, not in this markdown file.
 
 RBX is RebelAI's native character exchange format.
 

@@ -14,7 +14,7 @@
 [**🚀 Getting Started Guide**](./docs/GETTING_STARTED.md) — _New to RebelAI? Start here!_
 [**🧰 RBX Authoring**](./docs/RBX_AUTHORING_WITH_CLAUDE.md) — _Create `.rbx` packages with the bundled Claude-importable skill_
 [**🧭 Hosting Profiles**](./docs/HOSTING_PROFILES.md) — _Current low-cost path vs future managed public path_
-[**📋 Operating Plan**](./docs/OPERATING_PLAN.md) — _Current operating contract, gates, and scope boundaries_
+[**📋 Operating Plan**](./docs/OPERATING_PLAN.md) — _Maintainer operating note for current mode, gates, and scope boundaries_
 [**🩺 Smoke Checks**](./docs/FIRST_CLASS_SMOKE_CHECKS.md) — _Repeatable verification for the current first-class low-cost path_
 [**🗂 Docs Map**](./docs/README.md) — _Where operations, plans, reviews, and backlogs now live_
 
@@ -157,22 +157,23 @@ Note: the maintainer-operated path currently treats `prefix_live_blocks + episod
 
 ## Documentation Map
 
-| Audience        | Document                                                                   | Purpose                                                           |
-| --------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Docs index      | [`docs/README.md`](./docs/README.md)                                       | Tree for active docs, plans, reviews, and backlogs                |
-| Setup           | [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md)                                 | Local + Supabase configuration walkthrough                        |
-| Getting started | [`docs/GETTING_STARTED.md`](./docs/GETTING_STARTED.md)                     | First-run guide for a fresh local deployment                      |
-| Authoring       | [`docs/RBX_AUTHORING_WITH_CLAUDE.md`](./docs/RBX_AUTHORING_WITH_CLAUDE.md) | Create `.rbx` packages with the bundled Claude skill              |
-| Hosting         | [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md)                   | Current low-cost profile vs future managed public profile         |
-| Operations      | [`docs/OPERATING_PLAN.md`](./docs/OPERATING_PLAN.md)                       | Current first-class mode, public gates, and scope boundaries      |
-| Smoke checks    | [`docs/FIRST_CLASS_SMOKE_CHECKS.md`](./docs/FIRST_CLASS_SMOKE_CHECKS.md)   | Repeatable operator verification for the current first-class mode |
-| Database        | [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)                               | Tables, RLS policies, RPC functions                               |
-| Database ops    | [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md)               | Migration workflow, production pushes, and drift recovery         |
-| Format          | [`docs/rbx-spec.md`](./docs/rbx-spec.md)                                   | RBX notes and implementation entrypoint                           |
-| Security        | [`SECURITY.md`](./SECURITY.md)                                             | Reporting policy, security model, and self-hosting requirements   |
+| Audience        | Document                                                                   | Purpose                                                                              |
+| --------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Docs index      | [`docs/README.md`](./docs/README.md)                                       | Tree for active docs, plans, reviews, and backlogs                                   |
+| Setup           | [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md)                                 | Local + Supabase configuration walkthrough                                           |
+| Getting started | [`docs/GETTING_STARTED.md`](./docs/GETTING_STARTED.md)                     | First-run guide for a fresh local deployment                                         |
+| Authoring       | [`docs/RBX_AUTHORING_WITH_CLAUDE.md`](./docs/RBX_AUTHORING_WITH_CLAUDE.md) | Create `.rbx` packages with the bundled Claude skill                                 |
+| Hosting         | [`docs/HOSTING_PROFILES.md`](./docs/HOSTING_PROFILES.md)                   | Current low-cost profile vs future managed public profile                            |
+| Operations      | [`docs/OPERATING_PLAN.md`](./docs/OPERATING_PLAN.md)                       | Maintainer mode note, public gates, and support boundaries                           |
+| Smoke checks    | [`docs/FIRST_CLASS_SMOKE_CHECKS.md`](./docs/FIRST_CLASS_SMOKE_CHECKS.md)   | Repeatable operator verification for the current first-class mode                    |
+| Database        | [`DATABASE_SCHEMA.md`](./DATABASE_SCHEMA.md)                               | Human-oriented schema overview; exact schema lives in migrations and generated types |
+| Database ops    | [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md)               | Migration workflow, production pushes, and drift recovery                            |
+| Format          | [`docs/rbx-spec.md`](./docs/rbx-spec.md)                                   | Lightweight RBX notes and implementation entrypoint                                  |
+| Security        | [`SECURITY.md`](./SECURITY.md)                                             | Reporting policy, security model, and self-hosting requirements                      |
 
-> **Tip:** Keep the public entry points small: setup, schema, security, and the RBX notes should
-> be enough to deploy and extend the project.
+> **Tip:** Keep the public entry points small. Use the docs for orientation and operations, but treat
+> exact behavior as code-first. Schema truth lives in `supabase/migrations/`, `supabase/schema.sql`,
+> and generated types; runtime behavior lives in the active code paths and tests.
 
 For database bootstrapping, treat `supabase/migrations/` as the source of truth. `supabase/schema.sql` is the generated hosted bootstrap snapshot and should be regenerated after migration changes. Use SQL Editor for first-time hosted bootstrap only, not for ongoing production schema changes. See [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md) for the operational workflow.
 

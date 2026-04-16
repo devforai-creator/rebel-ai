@@ -1,6 +1,8 @@
 # Operating Plan
 
-This document is the current operating contract for RebelAI.
+This document is a maintainer operating note for RebelAI.
+It captures the current supported mode, boundary decisions, and public-opening gates.
+It is not the exact source of truth for schema or route-level behavior.
 
 It exists to keep one real first-class path, prevent mode sprawl, and define the gates that must close before public signup opens.
 

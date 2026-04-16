@@ -2,21 +2,34 @@
 
 This directory now separates day-to-day operating docs from review artifacts and execution backlogs.
 
-## Active Docs
+The current repo is optimized for a maintainer + AI-agent workflow, not for a large long-lived contributor base.
+Keep human-facing docs short and directional. Exact runtime behavior should come from code, tests, migrations, generated types, and the current deployment itself.
 
-- [GETTING_STARTED.md](./GETTING_STARTED.md): fastest path from checkout to a working deployment
+## Primary Entry Points
+
+- [README.md](../README.md): top-level landing page and navigation hub
+- [GETTING_STARTED.md](./GETTING_STARTED.md): quickest route from checkout to a working local or closed deployment
+- [FIRST_CLASS_SMOKE_CHECKS.md](./FIRST_CLASS_SMOKE_CHECKS.md): post-deploy verification runbook for the current first-class mode
+
+## Active Docs And Runbooks
+
 - [HOSTING_PROFILES.md](./HOSTING_PROFILES.md): supported hosting profiles and current default mode
-- [OPERATING_PLAN.md](./OPERATING_PLAN.md): current operating contract and public-opening gates
+- [OPERATING_PLAN.md](./OPERATING_PLAN.md): maintainer operating note for current mode, support boundaries, and public-opening gates
 - [FIRST_CLASS_SMOKE_CHECKS.md](./FIRST_CLASS_SMOKE_CHECKS.md): repeatable operator verification
 - [CHAT_RUNTIME_TUNING.md](./CHAT_RUNTIME_TUNING.md): supported chat and runner tuning knobs
 - [DB_CHANGE_WORKFLOW.md](./DB_CHANGE_WORKFLOW.md): database migration and schema workflow
 
-## Reference
+## Reference (Not Exact Source Of Truth)
+
+These help humans orient themselves, but they should not be treated as the precise contract when code says otherwise.
 
 - [rbx-spec.md](./rbx-spec.md): RBX notes and implementation entrypoint
 - [RBX_AUTHORING_WITH_CLAUDE.md](./RBX_AUTHORING_WITH_CLAUDE.md): RBX authoring workflow with the bundled skill
+- [../DATABASE_SCHEMA.md](../DATABASE_SCHEMA.md): schema overview and terminology map; exact schema lives in `supabase/migrations/`, `supabase/schema.sql`, and generated types
 
-## Product Plans And Notes
+## Working Notes (Not Contract Sources)
+
+These are useful design notes and transition records, but they should not be treated as the live product contract without being folded back into code or the small set of active runbooks above.
 
 - [chat-followups.md](./chat-followups.md)
 - [chat-regeneration-architecture.md](./chat-regeneration-architecture.md)
@@ -27,10 +40,14 @@ This directory now separates day-to-day operating docs from review artifacts and
 
 ## Reviews
 
+Reviews are evidence and recommendations, not the source of truth for the current contract.
+
 - [reviews/production-readiness-followups-2026-04-12.md](./reviews/production-readiness-followups-2026-04-12.md)
 - [reviews/review-followups.md](./reviews/review-followups.md)
 
 ## Backlogs
+
+Backlogs are execution queues, not contract documents.
 
 - [backlogs/db-hygiene-followup-2026-04-14.md](./backlogs/db-hygiene-followup-2026-04-14.md)
 - [backlogs/db-query-audit-backlog-2026-04-14.md](./backlogs/db-query-audit-backlog-2026-04-14.md)

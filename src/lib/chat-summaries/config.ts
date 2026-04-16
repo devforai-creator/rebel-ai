@@ -22,11 +22,10 @@ export const META_SUMMARY_MAX_TOKENS = 16384 // meta summaries can be longer
 // CRITICAL: DO NOT USE A LOWER VALUE FOR LLM CALLS.
 // Gemini 2.5 Pro reserves ~1000-2000 tokens for internal 'thinking'
 // BEFORE generating output. Setting to 1024 will cause a SILENT FAILURE.
-// Use this constant for ALL generateText calls in this module (except meta summaries).
-// temperature: 1 is used because some models (e.g., GPT-o3-mini) only support the default value (1)
+// Use this constant for non-OpenAI generateText calls in this module (except meta summaries).
+// Sampling parameters are intentionally omitted to avoid provider-specific incompatibilities.
 export const DEFAULT_LLM_CONFIG = {
   maxTokens: CHUNK_SUMMARY_MAX_TOKENS,
-  temperature: 1,
 } as const
 
 // Text limits

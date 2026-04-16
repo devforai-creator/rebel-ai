@@ -142,7 +142,6 @@ export async function POST(request: Request) {
       model,
       system: profile.reprocess_prompt,
       messages: [{ role: 'user', content: message.content }],
-      temperature: 1,
     })
 
     let fullText = ''

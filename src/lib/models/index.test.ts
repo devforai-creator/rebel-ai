@@ -72,6 +72,13 @@ describe('Model Registry', () => {
       expect(model?.id).toBe('claude-opus-4-5')
     })
 
+    it('finds Claude Opus 4.7 by alias', () => {
+      const model = findModelDefinition({ modelName: 'claude-opus-4.7' })
+
+      expect(model).not.toBeNull()
+      expect(model?.id).toBe('claude-opus-4-7')
+    })
+
     it('is case-insensitive', () => {
       const model = findModelDefinition({ modelName: 'GPT-5.2' })
 
@@ -155,6 +162,27 @@ describe('Model Registry', () => {
     it('falls back to default when lightweight not defined', () => {
       // DeepSeek has no lightweight model defined
       expect(getDefaultModelForProvider('deepseek', { lightweight: true })).toBe('deepseek-chat')
+    })
+  })
+
+  describe('Anthropic model registration', () => {
+    it('lists Claude Opus 4.7 first in the Anthropic UI model list', () => {
+      const ids = listUiModelIdsByProvider('anthropic')
+
+      expect(ids[0]).toBe('claude-opus-4-7')
+    })
+
+    it('has flat Opus 4.7 pricing', () => {
+      const tiers = getModelPricingTiers({
+        provider: 'anthropic',
+        modelName: 'claude-opus-4-7',
+      })
+
+      expect(tiers).not.toBeNull()
+      expect(tiers).toHaveLength(1)
+      expect(tiers![0].rates.input).toBe(5)
+      expect(tiers![0].rates.output).toBe(25)
+      expect(tiers![0].rates.cachedInput).toBe(0.5)
     })
   })
 

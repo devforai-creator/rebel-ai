@@ -31,5 +31,9 @@ export function isAnthropicBatchChatSupported({
   }
 
   const normalized = modelName.toLowerCase()
-  return normalized.includes('claude-opus-4-6') || normalized.includes('claude-opus-4-5')
+  return (
+    normalized.includes('claude-opus-4-7') ||
+    normalized.includes('claude-opus-4-6') ||
+    normalized.includes('claude-opus-4-5')
+  )
 }

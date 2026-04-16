@@ -48,12 +48,12 @@ export async function generateSummaryWithFallback({
   promptCache,
 }: SummaryWithFallbackOptions): Promise<SummaryWithFallbackResult> {
   try {
-    // OpenAI GPT-5.1 doesn't support max_tokens, only max_completion_tokens
-    // For OpenAI providers, omit maxTokens but keep temperature: 1 (required by some models like GPT-o3-mini)
+    // OpenAI GPT-5.x compatibility is stricter around max_tokens and sampling settings,
+    // so keep summary calls minimal there and avoid explicit sampling parameters elsewhere.
     const baseParams =
       provider === 'openai'
-        ? { model, system: systemPrompt, prompt, temperature: 1 }
-        : { model, system: systemPrompt, prompt, maxTokens, temperature: 1 }
+        ? { model, system: systemPrompt, prompt }
+        : { model, system: systemPrompt, prompt, maxTokens }
 
     const providerOptions = getProviderOptions(provider, {
       promptCacheKey: promptCache?.key ?? undefined,
@@ -327,8 +327,7 @@ export async function createChunkFacts({
   })
 
   try {
-    // OpenAI GPT-5.1 doesn't support max_tokens, only max_completion_tokens
-    const llmConfig = provider === 'openai' ? { temperature: 1 } : DEFAULT_LLM_CONFIG
+    const llmConfig = provider === 'openai' ? {} : DEFAULT_LLM_CONFIG
 
     const promptCache = resolvePromptCacheDecision({
       provider,

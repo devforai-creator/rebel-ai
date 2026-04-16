@@ -524,6 +524,7 @@ describe('POST /api/messages/reprocess', () => {
       apiKey: 'sk-test',
       serviceTier: 'standard',
     })
+    expect(hoistedMocks.streamTextMock.mock.calls[0][0]).not.toHaveProperty('temperature')
 
     expect(supabase.state.messages[0]).toMatchObject({
       id: 'assistant-msg-1',

@@ -34,6 +34,7 @@ These help humans orient themselves, but they should not be treated as the preci
 These are useful design notes and transition records, but they should not be treated as the live product contract without being folded back into code or the small set of active runbooks above.
 
 - [chat-followups.md](./chat-followups.md)
+- [auth-session-hardening-architecture.md](./auth-session-hardening-architecture.md)
 - [chat-regeneration-architecture.md](./chat-regeneration-architecture.md)
 - [claude-batch-chat-mode-plan.md](./claude-batch-chat-mode-plan.md)
 - [lorebook-prefix-cache-plan.md](./lorebook-prefix-cache-plan.md)
@@ -54,6 +55,7 @@ Backlogs are execution queues, not contract documents.
 - [backlogs/db-hygiene-followup-2026-04-14.md](./backlogs/db-hygiene-followup-2026-04-14.md)
 - [backlogs/db-query-audit-backlog-2026-04-14.md](./backlogs/db-query-audit-backlog-2026-04-14.md)
 - [backlogs/FIRST_CLASS_HARDENING_BACKLOG.md](./backlogs/FIRST_CLASS_HARDENING_BACKLOG.md)
+- [backlogs/auth-session-hardening-backlog-2026-04-16.md](./backlogs/auth-session-hardening-backlog-2026-04-16.md)
 - [backlogs/production-audit-backlog-2026-04-12.md](./backlogs/production-audit-backlog-2026-04-12.md)
 - [backlogs/production-readiness-backlog-2026-04-14.md](./backlogs/production-readiness-backlog-2026-04-14.md)
 - [backlogs/production-readiness-gate-backlog-2026-04-14.md](./backlogs/production-readiness-gate-backlog-2026-04-14.md)

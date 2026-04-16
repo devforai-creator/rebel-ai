@@ -26,6 +26,9 @@ jobs:
       - name: Check direct dependency declarations
         run: npm run check:dependencies
 
+      - name: Check browser Supabase client runtime allowlist
+        run: npm run check:browser-supabase-client
+
       - name: Check hosted schema snapshot
         run: npm run db:schema:check
 

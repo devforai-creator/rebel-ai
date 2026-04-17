@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import DeleteChatButton from '../DeleteChatButton'
 import SystemPromptEditorButton from '../SystemPromptEditorButton'
-import { ChatComposer } from './ChatComposer'
+import { ChatComposer, shouldSubmitChatComposerOnEnter } from './ChatComposer'
 import { DebugModal } from './DebugModal'
 import { LorebookPanelContent } from './LorebookPanelContent'
 
@@ -105,8 +105,8 @@ describe('ChatComposer', () => {
       />,
     )
 
-    expect(html).toContain('Enter your message...')
-    expect(html).toContain('Send')
+    expect(html).toContain('Type a message...')
+    expect(html).toContain('Send message')
     expect(html).toContain('disabled')
   })
 
@@ -121,7 +121,30 @@ describe('ChatComposer', () => {
       />,
     )
 
+    expect(html).toContain('Sending message')
     expect(html).toContain('Sending...')
     expect(html).not.toContain('>Send<')
+  })
+
+  it('submits on Enter for desktop keyboard interactions', () => {
+    expect(
+      shouldSubmitChatComposerOnEnter({
+        key: 'Enter',
+        shiftKey: false,
+        isComposing: false,
+        mobileViewport: false,
+      }),
+    ).toBe(true)
+  })
+
+  it('keeps Enter as a newline on mobile viewports', () => {
+    expect(
+      shouldSubmitChatComposerOnEnter({
+        key: 'Enter',
+        shiftKey: false,
+        isComposing: false,
+        mobileViewport: true,
+      }),
+    ).toBe(false)
   })
 })

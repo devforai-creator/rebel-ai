@@ -75,33 +75,54 @@ export const ChatComposer = memo(function ChatComposer({
     <div className="border-t border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:p-4">
       <form onSubmit={onSubmit} className="max-w-4xl mx-auto">
         <div className="flex items-end gap-2 sm:gap-3">
-          <textarea
-            ref={composerRef}
-            value={input}
-            onChange={onInputChange}
-            onKeyDown={(event) => {
-              const isComposing =
-                'isComposing' in event.nativeEvent
-                  ? Boolean((event.nativeEvent as KeyboardEvent).isComposing)
-                  : false
+          <div className="relative flex-1">
+            <textarea
+              ref={composerRef}
+              value={input}
+              onChange={onInputChange}
+              onKeyDown={(event) => {
+                const isComposing =
+                  'isComposing' in event.nativeEvent
+                    ? Boolean((event.nativeEvent as KeyboardEvent).isComposing)
+                    : false
 
-              if (
-                shouldSubmitChatComposerOnEnter({
-                  key: event.key,
-                  shiftKey: event.shiftKey,
-                  isComposing,
-                  mobileViewport: isCompactComposerViewport(),
-                })
-              ) {
-                event.preventDefault()
-                void onSubmit()
-              }
-            }}
-            placeholder="Type a message..."
-            rows={1}
-            className="max-h-[60vh] w-full flex-1 resize-none overflow-y-auto rounded-2xl border border-gray-300 px-4 py-3.5 text-base leading-6 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            disabled={isLoading}
-          />
+                if (
+                  shouldSubmitChatComposerOnEnter({
+                    key: event.key,
+                    shiftKey: event.shiftKey,
+                    isComposing,
+                    mobileViewport: isCompactComposerViewport(),
+                  })
+                ) {
+                  event.preventDefault()
+                  void onSubmit()
+                }
+              }}
+              placeholder="Type a message..."
+              rows={1}
+              className="max-h-[60vh] w-full resize-none overflow-y-auto rounded-2xl border border-gray-300 px-4 pt-3.5 pb-12 text-base leading-6 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:py-3.5"
+              disabled={isLoading}
+            />
+            <div
+              className="pointer-events-none absolute inset-x-0 bottom-3 flex gap-2 px-4 sm:hidden"
+              aria-label="Quick insert symbols"
+            >
+              {QUICK_INSERT_SYMBOLS.map(({ symbol, label }) => (
+                <button
+                  key={symbol}
+                  type="button"
+                  aria-label={label}
+                  title={label}
+                  disabled={isLoading}
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() => handleQuickInsert(symbol)}
+                  className="pointer-events-auto inline-flex min-w-9 items-center justify-center rounded-full border border-gray-200 bg-white/90 px-2.5 py-1 text-sm font-medium text-gray-700 shadow-sm backdrop-blur transition-colors hover:border-gray-300 hover:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-500 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-gray-800"
+                >
+                  {symbol}
+                </button>
+              ))}
+            </div>
+          </div>
           <button
             type="submit"
             aria-label={submitLabel}
@@ -118,22 +139,6 @@ export const ChatComposer = memo(function ChatComposer({
             </span>
             <span className="hidden sm:inline">{isLoading ? 'Sending...' : 'Send'}</span>
           </button>
-        </div>
-        <div className="mt-2 flex gap-2 sm:hidden" aria-label="Quick insert symbols">
-          {QUICK_INSERT_SYMBOLS.map(({ symbol, label }) => (
-            <button
-              key={symbol}
-              type="button"
-              aria-label={label}
-              title={label}
-              disabled={isLoading}
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => handleQuickInsert(symbol)}
-              className="inline-flex min-w-10 items-center justify-center rounded-full border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700"
-            >
-              {symbol}
-            </button>
-          ))}
         </div>
       </form>
     </div>

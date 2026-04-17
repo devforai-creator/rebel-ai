@@ -101,12 +101,16 @@ describe('ChatComposer', () => {
         input="   "
         isLoading={false}
         onInputChange={vi.fn()}
+        onQuickInsert={vi.fn()}
         onSubmit={vi.fn()}
       />,
     )
 
     expect(html).toContain('Type a message...')
     expect(html).toContain('Send message')
+    expect(html).toContain('Insert double quote')
+    expect(html).toContain('Insert apostrophe')
+    expect(html).toContain('Insert asterisk')
     expect(html).toContain('disabled')
   })
 
@@ -117,6 +121,7 @@ describe('ChatComposer', () => {
         input="hello"
         isLoading
         onInputChange={vi.fn()}
+        onQuickInsert={vi.fn()}
         onSubmit={vi.fn()}
       />,
     )

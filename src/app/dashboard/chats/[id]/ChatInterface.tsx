@@ -117,6 +117,7 @@ export default function ChatInterface({
     setMessages,
     streamingDraft,
     input,
+    insertInputText,
     handleInputChange,
     handleSubmit,
     isLoading,
@@ -276,6 +277,7 @@ export default function ChatInterface({
         input={input}
         isLoading={isLoading}
         onInputChange={handleInputChange}
+        onQuickInsert={insertInputText}
         onSubmit={handleSubmit}
       />
 

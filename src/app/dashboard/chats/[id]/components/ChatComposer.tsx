@@ -3,11 +3,22 @@
 import React, { memo, type ChangeEvent, type FormEvent, type RefObject } from 'react'
 import { ArrowUp, Loader2 } from 'lucide-react'
 
+const QUICK_INSERT_SYMBOLS = [
+  { symbol: '"', label: 'Insert double quote' },
+  { symbol: "'", label: 'Insert apostrophe' },
+  { symbol: '*', label: 'Insert asterisk' },
+] as const
+
 export interface ChatComposerProps {
   composerRef: RefObject<HTMLTextAreaElement | null>
   input: string
   isLoading: boolean
   onInputChange: (event: ChangeEvent<HTMLTextAreaElement>) => void
+  onQuickInsert: (
+    text: string,
+    selectionStart?: number | null,
+    selectionEnd?: number | null,
+  ) => void
   onSubmit: (event?: FormEvent<HTMLFormElement>) => void
 }
 
@@ -38,9 +49,27 @@ export const ChatComposer = memo(function ChatComposer({
   input,
   isLoading,
   onInputChange,
+  onQuickInsert,
   onSubmit,
 }: ChatComposerProps) {
   const submitLabel = isLoading ? 'Sending message' : 'Send message'
+  const handleQuickInsert = (text: string) => {
+    const composer = composerRef.current
+    const selectionStart = composer?.selectionStart ?? input.length
+    const selectionEnd = composer?.selectionEnd ?? selectionStart
+    const nextCursorPosition = selectionStart + text.length
+
+    onQuickInsert(text, selectionStart, selectionEnd)
+
+    if (!composer || typeof window === 'undefined') {
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      composer.focus()
+      composer.setSelectionRange(nextCursorPosition, nextCursorPosition)
+    })
+  }
 
   return (
     <div className="border-t border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:p-4">
@@ -89,6 +118,22 @@ export const ChatComposer = memo(function ChatComposer({
             </span>
             <span className="hidden sm:inline">{isLoading ? 'Sending...' : 'Send'}</span>
           </button>
+        </div>
+        <div className="mt-2 flex gap-2 sm:hidden" aria-label="Quick insert symbols">
+          {QUICK_INSERT_SYMBOLS.map(({ symbol, label }) => (
+            <button
+              key={symbol}
+              type="button"
+              aria-label={label}
+              title={label}
+              disabled={isLoading}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => handleQuickInsert(symbol)}
+              className="inline-flex min-w-10 items-center justify-center rounded-full border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700"
+            >
+              {symbol}
+            </button>
+          ))}
         </div>
       </form>
     </div>

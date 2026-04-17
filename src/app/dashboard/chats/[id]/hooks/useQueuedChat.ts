@@ -43,6 +43,11 @@ export interface UseQueuedChatReturn {
   setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>
   streamingDraft: StreamingAssistantDraft | null
   input: string
+  insertInputText: (
+    text: string,
+    selectionStart?: number | null,
+    selectionEnd?: number | null,
+  ) => void
   handleInputChange: (event: ChangeEvent<HTMLTextAreaElement>) => void
   handleSubmit: (event?: FormEvent<HTMLFormElement>) => void
   isLoading: boolean
@@ -99,6 +104,26 @@ export function useQueuedChat({
   const handleInputChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(event.target.value)
   }, [])
+
+  const insertInputText = useCallback(
+    (text: string, selectionStart?: number | null, selectionEnd?: number | null) => {
+      setInput((previous) => {
+        const resolvedSelectionStart =
+          typeof selectionStart === 'number'
+            ? Math.max(0, Math.min(selectionStart, previous.length))
+            : previous.length
+        const resolvedSelectionEnd =
+          typeof selectionEnd === 'number'
+            ? Math.max(resolvedSelectionStart, Math.min(selectionEnd, previous.length))
+            : resolvedSelectionStart
+
+        return (
+          previous.slice(0, resolvedSelectionStart) + text + previous.slice(resolvedSelectionEnd)
+        )
+      })
+    },
+    [],
+  )
 
   const upsertAssistantMessage = useCallback(
     (assistantMessage: Message) => {
@@ -448,6 +473,7 @@ export function useQueuedChat({
     setMessages,
     streamingDraft,
     input,
+    insertInputText,
     handleInputChange,
     handleSubmit,
     isLoading: sending || pendingJobId !== null,

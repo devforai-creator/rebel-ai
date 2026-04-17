@@ -9,6 +9,16 @@
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fdevforai-creator%2Frebel-ai&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,CHAT_ADMIN_SECRET,SUMMARY_GENERATION_SECRET,CRON_SECRET,INTERNAL_API_ORIGIN)
 
+## Why This Exists
+
+RebelAI is built on a simple idea: character chat should be able to grow without making creators, users, or operators hostages of a single platform.
+
+Platforms, moderation rules, and product boundaries are normal.
+The real problem is irreversible lock-in: losing your data, your characters, or your ability to move because one service controls the whole stack.
+
+That is why RebelAI keeps self-hosting, BYOK, portable native formats, and explicit trust boundaries together.
+The goal is not to deny platforms. The goal is to preserve the ability to keep work, move it, and rebuild without starting from zero.
+
 ## What RebelAI Optimizes For
 
 - **Your keys**: bring your own model API keys and control your own cost surface

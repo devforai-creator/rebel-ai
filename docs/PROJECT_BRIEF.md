@@ -11,6 +11,17 @@ Exact behavior still lives in code, tests, migrations, and generated types.
 
 RebelAI is a self-hosted character chat stack for people who want their own API keys, their own data, and more control over the product boundary.
 
+## Why This Exists
+
+RebelAI is built on the belief that character chat should be able to grow without forcing creators, users, or operators into irreversible platform dependence.
+
+Platforms, moderation policies, and product boundaries are normal.
+What matters is whether people can still keep their work, move it, and continue operating when a platform changes direction.
+
+That is why RebelAI is BYOK-first, self-hosted-first, portability-conscious, and explicit about trust boundaries.
+The project is not trying to reject platforms outright.
+It is trying to make lock-in a choice people can refuse.
+
 ## What Problem It Solves
 
 Many AI chat products make the platform own one or more of these:

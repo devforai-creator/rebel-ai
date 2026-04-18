@@ -13,7 +13,7 @@ import {
   mapMessageToDisplay,
   buildSanitizedMessages,
 } from '../utils'
-import { isVisibleMessageStatus } from '@/lib/chat/message-status'
+import { MESSAGE_STATUS_COMPLETED, isVisibleMessageStatus } from '@/lib/chat/message-status'
 import { resolveAlternateApiKeyId } from '@/lib/chat/alternate-models'
 import { pollJobStatus as pollJobStatusPure } from './job-poller'
 import { fetchChatJobStatus, fetchLatestChatMessage, requestQueuedChatJob } from './queued-chat-api'
@@ -24,7 +24,10 @@ import {
   resolveQueuedChatPollSleepDelay,
   updateStreamingDraftFromEvent,
 } from './queued-chat-runtime'
-import { reconcileAssistantMessage } from './reconcile-assistant-message'
+import {
+  reconcileAssistantMessage,
+  type AssistantMessageSnapshot,
+} from './reconcile-assistant-message'
 
 export interface UseQueuedChatParams {
   chatId: string
@@ -126,11 +129,13 @@ export function useQueuedChat({
   )
 
   const upsertAssistantMessage = useCallback(
-    (assistantMessage: Message) => {
+    (assistantMessage: AssistantMessageSnapshot) => {
       const debugInfo = assistantMessage.debug_info as DebugInfo | null | undefined
       if (debugInfo) {
         debugInfoMap.current.set(assistantMessage.id, debugInfo)
       }
+
+      const messageStatus = assistantMessage.message_status ?? MESSAGE_STATUS_COMPLETED
 
       setMessages((prev) => {
         const pendingRegenerationTargetId = pendingRegenerationTargetIdRef.current
@@ -140,7 +145,7 @@ export function useQueuedChat({
           pendingRegenerationTargetId,
         })
 
-        if (isVisibleMessageStatus(assistantMessage.message_status)) {
+        if (isVisibleMessageStatus(messageStatus)) {
           persistedMessageIds.current.add(assistantMessage.id)
         }
 
@@ -158,7 +163,7 @@ export function useQueuedChat({
 
       if (
         pendingJobIdRef.current &&
-        isVisibleMessageStatus(assistantMessage.message_status) &&
+        isVisibleMessageStatus(messageStatus) &&
         assistantMessage.id !== pendingRegenerationTargetIdRef.current
       ) {
         pendingAssistantVisibleRef.current = true
@@ -286,20 +291,35 @@ export function useQueuedChat({
 
   const handleRealtimeMessageChange = useCallback(
     (payload: MessageChangePayload) => {
-      const newMessage = (payload.new as Message | null) ?? null
-      const oldMessage = (payload.old as Message | null) ?? null
+      const newMessage = (payload.new as AssistantMessageSnapshot | null) ?? null
+      const oldMessage = (payload.old as AssistantMessageSnapshot | null) ?? null
 
-      if (payload.eventType === 'INSERT' && newMessage && newMessage.role === 'assistant') {
+      if (
+        payload.eventType === 'INSERT' &&
+        newMessage &&
+        newMessage.role === 'assistant' &&
+        typeof newMessage.id === 'string'
+      ) {
         upsertAssistantMessage(newMessage)
         return
       }
 
-      if (payload.eventType === 'UPDATE' && newMessage && newMessage.role === 'assistant') {
+      if (
+        payload.eventType === 'UPDATE' &&
+        newMessage &&
+        newMessage.role === 'assistant' &&
+        typeof newMessage.id === 'string'
+      ) {
         upsertAssistantMessage(newMessage)
         return
       }
 
-      if (payload.eventType === 'DELETE' && oldMessage && oldMessage.role === 'assistant') {
+      if (
+        payload.eventType === 'DELETE' &&
+        oldMessage &&
+        oldMessage.role === 'assistant' &&
+        typeof oldMessage.id === 'string'
+      ) {
         setMessages((prev) => prev.filter((msg) => msg.id !== oldMessage.id))
         persistedMessageIds.current.delete(oldMessage.id)
         debugInfoMap.current.delete(oldMessage.id)

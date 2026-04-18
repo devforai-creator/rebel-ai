@@ -196,6 +196,46 @@ describe('useQueuedChat', () => {
     expect(persistedMessageIds.current.has('assistant-1')).toBe(false)
   })
 
+  it('preserves existing assistant content when realtime updates omit unchanged fields', () => {
+    const assistantMessage = createMessage({
+      id: 'assistant-1',
+      role: 'assistant',
+      content: 'assistant reply',
+      sequence: 2,
+    })
+
+    const { result } = renderHook(() =>
+      useQueuedChat(
+        createHookParams({
+          initialMessages: [createMessage({ id: 'user-1' }), assistantMessage],
+          selectedApiKeyId: 'key-1',
+        }),
+      ),
+    )
+
+    act(() => {
+      result.current.handleRealtimeMessageChange({
+        eventType: 'UPDATE',
+        old: { id: 'assistant-1', role: 'assistant' },
+        new: {
+          id: 'assistant-1',
+          role: 'assistant',
+          message_status: 'completed',
+        },
+      } as MessageChangePayload)
+    })
+
+    expect(result.current.messages).toEqual([
+      expect.objectContaining({ id: 'user-1', content: 'hello' }),
+      expect.objectContaining({
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'assistant reply',
+        sequence: 2,
+      }),
+    ])
+  })
+
   it('skips the assistant fallback fetch when realtime already delivered the visible reply', async () => {
     vi.useFakeTimers()
     Object.defineProperty(document, 'hidden', {

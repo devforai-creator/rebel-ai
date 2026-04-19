@@ -69,7 +69,7 @@ export default function PersonaList({ initialPersonas }: Props) {
       if (result.error) {
         setError(result.error)
       } else if (result.persona) {
-        setPersonas(personas.map((p) => (p.id === personaId ? result.persona! : p)))
+        setPersonas(personas.map((p) => (p.id === personaId ? { ...p, ...result.persona } : p)))
         setEditingId(null)
         setError(null)
       }

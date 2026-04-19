@@ -2,7 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import type { PersonaInsert, PersonaUpdate } from '@/types/database.types'
+import type { PersonaInsert } from '@/types/database.types'
+import { parsePersonaUpdateInput, updateOwnedPersona } from '@/lib/personas/update'
 
 /**
  * Get all personas for the current user
@@ -98,53 +99,27 @@ export async function updatePersona(
     return { error: 'Unauthorized' }
   }
 
-  // Verify ownership
-  const { data: existing } = await supabase
-    .from('personas')
-    .select('id')
-    .eq('id', personaId)
-    .eq('user_id', user.id)
-    .single()
+  const parsed = parsePersonaUpdateInput(data)
 
-  if (!existing) {
-    return { error: 'Persona not found or you do not have permission' }
-  }
-
-  // Validate input
-  if (data.name !== undefined) {
-    if (data.name.trim().length === 0) {
-      return { error: 'Persona name cannot be empty' }
-    }
-    if (data.name.length > 100) {
-      return { error: 'Persona name must be 100 characters or less' }
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0]?.message ?? 'Invalid payload',
     }
   }
 
-  if (data.description !== undefined) {
-    if (data.description !== null && data.description.length > 5000) {
-      return { error: 'Persona description must be 5000 characters or less' }
-    }
-  }
+  const result = await updateOwnedPersona({
+    supabase,
+    userId: user.id,
+    personaId,
+    input: parsed.data,
+  })
 
-  const updateData: PersonaUpdate = {}
-  if (data.name !== undefined) updateData.name = data.name.trim()
-  if (data.description !== undefined) {
-    updateData.description = data.description ? data.description.trim() : null
-  }
-
-  const { data: persona, error } = await supabase
-    .from('personas')
-    .update(updateData)
-    .eq('id', personaId)
-    .select()
-    .single()
-
-  if (error) {
-    return { error: error.message }
+  if (!result.success) {
+    return { error: result.message }
   }
 
   revalidatePath('/dashboard/personas')
-  return { persona }
+  return { persona: result.persona }
 }
 
 /**

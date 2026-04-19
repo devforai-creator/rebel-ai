@@ -4,13 +4,9 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { deleteChat } from '@/app/dashboard/chats/actions'
+import { fetchCharacterChatExport, fetchCharacterChatsPage } from '../character-chats-client'
+import { downloadBlob } from '../download-blob'
 import type { CharacterChat } from '../character-detail-types'
-
-type CharacterChatsResponse = {
-  chats: CharacterChat[]
-  hasMore: boolean
-  nextCursor: string | null
-}
 
 type UseCharacterChatsParams = {
   characterId: string
@@ -43,13 +39,7 @@ export function useCharacterChats({
     setExportingChatId(chatId)
 
     try {
-      const response = await fetch(`/api/chats/${chatId}/export`)
-      if (!response.ok) {
-        throw new Error('Export failed')
-      }
-
-      const filename = getExportFilename(response.headers.get('Content-Disposition'))
-      const blob = await response.blob()
+      const { blob, filename } = await fetchCharacterChatExport(chatId)
       downloadBlob(blob, filename)
     } catch (error) {
       console.error('Export failed:', error)
@@ -95,16 +85,7 @@ export function useCharacterChats({
     setIsChatLoading(true)
 
     try {
-      const response = await fetch(
-        `/api/characters/${characterId}/chats?before=${encodeURIComponent(chatCursor)}`,
-      )
-
-      if (!response.ok) {
-        console.error('Failed to load more chats:', response.statusText)
-        return
-      }
-
-      const data = (await response.json()) as CharacterChatsResponse
+      const data = await fetchCharacterChatsPage(characterId, chatCursor)
 
       if (Array.isArray(data.chats) && data.chats.length > 0) {
         setChatList((prev) => [...prev, ...data.chats])
@@ -135,28 +116,4 @@ export function useCharacterChats({
     confirmDeleteCharacterChat,
     loadMoreChats,
   }
-}
-
-function getExportFilename(contentDisposition: string | null) {
-  if (!contentDisposition) {
-    return 'chat_export.json'
-  }
-
-  const match = contentDisposition.match(/filename="(.+)"/)
-  if (!match) {
-    return 'chat_export.json'
-  }
-
-  return decodeURIComponent(match[1])
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
 }

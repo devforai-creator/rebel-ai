@@ -125,7 +125,8 @@ Verification:
 
 - [x] relevant unit tests pass
 - [x] `npx tsc --noEmit`
-- [ ] `npm run ops:smoke` after deploy
+- [x] `npm run ops:smoke` after deploy
+      deploy smoke completed on 2026-04-19; `triage` remained `warn` because recent failed jobs were still inside the 72-hour window, not because this contract change regressed health
 
 ### Phase 3. Split the Chat Detail Shell by State Ownership
 
@@ -194,3 +195,23 @@ As of 2026-04-19:
 - start with phase 1, not phase 2
 - treat phase 2 as the main structural change
 - start phase 3 only after phase 2 lands or the phase 2 contract is explicitly deferred
+
+## Follow-Up
+
+### Remove Legacy `/api/chat` Transcript Fallback
+
+Status: deferred follow-up
+
+Why this stays deferred:
+
+- first-party chat UI calls already use the slim request contract
+- `/api/chat` is still a public route boundary, so removing legacy fallback immediately could break unknown external or operational callers
+- the current compatibility layer is isolated to one server-side branch and documented in code
+
+Before removing it:
+
+- confirm no remaining first-party callers depend on `messages` as the request contract
+- if possible, add short-lived observability for legacy fallback hits before removal
+- then remove the fallback branch in [src/app/api/chat/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.ts)
+- remove the legacy `messages`-shape route coverage that only exists to protect the fallback path
+- update [docs/chat-regeneration-architecture.md](/home/tmdduq96kr/projects/rebel-ai/docs/chat-regeneration-architecture.md) to drop the temporary compatibility note

@@ -37,6 +37,14 @@ function createReprocessJsonResponse(body: unknown, init?: ResponseInit) {
   })
 }
 
+function buildReprocessedMessageUpdate(content: string) {
+  return {
+    content,
+    // Invalidate stale derived bilingual cache whenever the canonical text changes.
+    content_en: null,
+  }
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient()
   const {
@@ -163,7 +171,7 @@ export async function POST(request: Request) {
       updateInFlight = (async () => {
         const { error: messageUpdateError } = await supabase
           .from('messages')
-          .update({ content: contentSnapshot })
+          .update(buildReprocessedMessageUpdate(contentSnapshot))
           .eq('id', messageId)
           .eq('user_id', user.id)
 
@@ -219,7 +227,7 @@ export async function POST(request: Request) {
     const { error: finalUpdateError } = await supabase
       .from('messages')
       .update({
-        content: fullText,
+        ...buildReprocessedMessageUpdate(fullText),
         model_used:
           apiKeyData.model_preference ??
           getDefaultModelForProvider(apiKeyData.provider, { lightweight: true }),

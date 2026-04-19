@@ -55,6 +55,7 @@ type MessageRow = {
   chat_id: string
   role: string
   content: string
+  content_en?: string | null
   user_id: string
   model_used?: string | null
 }
@@ -129,6 +130,7 @@ function createRouteSupabase(options: RouteSupabaseOptions = {}) {
         chat_id: 'chat-1',
         role: 'assistant',
         content: 'Original assistant reply',
+        content_en: 'Original English translation',
         user_id: userId,
         model_used: null,
       },
@@ -529,6 +531,7 @@ describe('POST /api/messages/reprocess', () => {
     expect(supabase.state.messages[0]).toMatchObject({
       id: 'assistant-msg-1',
       content: 'rewritten once',
+      content_en: null,
       model_used: 'gpt-reprocess',
     })
 
@@ -536,12 +539,13 @@ describe('POST /api/messages/reprocess', () => {
       expect.arrayContaining([
         expect.objectContaining({
           table: 'messages',
-          payload: { content: 'rewritten once' },
+          payload: { content: 'rewritten once', content_en: null },
         }),
         expect.objectContaining({
           table: 'messages',
           payload: {
             content: 'rewritten once',
+            content_en: null,
             model_used: 'gpt-reprocess',
           },
         }),
@@ -605,11 +609,12 @@ describe('POST /api/messages/reprocess', () => {
     const messageUpdates = supabase.state.updateCalls.filter((call) => call.table === 'messages')
     expect(messageUpdates).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ payload: { content: 'Hello' } }),
-        expect.objectContaining({ payload: { content: 'Hello world' } }),
+        expect.objectContaining({ payload: { content: 'Hello', content_en: null } }),
+        expect.objectContaining({ payload: { content: 'Hello world', content_en: null } }),
         expect.objectContaining({
           payload: {
             content: 'Hello world',
+            content_en: null,
             model_used: modelName,
           },
         }),

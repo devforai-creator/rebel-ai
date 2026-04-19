@@ -39,6 +39,14 @@ function isOwnedMessageRow(value: unknown): value is OwnedMessageRow {
   )
 }
 
+function buildEditedMessageUpdate(content: string) {
+  return {
+    content,
+    // Invalidate derived bilingual cache when the canonical message content changes.
+    content_en: null,
+  }
+}
+
 /**
  * Edit a message's content
  */
@@ -70,7 +78,7 @@ export async function editMessage(messageId: string, newContent: string) {
   // Update message content
   const { error } = await supabase
     .from('messages')
-    .update({ content: newContent.trim() })
+    .update(buildEditedMessageUpdate(newContent.trim()))
     .eq('id', messageId)
 
   if (error) {

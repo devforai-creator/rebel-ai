@@ -75,6 +75,7 @@ describe('message actions', () => {
           role: 'assistant',
           turn_id: null,
           content: 'old',
+          content_en: 'old translation',
           chats: { user_id: 'user-1' },
         },
       ],
@@ -90,6 +91,7 @@ describe('message actions', () => {
         role: 'assistant',
         turn_id: null,
         content: 'updated content',
+        content_en: null,
         chats: { user_id: 'user-1' },
       },
     ])

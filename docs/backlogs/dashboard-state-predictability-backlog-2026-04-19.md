@@ -1,6 +1,7 @@
 # Dashboard State Predictability Backlog
 
 Updated: 2026-04-19
+Status: Completed 2026-04-19
 
 This backlog turns the current declarative-flow and error-handling review into a bounded execution
 queue for dashboard client state.
@@ -65,27 +66,27 @@ Primary scope:
 
 Entry checklist:
 
-- [ ] define the preferred client-side rule for reading API failure messages
-- [ ] list the routes that return JSON error payloads versus plain text
-- [ ] identify where dashboard callers intentionally want custom toast copy instead of raw server text
+- [x] define the preferred client-side rule for reading API failure messages
+- [x] list the routes that return JSON error payloads versus plain text
+- [x] identify where dashboard callers intentionally want custom toast copy instead of raw server text
 
 Implementation checklist:
 
-- [ ] extract or extend one narrow client-facing helper for `response -> user-facing message`
-- [ ] replace raw `response.text()` and `response.statusText` handling in dashboard callers where the shared helper should apply
-- [ ] keep feature-specific fallback wording only where the product intentionally wants it
-- [ ] add focused tests for JSON error body, plain-text body, and empty-body fallback behavior
+- [x] extract or extend one narrow client-facing helper for `response -> user-facing message`
+- [x] replace raw `response.text()` and `response.statusText` handling in dashboard callers where the shared helper should apply
+- [x] keep feature-specific fallback wording only where the product intentionally wants it
+- [x] add focused tests for JSON error body, plain-text body, and empty-body fallback behavior
 
 Done when:
 
-- [ ] dashboard client mutations no longer open-code basic API error parsing in several different ways
-- [ ] callers handling the same route family expose similar failure-message quality
-- [ ] future route error-shape changes touch one shared client boundary instead of several hooks and components
+- [x] dashboard client mutations no longer open-code basic API error parsing in several different ways
+- [x] callers handling the same route family expose similar failure-message quality
+- [x] future route error-shape changes touch one shared client boundary instead of several hooks and components
 
 Verification:
 
-- [ ] relevant unit tests pass
-- [ ] `npx tsc --noEmit`
+- [x] relevant unit tests pass
+- [x] `npx tsc --noEmit`
 
 ### P1. Normalize `useActionState` Feedback Patterns in Settings Forms
 
@@ -106,27 +107,27 @@ Primary scope:
 
 Entry checklist:
 
-- [ ] identify which forms truly need local transient feedback separate from server action state
-- [ ] define the minimal shared mapping for `error / success / warning -> feedback tone`
-- [ ] decide whether the right extraction is a helper, a small hook, or just local simplification
+- [x] identify which forms truly need local transient feedback separate from server action state
+- [x] define the minimal shared mapping for `error / success / warning -> feedback tone`
+- [x] decide whether the right extraction is a helper, a small hook, or just local simplification
 
 Implementation checklist:
 
-- [ ] remove mirrored local feedback state where it only re-expresses `useActionState` output
-- [ ] keep genuinely local pre-submit guidance separate from post-submit server feedback
-- [ ] normalize feedback rendering so similar forms do not drift in tone and reset behavior
-- [ ] add or update focused tests for visible success/error messaging if behavior changes
+- [x] remove mirrored local feedback state where it only re-expresses `useActionState` output
+- [x] keep genuinely local pre-submit guidance separate from post-submit server feedback
+- [x] normalize feedback rendering so similar forms do not drift in tone and reset behavior
+- [x] add or update focused tests for visible success/error messaging if behavior changes
 
 Done when:
 
-- [ ] settings forms read as `draft state + server action state`, not `draft state + copied server action state`
-- [ ] success and error rendering rules are easier to reuse and harder to drift
-- [ ] local feedback state remains only where it owns behavior the server action state does not
+- [x] settings forms read as `draft state + server action state`, not `draft state + copied server action state`
+- [x] success and error rendering rules are easier to reuse and harder to drift
+- [x] local feedback state remains only where it owns behavior the server action state does not
 
 Verification:
 
-- [ ] relevant unit tests pass
-- [ ] `npx tsc --noEmit`
+- [x] relevant unit tests pass
+- [x] `npx tsc --noEmit`
 
 ### P1. Make Runtime Variable Persistence Semantics Explicit
 
@@ -143,27 +144,27 @@ Primary scope:
 
 Entry checklist:
 
-- [ ] decide whether save failure should roll back local state, mark local state as dirty, or retry
-- [ ] define the intended source of truth for runtime variables during an in-flight save
-- [ ] identify which current behavior must remain fast and optimistic for UI-card interactions
+- [x] decide whether save failure should roll back local state, mark local state as dirty, or retry
+- [x] define the intended source of truth for runtime variables during an in-flight save
+- [x] identify which current behavior must remain fast and optimistic for UI-card interactions
 
 Implementation checklist:
 
-- [ ] separate persisted state from optimistic draft state if both need to exist
-- [ ] add rollback or explicit dirty-state semantics for failed saves
-- [ ] reuse the shared client error parsing path from `P0`
-- [ ] add targeted tests for save success, save failure, and follow-up user actions after failure
+- [x] separate persisted state from optimistic draft state if both need to exist
+- [x] add rollback or explicit dirty-state semantics for failed saves
+- [x] reuse the shared client error parsing path from `P0`
+- [x] add targeted tests for save success, save failure, and follow-up user actions after failure
 
 Done when:
 
-- [ ] the runtime-variable source of truth can be described clearly in one sentence
-- [ ] save failure no longer leaves silent divergence between local UI state and server state
-- [ ] follow-up edits after a failed save behave predictably
+- [x] the runtime-variable source of truth can be described clearly in one sentence
+- [x] save failure no longer leaves silent divergence between local UI state and server state
+- [x] follow-up edits after a failed save behave predictably
 
 Verification:
 
-- [ ] relevant unit tests pass
-- [ ] `npx tsc --noEmit`
+- [x] relevant unit tests pass
+- [x] `npx tsc --noEmit`
 
 ### P2. Reduce Hidden State Synchronization in Chat Memory and Stats Hooks
 
@@ -181,27 +182,27 @@ Primary scope:
 
 Entry checklist:
 
-- [ ] map which values are server-truth, realtime cache, and UI-local edit state
-- [ ] identify which prop-to-state mirror effects add real value versus pure duplication
-- [ ] decide whether `useChatSummariesState` should keep local collections or rely more directly on loader data plus mutation boundaries
+- [x] map which values are server-truth, realtime cache, and UI-local edit state
+- [x] identify which prop-to-state mirror effects add real value versus pure duplication
+- [x] decide whether `useChatSummariesState` should keep local collections or rely more directly on loader data plus mutation boundaries
 
 Implementation checklist:
 
-- [ ] remove pure mirror effects where they do not create a meaningful ownership boundary
-- [ ] if local caches remain, document and isolate their reconciliation rules
-- [ ] make usage-stat fetch gating more declarative than ref-mirrored booleans where practical
-- [ ] add or update tests around refresh, realtime reconciliation, and initial-value hydration
+- [x] remove pure mirror effects where they do not create a meaningful ownership boundary
+- [x] if local caches remain, document and isolate their reconciliation rules
+- [x] make usage-stat fetch gating more declarative than ref-mirrored booleans where practical
+- [x] add or update tests around refresh, realtime reconciliation, and initial-value hydration
 
 Done when:
 
-- [ ] `useChatSummariesState` is easier to read as `server-backed cache + local edit state` rather than several overlapping state channels
-- [ ] `useChatUsageStats` shows fetch conditions directly in its reactive inputs
-- [ ] future changes to stats or summaries have a clearer place to land
+- [x] `useChatSummariesState` is easier to read as `server-backed cache + local edit state` rather than several overlapping state channels
+- [x] `useChatUsageStats` shows fetch conditions directly in its reactive inputs
+- [x] future changes to stats or summaries have a clearer place to land
 
 Verification:
 
-- [ ] relevant unit tests pass
-- [ ] `npx tsc --noEmit`
+- [x] relevant unit tests pass
+- [x] `npx tsc --noEmit`
 
 ## Stop Conditions
 
@@ -212,14 +213,13 @@ Pause before continuing to the next item if any of these become true:
 - tests become more coupled and harder to understand after the extraction
 - a production issue or higher-priority contract change appears
 
-## Current Recommendation
+## Current Status
 
 As of 2026-04-19:
 
-- start with `P0 Canonicalize Dashboard Client API Error Handling`
-- take `P1 Normalize useActionState Feedback Patterns` next if you want the lowest-risk follow-up
-- treat `P1 Make Runtime Variable Persistence Semantics Explicit` as the highest-value behavioral cleanup after `P0`
-- start `P2` only after the easier consistency work lands
+- `P0`, both `P1` items, and `P2` are complete
+- this backlog can remain closed unless a new predictability issue appears in dashboard chat or settings UI
+- any future additions should be new bounded slices rather than reopening the entire document
 
 ## Follow-Up Notes
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { InlineFeedbackTone } from '@/app/dashboard/components/InlineFeedback'
 
 type ActionStateFeedbackLike = {
@@ -38,10 +38,7 @@ export function useActionStateFeedback(
   state: ActionStateFeedbackLike,
   options: { successMessage: string },
 ) {
-  const feedback = useMemo(
-    () => resolveActionStateFeedback(state, options),
-    [options.successMessage, state.error, state.success],
-  )
+  const feedback = resolveActionStateFeedback(state, options)
   const feedbackKey = feedback ? `${feedback.tone}:${feedback.message}` : null
   const [dismissedFeedbackKey, setDismissedFeedbackKey] = useState<string | null>(null)
 

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Message } from '@/types/database.types'
 import { fetchChatJobStatus, fetchLatestChatMessage, requestQueuedChatJob } from './queued-chat-api'
 
-function createJsonResponse(payload: unknown, ok = true, status = 200) {
+function createJsonResponse(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
     status,
     headers: { 'Content-Type': 'application/json' },
@@ -32,7 +32,7 @@ describe('queued-chat-api', () => {
   })
 
   it('returns null when the latest-message endpoint responds non-200', async () => {
-    stubFetch(async () => createJsonResponse({ error: 'missing' }, false, 404))
+    stubFetch(async () => createJsonResponse({ error: 'missing' }, 404))
 
     await expect(fetchLatestChatMessage('chat-1')).resolves.toBeNull()
   })
@@ -58,7 +58,7 @@ describe('queued-chat-api', () => {
 
   it('returns null when job polling receives a non-ok response', async () => {
     const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    stubFetch(async () => createJsonResponse({ error: 'oops' }, false, 503))
+    stubFetch(async () => createJsonResponse({ error: 'oops' }, 503))
 
     await expect(fetchChatJobStatus('job-1')).resolves.toBeNull()
     expect(consoleWarnSpy).toHaveBeenCalledWith('Job status check failed (503), retrying...')
@@ -81,7 +81,7 @@ describe('queued-chat-api', () => {
   })
 
   it('throws the parsed API error when queue creation fails with JSON', async () => {
-    stubFetch(async () => createJsonResponse({ error: 'Unauthorized' }, false, 401))
+    stubFetch(async () => createJsonResponse({ error: 'Unauthorized' }, 401))
 
     await expect(
       requestQueuedChatJob({

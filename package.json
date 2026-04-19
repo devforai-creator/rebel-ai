@@ -89,7 +89,11 @@
     "vitest": "^4.0.4"
   },
   "lint-staged": {
-    "*": "prettier --write --ignore-unknown"
+    "*.{js,jsx,ts,tsx,cjs,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,mdx,yml,yaml}": "prettier --write"
   },
   "overrides": {
     "parse5": "7.1.2",

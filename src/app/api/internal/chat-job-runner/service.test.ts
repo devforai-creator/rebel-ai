@@ -6,7 +6,9 @@ const claimPendingJobMock = vi.fn()
 const parseChatJobPayloadMock = vi.fn()
 const decryptSecretMock = vi.fn()
 const buildMemoryPlanMock = vi.fn()
+const countProjectedConversationMessagesMock = vi.fn()
 const loadGenerationTranscriptMock = vi.fn()
+const loadProjectedConversationTailMock = vi.fn()
 const streamTextMock = vi.fn()
 const triggerSummaryGenerationMock = vi.fn()
 const resolveGoogleCacheDecisionMock = vi.fn()
@@ -46,7 +48,10 @@ vi.mock('@/lib/chat-memory', () => ({
   buildMemoryPlan: (...args: unknown[]) => buildMemoryPlanMock(...args),
 }))
 vi.mock('@/lib/chat/turns', () => ({
+  countProjectedConversationMessages: (...args: unknown[]) =>
+    countProjectedConversationMessagesMock(...args),
   loadGenerationTranscript: (...args: unknown[]) => loadGenerationTranscriptMock(...args),
+  loadProjectedConversationTail: (...args: unknown[]) => loadProjectedConversationTailMock(...args),
 }))
 buildMemoryPlanMock.mockResolvedValue({
   mode: 'summary_window',
@@ -237,7 +242,9 @@ describe('processChatJobs', () => {
     parseChatJobPayloadMock.mockReset()
     decryptSecretMock.mockReset()
     buildMemoryPlanMock.mockReset()
+    countProjectedConversationMessagesMock.mockReset()
     loadGenerationTranscriptMock.mockReset()
+    loadProjectedConversationTailMock.mockReset()
     triggerSummaryGenerationMock.mockClear()
     streamTextMock.mockClear()
     resolveGoogleCacheDecisionMock.mockReset()
@@ -259,6 +266,8 @@ describe('processChatJobs', () => {
       providerMetadata: Promise.resolve({}),
       usage: Promise.resolve({ inputTokens: 10, outputTokens: 20, totalTokens: 30 }),
     })
+    countProjectedConversationMessagesMock.mockResolvedValue(0)
+    loadProjectedConversationTailMock.mockResolvedValue([])
     buildMemoryPlanMock.mockResolvedValue({
       mode: 'summary_window',
       promptBlocks: [
@@ -1898,8 +1907,9 @@ describe('processChatJobs', () => {
     createAdminClientMock.mockReturnValue(supabase)
 
     decryptSecretMock.mockResolvedValue('sk-test')
-    loadGenerationTranscriptMock.mockResolvedValue([
-      { role: 'user', content: 'latest user message', messageId: 'user-1' },
+    countProjectedConversationMessagesMock.mockResolvedValue(2)
+    loadProjectedConversationTailMock.mockResolvedValue([
+      { id: 'user-1', role: 'user', content: 'latest user message' },
     ])
     buildMemoryPlanMock.mockImplementation(
       async ({ baseSystemPrompt, sanitizedMessages }: Record<string, unknown>) => ({
@@ -1955,13 +1965,19 @@ describe('processChatJobs', () => {
     const result = await processChatJobs(1)
 
     expect(result.results[0]).toMatchObject({ status: 'success', jobId: 'job-prefix-regen' })
-    expect(loadGenerationTranscriptMock).toHaveBeenCalledWith(
+    expect(countProjectedConversationMessagesMock).toHaveBeenCalledWith(
       expect.objectContaining({
         chatId: 'chat-1',
-        turnId: 'turn-1',
+      }),
+    )
+    expect(loadProjectedConversationTailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatId: 'chat-1',
+        limitMessages: 1,
         excludeAssistantForTurnId: 'turn-1',
       }),
     )
+    expect(loadGenerationTranscriptMock).not.toHaveBeenCalled()
     expect(buildMemoryPlanMock).toHaveBeenCalledWith(
       expect.objectContaining({
         sanitizedMessages: [{ role: 'user', content: 'latest user message', messageId: 'user-1' }],

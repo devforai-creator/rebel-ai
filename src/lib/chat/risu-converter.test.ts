@@ -184,7 +184,7 @@ describe('Risu converter', () => {
     expect(parseRisuChatJson(json).data.message[0].data).toBe('hi')
     expect(() => parseRisuChatJson('{bad json')).toThrow('Invalid JSON format')
     expect(() => parseRisuChatJson('{}')).toThrow(
-      'Invalid RisuAI chat format: missing required fields',
+      'Invalid compatible chat JSON format: missing required fields',
     )
   })
 

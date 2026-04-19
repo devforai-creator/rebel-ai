@@ -115,6 +115,46 @@ function logPostGenerationPersistenceWarning({
   })
 }
 
+async function clearStaleAssistantDebugInfo({
+  supabase,
+  chatId,
+  userId,
+  apiKeyId,
+  requestId,
+  retainedAssistantMessageId,
+}: {
+  supabase: AdminSupabaseClient
+  chatId: string
+  userId: string
+  apiKeyId: string
+  requestId: string
+  retainedAssistantMessageId: string
+}): Promise<void> {
+  const clearDebugInfoUpdate: MessageUpdate = {
+    debug_info: null,
+  }
+
+  const { error } = await supabase
+    .from('messages')
+    .update(clearDebugInfoUpdate as never)
+    .eq('chat_id', chatId)
+    .eq('role', 'assistant')
+    .eq('user_id', userId)
+    .neq('id', retainedAssistantMessageId)
+    .not('debug_info', 'is', null)
+
+  if (error) {
+    logPostGenerationPersistenceWarning({
+      action: '[Chat Job Runner] Failed to clear stale assistant debug_info',
+      chatId,
+      userId,
+      apiKeyId,
+      requestId,
+      error: error.message,
+    })
+  }
+}
+
 function scheduleSummaryGeneration({
   supabase,
   chatId,
@@ -417,6 +457,16 @@ export async function runPostGenerationPipeline({
 
     throw error
   }
+
+  // Only the newest assistant message keeps server-side debug_info for this chat.
+  await clearStaleAssistantDebugInfo({
+    supabase,
+    chatId,
+    userId,
+    apiKeyId,
+    requestId,
+    retainedAssistantMessageId: finalAssistantMessageId,
+  })
 
   if (bilingualEnabled) {
     triggerMessageTranslationFn(finalAssistantMessageId, userId)

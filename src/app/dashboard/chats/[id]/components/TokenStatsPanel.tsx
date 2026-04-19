@@ -1,6 +1,6 @@
 'use client'
 
-import { memo } from 'react'
+import React, { memo } from 'react'
 import Button from '@/app/dashboard/components/Button'
 import type { ChatMemoryMode } from '@/lib/chat/model-config'
 import {
@@ -25,6 +25,8 @@ interface TokenStatsPanelProps {
   onSelectMemoryMode: (mode: ChatMemoryMode) => void
   onToggleAnthropicBatchMode: () => void
   latestUsage: LatestMessageTokenStats | null
+  usageStatsEnabled: boolean
+  usageStatsLoading: boolean
   statsExpanded: boolean
   onToggleStats: () => void
   isDeveloper: boolean
@@ -47,6 +49,8 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
   onSelectMemoryMode,
   onToggleAnthropicBatchMode,
   latestUsage,
+  usageStatsEnabled,
+  usageStatsLoading,
   statsExpanded,
   onToggleStats,
   isDeveloper,
@@ -72,13 +76,42 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-1 text-xs">
-            <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-              {formatUsd(latestUsage?.costUsd)}
-            </span>
-            <span className="text-gray-400">·</span>
-            <span>{latestUsage?.cacheHit ? '✅' : '❌'}</span>
-          </div>
+          {usageStatsEnabled && (
+            <Button
+              type="button"
+              onClick={onToggleStats}
+              variant="ghost"
+              size="sm"
+              className="gap-2 px-2 text-xs"
+            >
+              <span className="text-gray-600 dark:text-gray-300">
+                {usageStatsLoading
+                  ? 'Loading…'
+                  : latestUsage
+                    ? formatUsd(latestUsage.costUsd)
+                    : 'Usage'}
+              </span>
+              {latestUsage && (
+                <>
+                  <span className="text-gray-400">·</span>
+                  <span>{latestUsage.cacheHit ? '✅' : '❌'}</span>
+                </>
+              )}
+              <svg
+                className={`w-4 h-4 text-gray-400 transition-transform ${statsExpanded ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </Button>
+          )}
         </div>
         <div className="mt-2 flex flex-col gap-2 sm:hidden">
           <div className="flex items-center justify-between gap-2">
@@ -223,27 +256,48 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                   ))}
                 </select>
               </div>
-              {/* Summary info (click to expand) */}
-              <Button onClick={onToggleStats} variant="ghost" size="sm" className="gap-2 px-2">
-                <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                  {formatUsd(latestUsage?.costUsd)}
-                </span>
-                <span className="text-gray-400">·</span>
-                <span>{latestUsage?.cacheHit ? '✅' : '❌'}</span>
-                <svg
-                  className={`w-4 h-4 text-gray-400 transition-transform ${statsExpanded ? 'rotate-180' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              {usageStatsEnabled && (
+                <Button
+                  type="button"
+                  onClick={onToggleStats}
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 px-2"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              </Button>
+                  <span
+                    className={
+                      latestUsage
+                        ? 'text-emerald-600 dark:text-emerald-400 font-medium'
+                        : 'text-gray-600 dark:text-gray-300'
+                    }
+                  >
+                    {usageStatsLoading
+                      ? 'Loading…'
+                      : latestUsage
+                        ? formatUsd(latestUsage.costUsd)
+                        : 'Usage'}
+                  </span>
+                  {latestUsage && (
+                    <>
+                      <span className="text-gray-400">·</span>
+                      <span>{latestUsage.cacheHit ? '✅' : '❌'}</span>
+                    </>
+                  )}
+                  <svg
+                    className={`w-4 h-4 text-gray-400 transition-transform ${statsExpanded ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </Button>
+              )}
 
               {isDeveloper && (
                 <div className="flex items-center gap-2 border-l border-gray-300 dark:border-gray-600 pl-3">
@@ -271,47 +325,56 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
               )}
             </div>
           </div>
-
-          {/* Expanded details */}
-          {statsExpanded && (
-            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 text-sm">
-              <div className="flex flex-wrap gap-4">
-                <div className="flex items-center gap-2 px-3 py-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
-                  <span className="text-gray-600 dark:text-gray-400">Tokens:</span>
-                  <span className="text-xs text-gray-500">
-                    Input: {formatTokenValue(latestUsage?.prompt)} | Output:{' '}
-                    {formatTokenValue(latestUsage?.completion)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                  <span className="text-gray-600 dark:text-gray-400">Cost:</span>
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                    {formatUsd(latestUsage?.costUsd)}
-                  </span>
-                </div>
-              </div>
-              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                <div>
-                  Cache: {latestUsage?.cacheHit ? '✅ Hit' : '❌ Miss'}
-                  {latestUsage?.cachedPrompt
-                    ? ` (${formatTokenValue(latestUsage.cachedPrompt)} tokens)`
-                    : ''}
-                </div>
-                <div>
-                  Cost: Input {formatUsd(latestUsage?.promptCostUsd)} | Output{' '}
-                  {formatUsd(latestUsage?.completionCostUsd)} | Cached{' '}
-                  {formatUsd(latestUsage?.cachedPromptCostUsd)}
-                  {latestUsage?.reasoningCostUsd
-                    ? ` | Reasoning ${formatUsd(latestUsage?.reasoningCostUsd)}`
-                    : ''}
-                </div>
-                <div className="text-gray-400 dark:text-gray-500 italic">
-                  * Estimated. Check your AI provider dashboard for actual charges.
-                </div>
-              </div>
-            </div>
-          )}
         </div>
+
+        {usageStatsEnabled && statsExpanded && (
+          <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 text-sm">
+            {usageStatsLoading && !latestUsage ? (
+              <div className="text-sm text-gray-500 dark:text-gray-400">Loading latest usage…</div>
+            ) : latestUsage ? (
+              <>
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                    <span className="text-gray-600 dark:text-gray-400">Tokens:</span>
+                    <span className="text-xs text-gray-500">
+                      Input: {formatTokenValue(latestUsage.prompt)} | Output:{' '}
+                      {formatTokenValue(latestUsage.completion)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                    <span className="text-gray-600 dark:text-gray-400">Cost:</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      {formatUsd(latestUsage.costUsd)}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                  <div>
+                    Cache: {latestUsage.cacheHit ? '✅ Hit' : '❌ Miss'}
+                    {latestUsage.cachedPrompt
+                      ? ` (${formatTokenValue(latestUsage.cachedPrompt)} tokens)`
+                      : ''}
+                  </div>
+                  <div>
+                    Cost: Input {formatUsd(latestUsage.promptCostUsd)} | Output{' '}
+                    {formatUsd(latestUsage.completionCostUsd)} | Cached{' '}
+                    {formatUsd(latestUsage.cachedPromptCostUsd)}
+                    {latestUsage.reasoningCostUsd
+                      ? ` | Reasoning ${formatUsd(latestUsage.reasoningCostUsd)}`
+                      : ''}
+                  </div>
+                  <div className="text-gray-400 dark:text-gray-500 italic">
+                    * Estimated. Check your AI provider dashboard for actual charges.
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                No assistant usage has been recorded yet.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

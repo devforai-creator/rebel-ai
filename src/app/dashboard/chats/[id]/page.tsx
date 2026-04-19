@@ -102,28 +102,40 @@ export default async function ChatPage({ params, searchParams }: Props) {
     return persona
   })()
 
+  const usageSettingsPromise = supabase
+    .from('profiles')
+    .select('enable_chat_usage_stats')
+    .eq('id', user.id)
+    .maybeSingle<{ enable_chat_usage_stats: boolean }>()
+
   const availablePersonasPromise = supabase
     .from('personas')
     .select('id, name')
     .eq('user_id', user.id)
     .order('name', { ascending: true })
 
-  const [{ data: apiKeys }, persona, { data: availablePersonas }, initialWindow] =
-    await Promise.all([
-      supabase
-        .from('api_keys')
-        .select('id, key_name, provider, model_preference, service_tier')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .order('key_name', { ascending: true }),
-      personaPromise,
-      availablePersonasPromise,
-      loadProjectedChatWindow({
-        supabase,
-        chatId: id,
-        limitTurns: CHAT_MESSAGE_PAGE_SIZE,
-      }),
-    ])
+  const [
+    { data: apiKeys },
+    persona,
+    { data: usageSettings },
+    { data: availablePersonas },
+    initialWindow,
+  ] = await Promise.all([
+    supabase
+      .from('api_keys')
+      .select('id, key_name, provider, model_preference, service_tier')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .order('key_name', { ascending: true }),
+    personaPromise,
+    usageSettingsPromise,
+    availablePersonasPromise,
+    loadProjectedChatWindow({
+      supabase,
+      chatId: id,
+      limitTurns: CHAT_MESSAGE_PAGE_SIZE,
+    }),
+  ])
 
   const initialMessages = initialWindow.messages
   const historyCursor = initialWindow.nextCursor
@@ -169,6 +181,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
               preselectedApiKeyId={preselectedApiKeyId}
               initialModelConfig={normalizeChatModelConfig(chat.model_config)}
               initialUsageStats={null}
+              usageStatsEnabled={usageSettings?.enable_chat_usage_stats ?? false}
               character={{
                 name: character?.name || 'AI',
                 avatar_url: characterAvatarUrl,

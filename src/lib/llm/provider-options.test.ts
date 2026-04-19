@@ -143,6 +143,7 @@ describe('getAnthropicMinCacheTokens', () => {
 
   it('returns opus 4.5+ minimum tokens', () => {
     expect(getAnthropicMinCacheTokens('claude-opus-4-6')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.opus)
+    expect(getAnthropicMinCacheTokens('claude-opus-4-7')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.opus)
   })
 
   it('returns legacy opus minimum tokens', () => {

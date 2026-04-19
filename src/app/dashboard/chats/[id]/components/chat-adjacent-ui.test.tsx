@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import DeleteChatButton from '../DeleteChatButton'
 import SystemPromptEditorButton from '../SystemPromptEditorButton'
+import { ChatComposer, shouldSubmitChatComposerOnEnter } from './ChatComposer'
 import { DebugModal } from './DebugModal'
 import { LorebookPanelContent } from './LorebookPanelContent'
 
@@ -79,5 +80,76 @@ describe('DebugModal', () => {
     expect(html).toContain('Debug Info')
     expect(html).toContain('No server debug_info stored')
     expect(html).toContain('Close')
+  })
+
+  it('renders asset diagnostics mode without the message debug empty-state copy', () => {
+    const html = renderToStaticMarkup(
+      <DebugModal isOpen debugInfo={null} message={null} mode="assets" onClose={vi.fn()} />,
+    )
+
+    expect(html).toContain('Asset Diagnostics')
+    expect(html).toContain('No message selected for unresolved asset checks')
+    expect(html).not.toContain('No server debug_info stored')
+  })
+})
+
+describe('ChatComposer', () => {
+  it('renders the send action disabled for blank input', () => {
+    const html = renderToStaticMarkup(
+      <ChatComposer
+        composerRef={{ current: null }}
+        input="   "
+        isLoading={false}
+        onInputChange={vi.fn()}
+        onQuickInsert={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('Type a message...')
+    expect(html).toContain('Send message')
+    expect(html).toContain('Insert double quote')
+    expect(html).toContain('Insert apostrophe')
+    expect(html).toContain('Insert asterisk')
+    expect(html).toContain('disabled')
+  })
+
+  it('shows the loading label when a queued send is in progress', () => {
+    const html = renderToStaticMarkup(
+      <ChatComposer
+        composerRef={{ current: null }}
+        input="hello"
+        isLoading
+        onInputChange={vi.fn()}
+        onQuickInsert={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('Sending message')
+    expect(html).toContain('Sending...')
+    expect(html).not.toContain('>Send<')
+  })
+
+  it('submits on Enter for desktop keyboard interactions', () => {
+    expect(
+      shouldSubmitChatComposerOnEnter({
+        key: 'Enter',
+        shiftKey: false,
+        isComposing: false,
+        mobileViewport: false,
+      }),
+    ).toBe(true)
+  })
+
+  it('keeps Enter as a newline on mobile viewports', () => {
+    expect(
+      shouldSubmitChatComposerOnEnter({
+        key: 'Enter',
+        shiftKey: false,
+        isComposing: false,
+        mobileViewport: true,
+      }),
+    ).toBe(false)
   })
 })

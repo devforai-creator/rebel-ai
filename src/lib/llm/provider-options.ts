@@ -76,7 +76,7 @@ export function buildAnthropicCacheControl(
  * family-wide value.
  */
 export const ANTHROPIC_CACHE_MIN_TOKENS: Record<string, number> = {
-  opus: 4096, // Opus 4.5/4.6
+  opus: 4096, // Opus 4.5/4.6/4.7
   opusLegacy: 1024, // Opus 4/4.1/3
   sonnet: 1024, // Sonnet 4/4.5/3.7/3.5
   haiku: 4096, // Haiku 4.5
@@ -97,7 +97,11 @@ export function getAnthropicMinCacheTokens(modelName: string): number {
   if (normalized.includes('sonnet')) {
     return ANTHROPIC_CACHE_MIN_TOKENS.sonnet
   }
-  if (normalized.includes('opus-4-5') || normalized.includes('opus-4-6')) {
+  if (
+    normalized.includes('opus-4-5') ||
+    normalized.includes('opus-4-6') ||
+    normalized.includes('opus-4-7')
+  ) {
     return ANTHROPIC_CACHE_MIN_TOKENS.opus
   }
   if (normalized.includes('opus')) {

@@ -21,6 +21,14 @@ const ragSettingsFormSchema = z.object({
   voyage_key_id: optionalTrimmedStringSchema,
 })
 
+const chatUsageSettingsFormSchema = z.object({
+  enable_chat_usage_stats: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((value) => value === 'true'),
+})
+
 const summaryModelPreferenceFormSchema = z.object({
   summary_key_id: optionalTrimmedStringSchema,
 })
@@ -66,6 +74,11 @@ export async function updateSummaryPrompts(
 }
 
 export type RagSettingsState = {
+  error: string | null
+  success: boolean
+}
+
+export type ChatUsageSettingsState = {
   error: string | null
   success: boolean
 }
@@ -126,6 +139,47 @@ export async function updateRagSettings(
       voyage_embedding_api_key_id: selectedKeyId,
     },
     logLabel: '[Account] Failed to update RAG settings:',
+  })
+
+  if (error) {
+    return { error: 'An error occurred while saving settings.', success: false }
+  }
+
+  revalidateAccountSettingsPage()
+  return { error: null, success: true }
+}
+
+export async function updateChatUsageSettings(
+  _prevState: ChatUsageSettingsState,
+  formData: FormData,
+): Promise<ChatUsageSettingsState> {
+  const context = await createAuthenticatedAccountContext({
+    error: 'Login required.',
+    success: false,
+  })
+
+  if ('error' in context) {
+    return context
+  }
+
+  const { supabase, userId } = context
+  const parsedForm = parseAccountFormData(
+    formData,
+    chatUsageSettingsFormSchema,
+    'Please check your usage panel settings input.',
+  )
+
+  if ('error' in parsedForm) {
+    return parsedForm
+  }
+
+  const error = await updateProfileForUser({
+    supabase,
+    userId,
+    updates: {
+      enable_chat_usage_stats: parsedForm.data.enable_chat_usage_stats,
+    },
+    logLabel: '[Account] Failed to update chat usage settings:',
   })
 
   if (error) {

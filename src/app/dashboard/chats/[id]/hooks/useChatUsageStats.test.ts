@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment jsdom
 
-import { parseLatestMessageTokenStats, parseLatestUsageStatsResponse } from './useChatUsageStats'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import {
+  parseLatestMessageTokenStats,
+  parseLatestUsageStatsResponse,
+  useChatUsageStats,
+} from './useChatUsageStats'
 
 describe('parseLatestMessageTokenStats', () => {
   it('parses valid latest-message usage payloads', () => {
@@ -81,5 +88,117 @@ describe('parseLatestUsageStatsResponse', () => {
   it('returns null for invalid stats responses', () => {
     expect(parseLatestUsageStatsResponse(null)).toBeNull()
     expect(parseLatestUsageStatsResponse({ latestMessage: 'bad' })).toBeNull()
+  })
+})
+
+describe('useChatUsageStats', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('does not fetch on mount when the usage panel is disabled', () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderHook(() =>
+      useChatUsageStats({
+        chatId: 'chat-1',
+        initialUsageStats: null,
+        enabled: false,
+        active: false,
+      }),
+    )
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('does not fetch on mount when the panel is enabled but collapsed', () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderHook(() =>
+      useChatUsageStats({
+        chatId: 'chat-1',
+        initialUsageStats: null,
+        enabled: true,
+        active: false,
+      }),
+    )
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('fetches only after the panel becomes active', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        latestMessage: {
+          id: 'message-1',
+          costUsd: 0.12,
+        },
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result, rerender } = renderHook(
+      ({ enabled, active }) =>
+        useChatUsageStats({
+          chatId: 'chat-1',
+          initialUsageStats: null,
+          enabled,
+          active,
+        }),
+      {
+        initialProps: {
+          enabled: true,
+          active: false,
+        },
+      },
+    )
+
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    rerender({ enabled: true, active: true })
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    await waitFor(() => {
+      expect(result.current.latestUsage).toMatchObject({
+        id: 'message-1',
+        costUsd: 0.12,
+      })
+    })
+  })
+
+  it('skips manual refreshes and realtime updates while the panel is collapsed', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() =>
+      useChatUsageStats({
+        chatId: 'chat-1',
+        initialUsageStats: null,
+        enabled: true,
+        active: false,
+      }),
+    )
+
+    await act(async () => {
+      await result.current.fetchLatestUsage()
+    })
+
+    act(() => {
+      result.current.handleUsageRealtime({
+        eventType: 'INSERT',
+        old: null,
+        new: {
+          role: 'assistant',
+        },
+      })
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

@@ -9,7 +9,7 @@
  * - No 4-tier fuzzy asset matching
  * - No regex script sanitization (scripts excluded from spec)
  *
- * See docs/rbx-spec.md for the full specification.
+ * See docs/rbx-spec.md for the repository entrypoint and implementation references.
  */
 
 import type { RbxParseResult, RbxImportResult } from '@/types/rbx.types'

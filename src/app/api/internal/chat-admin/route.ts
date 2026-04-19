@@ -1,5 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  createApiErrorResponse,
+  parseJsonRequest,
+  requireBearerToken,
+} from '@/lib/http/api-contract'
 import type { Database } from '@/types/database.types'
 import { z } from 'zod'
 
@@ -52,23 +56,23 @@ const chatAdminRequestSchema: z.ZodType<ChatAdminRequest> = z.discriminatedUnion
 
 export const runtime = 'nodejs'
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   const adminSecret = process.env.CHAT_ADMIN_SECRET
 
   if (!adminSecret) {
     console.error('[Chat Admin API] CHAT_ADMIN_SECRET is not configured')
-    return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 })
   }
 
-  const authHeader = req.headers.get('authorization')
-  if (!authHeader || authHeader !== `Bearer ${adminSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = requireBearerToken(req, adminSecret, {
+    missingSecretMessage: 'Server misconfiguration',
+  })
+  if (!auth.success) {
+    return auth.response
   }
 
-  const parsed = chatAdminRequestSchema.safeParse(await req.json().catch(() => null))
-
+  const parsed = await parseJsonRequest(req, chatAdminRequestSchema)
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    return parsed.response
   }
 
   const body = parsed.data
@@ -87,10 +91,10 @@ export async function POST(req: NextRequest) {
         console.error('[Chat Admin API] check_anon_rate_limit failed', {
           code: result.error.code ?? null,
         })
-        return NextResponse.json({ error: 'check_anon_rate_limit failed' }, { status: 500 })
+        return createApiErrorResponse('check_anon_rate_limit failed', 500)
       }
 
-      return NextResponse.json({ data: result.data ?? null })
+      return Response.json({ data: result.data ?? null })
     }
     case 'checkUserRateLimit': {
       // Validate that requester matches target_user_id to prevent spoofing
@@ -99,7 +103,7 @@ export async function POST(req: NextRequest) {
           requester: body.requester,
           targetUserId: body.args.target_user_id,
         })
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        return createApiErrorResponse('Forbidden', 403)
       }
 
       // Type assertion needed due to Supabase generic RPC typing limitations
@@ -112,10 +116,10 @@ export async function POST(req: NextRequest) {
         console.error('[Chat Admin API] check_chat_rate_limit failed', {
           code: result.error.code ?? null,
         })
-        return NextResponse.json({ error: 'check_chat_rate_limit failed' }, { status: 500 })
+        return createApiErrorResponse('check_chat_rate_limit failed', 500)
       }
 
-      return NextResponse.json({ data: result.data ?? null })
+      return Response.json({ data: result.data ?? null })
     }
     case 'decryptSecret': {
       // Validate that requester matches the secret owner
@@ -124,7 +128,7 @@ export async function POST(req: NextRequest) {
           requester: body.requester,
           secretRequester: body.args.requester,
         })
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        return createApiErrorResponse('Forbidden', 403)
       }
 
       // Type assertion needed due to Supabase generic RPC typing limitations
@@ -137,12 +141,12 @@ export async function POST(req: NextRequest) {
         console.error('[Chat Admin API] get_decrypted_secret failed', {
           code: result.error?.code ?? null,
         })
-        return NextResponse.json({ error: 'get_decrypted_secret failed' }, { status: 500 })
+        return createApiErrorResponse('get_decrypted_secret failed', 500)
       }
 
-      return NextResponse.json({ data: result.data })
+      return Response.json({ data: result.data })
     }
     default:
-      return NextResponse.json({ error: 'Unsupported action' }, { status: 400 })
+      return createApiErrorResponse('Unsupported action', 400)
   }
 }

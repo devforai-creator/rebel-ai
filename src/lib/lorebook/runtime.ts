@@ -1,6 +1,6 @@
 import { renderLorebook } from '@/lib/lorebook-renderer'
 import type { SanitizedMessage, ServerSupabaseClient } from '@/lib/chat-summaries/types'
-import type { LorebookEntry } from '@/types/risuai.types'
+import type { LorebookEntry } from '@/types/lorebook.types'
 import {
   computeLorebookEntryFingerprint,
   getLorebookOverrideKeyV2,
@@ -42,6 +42,15 @@ type BuildLorebookDynamicContextOptions = {
   chatId: string
   characterId: string
   chatHistory: SanitizedMessage[]
+  onMetrics?: (metrics: LorebookDynamicContextMetrics) => void
+}
+
+export type LorebookDynamicContextMetrics = {
+  moduleCount: number
+  entryCount: number
+  overrideCount: number
+  hasContext: boolean
+  contextCharCount: number
 }
 
 export async function loadChatLorebookState({
@@ -166,11 +175,31 @@ export function renderActiveLorebookBlock({
   return `=== Active Lorebook Entries ===\n${sections.join('\n\n')}`
 }
 
+export function lorebookNeedsChatHistory({
+  entries,
+  overrideMap,
+}: {
+  entries: LorebookRuntimeEntry[]
+  overrideMap: Map<string, boolean>
+}): boolean {
+  return entries
+    .filter((entry) => getLorebookOverrideMode(entry, overrideMap) !== 'disabled')
+    .map((entry) =>
+      getLorebookOverrideMode(entry, overrideMap) === 'pinned'
+        ? { ...entry, alwaysActive: true }
+        : entry,
+    )
+    .some(
+      (entry) => !entry.alwaysActive && typeof entry.key === 'string' && entry.key.trim() !== '',
+    )
+}
+
 export async function buildLorebookDynamicContext({
   supabase,
   chatId,
   characterId,
   chatHistory,
+  onMetrics,
 }: BuildLorebookDynamicContextOptions): Promise<string | null> {
   const { entries, overrideMap } = await loadChatLorebookState({
     supabase,
@@ -178,11 +207,21 @@ export async function buildLorebookDynamicContext({
     characterId,
   })
 
-  return renderActiveLorebookBlock({
+  const context = renderActiveLorebookBlock({
     entries,
     overrideMap,
     chatHistory,
   })
+
+  onMetrics?.({
+    moduleCount: new Set(entries.map((entry) => entry.moduleId)).size,
+    entryCount: entries.length,
+    overrideCount: overrideMap.size,
+    hasContext: context !== null,
+    contextCharCount: context?.length ?? 0,
+  })
+
+  return context
 }
 
 function extractLorebookEntries(characterModules: CharacterModuleRow[]): LorebookRuntimeEntry[] {

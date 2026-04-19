@@ -83,9 +83,8 @@ describe('chunk-summarizer', () => {
       tokenCount: 12,
       finishReason: 'stop',
     })
-    expect(generateTextMock).toHaveBeenCalledWith(
-      expect.objectContaining({ maxTokens: 123, temperature: 1 }),
-    )
+    expect(generateTextMock).toHaveBeenCalledWith(expect.objectContaining({ maxTokens: 123 }))
+    expect(generateTextMock.mock.calls[0][0]).not.toHaveProperty('temperature')
   })
 
   it('falls back to local summary when LLM fails', async () => {
@@ -231,6 +230,7 @@ describe('chunk-summarizer', () => {
       end_seq: CHUNK_SIZE,
       summary: 'chunk summary',
     })
+    expect(generateTextMock.mock.calls[0][0]).not.toHaveProperty('temperature')
   })
 
   it('throws when chunk size is incomplete', async () => {

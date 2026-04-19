@@ -5,7 +5,7 @@ import { ArrowLeft, BookOpen, Folder, Search, SlidersHorizontal, X } from 'lucid
 import Button from '@/app/dashboard/components/Button'
 import EmptyState from '@/app/dashboard/components/EmptyState'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
-import type { LorebookEntry } from '@/types/risuai.types'
+import type { LorebookEntry } from '@/types/lorebook.types'
 import type {
   GroupedLorebookEntries,
   LorebookFilter,

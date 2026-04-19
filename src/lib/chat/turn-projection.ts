@@ -3,9 +3,11 @@ import { readMaybeSingleQuery, readRowsQuery } from '@/lib/supabase/query'
 import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from './message-status'
 import {
   buildProjectedConversationMessages,
-  countTurnConversationMessages,
+  countTurnsWithActiveAssistantMessage,
+  countTurnsWithUserMessage,
   getLowerSequenceBound,
   getTurnMessageIds,
+  loadLatestActiveAssistantMessageId,
   loadProjectedMessagesByIds,
   loadStandaloneSystemMessages,
   loadTurnsForChat,
@@ -18,16 +20,26 @@ import type {
   TurnClient,
 } from './turn-types'
 
+export type GenerationTranscriptMetrics = {
+  targetTurnIndex: number
+  turnCount: number
+  fetchedMessageCount: number
+  transcriptMessageCount: number
+  excludedAssistant: boolean
+}
+
 export async function loadGenerationTranscript({
   supabase,
   chatId,
   turnId,
   excludeAssistantForTurnId = null,
+  onMetrics,
 }: {
   supabase: TurnClient
   chatId: string
   turnId: string
   excludeAssistantForTurnId?: string | null
+  onMetrics?: (metrics: GenerationTranscriptMetrics) => void
 }): Promise<SanitizedMessage[]> {
   const targetTurn = await supabase
     .from('chat_turns')
@@ -65,6 +77,13 @@ export async function loadGenerationTranscript({
   })
 
   if (messageIds.length === 0) {
+    onMetrics?.({
+      targetTurnIndex: targetTurn.data.turn_index,
+      turnCount: turns.length,
+      fetchedMessageCount: 0,
+      transcriptMessageCount: 0,
+      excludedAssistant: excludeAssistantForTurnId !== null,
+    })
     return []
   }
 
@@ -106,6 +125,14 @@ export async function loadGenerationTranscript({
       }
     }
   }
+
+  onMetrics?.({
+    targetTurnIndex: targetTurn.data.turn_index,
+    turnCount: turns.length,
+    fetchedMessageCount: messagesResult.data?.length ?? 0,
+    transcriptMessageCount: transcript.length,
+    excludedAssistant: excludeAssistantForTurnId !== null,
+  })
 
   return transcript
 }
@@ -258,6 +285,49 @@ export async function loadProjectedConversationMessages({
   })
 }
 
+export async function loadProjectedConversationTail({
+  supabase,
+  chatId,
+  limitMessages,
+  excludeAssistantForTurnId = null,
+}: {
+  supabase: TurnClient
+  chatId: string
+  limitMessages: number
+  excludeAssistantForTurnId?: string | null
+}): Promise<ProjectedConversationMessage[]> {
+  if (limitMessages < 1) {
+    return []
+  }
+
+  const turns = await loadTurnsForChat({
+    supabase,
+    chatId,
+    ascending: false,
+    limit: limitMessages,
+  })
+
+  const orderedTurns = turns.slice().sort((a, b) => a.turn_index - b.turn_index)
+  const messageMap = await loadProjectedMessagesByIds({
+    supabase,
+    messageIds: orderedTurns.flatMap((turn) => getTurnMessageIds(turn)),
+  })
+
+  const projectedMessages = buildProjectedConversationMessages({
+    turns: orderedTurns.map((turn) =>
+      turn.id === excludeAssistantForTurnId
+        ? {
+            ...turn,
+            active_assistant_message_id: null,
+          }
+        : turn,
+    ),
+    messageMap,
+  })
+
+  return projectedMessages.slice(-limitMessages)
+}
+
 export async function loadProjectedConversationRange({
   supabase,
   chatId,
@@ -293,6 +363,45 @@ export async function loadLatestProjectedMessage({
   return messages[messages.length - 1] ?? null
 }
 
+export async function loadLatestProjectedConversationMessage({
+  supabase,
+  chatId,
+}: {
+  supabase: TurnClient
+  chatId: string
+}): Promise<ProjectedTurnMessage | null> {
+  const latestTurnResult = await readMaybeSingleQuery<PersistedTurnRow>(
+    supabase
+      .from('chat_turns')
+      .select('id, turn_index, user_message_id, active_assistant_message_id')
+      .eq('chat_id', chatId)
+      .order('turn_index', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  )
+
+  if (latestTurnResult.error && latestTurnResult.error.code !== 'PGRST116') {
+    throw new Error(`Failed to load latest chat turn: ${latestTurnResult.error.message}`)
+  }
+
+  const latestTurn = latestTurnResult.data
+  if (!latestTurn) {
+    return null
+  }
+
+  const preferredMessageId = latestTurn.active_assistant_message_id ?? latestTurn.user_message_id
+  if (!preferredMessageId) {
+    return null
+  }
+
+  const messageMap = await loadProjectedMessagesByIds({
+    supabase,
+    messageIds: [preferredMessageId],
+  })
+
+  return messageMap.get(preferredMessageId) ?? null
+}
+
 export async function loadLatestProjectedAssistantMessage({
   supabase,
   chatId,
@@ -300,14 +409,10 @@ export async function loadLatestProjectedAssistantMessage({
   supabase: TurnClient
   chatId: string
 }): Promise<ProjectedTurnMessage | null> {
-  const turns = await loadTurnsForChat({
+  const latestAssistantId = await loadLatestActiveAssistantMessageId({
     supabase,
     chatId,
-    ascending: false,
   })
-
-  const latestAssistantId =
-    turns.find((turn) => !!turn.active_assistant_message_id)?.active_assistant_message_id ?? null
 
   if (!latestAssistantId) {
     return null
@@ -328,32 +433,38 @@ export async function countProjectedChatMessages({
   supabase: TurnClient
   chatId: string
 }): Promise<number> {
-  const [turns, systemCountResult] = await Promise.all([
-    countTurnConversationMessages({
-      supabase,
-      chatId,
-    }).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error)
-      throw new Error(`Failed to count projected chat turns: ${message}`)
-    }),
-    supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('chat_id', chatId)
-      .eq('role', 'system')
-      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-      .neq('message_status', MESSAGE_STATUS_GENERATING),
-  ])
+  let userMessageCount: number
+  let activeAssistantCount: number
+  let systemCountResult: { count: number | null; error: { message: string } | null }
+
+  try {
+    ;[userMessageCount, activeAssistantCount, systemCountResult] = await Promise.all([
+      countTurnsWithUserMessage({
+        supabase,
+        chatId,
+      }),
+      countTurnsWithActiveAssistantMessage({
+        supabase,
+        chatId,
+      }),
+      supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('chat_id', chatId)
+        .eq('role', 'system')
+        .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+        .neq('message_status', MESSAGE_STATUS_GENERATING),
+    ])
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to count projected chat messages: ${message}`)
+  }
 
   if (systemCountResult.error) {
     throw new Error(`Failed to count projected system messages: ${systemCountResult.error.message}`)
   }
 
-  const turnMessageCount = turns.reduce((count, turn) => {
-    return count + (turn.user_message_id ? 1 : 0) + (turn.active_assistant_message_id ? 1 : 0)
-  }, 0)
-
-  return turnMessageCount + (systemCountResult.count ?? 0)
+  return userMessageCount + activeAssistantCount + (systemCountResult.count ?? 0)
 }
 
 export async function countProjectedConversationMessages({
@@ -363,15 +474,24 @@ export async function countProjectedConversationMessages({
   supabase: TurnClient
   chatId: string
 }): Promise<number> {
-  const turns = await countTurnConversationMessages({
-    supabase,
-    chatId,
-  }).catch((error: unknown) => {
+  let userMessageCount: number
+  let activeAssistantCount: number
+
+  try {
+    ;[userMessageCount, activeAssistantCount] = await Promise.all([
+      countTurnsWithUserMessage({
+        supabase,
+        chatId,
+      }),
+      countTurnsWithActiveAssistantMessage({
+        supabase,
+        chatId,
+      }),
+    ])
+  } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`Failed to count projected conversation messages: ${message}`)
-  })
+  }
 
-  return turns.reduce((count, turn) => {
-    return count + (turn.user_message_id ? 1 : 0) + (turn.active_assistant_message_id ? 1 : 0)
-  }, 0)
+  return userMessageCount + activeAssistantCount
 }

@@ -86,6 +86,29 @@ describe('triggerMessageTranslation', () => {
     )
   })
 
+  it('does not throw when resolving the internal origin fails', () => {
+    process.env.CHAT_ADMIN_SECRET = 'test-secret'
+    hoistedMocks.resolveOriginMock.mockImplementation(() => {
+      throw new Error('invalid internal origin')
+    })
+
+    expect(() => {
+      triggerMessageTranslation('msg-1', 'user-1')
+    }).not.toThrow()
+
+    expect(hoistedMocks.fetchMock).not.toHaveBeenCalled()
+    expect(getMessageTranslationTriggerStats()).toMatchObject({
+      totalFailures: 1,
+      consecutiveFailures: 1,
+      lastErrorMessage: 'invalid internal origin',
+      lastMetadata: {
+        messageId: 'msg-1',
+        userId: 'user-1',
+        stage: 'schedule',
+      },
+    })
+  })
+
   it('does not throw when fetch fails (fire-and-forget)', async () => {
     process.env.CHAT_ADMIN_SECRET = 'test-secret'
     hoistedMocks.fetchMock.mockRejectedValue(new Error('network down'))

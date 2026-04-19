@@ -20,6 +20,10 @@ function buildVaultSecretName(userId: string, provider: Provider): string {
   return `apikey_${userId}_${timestampSegment}_${provider}`
 }
 
+function buildApiKeyCleanupReference(): string {
+  return `api-key-cleanup-${Date.now().toString(36)}`
+}
+
 const apiKeyFormSchema = z.object({
   provider: z.string().refine((value) => PROVIDERS.includes(value as Provider), {
     message: 'Provider를 선택해주세요.',
@@ -48,15 +52,24 @@ const apiKeyFormSchema = z.object({
     .transform((value) => value?.trim().toLowerCase()),
 })
 
-function parseApiKeyFormData(
-  formData: FormData,
-): { data: z.infer<typeof apiKeyFormSchema> } | { error: string; success: false } {
+function parseApiKeyFormData(formData: FormData):
+  | { data: z.infer<typeof apiKeyFormSchema> }
+  | {
+      error: string
+      success: false
+      warning: null
+      rollbackFailed: false
+      cleanupReference: null
+    } {
   const parsed = safeParseFormData(formData, apiKeyFormSchema)
 
   if (!parsed.success) {
     return {
       error: getApiKeyFormErrorMessage(parsed.error),
       success: false,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
     } satisfies ApiKeyFormState
   }
 
@@ -66,6 +79,9 @@ function parseApiKeyFormData(
 export type ApiKeyFormState = {
   error: string | null
   success: boolean
+  warning?: string | null
+  rollbackFailed?: boolean
+  cleanupReference?: string | null
 }
 
 export async function createApiKey(
@@ -81,7 +97,13 @@ export async function createApiKey(
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return { error: '로그인이 필요합니다', success: false }
+    return {
+      error: '로그인이 필요합니다',
+      success: false,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
+    }
   }
 
   const parsedForm = parseApiKeyFormData(formData)
@@ -111,6 +133,9 @@ export async function createApiKey(
     return {
       error: `API 키 길이가 너무 깁니다. ${MAX_API_KEY_LENGTH}자 이하로 입력해주세요.`,
       success: false,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
     }
   }
 
@@ -121,11 +146,20 @@ export async function createApiKey(
       return {
         error: `API 키 길이가 너무 깁니다. ${providerRule.maxLength}자 이하로 입력해주세요.`,
         success: false,
+        warning: null,
+        rollbackFailed: false,
+        cleanupReference: null,
       }
     }
 
     if (!providerRule.pattern.test(apiKey)) {
-      return { error: providerRule.description, success: false }
+      return {
+        error: providerRule.description,
+        success: false,
+        warning: null,
+        rollbackFailed: false,
+        cleanupReference: null,
+      }
     }
   }
 
@@ -151,8 +185,11 @@ export async function createApiKey(
     if (normalizedMessage.includes('quota exceeded')) {
       return {
         error:
-          'API 키 등록 한도를 초과했습니다. 사용하지 않는 키를 삭제하거나 비활성화 후 다시 시도해주세요.',
+          'API 키 등록 한도(최대 20개)를 초과했습니다. 사용하지 않는 키를 삭제한 뒤 다시 시도해주세요.',
         success: false,
+        warning: null,
+        rollbackFailed: false,
+        cleanupReference: null,
       }
     }
 
@@ -160,12 +197,18 @@ export async function createApiKey(
       return {
         error: 'API 키 이름 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
         success: false,
+        warning: null,
+        rollbackFailed: false,
+        cleanupReference: null,
       }
     }
 
     return {
       error: 'API 키 암호화 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
       success: false,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
     }
   }
 
@@ -181,19 +224,57 @@ export async function createApiKey(
   })
 
   if (error) {
-    // 실패 시 Vault에서도 삭제
-    await deleteSecret(adminSupabase, {
+    const { error: rollbackError } = await deleteSecret(adminSupabase, {
       secret_name: vaultSecretName,
       requester: user.id,
     })
+
+    if (rollbackError) {
+      const cleanupReference = buildApiKeyCleanupReference()
+      console.error('[API Keys] create_api_key rollback failed', {
+        cleanupReference,
+        userId: user.id,
+        provider,
+        keyName,
+        vaultSecretName,
+        insertCode:
+          error && typeof error === 'object' && 'code' in error
+            ? ((error as { code?: string | null }).code ?? null)
+            : null,
+        insertMessage: error.message,
+        rollbackCode:
+          rollbackError && typeof rollbackError === 'object' && 'code' in rollbackError
+            ? ((rollbackError as { code?: string | null }).code ?? null)
+            : null,
+        rollbackMessage: rollbackError.message,
+      })
+      return {
+        error: 'API 키 등록 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+        success: false,
+        warning:
+          'API 키 등록에 실패했습니다. 다시 시도해주세요. 문제가 계속되면 관리자에게 참조 ID를 전달해주세요.',
+        rollbackFailed: true,
+        cleanupReference,
+      }
+    }
+
     return {
       error: 'API 키 등록 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
       success: false,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
     }
   }
 
   revalidatePath('/dashboard/api-keys')
-  return { success: true, error: null }
+  return {
+    success: true,
+    error: null,
+    warning: null,
+    rollbackFailed: false,
+    cleanupReference: null,
+  }
 }
 
 export async function deleteApiKey(id: string) {

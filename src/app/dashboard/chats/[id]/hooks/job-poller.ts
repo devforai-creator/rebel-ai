@@ -42,6 +42,40 @@ export const DEFAULT_JOB_POLLER_CONFIG: JobPollerConfig = {
   slowProgressThresholdMs: CHAT_JOB_POLLER_LIMITS.slowProgressThresholdMs,
 }
 
+export function resolveAdaptivePollDelay({
+  baseDelayMs,
+  isPageVisible,
+  lastProgressAt,
+  now,
+  hiddenTabMinDelayMs = CHAT_JOB_POLLER_LIMITS.hiddenTabMinDelayMs,
+  recentStreamWindowMs = CHAT_JOB_POLLER_LIMITS.recentStreamWindowMs,
+  recentStreamMinDelayMs = CHAT_JOB_POLLER_LIMITS.recentStreamMinDelayMs,
+}: {
+  baseDelayMs: number
+  isPageVisible: boolean
+  lastProgressAt: number | null
+  now: number
+  hiddenTabMinDelayMs?: number
+  recentStreamWindowMs?: number
+  recentStreamMinDelayMs?: number
+}): number {
+  let delayMs = Math.max(baseDelayMs, 0)
+
+  if (!isPageVisible) {
+    delayMs = Math.max(delayMs, hiddenTabMinDelayMs)
+  }
+
+  if (
+    typeof lastProgressAt === 'number' &&
+    Number.isFinite(lastProgressAt) &&
+    now - lastProgressAt <= recentStreamWindowMs
+  ) {
+    delayMs = Math.max(delayMs, recentStreamMinDelayMs)
+  }
+
+  return delayMs
+}
+
 export type JobPollerResult =
   | { outcome: 'success' }
   | { outcome: 'error'; error: Error }

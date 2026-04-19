@@ -27,5 +27,7 @@ RebelAI can import `.rbx` packages directly, but someone still needs to author t
 ## Notes
 
 - The bundled skill metadata has been sanitized for public distribution and does not include local filesystem paths.
-- The skill bundle includes a working RBX reference for the model, but the canonical project spec remains [`docs/rbx-spec.md`](./rbx-spec.md).
+- The skill bundle includes the maintained working RBX reference used for model-assisted
+  authoring. [`docs/rbx-spec.md`](./rbx-spec.md) stays as a lightweight repository entrypoint that
+  points to the active code surfaces.
 - Optional Safe UGC UI validation is not bundled in the skill package. If you want separate validator-level checks, run them from your own Safe UGC UI toolchain.

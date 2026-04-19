@@ -30,8 +30,11 @@ export const CHAT_RATE_LIMITS = {
 
 export const CHAT_JOB_POLLER_LIMITS = {
   timeoutMs: 10 * 60 * 1000,
-  initialDelayMs: 800,
-  maxDelayMs: 5000,
-  backoffMultiplier: 1.5,
+  initialDelayMs: 2000,
+  maxDelayMs: 8000,
+  backoffMultiplier: 1.8,
   slowProgressThresholdMs: 30_000,
+  recentStreamWindowMs: 3000,
+  recentStreamMinDelayMs: 4000,
+  hiddenTabMinDelayMs: 10_000,
 } as const

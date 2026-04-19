@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LatestMessageTokenStats, MessageChangePayload } from '../utils'
 import { shouldRefreshTokenStats } from '../utils'
 
@@ -46,13 +46,34 @@ export function parseLatestUsageStatsResponse(value: unknown): LatestMessageToke
 export function useChatUsageStats({
   chatId,
   initialUsageStats,
+  enabled,
+  active,
 }: {
   chatId: string
   initialUsageStats: LatestMessageTokenStats | null
+  enabled: boolean
+  active: boolean
 }) {
   const [latestUsage, setLatestUsage] = useState<LatestMessageTokenStats | null>(initialUsageStats)
+  const [isLoading, setIsLoading] = useState(false)
+  const enabledRef = useRef(enabled)
+  const activeRef = useRef(active)
+
+  useEffect(() => {
+    enabledRef.current = enabled
+  }, [enabled])
+
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
 
   const fetchLatestUsage = useCallback(async () => {
+    if (!enabledRef.current || !activeRef.current) {
+      return
+    }
+
+    setIsLoading(true)
+
     try {
       const response = await fetch(`/api/chats/${chatId}/stats`, { cache: 'no-store' })
       if (!response.ok) {
@@ -62,16 +83,20 @@ export function useChatUsageStats({
       setLatestUsage(parseLatestUsageStatsResponse(await response.json()))
     } catch (error) {
       console.error('Failed to load chat usage stats', error)
+    } finally {
+      setIsLoading(false)
     }
   }, [chatId])
 
   useEffect(() => {
-    setLatestUsage(initialUsageStats)
-  }, [initialUsageStats])
+    setLatestUsage(enabled ? initialUsageStats : null)
+  }, [enabled, initialUsageStats])
 
   useEffect(() => {
-    void fetchLatestUsage()
-  }, [fetchLatestUsage])
+    if (enabled && active) {
+      void fetchLatestUsage()
+    }
+  }, [active, enabled, fetchLatestUsage])
 
   const handleUsageRealtime = useCallback(
     (payload: MessageChangePayload) => {
@@ -84,6 +109,7 @@ export function useChatUsageStats({
 
   return {
     latestUsage,
+    isLoading,
     fetchLatestUsage,
     handleUsageRealtime,
   }

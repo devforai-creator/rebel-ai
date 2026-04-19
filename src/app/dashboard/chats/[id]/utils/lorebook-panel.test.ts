@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { LorebookEntry } from '@/types/risuai.types'
+import type { LorebookEntry } from '@/types/lorebook.types'
 import {
   filteredListFromGrouped,
   formatKeywordPreview,

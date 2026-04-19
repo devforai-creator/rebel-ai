@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { MESSAGE_STATUS_COMPLETED } from '@/lib/chat/message-status'
 import { createSupabaseMock } from '@/tests/mocks/supabase'
 
 const createClientMock = vi.fn()
@@ -24,10 +25,15 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePathMock(...args),
 }))
 
-vi.mock('@/lib/chat/turns', () => ({
-  buildTurnGraphForMessages: (...args: unknown[]) =>
-    hoistedMocks.buildTurnGraphForMessagesMock(...args),
-}))
+vi.mock('@/lib/chat/turns', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/chat/turns')>('@/lib/chat/turns')
+
+  return {
+    ...actual,
+    buildTurnGraphForMessages: (...args: unknown[]) =>
+      hoistedMocks.buildTurnGraphForMessagesMock(...args),
+  }
+})
 
 vi.mock('@/lib/chat/risu-converter', () => ({
   fromRisuFormat: (...args: unknown[]) => hoistedMocks.fromRisuFormatMock(...args),
@@ -39,12 +45,14 @@ function buildSupabase({
   user,
   chats,
   characters,
+  personas,
   turns,
   messages,
 }: {
   user: { id: string } | null
   chats?: Array<Record<string, unknown>>
   characters?: Array<Record<string, unknown>>
+  personas?: Array<Record<string, unknown>>
   turns?: Array<Record<string, unknown>>
   messages?: Array<Record<string, unknown>>
 }) {
@@ -60,6 +68,10 @@ function buildSupabase({
       },
       characters: {
         rows: characters ?? [],
+        primaryKeys: ['id'],
+      },
+      personas: {
+        rows: personas ?? [],
         primaryKeys: ['id'],
       },
       chat_turns: {
@@ -102,20 +114,29 @@ function buildSupabase({
             ownerId = ownerMatch?.[1] ?? null
             return builder
           },
-          async single() {
+          async maybeSingle() {
             const rows = (supabase.state.characters as Array<Record<string, unknown>>).filter(
-              (row) => row.id === characterId && (row.user_id === ownerId || row.user_id === null),
+              (row) =>
+                row.id === characterId &&
+                (ownerId === null || row.user_id === ownerId || row.user_id === null),
             )
             const character = rows[0] ?? null
 
             return {
-              data: character
+              data: character ?? null,
+              error: character ? null : { code: 'PGRST116', message: 'No rows found' },
+            }
+          },
+          async single() {
+            const result = await builder.maybeSingle()
+            return {
+              data: result.data
                 ? {
-                    id: character.id,
-                    name: character.name,
+                    id: result.data.id,
+                    name: result.data.name,
                   }
                 : null,
-              error: character ? null : { code: 'PGRST116', message: 'No rows found' },
+              error: result.error,
             }
           },
         }
@@ -150,6 +171,131 @@ describe('dashboard chats actions', () => {
     hoistedMocks.fromRisuFormatMock.mockReset()
     hoistedMocks.getMessageCountMock.mockReset()
     hoistedMocks.parseRisuChatJsonMock.mockReset()
+  })
+
+  it('returns a login error when creating a chat without a session', async () => {
+    createClientMock.mockResolvedValue(buildSupabase({ user: null }))
+    const { createChat } = await import('./actions')
+
+    await expect(
+      createChat({
+        characterId: 'char-1',
+        personaId: null,
+        greetingIndex: 0,
+      }),
+    ).resolves.toEqual({ error: '로그인이 필요합니다' })
+  })
+
+  it('creates a chat and starter greeting on the server for a valid persona', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      characters: [
+        {
+          id: 'char-1',
+          user_id: 'user-1',
+          name: 'Guide',
+          greeting_message: '안녕, {{user}}',
+          metadata: null,
+          archived_at: null,
+        },
+      ],
+      personas: [
+        {
+          id: 'persona-1',
+          user_id: 'user-1',
+          name: '승엽',
+        },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { createChat } = await import('./actions')
+
+    await expect(
+      createChat({
+        characterId: 'char-1',
+        personaId: 'persona-1',
+        greetingIndex: 0,
+      }),
+    ).resolves.toEqual({ chatId: 'chat-1' })
+
+    expect(getChatRows(supabase)).toEqual([
+      {
+        id: 'chat-1',
+        user_id: 'user-1',
+        character_id: 'char-1',
+        persona_id: 'persona-1',
+        title: 'Guide와의 대화',
+      },
+    ])
+    expect(getTurnRows(supabase)).toHaveLength(1)
+    expect(getMessageRows(supabase)).toEqual([
+      expect.objectContaining({
+        chat_id: 'chat-1',
+        user_id: 'user-1',
+        role: 'assistant',
+        content: '안녕, 승엽',
+        message_status: MESSAGE_STATUS_COMPLETED,
+      }),
+    ])
+    expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/characters/char-1')
+  })
+
+  it('creates a chat without inserting a greeting when the no-greeting option is selected', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      characters: [
+        {
+          id: 'char-1',
+          user_id: null,
+          name: 'Starter',
+          greeting_message: 'Hello there',
+          metadata: null,
+          archived_at: null,
+        },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { createChat } = await import('./actions')
+
+    await expect(
+      createChat({
+        characterId: 'char-1',
+        personaId: null,
+        greetingIndex: 1,
+      }),
+    ).resolves.toEqual({ chatId: 'chat-1' })
+
+    expect(getChatRows(supabase)).toHaveLength(1)
+    expect(getTurnRows(supabase)).toEqual([])
+    expect(getMessageRows(supabase)).toEqual([])
+  })
+
+  it('returns an error when creating a chat for an unavailable character', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      characters: [
+        {
+          id: 'char-1',
+          user_id: 'user-2',
+          name: 'Hidden',
+          greeting_message: null,
+          metadata: null,
+          archived_at: null,
+        },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { createChat } = await import('./actions')
+
+    await expect(
+      createChat({
+        characterId: 'char-1',
+        personaId: null,
+        greetingIndex: 0,
+      }),
+    ).resolves.toEqual({ error: '캐릭터를 찾을 수 없습니다' })
+
+    expect(getChatRows(supabase)).toEqual([])
   })
 
   it('returns login required when deleting a chat without a session', async () => {

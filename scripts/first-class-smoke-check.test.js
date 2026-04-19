@@ -77,19 +77,21 @@ describe('first-class-smoke-check', () => {
     })
 
     expect(passive.map((check) => check.key)).toEqual([
+      'signup-closed',
       'health',
       'triage',
       'storage-janitor-dry-run-dispatch',
     ])
     expect(active.map((check) => check.key)).toEqual([
+      'signup-closed',
       'health',
       'triage',
       'storage-janitor-dry-run-dispatch',
       'chat-runner',
       'character-import-runner',
     ])
-    expect(passive[2].url.toString()).toContain('/api/internal/storage-janitor?')
-    expect(passive[2].url.searchParams.get('dryRun')).toBe('1')
+    expect(passive[3].url.toString()).toContain('/api/internal/storage-janitor?')
+    expect(passive[3].url.searchParams.get('dryRun')).toBe('1')
   })
 
   it('marks degraded health and triage as warnings and preserves janitor dispatch success', async () => {
@@ -100,6 +102,7 @@ describe('first-class-smoke-check', () => {
     })
 
     const responseBodies = [
+      '<html><body>Sign-up Closed</body></html>',
       {
         status: 'degraded',
         healthSource: 'durable',
@@ -146,12 +149,40 @@ describe('first-class-smoke-check', () => {
       timeoutMs: DEFAULT_TIMEOUT_MS,
     })
 
-    expect(results.map((result) => result.status)).toEqual(['warn', 'warn', 'pass'])
+    expect(results.map((result) => result.status)).toEqual(['pass', 'warn', 'warn', 'pass'])
     expect(summarizeResults(results)).toEqual({
       ok: false,
       hasFailures: false,
       hasWarnings: true,
     })
+  })
+
+  it('fails when the signup page no longer exposes the closed-signup notice', async () => {
+    const checks = createCheckDefinitions({
+      origin: 'https://example.com',
+      adminSecret: 'secret',
+      activeRunners: false,
+    })
+
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => '<html><body>Open registration</body></html>',
+    })
+
+    const results = await runSmokeChecks({
+      checks: [checks[0]],
+      fetchImpl,
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+    })
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        key: 'signup-closed',
+        status: 'fail',
+        summary: 'signup page no longer advertises the closed-signup contract',
+      }),
+    ])
   })
 
   it('marks thrown fetch errors as failures', async () => {

@@ -300,6 +300,7 @@ describe('translateMessageForUser', () => {
     expect(result).toEqual({ status: 'success', content: 'translated text' })
     expect(getDefaultModelForProviderMock).toHaveBeenCalledWith('google', { lightweight: true })
     expect(generateTextMock).toHaveBeenCalledTimes(1)
+    expect(generateTextMock.mock.calls[0][0]).not.toHaveProperty('temperature')
 
     const messages = state.messages as Array<Record<string, unknown>>
     expect(messages[0].content_en).toBe('translated text')
@@ -327,6 +328,7 @@ describe('translateMessageForUser', () => {
       apiKey: 'sk-test',
       serviceTier: 'standard',
     })
+    expect(generateTextMock.mock.calls[0][0]).not.toHaveProperty('temperature')
   })
 
   it('uses anthropic provider when configured', async () => {
@@ -356,6 +358,7 @@ describe('translateMessageForUser', () => {
 
     expect(result).toMatchObject({ status: 'success' })
     expect(createAnthropicProviderMock).toHaveBeenCalledWith({ apiKey: 'sk-test' })
+    expect(generateTextMock.mock.calls[0][0]).not.toHaveProperty('temperature')
   })
 
   it('uses deepseek provider when configured', async () => {

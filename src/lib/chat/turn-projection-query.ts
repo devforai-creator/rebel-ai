@@ -1,5 +1,4 @@
-import type { ChatTurn } from '@/types/database.types'
-import { readRowsQuery } from '@/lib/supabase/query'
+import { readMaybeSingleQuery, readRowsQuery } from '@/lib/supabase/query'
 import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from './message-status'
 import type {
   PersistedTurnRow,
@@ -132,18 +131,24 @@ export async function loadTurnsForChat({
   supabase,
   chatId,
   ascending,
+  limit,
 }: {
   supabase: TurnClient
   chatId: string
   ascending: boolean
+  limit?: number
 }): Promise<PersistedTurnRow[]> {
-  const turnsResult = await readRowsQuery<PersistedTurnRow>(
-    supabase
-      .from('chat_turns')
-      .select('id, turn_index, user_message_id, active_assistant_message_id')
-      .eq('chat_id', chatId)
-      .order('turn_index', { ascending }),
-  )
+  let turnsQuery = supabase
+    .from('chat_turns')
+    .select('id, turn_index, user_message_id, active_assistant_message_id')
+    .eq('chat_id', chatId)
+    .order('turn_index', { ascending })
+
+  if (typeof limit === 'number') {
+    turnsQuery = turnsQuery.limit(limit)
+  }
+
+  const turnsResult = await readRowsQuery<PersistedTurnRow>(turnsQuery)
 
   if (turnsResult.error) {
     throw new Error(`Failed to load chat turns: ${turnsResult.error.message}`)
@@ -152,25 +157,79 @@ export async function loadTurnsForChat({
   return turnsResult.data ?? []
 }
 
-export async function countTurnConversationMessages({
+async function countTurnsWithMessageField({
+  supabase,
+  chatId,
+  field,
+}: {
+  supabase: TurnClient
+  chatId: string
+  field: 'user_message_id' | 'active_assistant_message_id'
+}): Promise<number> {
+  const { count, error } = await supabase
+    .from('chat_turns')
+    .select('id', { count: 'exact', head: true })
+    .eq('chat_id', chatId)
+    .not(field, 'is', null)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return count ?? 0
+}
+
+export async function countTurnsWithUserMessage({
   supabase,
   chatId,
 }: {
   supabase: TurnClient
   chatId: string
-}): Promise<Array<Pick<ChatTurn, 'user_message_id' | 'active_assistant_message_id'>>> {
-  const turnsResult = await readRowsQuery<
-    Pick<ChatTurn, 'user_message_id' | 'active_assistant_message_id'>
-  >(
+}): Promise<number> {
+  return countTurnsWithMessageField({
+    supabase,
+    chatId,
+    field: 'user_message_id',
+  })
+}
+
+export async function countTurnsWithActiveAssistantMessage({
+  supabase,
+  chatId,
+}: {
+  supabase: TurnClient
+  chatId: string
+}): Promise<number> {
+  return countTurnsWithMessageField({
+    supabase,
+    chatId,
+    field: 'active_assistant_message_id',
+  })
+}
+
+export async function loadLatestActiveAssistantMessageId({
+  supabase,
+  chatId,
+}: {
+  supabase: TurnClient
+  chatId: string
+}): Promise<string | null> {
+  const latestAssistantTurnResult = await readMaybeSingleQuery<{
+    active_assistant_message_id: string | null
+  }>(
     supabase
       .from('chat_turns')
-      .select('user_message_id, active_assistant_message_id')
-      .eq('chat_id', chatId),
+      .select('active_assistant_message_id')
+      .eq('chat_id', chatId)
+      .not('active_assistant_message_id', 'is', null)
+      .order('turn_index', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   )
 
-  if (turnsResult.error) {
-    throw new Error(turnsResult.error.message)
+  if (latestAssistantTurnResult.error && latestAssistantTurnResult.error.code !== 'PGRST116') {
+    throw new Error(latestAssistantTurnResult.error.message)
   }
 
-  return turnsResult.data ?? []
+  return latestAssistantTurnResult.data?.active_assistant_message_id ?? null
 }

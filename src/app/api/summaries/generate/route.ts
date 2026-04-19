@@ -1,11 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hasMemoryUpdateWork, updateMemoryState } from '@/lib/chat-memory'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
 import { getDecryptedSecret } from '@/lib/supabase/rpc'
 import type { ApiServiceTier, Database } from '@/types/database.types'
 import { buildLanguageModel } from '@/lib/llm/model-factory'
-import { createApiErrorResponse, parseJsonRequest } from '@/lib/http/api-contract'
+import {
+  createApiErrorResponse,
+  createUnexpectedRouteErrorResponse,
+  parseJsonRequest,
+  requireBearerToken,
+} from '@/lib/http/api-contract'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
@@ -45,25 +50,22 @@ type GenerateSummariesRequest = z.output<typeof generateSummariesRequestSchema>
 export async function POST(request: NextRequest) {
   try {
     // 1. Verify authorization
-    const authHeader = request.headers.get('authorization')
     const summarySecret = process.env.SUMMARY_GENERATION_SECRET
 
     if (!summarySecret) {
       console.error('[Summaries API] SUMMARY_GENERATION_SECRET not configured')
-      return createApiErrorResponse('Server misconfigured', 500, {
-        headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
-        },
-      })
     }
 
-    if (authHeader !== `Bearer ${summarySecret}`) {
-      console.error('[Summaries API] Invalid authorization')
-      return createApiErrorResponse('Unauthorized', 401, {
-        headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
-        },
-      })
+    const auth = requireBearerToken(request, summarySecret, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    })
+    if (!auth.success) {
+      if (summarySecret) {
+        console.error('[Summaries API] Invalid authorization')
+      }
+      return auth.response
     }
 
     // 2. Parse request body
@@ -109,14 +111,14 @@ export async function POST(request: NextRequest) {
 
     if (chatError || !chat) {
       console.error('[Summaries API] Chat not found:', chatError?.message)
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
+      return createApiErrorResponse('Chat not found', 404)
     }
 
     if (chat.user_id !== userId) {
       console.error(
         `[Summaries API] Ownership violation: user ${userId} attempted to access chat ${chatId} owned by ${chat.user_id}`,
       )
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      return createApiErrorResponse('Forbidden', 403)
     }
 
     const modelConfig = normalizeChatModelConfig(chat.model_config)
@@ -128,7 +130,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!hasWork) {
-      return NextResponse.json({
+      return Response.json({
         success: true,
         skipped: true,
         message: 'No summary generation work pending',
@@ -154,7 +156,7 @@ export async function POST(request: NextRequest) {
 
     if (apiKeyError || !apiKeyRow) {
       console.error('[Summaries API] API key lookup failed:', apiKeyError?.message)
-      return NextResponse.json({ error: 'API key not found' }, { status: 404 })
+      return createApiErrorResponse('API key not found', 404)
     }
 
     if (apiKeyRow.user_id !== userId || !apiKeyRow.is_active) {
@@ -164,12 +166,12 @@ export async function POST(request: NextRequest) {
         owner: apiKeyRow.user_id,
         isActive: apiKeyRow.is_active,
       })
-      return NextResponse.json({ error: 'API key not available' }, { status: 403 })
+      return createApiErrorResponse('API key not available', 403)
     }
 
     if (!apiKeyRow.vault_secret_name) {
       console.error('[Summaries API] API key missing vault secret reference', { apiKeyId })
-      return NextResponse.json({ error: 'API key misconfigured' }, { status: 500 })
+      return createApiErrorResponse('API key misconfigured', 500)
     }
 
     const decryptArgs: Database['public']['Functions']['get_decrypted_secret']['Args'] = {
@@ -187,7 +189,7 @@ export async function POST(request: NextRequest) {
         apiKeyId,
         error: decryptError?.message,
       })
-      return NextResponse.json({ error: 'Failed to decrypt API key' }, { status: 500 })
+      return createApiErrorResponse('Failed to decrypt API key', 500)
     }
 
     const resolvedProvider = provider === apiKeyRow.provider ? provider : apiKeyRow.provider
@@ -201,7 +203,7 @@ export async function POST(request: NextRequest) {
     const resolvedModelName = modelName || apiKeyRow.model_preference || ''
 
     if (!resolvedModelName) {
-      return NextResponse.json({ error: 'Model name missing' }, { status: 400 })
+      return createApiErrorResponse('Model name missing', 400)
     }
 
     // 5. Create model
@@ -215,7 +217,7 @@ export async function POST(request: NextRequest) {
       })
     } catch (error) {
       if (error instanceof Error && error.message.startsWith('Unsupported provider:')) {
-        return NextResponse.json({ error: error.message }, { status: 400 })
+        return createApiErrorResponse(error.message, 400)
       }
       throw error
     }
@@ -239,10 +241,9 @@ export async function POST(request: NextRequest) {
       return createApiErrorResponse('Summary generation failed', 500)
     }
 
-    return NextResponse.json({ success: true, message: 'Summary generation completed' })
+    return Response.json({ success: true, message: 'Summary generation completed' })
   } catch (error) {
-    console.error('[Summaries API] Unexpected error:', error)
-    return createApiErrorResponse('Internal server error', 500)
+    return createUnexpectedRouteErrorResponse('[Summaries API] Unexpected error:', error)
   }
 }
 

@@ -6,6 +6,7 @@ export { AssistantAvatar } from './AssistantAvatar'
 export { TypingIndicator } from './TypingIndicator'
 
 export { TokenStatsPanel } from './TokenStatsPanel'
+export { ChatComposer } from './ChatComposer'
 
 export { DebugModal } from './DebugModal'
 

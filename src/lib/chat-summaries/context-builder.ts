@@ -1,12 +1,14 @@
 import type { ChatSummary } from '@/types/database.types'
-import { generateFactEmbedding } from '@/lib/embeddings'
+import { generateFactEmbedding, type FactEmbeddingProfileSettings } from '@/lib/embeddings'
 import type {
   SummaryRow,
   FactRow,
   BuildContextOptions,
   BuildContextResult,
   SearchRelevantFactsOptions,
+  SearchRelevantFactsResult,
   RagResultInfo,
+  RagDiagnosticsInfo,
 } from './types'
 import {
   CONTEXT_WINDOW,
@@ -24,6 +26,32 @@ function logRagDebug(...args: unknown[]): void {
   if (RAG_DEBUG_ENABLED) {
     console.debug(...args)
   }
+}
+
+function roundMetricDuration(durationMs: number): number {
+  return Math.max(0, Math.round(durationMs))
+}
+
+async function loadRagCandidateFactCount({
+  supabase,
+  chatId,
+  userId,
+}: Pick<SearchRelevantFactsOptions, 'supabase' | 'chatId' | 'userId'>): Promise<number | null> {
+  const { count, error } = await supabase
+    .from('chat_facts')
+    .select('id', { count: 'exact', head: true })
+    .eq('chat_id', chatId)
+    .eq('user_id', userId)
+    .not('embedding', 'is', null)
+
+  if (error) {
+    logRagDebug('[RAG] Candidate fact count query failed', {
+      error: error.message,
+    })
+    return null
+  }
+
+  return count ?? 0
 }
 
 /**
@@ -77,7 +105,21 @@ export async function searchRelevantFacts({
   userId,
   recentMessages,
   topK = RAG_TOP_K,
-}: SearchRelevantFactsOptions): Promise<FactRow[]> {
+  profileSettings,
+}: SearchRelevantFactsOptions): Promise<SearchRelevantFactsResult> {
+  const diagnostics: RagDiagnosticsInfo = {
+    recentMessagesCount: recentMessages.length,
+    queryMessagesCount: 0,
+    queryTextChars: 0,
+    embeddingMs: null,
+    matchRpcMs: null,
+    totalRetrievalMs: null,
+    candidateFactCount: null,
+    resultCount: 0,
+    usedResultCount: 0,
+    skippedReason: null,
+  }
+
   logRagDebug('[RAG] searchRelevantFacts called', {
     chatId,
     userId,
@@ -87,28 +129,54 @@ export async function searchRelevantFacts({
 
   if (recentMessages.length === 0) {
     logRagDebug('[RAG] No recent messages, returning empty')
-    return []
+    diagnostics.skippedReason = 'no_recent_messages'
+    return {
+      facts: [],
+      diagnostics,
+    }
   }
 
   const queryMessages = recentMessages.slice(-RAG_QUERY_MESSAGES)
   const queryText = queryMessages.map((msg) => `${msg.role}: ${msg.content}`).join('\n')
+  diagnostics.queryMessagesCount = queryMessages.length
+  diagnostics.queryTextChars = queryText.length
+
+  if (RAG_DEBUG_ENABLED) {
+    diagnostics.candidateFactCount = await loadRagCandidateFactCount({
+      supabase,
+      chatId,
+      userId,
+    })
+  }
+
+  const retrievalStart = performance.now()
 
   logRagDebug('[RAG] Generating query embedding', {
     queryTextLength: queryText.length,
     queryMessagesCount: queryMessages.length,
   })
 
-  const queryEmbedding = await generateFactEmbedding(queryText, userId, supabase)
+  const embeddingStart = performance.now()
+  const queryEmbedding = await generateFactEmbedding(queryText, userId, supabase, {
+    profileSettings,
+  })
+  diagnostics.embeddingMs = roundMetricDuration(performance.now() - embeddingStart)
 
   if (!queryEmbedding) {
     logRagDebug('[RAG] Query embedding generation failed (returned null)')
-    return []
+    diagnostics.totalRetrievalMs = roundMetricDuration(performance.now() - retrievalStart)
+    diagnostics.skippedReason = 'embedding_unavailable'
+    return {
+      facts: [],
+      diagnostics,
+    }
   }
 
   logRagDebug('[RAG] Query embedding generated successfully', {
     embeddingLength: queryEmbedding.length,
   })
 
+  const rpcStart = performance.now()
   const { data, error } = await supabase.rpc('match_chat_facts', {
     chat_id: chatId,
     target_user_id: userId,
@@ -116,6 +184,7 @@ export async function searchRelevantFacts({
     match_threshold: RAG_SIMILARITY_THRESHOLD,
     match_count: topK,
   })
+  diagnostics.matchRpcMs = roundMetricDuration(performance.now() - rpcStart)
 
   if (error) {
     console.error('[RAG] match_chat_facts RPC failed:', {
@@ -123,20 +192,33 @@ export async function searchRelevantFacts({
       code: error.code,
       details: error.details,
     })
-    return []
+    diagnostics.totalRetrievalMs = roundMetricDuration(performance.now() - retrievalStart)
+    diagnostics.skippedReason = 'rpc_error'
+    return {
+      facts: [],
+      diagnostics,
+    }
   }
 
   const results = (data ?? []) as FactRow[]
+  diagnostics.resultCount = results.length
+  diagnostics.usedResultCount = results.length
+  diagnostics.totalRetrievalMs = roundMetricDuration(performance.now() - retrievalStart)
+  diagnostics.skippedReason = results.length > 0 ? null : 'no_matches'
 
   logRagDebug('[RAG] match_chat_facts RPC succeeded', {
     resultsCount: results.length,
+    diagnostics,
     similarities: results.map((r) => ({
       seq: `${r.start_seq}-${r.end_seq}`,
       similarity: r.similarity?.toFixed(3),
     })),
   })
 
-  return results
+  return {
+    facts: results,
+    diagnostics,
+  }
 }
 
 /**
@@ -146,11 +228,12 @@ export async function buildContext({
   supabase,
   chatId,
   sanitizedMessages,
+  totalConversationMessages,
   baseSystemPrompt,
   extraDynamicContext,
 }: BuildContextOptions): Promise<BuildContextResult> {
   const trimmedMessages = sanitizedMessages.slice(-CONTEXT_WINDOW)
-  const totalIncludingCurrent = sanitizedMessages.length
+  const totalIncludingCurrent = totalConversationMessages ?? sanitizedMessages.length
 
   // Initialize RAG info (disabled by default)
   const ragInfo: RagResultInfo = {
@@ -158,6 +241,7 @@ export async function buildContext({
     threshold: RAG_SIMILARITY_THRESHOLD,
     topK: RAG_TOP_K,
     results: [],
+    diagnostics: {},
   }
 
   const extraDynamicParts = (extraDynamicContext ?? []).filter(
@@ -227,12 +311,18 @@ export async function buildContext({
     filteredSummaries.length > 0 ? formatSummarySegments(filteredSummaries) : []
 
   // Load episodic memory (chat_facts) - fallback to existing behavior
+  const fallbackFactsQueryStart = performance.now()
   const { data: fallbackFacts, error: factsError } = await supabase
     .from('chat_facts')
     .select<'start_seq, end_seq, facts'>('start_seq, end_seq, facts')
     .eq('chat_id', chatId)
     .lte('end_seq', summaryCutoff)
     .order('start_seq', { ascending: true })
+  ragInfo.diagnostics = {
+    ...ragInfo.diagnostics,
+    fallbackFactsQueryMs: roundMetricDuration(performance.now() - fallbackFactsQueryStart),
+    fallbackFactsLoadedCount: (fallbackFacts ?? []).length,
+  }
 
   if (factsError) {
     console.error('Failed to load chat facts:', factsError.message)
@@ -254,9 +344,9 @@ export async function buildContext({
   if (chatOwner?.user_id) {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('enable_episodic_rag')
+      .select('enable_episodic_rag, voyage_embedding_api_key_id')
       .eq('id', chatOwner.user_id)
-      .single()
+      .single<FactEmbeddingProfileSettings>()
 
     if (profileError) {
       console.error('Failed to load profile RAG flag:', profileError.message)
@@ -264,12 +354,17 @@ export async function buildContext({
 
     if (profile?.enable_episodic_rag) {
       ragInfo.enabled = true
-      const ragFacts = await searchRelevantFacts({
+      const { facts: ragFacts, diagnostics } = await searchRelevantFacts({
         supabase,
         chatId,
         userId: chatOwner.user_id,
         recentMessages: trimmedMessages,
+        profileSettings: profile,
       })
+      ragInfo.diagnostics = {
+        ...ragInfo.diagnostics,
+        ...diagnostics,
+      }
 
       // Store RAG results for debug_info
       ragInfo.results = ragFacts.map((r) => ({

@@ -2,7 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkUserRateLimit } from '@/lib/chat/rate-limiter'
 import { translateMessageForUser, type TranslationResult } from '@/lib/chat/translation-service'
-import { createApiErrorResponse, parseJsonRequest } from '@/lib/http/api-contract'
+import {
+  createApiErrorResponse,
+  parseJsonRequest,
+  requireAuthenticatedUser,
+} from '@/lib/http/api-contract'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
@@ -14,13 +18,11 @@ const translateRequestSchema = z.object({
 
 export async function POST(request: Request) {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return createApiErrorResponse('Unauthorized', 401)
+  const auth = await requireAuthenticatedUser(supabase)
+  if (!auth.success) {
+    return auth.response
   }
+  const { user } = auth
 
   // Rate limiting
   const { allowed, retryAfter } = await checkUserRateLimit(user.id)

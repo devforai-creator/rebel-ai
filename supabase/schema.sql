@@ -6177,3 +6177,444 @@ where id in ('character-assets', 'module-assets');
 drop policy if exists "Public read access" on storage.objects;
 drop policy if exists "Module assets: public read access" on storage.objects;
 
+
+
+-- >>> 74_atomic_chat_job_claim.sql
+
+-- Atomically claim the next pending chat generation job for the runner.
+
+create index if not exists chat_generation_jobs_pending_created_idx
+  on public.chat_generation_jobs (created_at)
+  where status = 'pending';
+
+create or replace function public.claim_pending_chat_job()
+returns table (
+  id uuid,
+  payload jsonb
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if auth.role() is distinct from 'service_role' then
+    raise exception 'Not authorized'
+      using errcode = '42501';
+  end if;
+
+  return query
+  with next_job as (
+    select job.id
+    from public.chat_generation_jobs job
+    where job.status = 'pending'
+    order by job.created_at asc
+    for update skip locked
+    limit 1
+  ),
+  claimed as (
+    update public.chat_generation_jobs job
+    set status = 'processing',
+        lifecycle_stage = 'runner_claimed',
+        failure_stage = null,
+        error = null
+    from next_job
+    where job.id = next_job.id
+    returning job.id, job.payload
+  )
+  select claimed.id, claimed.payload
+  from claimed;
+end;
+$$;
+
+revoke all on function public.claim_pending_chat_job() from public, anon, authenticated;
+grant execute on function public.claim_pending_chat_job() to service_role;
+
+
+
+-- >>> 75_list_current_user_modules.sql
+
+-- Return lightweight module summaries for the current authenticated user.
+-- This avoids loading large lorebook/regex/assets arrays just to compute counts.
+
+create or replace function public.list_current_user_modules()
+returns table (
+  id uuid,
+  name text,
+  description text,
+  source_file text,
+  hide_icon boolean,
+  created_at timestamptz,
+  updated_at timestamptz,
+  lorebook_count integer,
+  regex_count integer,
+  asset_count integer
+)
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select
+    module.id,
+    module.name,
+    module.description,
+    module.source_file,
+    coalesce(module.hide_icon, false) as hide_icon,
+    module.created_at,
+    module.updated_at,
+    coalesce(array_length(module.lorebook, 1), 0)::integer as lorebook_count,
+    coalesce(array_length(module.regex, 1), 0)::integer as regex_count,
+    coalesce(array_length(module.assets, 1), 0)::integer as asset_count
+  from public.modules module
+  where module.user_id = auth.uid()
+  order by module.created_at desc;
+$$;
+
+revoke all on function public.list_current_user_modules() from public, anon;
+grant execute on function public.list_current_user_modules() to authenticated, service_role;
+
+
+
+-- >>> 76_enable_chat_usage_stats.sql
+
+alter table public.profiles
+  add column if not exists enable_chat_usage_stats boolean not null default false;
+
+comment on column public.profiles.enable_chat_usage_stats is
+  'Show optional token, cache, and cost usage details in chat UI. Disabled by default to avoid extra background requests.';
+
+
+
+-- >>> 77_retain_latest_assistant_debug_info.sql
+
+-- Keep server-side debug_info only on the newest assistant message per chat.
+-- Older assistant messages can still be displayed, but they no longer retain
+-- heavyweight server diagnostics once a newer assistant reply exists.
+
+with ranked_assistant_messages as (
+  select
+    message.id,
+    row_number() over (
+      partition by message.chat_id
+      order by message.sequence desc nulls last, message.created_at desc, message.id desc
+    ) as recency_rank
+  from public.messages as message
+  where message.role = 'assistant'
+    and message.debug_info is not null
+)
+update public.messages as message
+set debug_info = null
+from ranked_assistant_messages as ranked
+where message.id = ranked.id
+  and ranked.recency_rank > 1
+  and message.debug_info is not null;
+
+
+
+-- >>> 78_drop_redundant_asset_storage_path_indexes.sql
+
+-- character_assets.storage_path and module_assets.storage_path already have
+-- unique constraints backed by btree indexes. The extra non-unique indexes on
+-- the same column duplicate storage and write-maintenance cost without adding
+-- a different access path.
+
+drop index if exists public.idx_character_assets_storage_path;
+drop index if exists public.idx_module_assets_storage_path;
+
+
+
+-- >>> 79_drop_unused_character_asset_name_indexes.sql
+
+-- character_assets name matching currently happens after loading the asset list
+-- into application memory. These historical name indexes have shown no usage
+-- in the current observation window and duplicate write/storage overhead.
+
+drop index if exists public.idx_character_assets_display_name;
+drop index if exists public.idx_character_assets_canonical_name;
+
+
+
+-- >>> 81_fallback_match_chat_facts_to_full_scan.sql
+
+-- Keep the recent-candidate fast path, but fall back to the full chat scan
+-- when the recent window produces no matches above threshold.
+
+create or replace function public.match_chat_facts(
+  chat_id uuid,
+  target_user_id uuid,
+  query_embedding vector(1024),
+  match_threshold float,
+  match_count int
+)
+returns table (
+  start_seq int,
+  end_seq int,
+  facts text,
+  similarity float
+)
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  requester uuid := auth.uid();
+  effective_user uuid := target_user_id;
+  candidate_limit integer := greatest(match_count * 100, 1000);
+  recent_match_count bigint := 0;
+begin
+  if requester is not null then
+    if effective_user is null then
+      effective_user := requester;
+    elsif effective_user <> requester then
+      raise exception 'Forbidden'
+        using errcode = '42501';
+    end if;
+  end if;
+
+  if effective_user is null then
+    raise exception 'Forbidden'
+      using errcode = '42501';
+  end if;
+
+  if not exists (
+    select 1
+    from public.chats c
+    where c.id = match_chat_facts.chat_id
+      and c.user_id = effective_user
+  ) then
+    raise exception 'Forbidden'
+      using errcode = '42501';
+  end if;
+
+  return query
+  with recent_candidates as (
+    select
+      cf.start_seq,
+      cf.end_seq,
+      cf.facts,
+      cf.embedding
+    from public.chat_facts cf
+    where
+      cf.chat_id = match_chat_facts.chat_id
+      and cf.user_id = effective_user
+      and cf.embedding is not null
+    order by cf.start_seq desc
+    limit candidate_limit
+  )
+  select
+    recent_candidates.start_seq,
+    recent_candidates.end_seq,
+    recent_candidates.facts,
+    1 - (recent_candidates.embedding <=> query_embedding) as similarity
+  from recent_candidates
+  where 1 - (recent_candidates.embedding <=> query_embedding) > match_threshold
+  order by recent_candidates.embedding <=> query_embedding
+  limit match_count;
+
+  get diagnostics recent_match_count = row_count;
+  if recent_match_count > 0 then
+    return;
+  end if;
+
+  return query
+  select
+    cf.start_seq,
+    cf.end_seq,
+    cf.facts,
+    1 - (cf.embedding <=> query_embedding) as similarity
+  from public.chat_facts cf
+  where
+    cf.chat_id = match_chat_facts.chat_id
+    and cf.user_id = effective_user
+    and cf.embedding is not null
+    and 1 - (cf.embedding <=> query_embedding) > match_threshold
+  order by cf.embedding <=> query_embedding
+  limit match_count;
+end;
+$$;
+
+
+
+-- >>> 82_update_character_with_modules.sql
+
+-- Update a character and replace its module links inside one transaction.
+-- This prevents partial relink failures from clearing the existing link set.
+
+create or replace function public.update_character_with_modules(
+  p_character_id uuid,
+  p_name text,
+  p_description text,
+  p_system_prompt text,
+  p_greeting_message text,
+  p_module_ids uuid[] default '{}'::uuid[],
+  p_requester uuid default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  caller_uid uuid := auth.uid();
+  caller_role text := auth.role();
+  effective_requester uuid := coalesce(p_requester, caller_uid);
+  normalized_module_ids uuid[] := '{}'::uuid[];
+  requested_module_count integer := 0;
+  owned_module_count integer := 0;
+begin
+  if effective_requester is null then
+    raise exception 'Not authorized'
+      using errcode = '42501';
+  end if;
+
+  if caller_role <> 'service_role' and effective_requester <> caller_uid then
+    raise exception 'Not authorized'
+      using errcode = '42501';
+  end if;
+
+  perform 1
+  from public.characters
+  where id = p_character_id
+    and user_id = effective_requester
+  for update;
+
+  if not found then
+    raise exception 'Character not found'
+      using errcode = 'P0002';
+  end if;
+
+  with requested_modules as (
+    select requested.module_id, min(requested.ordinality) as first_position
+    from unnest(coalesce(p_module_ids, '{}'::uuid[])) with ordinality as requested(module_id, ordinality)
+    where requested.module_id is not null
+    group by requested.module_id
+  )
+  select coalesce(array_agg(module_id order by first_position), '{}'::uuid[]),
+         count(*)::integer
+    into normalized_module_ids, requested_module_count
+  from requested_modules;
+
+  if requested_module_count > 0 then
+    select count(*)::integer
+      into owned_module_count
+    from public.modules
+    where user_id = effective_requester
+      and id = any(normalized_module_ids);
+
+    if owned_module_count <> requested_module_count then
+      raise exception 'Selected modules not found or not owned by requester'
+        using errcode = '42501';
+    end if;
+  end if;
+
+  update public.characters
+  set name = p_name,
+      description = p_description,
+      system_prompt = p_system_prompt,
+      greeting_message = p_greeting_message
+  where id = p_character_id
+    and user_id = effective_requester;
+
+  delete from public.character_modules
+  where character_id = p_character_id;
+
+  insert into public.character_modules (character_id, module_id, enabled, priority)
+  select p_character_id,
+         requested.module_id,
+         true,
+         (cardinality(normalized_module_ids) - requested.ordinality + 1)
+  from unnest(normalized_module_ids) with ordinality as requested(module_id, ordinality);
+end;
+$$;
+
+revoke all on function public.update_character_with_modules(uuid, text, text, text, text, uuid[], uuid) from public, anon;
+grant execute on function public.update_character_with_modules(uuid, text, text, text, text, uuid[], uuid) to authenticated, service_role;
+
+
+
+-- >>> 83_raise_api_key_quota.sql
+
+-- Raise the per-user API key quota for Vault-backed key creation.
+
+create or replace function public.create_secret(
+  secret_name text,
+  secret_value text,
+  requester uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  caller_uid uuid := auth.uid();
+  caller_role text := auth.role();
+  effective_requester uuid := coalesce(requester, caller_uid);
+  secret_id uuid;
+  expected_prefix text;
+  suffix text;
+  max_keys constant integer := 20;
+  current_key_count integer;
+begin
+  if effective_requester is null then
+    insert into public.vault_secret_audit (user_id, secret_name, action, details)
+    values (null, coalesce(secret_name, ''), 'attempt_denied', 'unauthenticated create_secret call');
+    raise exception 'Not authorized'
+      using errcode = '42501';
+  end if;
+
+  if caller_role is distinct from 'service_role' and effective_requester <> caller_uid then
+    insert into public.vault_secret_audit (user_id, secret_name, action, details)
+    values (effective_requester, coalesce(secret_name, ''), 'attempt_denied', 'requester mismatch');
+    raise exception 'Not authorized'
+      using errcode = '42501';
+  end if;
+
+  if secret_name is null or length(secret_name) = 0 then
+    insert into public.vault_secret_audit (user_id, secret_name, action, details)
+    values (effective_requester, coalesce(secret_name, ''), 'attempt_denied', 'secret name required');
+    raise exception 'Secret name required'
+      using errcode = '22004';
+  end if;
+
+  expected_prefix := 'apikey_' || effective_requester::text || '_';
+
+  if left(secret_name, length(expected_prefix)) <> expected_prefix then
+    insert into public.vault_secret_audit (user_id, secret_name, action, details)
+    values (effective_requester, secret_name, 'attempt_denied', 'prefix mismatch');
+    raise exception 'Not authorized'
+      using errcode = '42501';
+  end if;
+
+  suffix := substring(secret_name from length(expected_prefix) + 1);
+
+  if suffix !~ '^[a-z0-9_]+$' then
+    insert into public.vault_secret_audit (user_id, secret_name, action, details)
+    values (effective_requester, secret_name, 'attempt_denied', 'invalid suffix format');
+    raise exception 'Invalid secret name format'
+      using errcode = '22023';
+  end if;
+
+  select count(*) into current_key_count
+  from public.api_keys
+  where user_id = effective_requester;
+
+  if current_key_count >= max_keys then
+    insert into public.vault_secret_audit (user_id, secret_name, action, details)
+    values (effective_requester, secret_name, 'attempt_denied', 'api key quota exceeded');
+    raise exception 'API key quota exceeded'
+      using errcode = '54013';
+  end if;
+
+  select vault.create_secret(secret_value, secret_name) into secret_id;
+
+  insert into public.vault_secret_audit (user_id, secret_name, action, details)
+  values (effective_requester, secret_name, 'create', null);
+
+  return secret_id;
+end;
+$$;
+
+revoke all on function public.create_secret(text, text) from public, anon, authenticated, service_role;
+revoke all on function public.create_secret(text, text, uuid) from public, anon, authenticated;
+grant execute on function public.create_secret(text, text, uuid) to service_role;
+

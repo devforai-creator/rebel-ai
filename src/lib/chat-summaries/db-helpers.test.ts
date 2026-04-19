@@ -84,7 +84,9 @@ describe('db-helpers', () => {
       const supabase = {
         from: () => ({
           select: () => ({
-            eq: () => Promise.resolve({ data: null, error: { message: 'Database error' } }),
+            eq: () => ({
+              not: () => Promise.resolve({ data: null, error: { message: 'Database error' } }),
+            }),
           }),
         }),
       }
@@ -152,7 +154,10 @@ describe('db-helpers', () => {
       const supabase = {
         from: () => ({
           select: () => ({
-            eq: () => Promise.resolve({ data: null, error: { message: 'Something went wrong' } }),
+            eq: () => ({
+              not: () =>
+                Promise.resolve({ data: null, error: { message: 'Something went wrong' } }),
+            }),
           }),
         }),
       }

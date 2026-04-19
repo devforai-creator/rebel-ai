@@ -1,4 +1,5 @@
-import { IMPORT_UPLOAD_BUCKET, MAX_IMPORT_UPLOAD_MB } from '@/lib/import/constants'
+import { MAX_IMPORT_UPLOAD_MB } from '@/lib/import/constants'
+import { buildImportUploadPath } from '@/lib/import/upload-path'
 
 export type CharacterImportJobStatus = 'pending' | 'processing' | 'success' | 'error'
 
@@ -39,42 +40,27 @@ type DeleteCharacterParams = {
   deleteCharacterImpl: (id: string) => Promise<DeleteCharacterResult>
 }
 
-type CharacterImportSupabase = {
-  auth: {
-    getUser: () => Promise<{
-      data: { user: { id: string } | null }
-      error?: { message?: string } | null
-    }>
-  }
-  storage: {
-    from: (bucket: string) => {
-      upload: (
-        path: string,
-        file: File,
-        options?: {
-          upsert?: boolean
-          cacheControl?: string
-          contentType?: string
-        },
-      ) => Promise<{
-        data?: { path: string } | null
-        error?: { message?: string } | null
-      }>
-    }
-  }
+type CharacterImportFetchResponse = {
+  ok: boolean
+  json: () => Promise<unknown>
+  text?: () => Promise<string>
 }
 
 type CharacterImportFetch = (
-  input: string,
+  input: string | URL,
   init?: {
     method?: string
-    headers?: Record<string, string>
-    body?: string
+    headers?: HeadersInit
+    body?: BodyInit | null
   },
-) => Promise<{
-  ok: boolean
-  json: () => Promise<{ jobId?: string; status?: CharacterImportJobStatus; error?: string }>
-}>
+) => Promise<CharacterImportFetchResponse>
+
+type CharacterImportUploadContract = {
+  path: string
+  signedUrl: string
+  token: string
+  uploadTicket: string
+}
 
 export const characterImportStatusCopy: Record<CharacterImportJobStatus, string> = {
   pending: 'Job is waiting. Server will process it in order.',
@@ -107,31 +93,28 @@ export function getCharacterImportValidationError(file: UploadableFile | null) {
   return null
 }
 
-export function buildUploadPath(
-  userId: string,
-  file: Pick<UploadableFile, 'name'>,
-  createUniqueSuffix: () => string = () =>
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}`,
-) {
-  const sanitizedName = file.name
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-\.(?=[^.]+$)/, '.')
+export const buildUploadPath = buildImportUploadPath
 
-  const safeName = sanitizedName || 'character.rbx'
-  return `${userId}/imports/${createUniqueSuffix()}-${safeName}`
+export function buildCharacterImportContractRequestBody(file: UploadableFile) {
+  return {
+    action: 'prepare' as const,
+    fileName: file.name,
+    fileType: file.type || null,
+    fileSize: file.size,
+  }
 }
 
-export function buildCharacterImportRequestBody(path: string, file: UploadableFile) {
+export function buildCharacterImportRequestBody(
+  contract: Pick<CharacterImportUploadContract, 'path' | 'uploadTicket'>,
+  file: UploadableFile,
+) {
   return {
-    path,
+    action: 'enqueue' as const,
+    path: contract.path,
     fileName: file.name,
-    fileType: file.type,
+    fileType: file.type || null,
     fileSize: file.size,
+    uploadTicket: contract.uploadTicket,
   }
 }
 
@@ -140,13 +123,69 @@ export function getCharacterImportErrorMessage(error: unknown, prefix = 'Import 
   return `${prefix}: ${message}`
 }
 
+async function readCharacterImportApiError(
+  response: CharacterImportFetchResponse,
+  fallback: string,
+): Promise<string> {
+  try {
+    const body = await response.json()
+    if (body && typeof body === 'object') {
+      if ('error' in body && typeof body.error === 'string') {
+        return body.error
+      }
+      if ('message' in body && typeof body.message === 'string') {
+        return body.message
+      }
+    }
+  } catch {
+    // Ignore and fall through.
+  }
+
+  if (typeof response.text === 'function') {
+    try {
+      const text = await response.text()
+      if (text) {
+        return text
+      }
+    } catch {
+      // Ignore and fall through.
+    }
+  }
+
+  return fallback
+}
+
+async function uploadCharacterImportFile({
+  contract,
+  selectedFile,
+  fetchImpl,
+}: {
+  contract: CharacterImportUploadContract
+  selectedFile: File
+  fetchImpl: CharacterImportFetch
+}) {
+  const formData = new FormData()
+  formData.append('cacheControl', '3600')
+  formData.append('', selectedFile)
+
+  const response = await fetchImpl(contract.signedUrl, {
+    method: 'PUT',
+    headers: {
+      'x-upsert': 'false',
+    },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    throw new Error(await readCharacterImportApiError(response, 'File upload failed'))
+  }
+}
+
 export async function startCharacterImportJob({
   selectedFile,
-  supabase,
   fetchImpl,
 }: {
   selectedFile: File | null
-  supabase: CharacterImportSupabase
   fetchImpl: CharacterImportFetch
 }) {
   const validationError = getCharacterImportValidationError(selectedFile)
@@ -158,37 +197,61 @@ export async function startCharacterImportJob({
   }
 
   try {
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
+    const contractResponse = await fetchImpl('/api/characters/import/storage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(buildCharacterImportContractRequestBody(selectedFile)),
+    })
 
-    if (userError || !user) {
-      throw new Error('Login required')
+    const contractResult =
+      (await contractResponse.json()) as Partial<CharacterImportUploadContract> & {
+        error?: string
+      }
+
+    if (
+      !contractResponse.ok ||
+      !contractResult.path ||
+      !contractResult.signedUrl ||
+      !contractResult.token ||
+      !contractResult.uploadTicket
+    ) {
+      throw new Error(contractResult.error || 'Upload contract request failed')
     }
 
-    const uploadPath = buildUploadPath(user.id, selectedFile)
-    const uploadResult = await supabase.storage
-      .from(IMPORT_UPLOAD_BUCKET)
-      .upload(uploadPath, selectedFile, {
-        upsert: false,
-        cacheControl: '3600',
-        contentType: selectedFile.type || 'application/octet-stream',
-      })
-
-    if (uploadResult.error || !uploadResult.data) {
-      throw new Error(uploadResult.error?.message || 'File upload failed')
-    }
+    await uploadCharacterImportFile({
+      contract: {
+        path: contractResult.path,
+        signedUrl: contractResult.signedUrl,
+        token: contractResult.token,
+        uploadTicket: contractResult.uploadTicket,
+      },
+      selectedFile,
+      fetchImpl,
+    })
 
     const response = await fetchImpl('/api/characters/import/storage', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(buildCharacterImportRequestBody(uploadResult.data.path, selectedFile)),
+      body: JSON.stringify(
+        buildCharacterImportRequestBody(
+          {
+            path: contractResult.path,
+            uploadTicket: contractResult.uploadTicket,
+          },
+          selectedFile,
+        ),
+      ),
     })
 
-    const result = await response.json()
+    const result = (await response.json()) as {
+      jobId?: string
+      status?: CharacterImportJobStatus
+      error?: string
+    }
 
     if (!response.ok || !result?.jobId) {
       throw new Error(result?.error || 'Import job enqueue failed')

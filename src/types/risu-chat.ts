@@ -1,13 +1,12 @@
 /**
- * RisuAI Chat Format Types
+ * Chat JSON compatibility types for the observed Risu-style export shape.
  *
- * Chat format type definitions for bidirectional compatibility with RisuAI
- * - Import: RisuAI JSON -> RebelAI
- * - Export: RebelAI -> RisuAI JSON
+ * These types support legacy import/export portability only.
+ * They are not the native RBX/SUU package contract.
  */
 
 /**
- * Generation info for RisuAI messages
+ * Generation info for compatibility-format messages
  */
 export interface RisuGenerationInfo {
   model: string
@@ -18,7 +17,7 @@ export interface RisuGenerationInfo {
 }
 
 /**
- * Individual RisuAI message
+ * Individual compatibility-format message
  */
 export interface RisuMessage {
   role: 'user' | 'char'
@@ -64,7 +63,7 @@ export interface RebelAIExtension {
 }
 
 /**
- * RisuAI chat data
+ * Compatibility-format chat payload
  */
 export interface RisuChatData {
   message: RisuMessage[]
@@ -77,7 +76,7 @@ export interface RisuChatData {
 }
 
 /**
- * RisuAI chat export format
+ * Compatibility-format chat document
  */
 export interface RisuChat {
   type: 'risuChat'

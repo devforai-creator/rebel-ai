@@ -7,6 +7,7 @@ Current operating contract:
 - Current maintainer-operated first-class profile: Low-Cost Self-Hosted with signup closed
 - Future public-serving default: Managed Production
 - Full self-hosted remains an advanced path you should validate against your own workload before treating it as production-ready
+- Official profiles assume private `character-assets` and `module-assets` buckets with signed or authenticated asset delivery. Anonymous public bucket reads are not an official default.
 
 Use this page to choose the profile that matches your operating contract, not just the cheapest plan combination.
 
@@ -60,7 +61,9 @@ For the current repo operating contract, this should be treated as advanced or e
 ## Notes
 
 - `INTERNAL_API_ORIGIN`, `CHAT_ADMIN_SECRET`, `SUMMARY_GENERATION_SECRET`, and `CRON_SECRET` are required in every deployed profile.
+- Signup is closed in the current repository default. For personal or closed deployments, create the first user from Supabase Dashboard instead of expecting the app to accept open registration.
 - Realtime and storage quotas vary by provider plan. Check the provider docs before advertising a public instance.
+- If you intentionally reopen public signup or public bucket reads later, treat that as an operating-mode change and update the operator docs and smoke checks in the same change.
 - If you change hosting assumptions, test chat generation, background job pickup, summary generation, RBX import, and `GET /api/internal/health` before calling the setup production-ready.
-- For the current first-class low-cost path, use [`FIRST_CLASS_SMOKE_CHECKS.md`](./FIRST_CLASS_SMOKE_CHECKS.md) and `npm run ops:smoke` as the default post-change verification flow.
+- For the current first-class low-cost path, use [`FIRST_CLASS_SMOKE_CHECKS.md`](./FIRST_CLASS_SMOKE_CHECKS.md) and `npm run ops:smoke` as the default post-deploy verification flow. Treat local smoke as rehearsal, not as the final gate for high-risk deployed changes.
 - See [`OPERATING_PLAN.md`](./OPERATING_PLAN.md) for the current first-class mode and the remaining public-opening gates.

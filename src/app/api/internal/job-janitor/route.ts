@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { resetStuckProcessingJobs } from '@/lib/chat/job-queue'
+import { pruneHistoricalChatJobs, resetStuckProcessingJobs } from '@/lib/chat/job-queue'
 import { resetStuckImportProcessingJobs } from '@/lib/import/job-queue'
 
 export const runtime = 'nodejs'
@@ -30,9 +30,10 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = createAdminClient()
-  const [chatRecovered, importRecovered] = await Promise.all([
+  const [chatRecovered, importRecovered, chatPruned] = await Promise.all([
     resetStuckProcessingJobs(supabase),
     resetStuckImportProcessingJobs(supabase),
+    pruneHistoricalChatJobs(supabase),
   ])
 
   return NextResponse.json(
@@ -42,6 +43,9 @@ export async function GET(req: NextRequest) {
       recovered: {
         chatJobs: chatRecovered,
         importJobs: importRecovered,
+      },
+      pruned: {
+        chatJobHistory: chatPruned,
       },
     },
     {

@@ -1,13 +1,9 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { toast } from 'sonner'
 import type { Message } from '@/types/database.types'
 import type { AlternateModelsConfig } from '@/lib/chat/model-config'
-import {
-  CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
-  CHAT_DELIVERY_MODE_STREAMING,
-  type ChatDeliveryMode,
-} from '@/lib/chat/delivery-mode'
+import { CHAT_DELIVERY_MODE_STREAMING, type ChatDeliveryMode } from '@/lib/chat/delivery-mode'
 import type { AssistantStreamBroadcastPayload } from '@/lib/chat/assistant-stream'
 import {
   DisplayMessage,
@@ -17,10 +13,21 @@ import {
   mapMessageToDisplay,
   buildSanitizedMessages,
 } from '../utils'
-import { isVisibleMessageStatus } from '@/lib/chat/message-status'
+import { MESSAGE_STATUS_COMPLETED, isVisibleMessageStatus } from '@/lib/chat/message-status'
 import { resolveAlternateApiKeyId } from '@/lib/chat/alternate-models'
-import { pollJobStatus as pollJobStatusPure, DEFAULT_JOB_POLLER_CONFIG } from './job-poller'
-import { reconcileAssistantMessage } from './reconcile-assistant-message'
+import { pollJobStatus as pollJobStatusPure } from './job-poller'
+import { fetchChatJobStatus, fetchLatestChatMessage, requestQueuedChatJob } from './queued-chat-api'
+import {
+  createStreamingAssistantDraft,
+  getQueuedChatPollerConfig,
+  getQueuedChatSlowProgressMessage,
+  resolveQueuedChatPollSleepDelay,
+  updateStreamingDraftFromEvent,
+} from './queued-chat-runtime'
+import {
+  reconcileAssistantMessage,
+  type AssistantMessageSnapshot,
+} from './reconcile-assistant-message'
 
 export interface UseQueuedChatParams {
   chatId: string
@@ -39,6 +46,11 @@ export interface UseQueuedChatReturn {
   setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>
   streamingDraft: StreamingAssistantDraft | null
   input: string
+  insertInputText: (
+    text: string,
+    selectionStart?: number | null,
+    selectionEnd?: number | null,
+  ) => void
   handleInputChange: (event: ChangeEvent<HTMLTextAreaElement>) => void
   handleSubmit: (event?: FormEvent<HTMLFormElement>) => void
   isLoading: boolean
@@ -68,21 +80,62 @@ export function useQueuedChat({
   const [sending, setSending] = useState(false)
   const [pendingJobId, setPendingJobId] = useState<string | null>(null)
   const pendingJobIdRef = useRef<string | null>(null)
+  const pendingAssistantVisibleRef = useRef(false)
   const pendingRegenerationTargetIdRef = useRef<string | null>(null)
   const lastStreamProgressAtRef = useRef<number | null>(null)
+  const [isPageVisible, setIsPageVisible] = useState(
+    () => typeof document === 'undefined' || !document.hidden,
+  )
   const [streamingDraft, setStreamingDraft] = useState<StreamingAssistantDraft | null>(null)
   const [error, setError] = useState<Error | null>(null)
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return
+    }
+
+    const syncPageVisibility = () => {
+      setIsPageVisible(!document.hidden)
+    }
+
+    document.addEventListener('visibilitychange', syncPageVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', syncPageVisibility)
+    }
+  }, [])
 
   const handleInputChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(event.target.value)
   }, [])
 
+  const insertInputText = useCallback(
+    (text: string, selectionStart?: number | null, selectionEnd?: number | null) => {
+      setInput((previous) => {
+        const resolvedSelectionStart =
+          typeof selectionStart === 'number'
+            ? Math.max(0, Math.min(selectionStart, previous.length))
+            : previous.length
+        const resolvedSelectionEnd =
+          typeof selectionEnd === 'number'
+            ? Math.max(resolvedSelectionStart, Math.min(selectionEnd, previous.length))
+            : resolvedSelectionStart
+
+        return (
+          previous.slice(0, resolvedSelectionStart) + text + previous.slice(resolvedSelectionEnd)
+        )
+      })
+    },
+    [],
+  )
+
   const upsertAssistantMessage = useCallback(
-    (assistantMessage: Message) => {
+    (assistantMessage: AssistantMessageSnapshot) => {
       const debugInfo = assistantMessage.debug_info as DebugInfo | null | undefined
       if (debugInfo) {
         debugInfoMap.current.set(assistantMessage.id, debugInfo)
       }
+
+      const messageStatus = assistantMessage.message_status ?? MESSAGE_STATUS_COMPLETED
 
       setMessages((prev) => {
         const pendingRegenerationTargetId = pendingRegenerationTargetIdRef.current
@@ -92,7 +145,7 @@ export function useQueuedChat({
           pendingRegenerationTargetId,
         })
 
-        if (isVisibleMessageStatus(assistantMessage.message_status)) {
+        if (isVisibleMessageStatus(messageStatus)) {
           persistedMessageIds.current.add(assistantMessage.id)
         }
 
@@ -110,9 +163,10 @@ export function useQueuedChat({
 
       if (
         pendingJobIdRef.current &&
-        isVisibleMessageStatus(assistantMessage.message_status) &&
+        isVisibleMessageStatus(messageStatus) &&
         assistantMessage.id !== pendingRegenerationTargetIdRef.current
       ) {
+        pendingAssistantVisibleRef.current = true
         setStreamingDraft(null)
       }
     },
@@ -121,43 +175,24 @@ export function useQueuedChat({
 
   const startStreamingDraft = useCallback(
     (jobId: string, regenerateAssistantMessageId: string | null) => {
+      pendingAssistantVisibleRef.current = false
       lastStreamProgressAtRef.current = null
-      const isBatchMode = deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
-      setStreamingDraft({
-        id: `stream-${jobId}`,
-        jobId,
-        role: 'assistant',
-        content: isBatchMode
-          ? 'Claude Batch 처리 중입니다. 이 모드는 스트리밍 없이 완료 후 한 번에 표시됩니다.'
-          : '',
-        created_at: new Date().toISOString(),
-        streaming: true,
-        replaceMessageId: regenerateAssistantMessageId,
-        deliveryMode,
-      })
+      setStreamingDraft(
+        createStreamingAssistantDraft(jobId, regenerateAssistantMessageId, deliveryMode),
+      )
     },
     [deliveryMode],
   )
 
   const clearPendingJob = useCallback(() => {
     pendingJobIdRef.current = null
+    pendingAssistantVisibleRef.current = false
     lastStreamProgressAtRef.current = null
     setPendingJobId(null)
   }, [])
 
   const fetchLatestMessage = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/chats/${chatId}/messages/latest`, {
-        cache: 'no-store',
-      })
-      if (!response.ok) {
-        return null
-      }
-      return (await response.json()) as Message & { debug_info?: DebugInfo }
-    } catch (err) {
-      console.error('Failed to fetch latest message:', err)
-      return null
-    }
+    return fetchLatestChatMessage(chatId) as Promise<(Message & { debug_info?: DebugInfo }) | null>
   }, [chatId])
 
   const syncLatestUserMessage = useCallback(async () => {
@@ -200,23 +235,13 @@ export function useQueuedChat({
         jobId,
         {
           fetchJobStatus: async (id) => {
-            try {
-              const response = await fetch(`/api/chat/jobs/${id}`, {
-                cache: 'no-store',
-              })
-              if (!response.ok) {
-                console.warn(`Job status check failed (${response.status}), retrying...`)
-                return null
-              }
-              return await response.json()
-            } catch (err) {
-              console.warn('Job poll network error, retrying...', err)
-              return null
-            }
+            return fetchChatJobStatus(id)
           },
           getLastProgressAt: () => lastStreamProgressAtRef.current,
           onSuccess: async () => {
-            await appendAssistantMessage()
+            if (!pendingAssistantVisibleRef.current) {
+              await appendAssistantMessage()
+            }
             await fetchLatestUsage()
             clearPendingJob()
             setStreamingDraft(null)
@@ -234,50 +259,67 @@ export function useQueuedChat({
             })
           },
           onSlowProgress: (elapsedMs) => {
-            const seconds = Math.round(elapsedMs / 1000)
-            const message =
-              deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
-                ? `Claude Batch is still processing (${seconds}s). It will appear here when finished.`
-                : `Response is taking longer than usual (${seconds}s). Still waiting...`
-            toast.info(message, { duration: 8000 })
+            toast.info(getQueuedChatSlowProgressMessage(deliveryMode, elapsedMs), {
+              duration: 8000,
+            })
           },
           now: () => Date.now(),
-          sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+          sleep: (ms) => {
+            return new Promise((resolve) =>
+              setTimeout(
+                resolve,
+                resolveQueuedChatPollSleepDelay({
+                  baseDelayMs: ms,
+                  deliveryMode,
+                  isPageVisible,
+                  lastProgressAt: lastStreamProgressAtRef.current,
+                  now: Date.now(),
+                }),
+              ),
+            )
+          },
         },
-        deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
-          ? {
-              timeoutMs: 25 * 60 * 60 * 1000,
-              initialDelayMs: 3000,
-              maxDelayMs: 60_000,
-              backoffMultiplier: 1.4,
-              slowProgressThresholdMs: 30_000,
-            }
-          : DEFAULT_JOB_POLLER_CONFIG,
+        getQueuedChatPollerConfig(deliveryMode),
       )
 
       if (result.outcome !== 'success') {
         throw result.error
       }
     },
-    [appendAssistantMessage, clearPendingJob, deliveryMode, fetchLatestUsage],
+    [appendAssistantMessage, clearPendingJob, deliveryMode, fetchLatestUsage, isPageVisible],
   )
 
   const handleRealtimeMessageChange = useCallback(
     (payload: MessageChangePayload) => {
-      const newMessage = (payload.new as Message | null) ?? null
-      const oldMessage = (payload.old as Message | null) ?? null
+      const newMessage = (payload.new as AssistantMessageSnapshot | null) ?? null
+      const oldMessage = (payload.old as AssistantMessageSnapshot | null) ?? null
 
-      if (payload.eventType === 'INSERT' && newMessage && newMessage.role === 'assistant') {
+      if (
+        payload.eventType === 'INSERT' &&
+        newMessage &&
+        newMessage.role === 'assistant' &&
+        typeof newMessage.id === 'string'
+      ) {
         upsertAssistantMessage(newMessage)
         return
       }
 
-      if (payload.eventType === 'UPDATE' && newMessage && newMessage.role === 'assistant') {
+      if (
+        payload.eventType === 'UPDATE' &&
+        newMessage &&
+        newMessage.role === 'assistant' &&
+        typeof newMessage.id === 'string'
+      ) {
         upsertAssistantMessage(newMessage)
         return
       }
 
-      if (payload.eventType === 'DELETE' && oldMessage && oldMessage.role === 'assistant') {
+      if (
+        payload.eventType === 'DELETE' &&
+        oldMessage &&
+        oldMessage.role === 'assistant' &&
+        typeof oldMessage.id === 'string'
+      ) {
         setMessages((prev) => prev.filter((msg) => msg.id !== oldMessage.id))
         persistedMessageIds.current.delete(oldMessage.id)
         debugInfoMap.current.delete(oldMessage.id)
@@ -298,25 +340,7 @@ export function useQueuedChat({
 
     lastStreamProgressAtRef.current = Date.now()
 
-    setStreamingDraft((current) => {
-      if (!current || current.jobId !== payload.jobId) {
-        return {
-          id: `stream-${payload.jobId}`,
-          jobId: payload.jobId,
-          role: 'assistant',
-          content: payload.content,
-          created_at: new Date().toISOString(),
-          streaming: true,
-          replaceMessageId: payload.regenerateAssistantMessageId,
-        }
-      }
-
-      return {
-        ...current,
-        content: payload.content,
-        replaceMessageId: payload.regenerateAssistantMessageId,
-      }
-    })
+    setStreamingDraft((current) => updateStreamingDraftFromEvent(current, payload))
   }, [])
 
   const resolveNextApiKeyId = useCallback(
@@ -355,29 +379,19 @@ export function useQueuedChat({
       setSending(true)
       setError(null)
       try {
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chatId,
-            apiKeyId: resolvedApiKeyId,
-            messages: messagesPayload,
-            deliveryMode,
-            isRegeneration,
-            regenerateAssistantMessageId,
-          }),
+        const data = await requestQueuedChatJob({
+          chatId,
+          apiKeyId: resolvedApiKeyId,
+          messages: messagesPayload,
+          deliveryMode,
+          isRegeneration,
+          regenerateAssistantMessageId,
         })
-
-        if (!response.ok) {
-          const text = await response.text()
-          throw new Error(text || 'Chat request failed.')
-        }
 
         if (!isRegeneration && syncUser) {
           await syncLatestUserMessage()
         }
 
-        const data = (await response.json()) as { jobId: string }
         pendingJobIdRef.current = data.jobId
         setPendingJobId(data.jobId)
         startStreamingDraft(data.jobId, regenerateAssistantMessageId)
@@ -479,6 +493,7 @@ export function useQueuedChat({
     setMessages,
     streamingDraft,
     input,
+    insertInputText,
     handleInputChange,
     handleSubmit,
     isLoading: sending || pendingJobId !== null,

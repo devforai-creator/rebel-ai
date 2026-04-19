@@ -143,6 +143,9 @@ function createAdminSupabase(
 const INITIAL_STATE = {
   error: null,
   success: false,
+  warning: null,
+  rollbackFailed: false,
+  cleanupReference: null,
 }
 
 describe('api key actions', () => {
@@ -168,6 +171,9 @@ describe('api key actions', () => {
     expect(result).toEqual({
       error: '로그인이 필요합니다',
       success: false,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
     })
   })
 
@@ -188,6 +194,9 @@ describe('api key actions', () => {
     expect(result).toEqual({
       error: 'API 키를 입력해주세요.',
       success: false,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
     })
     expect(adminSupabase.rpc).not.toHaveBeenCalled()
     expect(supabase.state.insertPayloads).toHaveLength(0)
@@ -210,6 +219,9 @@ describe('api key actions', () => {
     expect(result).toEqual({
       error: 'Provider를 선택해주세요.',
       success: false,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
     })
     expect(adminSupabase.rpc).not.toHaveBeenCalled()
     expect(supabase.state.insertPayloads).toHaveLength(0)
@@ -238,6 +250,9 @@ describe('api key actions', () => {
     expect(result).toEqual({
       error: null,
       success: true,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
     })
     expect(adminSupabase.rpc).toHaveBeenCalledWith('create_secret', {
       secret_name: 'apikey_11111111-1111-1111-1111-111111111111_loyw3v28_openai',
@@ -278,6 +293,9 @@ describe('api key actions', () => {
     expect(result).toEqual({
       error: null,
       success: true,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
     })
     expect(supabase.state.insertPayloads[0]).toMatchObject({
       provider: 'google',
@@ -304,6 +322,9 @@ describe('api key actions', () => {
     expect(result).toEqual({
       error: 'API 키 등록 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
       success: false,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
     })
     expect(adminSupabase.rpc).toHaveBeenNthCalledWith(1, 'create_secret', {
       secret_name: 'apikey_11111111-1111-1111-1111-111111111111_loyw3v28_google',
@@ -315,6 +336,79 @@ describe('api key actions', () => {
       requester: '11111111-1111-1111-1111-111111111111',
     })
     dateNowSpy.mockRestore()
+  })
+
+  it('returns an explicit rollback failure signal when Vault cleanup fails after metadata persistence error', async () => {
+    const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
+    const adminSupabase = createAdminSupabase({
+      deleteSecretError: {
+        message: 'vault unavailable',
+        code: 'XX000',
+      },
+    })
+    const supabase = buildSupabase({
+      insertApiKeyError: {
+        message: 'insert failed',
+        code: '23505',
+      },
+    })
+    createAdminClientMock.mockReturnValue(adminSupabase)
+    createClientMock.mockResolvedValue(supabase)
+    const { createApiKey } = await import('./actions')
+
+    const result = await createApiKey(INITIAL_STATE, buildApiKeyFormData())
+
+    expect(result).toEqual({
+      error: 'API 키 등록 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+      success: false,
+      warning:
+        'API 키 등록에 실패했습니다. 다시 시도해주세요. 문제가 계속되면 관리자에게 참조 ID를 전달해주세요.',
+      rollbackFailed: true,
+      cleanupReference: 'api-key-cleanup-loyw3v28',
+    })
+    expect(adminSupabase.rpc).toHaveBeenNthCalledWith(2, 'delete_secret', {
+      secret_name: 'apikey_11111111-1111-1111-1111-111111111111_loyw3v28_google',
+      requester: '11111111-1111-1111-1111-111111111111',
+    })
+    expect(consoleErrorSpy).toHaveBeenCalledWith('[API Keys] create_api_key rollback failed', {
+      cleanupReference: 'api-key-cleanup-loyw3v28',
+      userId: '11111111-1111-1111-1111-111111111111',
+      provider: 'google',
+      keyName: 'My API Key',
+      vaultSecretName: 'apikey_11111111-1111-1111-1111-111111111111_loyw3v28_google',
+      insertCode: '23505',
+      insertMessage: 'insert failed',
+      rollbackCode: 'XX000',
+      rollbackMessage: 'vault unavailable',
+    })
+    expect(revalidatePathMock).not.toHaveBeenCalled()
+    dateNowSpy.mockRestore()
+  })
+
+  it('returns an explicit quota message when Vault rejects create_secret for quota exceeded', async () => {
+    const adminSupabase = createAdminSupabase({
+      createSecretError: {
+        message: 'API key quota exceeded',
+        code: '54013',
+      },
+    })
+    const supabase = buildSupabase()
+    createAdminClientMock.mockReturnValue(adminSupabase)
+    createClientMock.mockResolvedValue(supabase)
+    const { createApiKey } = await import('./actions')
+
+    const result = await createApiKey(INITIAL_STATE, buildApiKeyFormData())
+
+    expect(result).toEqual({
+      error:
+        'API 키 등록 한도(최대 20개)를 초과했습니다. 사용하지 않는 키를 삭제한 뒤 다시 시도해주세요.',
+      success: false,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
+    })
+    expect(supabase.state.insertPayloads).toHaveLength(0)
+    expect(revalidatePathMock).not.toHaveBeenCalled()
   })
 
   it('returns login required when deleting an API key while unauthenticated', async () => {

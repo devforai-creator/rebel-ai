@@ -8,3 +8,4 @@ export { useChatHistory, combineHistoryWithLiveMessages } from './useChatHistory
 export { useChatRuntimeVariables } from './useChatRuntimeVariables'
 export { useChatUsageStats } from './useChatUsageStats'
 export { useChatRealtimeSubscription } from './useChatRealtimeSubscription'
+export { useChatMetadataViews } from './useChatMetadataViews'

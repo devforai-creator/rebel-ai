@@ -32,6 +32,7 @@ function createSupabaseStub(options?: {
   chatOwnerId?: string | null
   chatOwnerError?: StubError | null
   profileEnableRag?: boolean
+  profileApiKeyId?: string | null
   profileError?: StubError | null
   ragFactsData?: Array<{
     start_seq: number
@@ -39,14 +40,14 @@ function createSupabaseStub(options?: {
     facts: string
     similarity?: number
   }> | null
+  ragCandidateCount?: number | null
   ragError?: StubError | null
 }): ChatSummariesSupabaseClient {
   const latestSequence = options?.latestSequence
   const latestSequenceError = options?.latestSequenceError ?? null
 
-  const chatTurnsQuery = {
-    select: () => chatTurnsQuery,
-    eq: () => chatTurnsQuery,
+  const chatTurnsRowsQuery = {
+    eq: () => chatTurnsRowsQuery,
     then<TResult1 = { data: unknown; error: StubError | null }, TResult2 = never>(
       onfulfilled?:
         | ((value: { data: unknown; error: StubError | null }) => TResult1 | PromiseLike<TResult1>)
@@ -69,6 +70,24 @@ function createSupabaseStub(options?: {
     },
   }
 
+  const chatTurnsCountQuery = {
+    eq: () => chatTurnsCountQuery,
+    not: async () => {
+      if (latestSequenceError) {
+        return { count: null, error: latestSequenceError }
+      }
+      return {
+        count: latestSequence ?? 0,
+        error: null,
+      }
+    },
+  }
+
+  const chatTurnsQuery = {
+    select: (_columns?: string, options?: { count?: string; head?: boolean }) =>
+      options?.count === 'exact' && options?.head ? chatTurnsCountQuery : chatTurnsRowsQuery,
+  }
+
   const summaryQuery = {
     select: () => summaryQuery,
     eq: () => summaryQuery,
@@ -78,13 +97,25 @@ function createSupabaseStub(options?: {
     error: options?.summaryError ?? null,
   }
 
-  const factsQuery = {
-    select: () => factsQuery,
-    eq: () => factsQuery,
-    lte: () => factsQuery,
-    order: () => factsQuery,
+  const factsRowsQuery = {
+    eq: () => factsRowsQuery,
+    lte: () => factsRowsQuery,
+    order: () => factsRowsQuery,
     data: options?.factsData ?? [],
     error: options?.factsError ?? null,
+  }
+
+  const factsCountQuery = {
+    eq: () => factsCountQuery,
+    not: async () => ({
+      count: options?.ragCandidateCount ?? options?.ragFactsData?.length ?? 0,
+      error: null,
+    }),
+  }
+
+  const factsQuery = {
+    select: (_columns?: string, queryOptions?: { count?: string; head?: boolean }) =>
+      queryOptions?.count === 'exact' && queryOptions?.head ? factsCountQuery : factsRowsQuery,
   }
 
   const chatsQuery = {
@@ -109,7 +140,10 @@ function createSupabaseStub(options?: {
         return { data: null, error: options.profileError }
       }
       return {
-        data: { enable_episodic_rag: options?.profileEnableRag ?? false },
+        data: {
+          enable_episodic_rag: options?.profileEnableRag ?? false,
+          voyage_embedding_api_key_id: options?.profileApiKeyId ?? 'voyage-key-1',
+        },
         error: null,
       }
     },
@@ -162,7 +196,8 @@ describe('searchRelevantFacts', () => {
       recentMessages: [],
     })
 
-    expect(result).toEqual([])
+    expect(result.facts).toEqual([])
+    expect(result.diagnostics.skippedReason).toBe('no_recent_messages')
     expect(generateFactEmbeddingMock).not.toHaveBeenCalled()
   })
 
@@ -177,7 +212,9 @@ describe('searchRelevantFacts', () => {
       recentMessages: makeMessages(3),
     })
 
-    expect(result).toEqual([])
+    expect(result.facts).toEqual([])
+    expect(result.diagnostics.skippedReason).toBe('embedding_unavailable')
+    expect(result.diagnostics.embeddingMs).not.toBeNull()
   })
 
   it('returns empty array when similarity RPC fails', async () => {
@@ -192,7 +229,9 @@ describe('searchRelevantFacts', () => {
       recentMessages: makeMessages(4),
     })
 
-    expect(result).toEqual([])
+    expect(result.facts).toEqual([])
+    expect(result.diagnostics.matchRpcMs).not.toBeNull()
+    expect(result.diagnostics.skippedReason).toBe('rpc_error')
   })
 
   it('handles null RPC data and returns empty array', async () => {
@@ -207,7 +246,9 @@ describe('searchRelevantFacts', () => {
       recentMessages: makeMessages(2),
     })
 
-    expect(result).toEqual([])
+    expect(result.facts).toEqual([])
+    expect(result.diagnostics.resultCount).toBe(0)
+    expect(result.diagnostics.skippedReason).toBe('no_matches')
   })
 
   it('returns matched facts including long previews and similarities', async () => {
@@ -234,8 +275,13 @@ describe('searchRelevantFacts', () => {
       recentMessages: makeMessages(5),
     })
 
-    expect(result).toHaveLength(2)
-    expect(result[0].similarity).toBeCloseTo(0.9876)
+    expect(result.facts).toHaveLength(2)
+    expect(result.facts[0].similarity).toBeCloseTo(0.9876)
+    expect(result.diagnostics.queryMessagesCount).toBeGreaterThan(0)
+    expect(result.diagnostics.queryTextChars).toBeGreaterThan(0)
+    expect(result.diagnostics.resultCount).toBe(2)
+    expect(result.diagnostics.usedResultCount).toBe(2)
+    expect(result.diagnostics.totalRetrievalMs).not.toBeNull()
   })
 })
 
@@ -440,5 +486,21 @@ describe('buildContext branches', () => {
     expect(result.ragInfo?.enabled).toBe(true)
     expect(result.ragInfo?.results[0]?.preview.endsWith('...')).toBe(true)
     expect(result.ragInfo?.results[1]?.preview.endsWith('...')).toBe(false)
+    expect(result.ragInfo?.diagnostics?.fallbackFactsLoadedCount).toBe(1)
+    expect(result.ragInfo?.diagnostics?.queryMessagesCount).toBeGreaterThan(0)
+    expect(result.ragInfo?.diagnostics?.resultCount).toBe(2)
+    expect(result.ragInfo?.diagnostics?.usedResultCount).toBe(2)
+    expect(result.ragInfo?.diagnostics?.totalRetrievalMs).not.toBeNull()
+    expect(generateFactEmbeddingMock).toHaveBeenCalledWith(
+      expect.any(String),
+      'user-1',
+      supabase,
+      expect.objectContaining({
+        profileSettings: expect.objectContaining({
+          enable_episodic_rag: true,
+          voyage_embedding_api_key_id: 'voyage-key-1',
+        }),
+      }),
+    )
   })
 })

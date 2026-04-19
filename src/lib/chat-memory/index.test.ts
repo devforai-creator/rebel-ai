@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { ChatModelConfig } from '@/lib/chat/model-config'
 import type { ChatSummariesSupabaseClient } from '@/lib/chat-summaries/types'
 import { createSupabaseMock } from '@/tests/mocks/supabase'
-import { buildMemoryPlan, calculatePrefixLiveBlockBoundaries } from './index'
+import {
+  buildPrefixLiveBlocksMemoryPlan,
+  calculatePrefixLiveBlockBoundaries,
+} from './prefix-live-blocks'
 
 function createPrefixModeSupabaseStub(options?: {
   lastChunkEnd?: number | null
@@ -64,7 +66,7 @@ describe('calculatePrefixLiveBlockBoundaries', () => {
   })
 })
 
-describe('buildMemoryPlan', () => {
+describe('buildPrefixLiveBlocksMemoryPlan', () => {
   it('builds prefix_live_blocks from the provided live transcript', async () => {
     const supabase = createPrefixModeSupabaseStub({
       liveMessages: [
@@ -72,13 +74,8 @@ describe('buildMemoryPlan', () => {
         { role: 'assistant', content: 'db-assistant-2' },
       ],
     })
-    const modelConfig: ChatModelConfig = {
-      memory: {
-        mode: 'prefix_live_blocks',
-      },
-    }
 
-    const result = await buildMemoryPlan({
+    const result = await buildPrefixLiveBlocksMemoryPlan({
       supabase,
       chatId: 'chat-1',
       sanitizedMessages: [
@@ -86,7 +83,6 @@ describe('buildMemoryPlan', () => {
         { role: 'assistant', content: 'db-assistant-2', messageId: 'msg-2' },
       ],
       baseSystemPrompt: 'STATIC PROMPT',
-      modelConfig,
     })
 
     expect(result.mode).toBe('prefix_live_blocks')
@@ -159,18 +155,11 @@ describe('buildMemoryPlan', () => {
         },
       },
     }) as unknown as ChatSummariesSupabaseClient
-    const modelConfig: ChatModelConfig = {
-      memory: {
-        mode: 'prefix_live_blocks',
-      },
-    }
-
-    const result = await buildMemoryPlan({
+    const result = await buildPrefixLiveBlocksMemoryPlan({
       supabase,
       chatId: 'chat-1',
       sanitizedMessages: [],
       baseSystemPrompt: 'STATIC PROMPT',
-      modelConfig,
     })
 
     expect(result.fallbackMessages).toEqual([
@@ -213,18 +202,11 @@ describe('buildMemoryPlan', () => {
         },
       },
     }) as unknown as ChatSummariesSupabaseClient
-    const modelConfig: ChatModelConfig = {
-      memory: {
-        mode: 'prefix_live_blocks',
-      },
-    }
-
-    const result = await buildMemoryPlan({
+    const result = await buildPrefixLiveBlocksMemoryPlan({
       supabase,
       chatId: 'chat-1',
       sanitizedMessages: [{ role: 'user', content: 'db-user-1', messageId: 'msg-1' }],
       baseSystemPrompt: 'STATIC PROMPT',
-      modelConfig,
     })
 
     expect(result.fallbackMessages).toEqual([
@@ -242,6 +224,43 @@ describe('buildMemoryPlan', () => {
         content: 'db-user-1',
         cachePreference: 'prefer-cache',
         stability: 'live',
+      },
+    ])
+  })
+
+  it('does not fall back to DB when an explicit empty live window is provided', async () => {
+    const supabase = createPrefixModeSupabaseStub({
+      lastChunkEnd: 4,
+      liveMessages: [
+        { role: 'user', content: 'sealed user 1' },
+        { role: 'assistant', content: 'sealed assistant 1' },
+        { role: 'user', content: 'sealed user 2' },
+        { role: 'assistant', content: 'sealed assistant 2' },
+      ],
+    })
+
+    const result = await buildPrefixLiveBlocksMemoryPlan({
+      supabase,
+      chatId: 'chat-1',
+      sanitizedMessages: [],
+      transcriptCoverage: 'window',
+      transcriptStartOrdinal: 5,
+      baseSystemPrompt: 'STATIC PROMPT',
+    })
+
+    expect(result.fallbackMessages).toEqual([])
+    expect(result.promptBlocks).toEqual([
+      {
+        role: 'system',
+        content: 'STATIC PROMPT',
+        cachePreference: 'prefer-cache',
+        stability: 'static',
+      },
+      {
+        role: 'system',
+        content: '=== Previous Conversation Summary ===\n[Summary 1-4]\nsealed',
+        cachePreference: 'prefer-cache',
+        stability: 'sealed',
       },
     ])
   })

@@ -1,43 +1,42 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CHAT_RATE_LIMITS } from './runtime-limits'
 
-const internalApiUrl = 'https://internal.test/api/internal/chat-admin'
+const createAdminClientMock = vi.fn()
+const checkChatRateLimitMock = vi.fn()
+const checkAnonRateLimitRpcMock = vi.fn()
 
-vi.mock('@/lib/internal-api-origin', () => ({
-  buildInternalApiUrlForEdge: vi.fn(() => internalApiUrl),
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: () => createAdminClientMock(),
 }))
 
-type ParsedPayload = {
-  requester: string
-  action: 'checkAnonRateLimit' | 'checkUserRateLimit'
-  args: Record<string, unknown>
-}
+vi.mock('@/lib/supabase/rpc', () => ({
+  checkChatRateLimit: (...args: unknown[]) => checkChatRateLimitMock(...args),
+  checkAnonRateLimitRpc: (...args: unknown[]) => checkAnonRateLimitRpcMock(...args),
+}))
 
 describe('rate limiter', () => {
-  const originalEnv = { ...process.env }
-  let fetchMock: ReturnType<typeof vi.fn>
-  let lastPayload: ParsedPayload | null = null
+  const adminClient = { rpc: vi.fn() }
 
   beforeEach(() => {
     vi.resetModules()
-    vi.unstubAllEnvs()
-    process.env = { ...originalEnv, CHAT_ADMIN_SECRET: 'secret' }
-    fetchMock = vi.fn(async (_url, init?: RequestInit) => {
-      const body = init?.body ? JSON.parse(init.body.toString()) : null
-      lastPayload = body
-      return new Response(JSON.stringify({ data: [{ allowed: true, retry_after: 0 }] }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+    createAdminClientMock.mockReset()
+    checkChatRateLimitMock.mockReset()
+    checkAnonRateLimitRpcMock.mockReset()
+
+    createAdminClientMock.mockReturnValue(adminClient)
+    checkChatRateLimitMock.mockResolvedValue({
+      data: [{ allowed: true, retry_after: 0 }],
+      error: null,
     })
-    vi.stubGlobal('fetch', fetchMock)
+    checkAnonRateLimitRpcMock.mockResolvedValue({
+      data: [{ allowed: true, retry_after: 0 }],
+      error: null,
+    })
   })
 
   afterEach(() => {
-    process.env = { ...originalEnv }
     vi.unstubAllEnvs()
     vi.unstubAllGlobals()
-    lastPayload = null
   })
 
   it('builds deterministic client identifiers and enforces length limit', async () => {
@@ -51,34 +50,25 @@ describe('rate limiter', () => {
     expect(hashed.length).toBeLessThanOrEqual(CHAT_RATE_LIMITS.maxAnonRateLimitIdentifierLength)
   })
 
-  it('calls chat-admin for user rate limit with auth header', async () => {
+  it('calls the rate-limit RPC directly for user rate limits', async () => {
     const { checkUserRateLimit } = await import('./rate-limiter')
 
     const result = await checkUserRateLimit('user-123')
 
     expect(result).toEqual({ allowed: true, retryAfter: null })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [, init] = fetchMock.mock.calls[0]
-    expect(init?.headers).toMatchObject({
-      Authorization: 'Bearer secret',
-      'Content-Type': 'application/json',
-    })
-    expect(lastPayload).toMatchObject({
-      requester: 'user-123',
-      action: 'checkUserRateLimit',
-      args: expect.objectContaining({
+    expect(createAdminClientMock).toHaveBeenCalledTimes(1)
+    expect(checkChatRateLimitMock).toHaveBeenCalledWith(
+      adminClient,
+      expect.objectContaining({
         target_user_id: 'user-123',
       }),
-    })
+    )
   })
 
-  it('returns retryAfter when rate limit is exceeded', async () => {
-    fetchMock.mockImplementationOnce(async (_url, init?: RequestInit) => {
-      lastPayload = init?.body ? JSON.parse(init.body.toString()) : null
-      return new Response(JSON.stringify({ data: [{ allowed: false, retry_after: 12 }] }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+  it('returns retryAfter when anon rate limit is exceeded', async () => {
+    checkAnonRateLimitRpcMock.mockResolvedValueOnce({
+      data: [{ allowed: false, retry_after: 12 }],
+      error: null,
     })
     const { checkAnonRateLimit } = await import('./rate-limiter')
 
@@ -86,20 +76,18 @@ describe('rate limiter', () => {
 
     expect(result.allowed).toBe(false)
     expect(result.retryAfter).toBe(12)
-    expect(lastPayload).toMatchObject({
-      requester: 'anonymous-user',
-      action: 'checkAnonRateLimit',
-    })
-    expect((lastPayload?.args as { identifier?: string })?.identifier).toMatch(/^ua:/)
+    expect(checkAnonRateLimitRpcMock).toHaveBeenCalledWith(
+      adminClient,
+      expect.objectContaining({
+        identifier: expect.stringMatching(/^ua:/),
+      }),
+    )
   })
 
   it('falls back to default window when user rate-limit payload is missing', async () => {
-    fetchMock.mockImplementationOnce(async (_url, init?: RequestInit) => {
-      lastPayload = init?.body ? JSON.parse(init.body.toString()) : null
-      return new Response(JSON.stringify({ data: null }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+    checkChatRateLimitMock.mockResolvedValueOnce({
+      data: null,
+      error: null,
     })
     const { checkUserRateLimit } = await import('./rate-limiter')
 
@@ -108,12 +96,9 @@ describe('rate limiter', () => {
   })
 
   it('clamps anon retryAfter to at least one second', async () => {
-    fetchMock.mockImplementationOnce(async (_url, init?: RequestInit) => {
-      lastPayload = init?.body ? JSON.parse(init.body.toString()) : null
-      return new Response(JSON.stringify({ data: [{ allowed: false, retry_after: 0 }] }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+    checkAnonRateLimitRpcMock.mockResolvedValueOnce({
+      data: [{ allowed: false, retry_after: 0 }],
+      error: null,
     })
     const { checkAnonRateLimit } = await import('./rate-limiter')
 
@@ -122,12 +107,9 @@ describe('rate limiter', () => {
   })
 
   it('uses default anon retry window when retry_after is not a number', async () => {
-    fetchMock.mockImplementationOnce(async (_url, init?: RequestInit) => {
-      lastPayload = init?.body ? JSON.parse(init.body.toString()) : null
-      return new Response(JSON.stringify({ data: [{ allowed: false, retry_after: null }] }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+    checkAnonRateLimitRpcMock.mockResolvedValueOnce({
+      data: [{ allowed: false, retry_after: null }],
+      error: null,
     })
     const { checkAnonRateLimit } = await import('./rate-limiter')
 
@@ -135,34 +117,27 @@ describe('rate limiter', () => {
     expect(result).toEqual({ allowed: false, retryAfter: CHAT_RATE_LIMITS.anonWindowSeconds })
   })
 
-  it('adds Vercel protection bypass header when configured', async () => {
-    process.env.VERCEL_AUTOMATION_BYPASS_SECRET = 'bypass-secret'
-    const { checkUserRateLimit } = await import('./rate-limiter')
-
-    await checkUserRateLimit('user-123')
-
-    const [, init] = fetchMock.mock.calls[0]
-    expect(init?.headers).toMatchObject({
-      'x-vercel-protection-bypass': 'bypass-secret',
-    })
-  })
-
-  it('throws detailed error when chat-admin returns a non-OK response', async () => {
-    fetchMock.mockImplementationOnce(async (_url, init?: RequestInit) => {
-      lastPayload = init?.body ? JSON.parse(init.body.toString()) : null
-      return new Response('denied', { status: 500 })
+  it('throws detailed error when user rate-limit RPC fails', async () => {
+    checkChatRateLimitMock.mockResolvedValueOnce({
+      data: null,
+      error: { code: '57014', message: 'statement timeout' },
     })
     const { checkUserRateLimit } = await import('./rate-limiter')
 
     await expect(checkUserRateLimit('user-123')).rejects.toThrow(
-      'Chat admin request failed (500): denied',
+      'check_chat_rate_limit failed (57014): statement timeout',
     )
   })
 
-  it('throws when CHAT_ADMIN_SECRET is missing', async () => {
-    delete process.env.CHAT_ADMIN_SECRET
-    const { checkUserRateLimit } = await import('./rate-limiter')
+  it('throws detailed error when anon rate-limit RPC fails', async () => {
+    checkAnonRateLimitRpcMock.mockResolvedValueOnce({
+      data: null,
+      error: { code: '57014', message: 'statement timeout' },
+    })
+    const { checkAnonRateLimit } = await import('./rate-limiter')
 
-    await expect(checkUserRateLimit('user-123')).rejects.toThrow('CHAT_ADMIN_SECRET')
+    await expect(checkAnonRateLimit('203.0.113.77')).rejects.toThrow(
+      'check_anon_rate_limit failed (57014): statement timeout',
+    )
   })
 })

@@ -1,6 +1,6 @@
 # First-Class Smoke Checks
 
-Updated: 2026-04-12
+Updated: 2026-04-16
 
 This runbook is for the current first-class operating mode:
 
@@ -10,6 +10,7 @@ This runbook is for the current first-class operating mode:
 - `RBX + SUU` as the primary product surface
 
 Use this document to verify that the current operating path still works after deploys, env changes, or infrastructure adjustments.
+Treat `npm run ops:smoke` and `npm run ops:smoke:active` as post-deploy verification gates for a deployed target, not as replacements for pre-deploy CI checks such as lint, tests, and build validation.
 
 It is not a public-launch checklist. It is the smallest repeatable operator checklist for the mode the maintainer actually runs.
 
@@ -17,12 +18,20 @@ It is not a public-launch checklist. It is the smallest repeatable operator chec
 
 The runbook verifies the parts that tend to drift first on the low-cost profile:
 
+- closed-signup status page
 - internal health snapshot
 - internal triage snapshot
 - storage janitor dry-run
 - optional active probes for the chat runner and character import runner
 
 Those checks are exposed through one helper script and a short manual checklist.
+
+## Gate Semantics
+
+- Pre-deploy checks belong in normal CI: lint, typecheck, unit/integration tests, migration validation, and production build.
+- Local smoke checks are rehearsal only. They help catch env and route-contract drift before deploy, but they do not prove that the deployed target is healthy.
+- Deployed smoke checks are post-deploy verification. Run them against the actual target origin before treating a high-risk rollout as closed.
+- If preview/staging exercises the same risk boundary, smoke there first. If the risk only exists on the real deployment shape, run the gate against production.
 
 ## Commands
 
@@ -74,6 +83,7 @@ Origin resolution order:
 
 `npm run ops:smoke` calls:
 
+- `GET /auth/signup`
 - `GET /api/internal/health`
 - `GET /api/internal/triage`
 - `GET /api/internal/storage-janitor?dryRun=1&olderThanDays=1&maxDelete=10`
@@ -87,6 +97,7 @@ Interpretation:
 The script exits non-zero on either `WARN` or `FAIL`. That is intentional. A degraded system is still a failed smoke check.
 
 The passive janitor probe checks that dry-run dispatch is accepted quickly. It does not wait for a full storage scan to finish.
+The signup probe checks that the deployment still presents the explicit closed-signup notice instead of silently reopening registration UX.
 
 ## Active Runner Probe
 
@@ -118,6 +129,8 @@ curl -X POST \
 
 ## Local Verification Flow
 
+This flow is a rehearsal for the deployed verification gate. It is useful before shipping, but it does not replace the deployed-origin smoke requirement for high-risk changes.
+
 1. Start the app locally.
 
 ```bash
@@ -138,10 +151,13 @@ npm run ops:smoke:local:active
 
 4. Manually verify one end-to-end chat if the deployment is meant to be actively used today.
    Send a message from the UI, then confirm the resulting job moves through `/api/chat/jobs/[jobId]` and appears clean in `/api/internal/triage`.
+5. If the change touched storage delivery or bucket policy, verify one signed asset loads in the UI and that the equivalent anonymous `/storage/v1/object/public/...` URL does not return `200`.
 
 `npm run dev:local` forces `INTERNAL_API_ORIGIN=http://127.0.0.1:3000` for that dev process only. Keep the deployed `INTERNAL_API_ORIGIN` in `.env.local` if you want; you no longer need to swap files just to run local smoke checks.
 
 ## Deployed Verification Flow
+
+This is the real release-verification path. Use it after deploy and before treating a high-risk change as complete.
 
 1. Point the script at the deployed origin.
 
@@ -155,20 +171,23 @@ SMOKE_CHECK_APP_ORIGIN=https://your-app.example.com npm run ops:smoke
 SMOKE_CHECK_APP_ORIGIN=https://your-app.example.com npm run ops:smoke:active
 ```
 
-3. If either returns `WARN` or `FAIL`, inspect:
+3. If either returns `WARN` or `FAIL`, do not treat the rollout as closed. Inspect:
 
+- `/auth/signup` if the contract may have drifted toward open registration
 - `/api/internal/triage` first for recent failed jobs and degraded services
 - `/api/internal/health` for durable service status
 - `/api/chat/jobs/[jobId]` for a specific failed job
 
 ## Expected Use After Changes
 
-Run this after:
+Run this after the change is deployed to the target environment whenever the batch touches:
 
 - changing deployment environment variables
+- changing signup or public-access assumptions
 - changing scheduler or cron wiring
 - changing `INTERNAL_API_ORIGIN`
 - modifying runner, janitor, or internal auth behavior
+- modifying signed asset delivery or bucket privacy
 - rolling out a new low-cost host setup
 
 ## Related Docs

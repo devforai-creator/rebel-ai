@@ -1,4 +1,8 @@
-import { NextResponse } from 'next/server'
+import {
+  createApiErrorResponse,
+  createUnexpectedRouteErrorResponse,
+  requireAuthenticatedUser,
+} from '@/lib/http/api-contract'
 import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
@@ -17,13 +21,9 @@ type AnnouncementPayload = {
 export async function GET() {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await requireAuthenticatedUser(supabase)
+    if (!auth.success) {
+      return auth.response
     }
 
     const nowIso = new Date().toISOString()
@@ -39,7 +39,7 @@ export async function GET() {
 
     if (error) {
       console.error('[Announcements API] Failed to fetch announcement:', error)
-      return NextResponse.json({ error: 'Failed to fetch announcement' }, { status: 500 })
+      return createApiErrorResponse('Failed to fetch announcement', 500)
     }
 
     const payload: AnnouncementPayload | null = data
@@ -54,9 +54,8 @@ export async function GET() {
         }
       : null
 
-    return NextResponse.json({ announcement: payload })
+    return Response.json({ announcement: payload })
   } catch (error) {
-    console.error('[Announcements API] Unexpected error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return createUnexpectedRouteErrorResponse('[Announcements API] Unexpected error:', error)
   }
 }

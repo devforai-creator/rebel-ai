@@ -3,7 +3,7 @@
  * Activates and renders lorebook entries based on chat context
  */
 
-import type { LorebookEntry } from '@/types/risuai.types'
+import type { LorebookEntry } from '@/types/lorebook.types'
 
 export interface RenderLorebookOptions {
   lorebookEntries: LorebookEntry[]

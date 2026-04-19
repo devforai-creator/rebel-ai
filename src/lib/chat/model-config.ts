@@ -1,3 +1,5 @@
+import { SUPPORT_TIER_FEATURES, type SupportTier } from '@/lib/support-tier'
+
 export type AlternateModelsConfig = {
   enabled: boolean
   primaryApiKeyId: string | null
@@ -16,6 +18,10 @@ export const DEFAULT_CHAT_MEMORY_MODE: ChatMemoryMode = 'summary_window'
 export const OPERATOR_DEFAULT_CHAT_MEMORY_MODE: ChatMemoryMode = 'prefix_live_blocks'
 export const DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES = 100
 export const DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES = 4
+export const CHAT_MEMORY_MODE_SUPPORT_TIERS: Record<ChatMemoryMode, SupportTier> = {
+  summary_window: SUPPORT_TIER_FEATURES.SUMMARY_WINDOW_MEMORY.tier,
+  prefix_live_blocks: SUPPORT_TIER_FEATURES.PREFIX_LIVE_BLOCKS_MEMORY.tier,
+}
 
 export type ChatModelConfig = {
   alternateModels?: AlternateModelsConfig | null

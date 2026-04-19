@@ -13,10 +13,12 @@ import {
   createChatTurn,
   loadGenerationTranscript,
   loadLatestProjectedAssistantMessage,
+  loadLatestProjectedConversationMessage,
   loadLatestProjectedMessage,
   loadProjectedChatMessages,
   loadProjectedConversationMessages,
   loadProjectedConversationRange,
+  loadProjectedConversationTail,
   loadProjectedChatWindow,
 } from './turns'
 
@@ -263,6 +265,183 @@ function createConversationCountSupabase() {
   }) as unknown as SupabaseClientType
 }
 
+function createCounterQueryShapeSupabase() {
+  const chatTurnCalls: Array<{
+    columns?: string
+    options?: { count?: string; head?: boolean }
+    filters: Array<{ method: string; field: string; value: unknown; operator?: string }>
+  }> = []
+  const messageCalls: Array<{
+    columns?: string
+    options?: { count?: string; head?: boolean }
+    filters: Array<{ method: string; field: string; value: unknown; operator?: string }>
+  }> = []
+
+  const supabase = {
+    from(table: string) {
+      const call = {
+        columns: undefined as string | undefined,
+        options: undefined as { count?: string; head?: boolean } | undefined,
+        filters: [] as Array<{ method: string; field: string; value: unknown; operator?: string }>,
+      }
+
+      const builder = {
+        select(columns?: string, options?: { count?: string; head?: boolean }) {
+          call.columns = columns
+          call.options = options
+          return this
+        },
+        eq(field: string, value: unknown) {
+          call.filters.push({ method: 'eq', field, value })
+          return this
+        },
+        neq(field: string, value: unknown) {
+          call.filters.push({ method: 'neq', field, value })
+          return this
+        },
+        not(field: string, operator: string, value: unknown) {
+          call.filters.push({ method: 'not', field, operator, value })
+          return this
+        },
+        then(onfulfilled?: (value: { data: unknown[]; error: null; count?: number }) => unknown) {
+          const isUserCount = call.filters.some(
+            (filter) => filter.field === 'user_message_id' && filter.method === 'not',
+          )
+          const isAssistantCount = call.filters.some(
+            (filter) => filter.field === 'active_assistant_message_id' && filter.method === 'not',
+          )
+          const count = table === 'chat_turns' ? (isUserCount ? 2 : isAssistantCount ? 1 : 0) : 1
+          const result = { data: [], error: null, count }
+          ;(table === 'chat_turns' ? chatTurnCalls : messageCalls).push(call)
+          return Promise.resolve(onfulfilled ? onfulfilled(result) : result)
+        },
+      }
+
+      return builder
+    },
+  }
+
+  return {
+    supabase: supabase as unknown as SupabaseClientType,
+    chatTurnCalls,
+    messageCalls,
+  }
+}
+
+function createLatestAssistantQueryShapeSupabase() {
+  const chatTurnCalls: Array<{
+    columns?: string
+    filters: Array<{ method: string; field: string; value: unknown; operator?: string }>
+    order?: { field: string; ascending: boolean }
+    limit?: number
+  }> = []
+  const messageCalls: Array<{
+    columns?: string
+    ids?: unknown[]
+  }> = []
+
+  const supabase = {
+    from(table: string) {
+      if (table === 'chat_turns') {
+        const call = {
+          columns: undefined as string | undefined,
+          filters: [] as Array<{
+            method: string
+            field: string
+            value: unknown
+            operator?: string
+          }>,
+          order: undefined as { field: string; ascending: boolean } | undefined,
+          limit: undefined as number | undefined,
+        }
+
+        return {
+          select(columns?: string) {
+            call.columns = columns
+            return this
+          },
+          eq(field: string, value: unknown) {
+            call.filters.push({ method: 'eq', field, value })
+            return this
+          },
+          not(field: string, operator: string, value: unknown) {
+            call.filters.push({ method: 'not', field, operator, value })
+            return this
+          },
+          order(field: string, options?: { ascending?: boolean }) {
+            call.order = { field, ascending: options?.ascending ?? true }
+            return this
+          },
+          limit(count: number) {
+            call.limit = count
+            return this
+          },
+          maybeSingle() {
+            chatTurnCalls.push(call)
+            return Promise.resolve({
+              data: { active_assistant_message_id: 'assistant-2' },
+              error: null,
+            })
+          },
+        }
+      }
+
+      const call = {
+        columns: undefined as string | undefined,
+        ids: undefined as unknown[] | undefined,
+      }
+
+      return {
+        select(columns?: string) {
+          call.columns = columns
+          return this
+        },
+        in(_field: string, ids: unknown[]) {
+          call.ids = ids
+          return this
+        },
+        then(
+          onfulfilled?: (value: { data: Array<Record<string, unknown>>; error: null }) => unknown,
+        ) {
+          messageCalls.push(call)
+          const result = {
+            data: [
+              {
+                id: 'assistant-2',
+                role: 'assistant',
+                content: 'Second reply',
+                chat_id: chatId,
+                user_id: 'user-1',
+                sequence: 7,
+                model_used: null,
+                prompt_tokens: null,
+                completion_tokens: null,
+                latency_ms: null,
+                error_code: null,
+                debug_info: null,
+                content_en: null,
+                created_at: null,
+                turn_id: 'turn-2',
+                variant_index: 1,
+                supersedes_message_id: null,
+                message_status: MESSAGE_STATUS_COMPLETED,
+              },
+            ],
+            error: null,
+          }
+          return Promise.resolve(onfulfilled ? onfulfilled(result) : result)
+        },
+      }
+    },
+  }
+
+  return {
+    supabase: supabase as unknown as SupabaseClientType,
+    chatTurnCalls,
+    messageCalls,
+  }
+}
+
 describe('chat turn projections', () => {
   it('loads the latest turn window with interleaved system messages', async () => {
     const supabase = createTurnProjectionSupabase()
@@ -307,12 +486,14 @@ describe('chat turn projections', () => {
   it('loads all projected messages and projected counters from active variants only', async () => {
     const supabase = createTurnProjectionSupabase()
 
-    const [messages, latestMessage, latestAssistant, messageCount] = await Promise.all([
-      loadProjectedChatMessages({ supabase, chatId }),
-      loadLatestProjectedMessage({ supabase, chatId }),
-      loadLatestProjectedAssistantMessage({ supabase, chatId }),
-      countProjectedChatMessages({ supabase, chatId }),
-    ])
+    const [messages, latestMessage, latestConversationMessage, latestAssistant, messageCount] =
+      await Promise.all([
+        loadProjectedChatMessages({ supabase, chatId }),
+        loadLatestProjectedMessage({ supabase, chatId }),
+        loadLatestProjectedConversationMessage({ supabase, chatId }),
+        loadLatestProjectedAssistantMessage({ supabase, chatId }),
+        countProjectedChatMessages({ supabase, chatId }),
+      ])
 
     expect(messages.map((message) => message.id)).toEqual([
       'system-1',
@@ -326,6 +507,7 @@ describe('chat turn projections', () => {
       'system-4',
     ])
     expect(latestMessage?.id).toBe('system-4')
+    expect(latestConversationMessage?.id).toBe('user-3')
     expect(latestAssistant?.id).toBe('assistant-2')
     expect(messageCount).toBe(9)
   })
@@ -669,6 +851,31 @@ describe('projected conversation helpers', () => {
     expect(result.map((message) => message.id)).toEqual(['user-1', 'assistant-1b'])
   })
 
+  it('loads the latest projected conversation tail without scanning the full transcript', async () => {
+    const supabase = createTurnProjectionSupabase()
+
+    const result = await loadProjectedConversationTail({
+      supabase,
+      chatId,
+      limitMessages: 3,
+    })
+
+    expect(result.map((message) => message.id)).toEqual(['user-2', 'assistant-2', 'user-3'])
+  })
+
+  it('excludes the regenerated assistant from the projected conversation tail', async () => {
+    const supabase = createTurnProjectionSupabase()
+
+    const result = await loadProjectedConversationTail({
+      supabase,
+      chatId,
+      limitMessages: 2,
+      excludeAssistantForTurnId: 'turn-2',
+    })
+
+    expect(result.map((message) => message.id)).toEqual(['user-2', 'user-3'])
+  })
+
   it('counts conversation and visible system messages separately', async () => {
     const supabase = createConversationCountSupabase()
 
@@ -679,6 +886,64 @@ describe('projected conversation helpers', () => {
 
     expect(conversationCount).toBe(3)
     expect(projectedCount).toBe(4)
+  })
+
+  it('uses exact count queries instead of loading all chat turn rows for counters', async () => {
+    const { supabase, chatTurnCalls, messageCalls } = createCounterQueryShapeSupabase()
+
+    const [conversationCount, projectedCount] = await Promise.all([
+      countProjectedConversationMessages({ supabase, chatId }),
+      countProjectedChatMessages({ supabase, chatId }),
+    ])
+
+    expect(conversationCount).toBe(3)
+    expect(projectedCount).toBe(4)
+    expect(chatTurnCalls).toEqual([
+      expect.objectContaining({
+        columns: 'id',
+        options: { count: 'exact', head: true },
+        filters: expect.arrayContaining([
+          { method: 'eq', field: 'chat_id', value: chatId },
+          { method: 'not', field: 'user_message_id', operator: 'is', value: null },
+        ]),
+      }),
+      expect.objectContaining({
+        columns: 'id',
+        options: { count: 'exact', head: true },
+        filters: expect.arrayContaining([
+          { method: 'eq', field: 'chat_id', value: chatId },
+          { method: 'not', field: 'active_assistant_message_id', operator: 'is', value: null },
+        ]),
+      }),
+      expect.objectContaining({
+        columns: 'id',
+        options: { count: 'exact', head: true },
+        filters: expect.arrayContaining([
+          { method: 'eq', field: 'chat_id', value: chatId },
+          { method: 'not', field: 'user_message_id', operator: 'is', value: null },
+        ]),
+      }),
+      expect.objectContaining({
+        columns: 'id',
+        options: { count: 'exact', head: true },
+        filters: expect.arrayContaining([
+          { method: 'eq', field: 'chat_id', value: chatId },
+          { method: 'not', field: 'active_assistant_message_id', operator: 'is', value: null },
+        ]),
+      }),
+    ])
+    expect(messageCalls).toEqual([
+      expect.objectContaining({
+        columns: 'id',
+        options: { count: 'exact', head: true },
+        filters: expect.arrayContaining([
+          { method: 'eq', field: 'chat_id', value: chatId },
+          { method: 'eq', field: 'role', value: 'system' },
+          { method: 'neq', field: 'message_status', value: MESSAGE_STATUS_SUPERSEDED },
+          { method: 'neq', field: 'message_status', value: MESSAGE_STATUS_GENERATING },
+        ]),
+      }),
+    ])
   })
 
   it('returns null when the latest turn has no active assistant message', async () => {
@@ -702,5 +967,34 @@ describe('projected conversation helpers', () => {
     }) as unknown as SupabaseClientType
 
     await expect(loadLatestProjectedAssistantMessage({ supabase, chatId })).resolves.toBeNull()
+  })
+
+  it('loads the latest assistant message from the latest assistant turn only', async () => {
+    const { supabase, chatTurnCalls, messageCalls } = createLatestAssistantQueryShapeSupabase()
+
+    const result = await loadLatestProjectedAssistantMessage({ supabase, chatId })
+
+    expect(result?.id).toBe('assistant-2')
+    expect(chatTurnCalls).toEqual([
+      expect.objectContaining({
+        columns: 'active_assistant_message_id',
+        order: { field: 'turn_index', ascending: false },
+        limit: 1,
+        filters: expect.arrayContaining([
+          { method: 'eq', field: 'chat_id', value: chatId },
+          {
+            method: 'not',
+            field: 'active_assistant_message_id',
+            operator: 'is',
+            value: null,
+          },
+        ]),
+      }),
+    ])
+    expect(messageCalls).toEqual([
+      expect.objectContaining({
+        ids: ['assistant-2'],
+      }),
+    ])
   })
 })

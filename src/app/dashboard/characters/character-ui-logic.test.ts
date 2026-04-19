@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { MAX_IMPORT_UPLOAD_MB } from '@/lib/import/constants'
 import {
+  buildCharacterImportContractRequestBody,
   buildCharacterImportRequestBody,
   buildUploadPath,
   getCharacterImportErrorMessage,
@@ -56,18 +57,39 @@ describe('character-ui-logic import helpers', () => {
     )
   })
 
-  it('builds the enqueue payload from upload metadata', () => {
+  it('builds the contract and enqueue payloads from upload metadata', () => {
     expect(
-      buildCharacterImportRequestBody('user-1/imports/file.rbx', {
+      buildCharacterImportContractRequestBody({
         name: 'Guide.rbx',
         size: 42,
         type: 'application/octet-stream',
       }),
     ).toEqual({
+      action: 'prepare',
+      fileName: 'Guide.rbx',
+      fileType: 'application/octet-stream',
+      fileSize: 42,
+    })
+
+    expect(
+      buildCharacterImportRequestBody(
+        {
+          path: 'user-1/imports/file.rbx',
+          uploadTicket: 'ticket-1',
+        },
+        {
+          name: 'Guide.rbx',
+          size: 42,
+          type: 'application/octet-stream',
+        },
+      ),
+    ).toEqual({
+      action: 'enqueue',
       path: 'user-1/imports/file.rbx',
       fileName: 'Guide.rbx',
       fileType: 'application/octet-stream',
       fileSize: 42,
+      uploadTicket: 'ticket-1',
     })
   })
 
@@ -77,30 +99,28 @@ describe('character-ui-logic import helpers', () => {
   })
 
   it('starts a character import job successfully', async () => {
-    const upload = vi.fn().mockResolvedValue({
-      data: { path: 'user-1/imports/guide.rbx' },
-      error: null,
-    })
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ jobId: 'job-1', status: 'processing' }),
-    })
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          path: 'user-1/imports/guide.rbx',
+          signedUrl: 'https://storage.test/upload?token=abc',
+          token: 'abc',
+          uploadTicket: 'ticket-1',
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({}),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ jobId: 'job-1', status: 'processing' }),
+      })
 
     const result = await startCharacterImportJob({
       selectedFile: createImportFile('Guide.rbx'),
-      supabase: {
-        auth: {
-          getUser: async () => ({
-            data: { user: { id: 'user-1' } },
-            error: null,
-          }),
-        },
-        storage: {
-          from: () => ({
-            upload,
-          }),
-        },
-      },
       fetchImpl,
     })
 
@@ -110,11 +130,16 @@ describe('character-ui-logic import helpers', () => {
       jobStatus: 'processing',
       statusMessage: 'Preparing background import job...',
     })
-    expect(upload).toHaveBeenCalledOnce()
     expect(fetchImpl).toHaveBeenCalledWith(
       '/api/characters/import/storage',
       expect.objectContaining({
         method: 'POST',
+      }),
+    )
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://storage.test/upload?token=abc',
+      expect.objectContaining({
+        method: 'PUT',
       }),
     )
   })
@@ -122,14 +147,6 @@ describe('character-ui-logic import helpers', () => {
   it('returns validation and dependency failures from import startup', async () => {
     const missingFile = await startCharacterImportJob({
       selectedFile: null,
-      supabase: {
-        auth: { getUser: async () => ({ data: { user: null }, error: null }) },
-        storage: {
-          from: () => ({
-            upload: vi.fn(),
-          }),
-        },
-      },
       fetchImpl: vi.fn(),
     })
 
@@ -140,20 +157,10 @@ describe('character-ui-logic import helpers', () => {
 
     const loginFailure = await startCharacterImportJob({
       selectedFile: createImportFile('Guide.rbx'),
-      supabase: {
-        auth: {
-          getUser: async () => ({
-            data: { user: null },
-            error: null,
-          }),
-        },
-        storage: {
-          from: () => ({
-            upload: vi.fn(),
-          }),
-        },
-      },
-      fetchImpl: vi.fn(),
+      fetchImpl: vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: 'Login required' }),
+      }),
     })
 
     expect(loginFailure).toEqual({
@@ -165,23 +172,21 @@ describe('character-ui-logic import helpers', () => {
   it('returns upload and enqueue failures from import startup', async () => {
     const uploadFailure = await startCharacterImportJob({
       selectedFile: createImportFile('Guide.rbx'),
-      supabase: {
-        auth: {
-          getUser: async () => ({
-            data: { user: { id: 'user-1' } },
-            error: null,
+      fetchImpl: vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            path: 'user-1/imports/guide.rbx',
+            signedUrl: 'https://storage.test/upload?token=abc',
+            token: 'abc',
+            uploadTicket: 'ticket-1',
           }),
-        },
-        storage: {
-          from: () => ({
-            upload: vi.fn().mockResolvedValue({
-              data: null,
-              error: { message: 'storage down' },
-            }),
-          }),
-        },
-      },
-      fetchImpl: vi.fn(),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({ error: 'storage down' }),
+        }),
     })
 
     expect(uploadFailure).toEqual({
@@ -191,26 +196,25 @@ describe('character-ui-logic import helpers', () => {
 
     const enqueueFailure = await startCharacterImportJob({
       selectedFile: createImportFile('Guide.rbx'),
-      supabase: {
-        auth: {
-          getUser: async () => ({
-            data: { user: { id: 'user-1' } },
-            error: null,
+      fetchImpl: vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            path: 'user-1/imports/guide.rbx',
+            signedUrl: 'https://storage.test/upload?token=abc',
+            token: 'abc',
+            uploadTicket: 'ticket-1',
           }),
-        },
-        storage: {
-          from: () => ({
-            upload: vi.fn().mockResolvedValue({
-              data: { path: 'user-1/imports/guide.rbx' },
-              error: null,
-            }),
-          }),
-        },
-      },
-      fetchImpl: vi.fn().mockResolvedValue({
-        ok: false,
-        json: async () => ({ error: 'queue unavailable' }),
-      }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({ error: 'queue unavailable' }),
+        }),
     })
 
     expect(enqueueFailure).toEqual({

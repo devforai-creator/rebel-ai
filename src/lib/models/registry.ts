@@ -324,13 +324,22 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
   // Anthropic (Claude)
   // ===========================================================================
   {
+    id: 'claude-opus-4-7',
+    provider: 'anthropic',
+    displayName: 'Claude Opus 4.7',
+    aliases: ['claude-opus-4.7'],
+    pricing: CLAUDE_OPUS_PRICING,
+    uiVisible: true,
+    uiOrder: 1,
+  },
+  {
     id: 'claude-opus-4-6',
     provider: 'anthropic',
     displayName: 'Claude Opus 4.6',
     aliases: ['claude-opus-4.6'],
     pricing: CLAUDE_OPUS_46_PRICING,
     uiVisible: true,
-    uiOrder: 1,
+    uiOrder: 2,
   },
   {
     id: 'claude-opus-4-5',
@@ -339,7 +348,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
     aliases: ['claude-opus-4.5'],
     pricing: CLAUDE_OPUS_PRICING,
     uiVisible: true,
-    uiOrder: 2,
+    uiOrder: 3,
   },
   {
     id: 'claude-sonnet-4-5',
@@ -348,7 +357,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
     aliases: ['claude-sonnet-4.5'],
     pricing: CLAUDE_SONNET_PRICING,
     uiVisible: true,
-    uiOrder: 3,
+    uiOrder: 4,
   },
   {
     id: 'claude-haiku-4-5',
@@ -357,7 +366,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
     aliases: ['claude-haiku-4.5'],
     pricing: CLAUDE_HAIKU_PRICING,
     uiVisible: true,
-    uiOrder: 4,
+    uiOrder: 5,
   },
   {
     id: 'claude-3-5-haiku-latest',

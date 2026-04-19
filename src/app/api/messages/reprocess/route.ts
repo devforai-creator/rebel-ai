@@ -5,23 +5,22 @@ import { CHAT_REPROCESS_LIMITS } from '@/lib/chat/runtime-limits'
 import { streamText } from 'ai'
 import { buildLanguageModel } from '@/lib/llm/model-factory'
 import { getDefaultModelForProvider } from '@/lib/models'
+import {
+  SUPPORT_TIER_FEATURES,
+  withSupportTierHeaders as withSupportTierHeadersBase,
+} from '@/lib/support-tier'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const SUPPORT_TIER_HEADER = 'X-RebelAI-Support-Tier'
-const REPROCESS_SUPPORT_TIER = 'experimental'
-
 const reprocessRequestSchema = z.object({
   messageId: z.string().min(1),
 })
 
 function withSupportTierHeaders(headers?: HeadersInit) {
-  const nextHeaders = new Headers(headers)
-  nextHeaders.set(SUPPORT_TIER_HEADER, REPROCESS_SUPPORT_TIER)
-  return nextHeaders
+  return withSupportTierHeadersBase(SUPPORT_TIER_FEATURES.MESSAGE_REPROCESS.tier, headers)
 }
 
 function createReprocessTextResponse(body: string, init?: ResponseInit) {
@@ -143,7 +142,6 @@ export async function POST(request: Request) {
       model,
       system: profile.reprocess_prompt,
       messages: [{ role: 'user', content: message.content }],
-      temperature: 1,
     })
 
     let fullText = ''

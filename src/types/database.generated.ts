@@ -1178,6 +1178,7 @@ export type Database = {
           chunk_summary_prompt: string | null
           created_at: string
           display_name: string | null
+          enable_chat_usage_stats: boolean
           enable_episodic_rag: boolean
           fact_extraction_prompt: string | null
           id: string
@@ -1196,6 +1197,7 @@ export type Database = {
           chunk_summary_prompt?: string | null
           created_at?: string
           display_name?: string | null
+          enable_chat_usage_stats?: boolean
           enable_episodic_rag?: boolean
           fact_extraction_prompt?: string | null
           id: string
@@ -1214,6 +1216,7 @@ export type Database = {
           chunk_summary_prompt?: string | null
           created_at?: string
           display_name?: string | null
+          enable_chat_usage_stats?: boolean
           enable_episodic_rag?: boolean
           fact_extraction_prompt?: string | null
           id?: string
@@ -1469,6 +1472,13 @@ export type Database = {
           retry_after: number
         }[]
       }
+      claim_pending_chat_job: {
+        Args: never
+        Returns: {
+          id: string
+          payload: Json
+        }[]
+      }
       create_secret:
         | {
             Args: { secret_name: string; secret_value: string }
@@ -1489,6 +1499,18 @@ export type Database = {
       delete_orphaned_modules: {
         Args: { module_ids: string[]; requester?: string }
         Returns: number
+      }
+      update_character_with_modules: {
+        Args: {
+          p_character_id: string
+          p_description: string
+          p_greeting_message: string | null
+          p_module_ids?: string[]
+          p_name: string
+          p_requester?: string
+          p_system_prompt: string
+        }
+        Returns: undefined
       }
       delete_secret:
         | { Args: { secret_name: string }; Returns: undefined }
@@ -1535,6 +1557,21 @@ export type Database = {
       get_decrypted_secret: {
         Args: { requester?: string; secret_name: string }
         Returns: string
+      }
+      list_current_user_modules: {
+        Args: never
+        Returns: {
+          asset_count: number
+          created_at: string
+          description: string
+          hide_icon: boolean
+          id: string
+          lorebook_count: number
+          name: string
+          regex_count: number
+          source_file: string
+          updated_at: string
+        }[]
       }
       match_chat_facts: {
         Args: {

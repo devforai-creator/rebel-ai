@@ -73,6 +73,15 @@ class BaseQuery<T extends Record<string, unknown>> {
     return this
   }
 
+  not(field: keyof T, operator: string, value: unknown) {
+    if (operator === 'is' && value === null) {
+      this.filters.push((row) => row[field] !== null)
+      return this
+    }
+    this.filters.push((row) => row[field] !== value)
+    return this
+  }
+
   gt(field: keyof T, value: number) {
     this.filters.push((row) => Number(row[field]) > value)
     return this
@@ -274,7 +283,10 @@ class MessagesCountQuery {
 class ChatTurnsTable {
   constructor(private readonly mock: SupabaseMock) {}
 
-  select(columns: string) {
+  select(columns: string, options?: { count?: string; head?: boolean }) {
+    if (options?.head) {
+      return new ChatTurnsCountQuery(this.mock)
+    }
     return new ChatTurnsQuery(this.mock, columns)
   }
 }
@@ -282,6 +294,40 @@ class ChatTurnsTable {
 class ChatTurnsQuery extends BaseQuery<ChatTurnRow> {
   constructor(mock: SupabaseMock, columns: string) {
     super(() => mock.chatTurns, mapColumns<ChatTurnRow>(columns))
+  }
+}
+
+class ChatTurnsCountQuery {
+  constructor(private readonly mock: SupabaseMock) {}
+
+  private predicates: Array<(row: ChatTurnRow) => boolean> = []
+
+  eq(field: keyof ChatTurnRow, value: unknown) {
+    this.predicates.push((row) => row[field] === value)
+    return this
+  }
+
+  not(field: keyof ChatTurnRow, operator: string, value: unknown) {
+    if (operator === 'is' && value === null) {
+      this.predicates.push((row) => row[field] !== null)
+      return this
+    }
+    this.predicates.push((row) => row[field] !== value)
+    return this
+  }
+
+  then<TResult1 = { count: number; error: null }, TResult2 = never>(
+    onfulfilled?:
+      | ((value: { count: number; error: null }) => TResult1 | PromiseLike<TResult1>)
+      | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ) {
+    return Promise.resolve({
+      count: this.mock.chatTurns.filter((row) =>
+        this.predicates.every((predicate) => predicate(row)),
+      ).length,
+      error: null,
+    }).then(onfulfilled, onrejected)
   }
 }
 

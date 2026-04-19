@@ -38,6 +38,9 @@ type ReasoningEffortValue = (typeof REASONING_EFFORT_OPTIONS)[number]['value']
 const INITIAL_FORM_STATE: ApiKeyFormState = {
   error: null,
   success: false,
+  warning: null,
+  rollbackFailed: false,
+  cleanupReference: null,
 }
 
 export default function AddApiKeyForm() {
@@ -120,6 +123,19 @@ export default function AddApiKeyForm() {
         {displayError && (
           <InlineFeedback tone="error" className="mb-4">
             {displayError}
+          </InlineFeedback>
+        )}
+
+        {formState.warning && (
+          <InlineFeedback tone="warning" className="mb-4">
+            <div className="space-y-1">
+              <p>{formState.warning}</p>
+              {formState.cleanupReference && (
+                <p className="text-xs font-mono break-all">
+                  정리 참조 ID: {formState.cleanupReference}
+                </p>
+              )}
+            </div>
           </InlineFeedback>
         )}
 

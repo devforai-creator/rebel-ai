@@ -31,6 +31,7 @@ const createMockSupabaseClient = (authenticated: boolean, user = mockUser) => {
         remove: vi.fn().mockResolvedValue({ data: [], error: null }),
       }),
     },
+    rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
     from: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnThis(),
       insert: vi.fn().mockReturnThis(),
@@ -77,12 +78,6 @@ describe('API Authentication Patterns', () => {
 
     it('returns 200 when authenticated', async () => {
       const mockClient = createMockSupabaseClient(true)
-      // Mock successful module fetch
-      mockClient.from = vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: [], error: null }),
-      })
 
       vi.doMock('@/lib/supabase/server', () => ({
         createClient: vi.fn().mockResolvedValue(mockClient),
@@ -97,15 +92,8 @@ describe('API Authentication Patterns', () => {
       expect(body.modules).toBeDefined()
     })
 
-    it('queries with user_id filter', async () => {
+    it('loads module summaries through the RPC helper', async () => {
       const mockClient = createMockSupabaseClient(true)
-      const eqMock = vi.fn().mockReturnThis()
-
-      mockClient.from = vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: eqMock,
-        order: vi.fn().mockResolvedValue({ data: [], error: null }),
-      })
 
       vi.doMock('@/lib/supabase/server', () => ({
         createClient: vi.fn().mockResolvedValue(mockClient),
@@ -114,8 +102,7 @@ describe('API Authentication Patterns', () => {
       const { GET } = await import('@/app/api/modules/route')
       await GET()
 
-      // Verify user_id filter was applied
-      expect(eqMock).toHaveBeenCalledWith('user_id', mockUser.id)
+      expect(mockClient.rpc).toHaveBeenCalledWith('list_current_user_modules')
     })
   })
 

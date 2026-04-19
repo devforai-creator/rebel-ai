@@ -12,6 +12,7 @@ Use this document when you want to:
 If you only want the shortest possible local boot flow, start with [docs/GETTING_STARTED.md](./docs/GETTING_STARTED.md).
 
 Repository default note: public signup is currently blocked. For a fresh personal deployment, create the first user from Supabase Dashboard instead of relying on the app signup form.
+Storage default note: `character-assets` and `module-assets` are private by default. The app serves them through signed or authenticated URLs at runtime.
 
 ## 1. Create a Supabase Project
 
@@ -77,6 +78,7 @@ Once a project exists, use this rule:
 - regenerate `supabase/schema.sql` with `npm run db:schema`
 - push to production with `supabase db push --linked`
 - verify with `supabase db diff --linked --schema public`
+- if the change touched buckets, storage policies, or signed/public delivery behavior, also verify with `supabase db diff --linked --schema storage`
 
 For the full workflow and drift recovery steps, see
 [`docs/DB_CHANGE_WORKFLOW.md`](./docs/DB_CHANGE_WORKFLOW.md).
@@ -91,8 +93,9 @@ In Supabase Dashboard, open `Settings -> API` and copy:
 
 You will use these in `.env.local` or your deployment environment.
 
-Storage note: keep `character-assets` and `module-assets` private. The app now serves those files
-through authenticated signed URLs, not public bucket reads.
+Storage note: keep `character-assets` and `module-assets` private. The app serves those files
+through authenticated signed URLs, not public bucket reads. Reopening anonymous public reads is an
+explicit operating-mode change, not a bootstrap convenience step.
 
 ## 4. Configure Authentication URLs
 
@@ -184,6 +187,7 @@ Then verify the happy path:
 4. Add an API key in `/dashboard/api-keys`
 5. Import an `.rbx` package in the character import UI
 6. Start a chat and confirm responses stream
+7. Visit `/auth/signup` and confirm the closed-signup notice still renders for the default operating contract
 
 ## 7. Optional Admin Access
 
@@ -209,6 +213,7 @@ If you deploy on Vercel:
 - keep `CRON_SECRET` configured so Vercel Cron can call the trigger endpoints
 - set `INTERNAL_API_ORIGIN` to the production app URL
 - verify `vercel.json` cron jobs are active after deployment
+- run `npm run ops:smoke` against the deployed origin after changing auth, internal triggers, storage delivery, or environment-variable wiring
 
 Current trigger endpoints accept only bearer-token auth. You should not rely on query-string secrets.
 Minute-level Vercel Cron is the simplest future public-serving path and requires a plan that supports it. On Vercel Hobby, use an external scheduler or run the runner scripts from another process instead.
@@ -220,6 +225,7 @@ If you self-host elsewhere, or you deploy the app on Vercel Hobby:
 - set `INTERNAL_API_ORIGIN` explicitly
 - provide a scheduler that calls the internal trigger routes with `Authorization: Bearer <CRON_SECRET>`
 - or run `npm run chat:jobs` / `npm run character:jobs` from your own worker process
+- run `npm run ops:smoke` after deployment changes and manually confirm one signed asset still loads while the equivalent anonymous public bucket URL does not return `200`
 
 For low-cost hosted setups, keep RBX imports within your storage provider's limits. Raising `NEXT_PUBLIC_IMPORT_MAX_UPLOAD_MB` does not bypass hosted storage caps.
 

@@ -1,3 +1,4 @@
+export type { GenerationTranscriptMetrics } from './turn-projection'
 export type {
   OrderedChatMessageDraft,
   OrderedChatMessageInsert,
@@ -12,9 +13,11 @@ export {
   countProjectedConversationMessages,
   loadGenerationTranscript,
   loadLatestProjectedAssistantMessage,
+  loadLatestProjectedConversationMessage,
   loadLatestProjectedMessage,
   loadProjectedChatMessages,
   loadProjectedChatWindow,
   loadProjectedConversationMessages,
   loadProjectedConversationRange,
+  loadProjectedConversationTail,
 } from './turn-projection'

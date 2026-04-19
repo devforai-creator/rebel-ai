@@ -5,7 +5,7 @@ import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { useAutosizeTextArea } from '@/hooks/useAutosizeTextArea'
 
 // Local imports
-import { type ChatInterfaceProps, type InlineUiCardRegistry, type DebugInfo } from './utils'
+import { type ChatInterfaceProps, type DebugInfo } from './utils'
 import {
   useChatInterfaceSettings,
   useQueuedChat,
@@ -16,15 +16,9 @@ import {
   useChatRealtimeSubscription,
   useChatRuntimeVariables,
   useChatUsageStats,
+  useChatMetadataViews,
 } from './hooks'
-import { MessageList, TokenStatsPanel, DebugModal } from './components'
-
-function isValidInlineUiCard(raw: unknown): raw is Record<string, unknown> {
-  if (!raw || typeof raw !== 'object') return false
-  if (!('meta' in raw) || !('views' in raw)) return false
-  const views = (raw as Record<string, unknown>).views
-  return typeof views === 'object' && views !== null && Object.keys(views).length > 0
-}
+import { ChatComposer, MessageList, TokenStatsPanel, DebugModal } from './components'
 
 export default function ChatInterface({
   chatId,
@@ -33,6 +27,7 @@ export default function ChatInterface({
   preselectedApiKeyId,
   initialModelConfig,
   initialUsageStats,
+  usageStatsEnabled,
   character,
   initialHistoryCursor,
   hasMoreHistory,
@@ -73,13 +68,20 @@ export default function ChatInterface({
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
 
   // State
-  const { latestUsage, fetchLatestUsage, handleUsageRealtime } = useChatUsageStats({
-    chatId,
-    initialUsageStats,
-  })
-
   // Developer mode state
   const [statsExpanded, setStatsExpanded] = useState(false)
+
+  const {
+    latestUsage,
+    isLoading: usageStatsLoading,
+    fetchLatestUsage,
+    handleUsageRealtime,
+  } = useChatUsageStats({
+    chatId,
+    initialUsageStats,
+    enabled: usageStatsEnabled,
+    active: statsExpanded,
+  })
 
   // Debug info and persisted IDs tracking
   const debugInfoMap = useRef<Map<string, DebugInfo>>(new Map())
@@ -115,6 +117,7 @@ export default function ChatInterface({
     setMessages,
     streamingDraft,
     input,
+    insertInputText,
     handleInputChange,
     handleSubmit,
     isLoading,
@@ -157,42 +160,8 @@ export default function ChatInterface({
     () => combineHistoryWithLiveMessages(historyMessages, messages),
     [historyMessages, messages],
   )
-
-  const defaultVariables = useMemo(() => {
-    return character.metadata?.default_variables as Record<string, unknown> | undefined
-  }, [character.metadata])
-
-  // Merge default variables with runtime variables (runtime takes precedence)
-  const mergedVariables = useMemo(() => {
-    return { ...defaultVariables, ...runtimeVariables }
-  }, [defaultVariables, runtimeVariables])
-
-  // Detect ui_card from character metadata (v1.1 SUU integration)
-  // Passed down to MessageList for per-message inline rendering
-  const uiCard = useMemo(() => {
-    const raw = character.metadata?.ui_card as Record<string, unknown> | null | undefined
-    return isValidInlineUiCard(raw) ? raw : null
-  }, [character.metadata])
-
-  const uiCardRegistry = useMemo(() => {
-    const raw = character.metadata?.ui_cards
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-
-    const entries = Object.entries(raw).filter(
-      ([key, value]) => key.trim().length > 0 && isValidInlineUiCard(value),
-    )
-    if (entries.length === 0) return null
-
-    return Object.fromEntries(entries) as InlineUiCardRegistry
-  }, [character.metadata])
-
-  const imageDisplay = useMemo(() => {
-    const raw = character.metadata?.image_display as Record<string, unknown> | null | undefined
-    if (!raw || typeof raw !== 'object') return null
-    if (!raw.meta || !raw.views || typeof raw.views !== 'object') return null
-    if (Object.keys(raw.views as Record<string, unknown>).length === 0) return null
-    return raw
-  }, [character.metadata])
+  const { defaultVariables, mergedVariables, uiCard, uiCardRegistry, imageDisplay } =
+    useChatMetadataViews(character, runtimeVariables)
 
   const {
     editingMessageId,
@@ -250,6 +219,8 @@ export default function ChatInterface({
         onSelectMemoryMode={handleSelectMemoryMode}
         onToggleAnthropicBatchMode={handleToggleAnthropicBatchMode}
         latestUsage={latestUsage}
+        usageStatsEnabled={usageStatsEnabled}
+        usageStatsLoading={usageStatsLoading}
         statsExpanded={statsExpanded}
         onToggleStats={() => setStatsExpanded(!statsExpanded)}
         isDeveloper={isDeveloper}
@@ -301,35 +272,14 @@ export default function ChatInterface({
         </div>
       </div>
 
-      {/* Input form */}
-      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
-        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <textarea
-              ref={composerRef}
-              value={input}
-              onChange={handleInputChange}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault()
-                  void handleSubmit()
-                }
-              }}
-              placeholder="Enter your message... (Enter to send, Shift+Enter for new line)"
-              rows={1}
-              className="w-full flex-1 px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white resize-none max-h-[60vh] overflow-y-auto"
-              disabled={isLoading}
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !input.trim()}
-              className="w-full sm:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors sm:self-end"
-            >
-              {isLoading ? 'Sending...' : 'Send'}
-            </button>
-          </div>
-        </form>
-      </div>
+      <ChatComposer
+        composerRef={composerRef}
+        input={input}
+        isLoading={isLoading}
+        onInputChange={handleInputChange}
+        onQuickInsert={insertInputText}
+        onSubmit={handleSubmit}
+      />
 
       {/* Debug modal */}
       <DebugModal

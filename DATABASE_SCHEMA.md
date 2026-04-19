@@ -1,6 +1,8 @@
 # Database Schema Documentation
 
-This document provides a comprehensive reference for the RebelAI database schema. It covers all tables, relationships, storage buckets, RPC functions, and security policies.
+This document is a human-oriented schema overview for RebelAI.
+It is not the exact source of truth for every column, RPC, or policy detail.
+For precise schema state, use `supabase/migrations/`, `supabase/schema.sql`, `src/types/database.generated.ts`, and matching tests.
 
 **Last Updated:** 2025-11-19 (v0.7.4)
 
@@ -243,7 +245,7 @@ Individual chat messages with token tracking.
 
 - Users can view/insert/delete messages in their own chats only
 
-**Note:** Messages can contain HTML (v0.4.7+) which is sanitized with `isomorphic-dompurify` before display.
+**Historical note:** Older builds experimented with sanitized HTML rendering, but that is no longer part of the supported product contract. Current maintainer-facing behavior should be described in terms of constrained markdown, asset tokens, and RBX/SUU inline UI instead of raw HTML support.
 
 ---
 
@@ -987,4 +989,4 @@ ORDER BY cm.priority DESC;
 
 - `SUPABASE_SETUP.md` - Initial setup instructions
 - `SECURITY.md` - Current security boundaries and operational safeguards
-- `docs/rbx-spec.md` - RBX package format and runtime contract
+- `docs/rbx-spec.md` - RBX notes and implementation entrypoint

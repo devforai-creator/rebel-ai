@@ -319,5 +319,42 @@ describe('generateFactEmbedding', () => {
       const result = await generateFactEmbedding('test text', 'user-123', supabase)
       expect(result).toBeNull()
     })
+
+    it('reuses cached embedding access across repeated calls', async () => {
+      const supabase = createMockSupabase()
+      const adminClient = createMockAdminClient()
+      mockCreateAdminClient.mockReturnValue(adminClient)
+      setupVoyageEmbed()
+
+      const first = await generateFactEmbedding('first text', 'user-123', supabase)
+      const second = await generateFactEmbedding('second text', 'user-123', supabase)
+
+      expect(first).toEqual([0.1, 0.2, 0.3, 0.4, 0.5])
+      expect(second).toEqual([0.1, 0.2, 0.3, 0.4, 0.5])
+      expect(
+        (supabase.from as ReturnType<typeof vi.fn>).mock.calls.map(([table]) => table),
+      ).toEqual(['profiles', 'api_keys'])
+      expect(mockCreateAdminClient).toHaveBeenCalledTimes(1)
+      expect(adminClient.rpc).toHaveBeenCalledTimes(1)
+    })
+
+    it('uses preloaded profile settings without querying profiles again', async () => {
+      const supabase = createMockSupabase()
+      const adminClient = createMockAdminClient()
+      mockCreateAdminClient.mockReturnValue(adminClient)
+      setupVoyageEmbed()
+
+      const result = await generateFactEmbedding('test text', 'user-123', supabase, {
+        profileSettings: {
+          enable_episodic_rag: true,
+          voyage_embedding_api_key_id: 'api-key-123',
+        },
+      })
+
+      expect(result).toEqual([0.1, 0.2, 0.3, 0.4, 0.5])
+      expect(
+        (supabase.from as ReturnType<typeof vi.fn>).mock.calls.map(([table]) => table),
+      ).toEqual(['api_keys'])
+    })
   })
 })

@@ -89,6 +89,45 @@ function createCheckDefinitions({ origin, adminSecret, activeRunners }) {
 
   const checks = [
     {
+      key: 'signup-closed',
+      label: 'signup closed status page',
+      url: new URL('/auth/signup', origin),
+      init: {
+        method: 'GET',
+      },
+      evaluate(response, body) {
+        if (!response.ok) {
+          return {
+            status: 'fail',
+            summary: `unexpected HTTP ${response.status}`,
+            details: body,
+          }
+        }
+
+        if (typeof body !== 'string') {
+          return {
+            status: 'fail',
+            summary: 'unexpected signup response body',
+            details: body,
+          }
+        }
+
+        if (!body.includes('Sign-up Closed')) {
+          return {
+            status: 'fail',
+            summary: 'signup page no longer advertises the closed-signup contract',
+            details: null,
+          }
+        }
+
+        return {
+          status: 'pass',
+          summary: 'signup remains explicitly closed',
+          details: null,
+        }
+      },
+    },
+    {
       key: 'health',
       label: 'internal health',
       url: new URL('/api/internal/health', origin),

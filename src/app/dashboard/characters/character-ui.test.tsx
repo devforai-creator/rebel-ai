@@ -6,7 +6,6 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
 import CharacterCard from './CharacterCard'
 import CharacterForm from './CharacterForm'
 import CharacterImport from './CharacterImport'
@@ -54,32 +53,6 @@ vi.mock('@/hooks/useUserResources', () => ({
     modules,
   }),
 }))
-
-vi.mock('@/lib/supabase/client', () => ({
-  createClient: vi.fn(),
-}))
-
-function createImportSupabaseMock() {
-  const uploadMock = vi.fn()
-  return {
-    uploadMock,
-    supabase: {
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: {
-            user: { id: 'user-1' },
-          },
-          error: null,
-        }),
-      },
-      storage: {
-        from: vi.fn().mockReturnValue({
-          upload: uploadMock,
-        }),
-      },
-    },
-  }
-}
 
 describe('CharacterCard', () => {
   it('renders the shared destructive action for deletable characters', () => {
@@ -231,15 +204,22 @@ describe('CharacterImport', () => {
 
   it('uploads an RBX package, tracks the background job, and redirects on success', async () => {
     const user = userEvent.setup()
-    const { uploadMock, supabase } = createImportSupabaseMock()
-    uploadMock.mockResolvedValue({
-      data: { path: 'user-1/imports/job-1-guide.rbx' },
-      error: null,
-    })
-    vi.mocked(createClient).mockReturnValue(supabase as never)
 
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          path: 'user-1/imports/job-1-guide-export.rbx',
+          signedUrl: 'https://storage.test/upload?token=abc',
+          token: 'abc',
+          uploadTicket: 'ticket-1',
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({}),
+      })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ jobId: 'job-1', status: 'pending' }),
@@ -283,8 +263,7 @@ describe('CharacterImport', () => {
     expect(await screen.findByText('Import complete.')).toBeTruthy()
     expect(screen.getByText('Some assets failed to import.')).toBeTruthy()
     expect(screen.getByText('Missing optional lorebook metadata')).toBeTruthy()
-    expect(uploadMock).toHaveBeenCalled()
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
 
     await waitFor(
       () => {
@@ -296,15 +275,22 @@ describe('CharacterImport', () => {
 
   it('reports polling failures from the background import status check', async () => {
     const user = userEvent.setup()
-    const { uploadMock, supabase } = createImportSupabaseMock()
-    uploadMock.mockResolvedValue({
-      data: { path: 'user-1/imports/job-2-guide.rbx' },
-      error: null,
-    })
-    vi.mocked(createClient).mockReturnValue(supabase as never)
 
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          path: 'user-1/imports/job-2-guide.rbx',
+          signedUrl: 'https://storage.test/upload?token=def',
+          token: 'def',
+          uploadTicket: 'ticket-2',
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({}),
+      })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ jobId: 'job-2', status: 'pending' }),

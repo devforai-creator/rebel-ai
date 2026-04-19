@@ -97,7 +97,6 @@ export async function translateMessageForUser({
       model,
       system: TRANSLATION_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: messageContent }],
-      temperature: 0.3,
     })
 
     translatedText = trimOutput ? text.trim() : text

@@ -19,6 +19,7 @@ import {
   isChatDeliveryMode,
 } from '@/lib/chat/delivery-mode'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
+import { dispatchNonBlockingSupportEffect, SUPPORT_TIER_FEATURES } from '@/lib/support-tier'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { scheduleChatJobRunnerTrigger } from './background-trigger'
@@ -382,8 +383,17 @@ export async function POST(req: Request) {
     const jobId = enqueueResult.jobId
 
     if (insertedUserMessageId) {
-      // Fire-and-forget: trigger background translation for user message
-      triggerMessageTranslation(insertedUserMessageId, user.id)
+      dispatchNonBlockingSupportEffect({
+        feature: SUPPORT_TIER_FEATURES.MESSAGE_TRANSLATION_TRIGGER,
+        execute: () => triggerMessageTranslation(insertedUserMessageId, user.id),
+        context: {
+          chatId,
+          jobId,
+          messageId: insertedUserMessageId,
+          userId: user.id,
+        },
+        logPrefix: '[Chat API]',
+      })
     }
 
     scheduleChatJobRunnerTrigger({

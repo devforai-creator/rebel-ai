@@ -337,7 +337,7 @@ export function useChatSummariesState({
       }
 
       const result = await updateSummary(summaryId, chatId, summaryEditContent)
-      if (result.error) {
+      if ('error' in result) {
         toast.error('Failed to update summary: ' + result.error)
         return
       }
@@ -369,7 +369,7 @@ export function useChatSummariesState({
       }
 
       const result = await updateFact(factId, chatId, factEditContent)
-      if (result.error) {
+      if ('error' in result) {
         toast.error(result.error)
         return
       }
@@ -387,7 +387,7 @@ export function useChatSummariesState({
       const result = await reembedFact(factId, chatId)
       setReembeddingFactId(null)
 
-      if (result?.error) {
+      if ('error' in result) {
         toast.error(result.error)
         return
       }
@@ -403,7 +403,7 @@ export function useChatSummariesState({
       const result = await regenerateSummary(summaryId, chatId)
       setRegeneratingSummaryId(null)
 
-      if (result?.error) {
+      if ('error' in result) {
         toast.error(result.error)
         return
       }
@@ -419,7 +419,7 @@ export function useChatSummariesState({
       const result = await regenerateFacts(factId, chatId)
       setRegeneratingFactId(null)
 
-      if (result?.error) {
+      if ('error' in result) {
         toast.error(result.error)
         return
       }
@@ -432,7 +432,7 @@ export function useChatSummariesState({
   const handleDeleteSummary = useCallback(
     async (summaryId: string) => {
       const result = await deleteSummary(summaryId, chatId)
-      if (result.error) {
+      if ('error' in result) {
         toast.error('Failed to delete summary: ' + result.error)
         return
       }

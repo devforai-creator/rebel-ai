@@ -46,9 +46,30 @@ export function deleteApiKey(client: RpcClient, args: RpcFunctions['delete_api_k
   return callTypedRpc(client, 'delete_api_key', args)
 }
 
+export function updateCharacterWithModules(
+  client: RpcClient,
+  args: RpcFunctions['update_character_with_modules']['Args'],
+) {
+  return callTypedRpc(client, 'update_character_with_modules', args)
+}
+
 export function recordServiceHealthStatus(
   client: RpcClient,
   args: RpcFunctions['record_service_health_status']['Args'],
 ) {
   return callTypedRpc(client, 'record_service_health_status', args)
+}
+
+export function checkChatRateLimit(
+  client: RpcClient,
+  args: RpcFunctions['check_chat_rate_limit']['Args'],
+) {
+  return callTypedRpc(client, 'check_chat_rate_limit', args)
+}
+
+export function checkAnonRateLimitRpc(
+  client: RpcClient,
+  args: RpcFunctions['check_anon_rate_limit']['Args'],
+) {
+  return callTypedRpc(client, 'check_anon_rate_limit', args)
 }

@@ -1,4 +1,4 @@
-import { readApiErrorMessage } from '@/lib/http/api-contract'
+import { createApiError } from '@/lib/http/api-contract'
 import type { CharacterChat } from './character-detail-types'
 
 export type CharacterChatsPage = {
@@ -17,7 +17,7 @@ export async function fetchCharacterChatsPage(
   )
 
   if (!response.ok) {
-    throw new Error(await readApiErrorMessage(response, 'Failed to load more chats'))
+    throw await createApiError(response, 'Failed to load more chats')
   }
 
   const data = (await response.json()) as Partial<CharacterChatsPage>
@@ -36,7 +36,7 @@ export async function fetchCharacterChatExport(
   const response = await fetchImpl(`/api/chats/${chatId}/export`)
 
   if (!response.ok) {
-    throw new Error(await readApiErrorMessage(response, 'Export failed'))
+    throw await createApiError(response, 'Export failed')
   }
 
   return {

@@ -1,5 +1,6 @@
 import type { ChatDeliveryMode } from '@/lib/chat/delivery-mode'
 import type { Message } from '@/types/database.types'
+import { createApiError } from '@/lib/http/api-contract'
 
 export interface ChatJobStatusResponse {
   status: 'pending' | 'processing' | 'success' | 'error'
@@ -58,8 +59,7 @@ export async function requestQueuedChatJob(
   })
 
   if (!response.ok) {
-    const text = await response.text()
-    throw new Error(text || 'Chat request failed.')
+    throw await createApiError(response, 'Chat request failed.')
   }
 
   return (await response.json()) as { jobId: string }

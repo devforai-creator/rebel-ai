@@ -1,4 +1,4 @@
-import { readApiErrorMessage } from '@/lib/http/api-contract'
+import { createApiError } from '@/lib/http/api-contract'
 
 export type ModuleSummary = {
   id: string
@@ -19,7 +19,7 @@ export async function listModules(fetchImpl: typeof fetch = fetch): Promise<Modu
   const response = await fetchImpl('/api/modules', { cache: 'no-store' })
 
   if (!response.ok) {
-    throw new Error(await readApiErrorMessage(response, 'Failed to load module list.'))
+    throw await createApiError(response, 'Failed to load module list.')
   }
 
   const payload = (await response.json()) as { modules?: unknown }
@@ -35,7 +35,7 @@ export async function deleteModule(
   })
 
   if (!response.ok) {
-    throw new Error(await readApiErrorMessage(response, 'Failed to delete module.'))
+    throw await createApiError(response, 'Failed to delete module.')
   }
 
   const payload = (await response.json().catch(() => null)) as { warning?: unknown } | null

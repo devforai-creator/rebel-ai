@@ -1,9 +1,10 @@
 import useSWR from 'swr'
+import { createApiError } from '@/lib/http/api-contract'
 
 const fetchModules = async (url: string) => {
   const response = await fetch(url, { cache: 'no-store' })
   if (!response.ok) {
-    throw new Error('Failed to load modules')
+    throw await createApiError(response, 'Failed to load modules')
   }
   const data = await response.json()
   return Array.isArray(data.modules) ? data.modules : []

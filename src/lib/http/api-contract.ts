@@ -204,3 +204,10 @@ export async function readApiErrorMessage(
 
   return fallback
 }
+
+export async function createApiError(
+  response: Response,
+  fallback = 'Request failed',
+): Promise<Error> {
+  return new Error(await readApiErrorMessage(response, fallback))
+}

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Button from '@/app/dashboard/components/Button'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
+import { createApiError } from '@/lib/http/api-contract'
 import {
   hasCustomSystemPromptOverride,
   normalizeSystemPromptOverride,
@@ -53,7 +54,7 @@ export default function SystemPromptEditorButton({
       })
 
       if (!response.ok) {
-        throw new Error('Failed to update system prompt')
+        throw await createApiError(response, 'Failed to update system prompt')
       }
 
       setHasCustomPrompt(body.systemPrompt !== null)
@@ -62,7 +63,7 @@ export default function SystemPromptEditorButton({
       router.refresh()
     } catch (error) {
       console.error('Failed to save system prompt', error)
-      toast.error('Failed to save system prompt.')
+      toast.error(error instanceof Error ? error.message : 'Failed to save system prompt.')
     } finally {
       setIsSaving(false)
     }

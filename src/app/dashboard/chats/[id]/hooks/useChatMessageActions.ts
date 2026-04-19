@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import { deleteMessage, editMessage } from '../message-actions'
 import type { DebugInfo, DisplayMessage } from '../utils'
 import type { UseQueuedChatReturn } from './useQueuedChat'
-import { readApiErrorMessage } from '@/lib/http/api-contract'
+import { createApiError, readApiErrorMessage } from '@/lib/http/api-contract'
 import { SUPPORT_TIER_HEADER, SUPPORT_TIERS } from '@/lib/support-tier'
 
 type UseChatMessageActionsArgs = {
@@ -160,6 +160,8 @@ export function useChatMessageActions({
       }
 
       setReprocessingMessageId(messageId)
+      let fallbackMessage = 'Experimental reprocess failed'
+
       try {
         const response = await fetch('/api/messages/reprocess', {
           method: 'POST',
@@ -169,14 +171,12 @@ export function useChatMessageActions({
 
         const isExperimental =
           response.headers.get(SUPPORT_TIER_HEADER) === SUPPORT_TIERS.EXPERIMENTAL
+        fallbackMessage = isExperimental
+          ? 'Experimental reprocess failed'
+          : 'Failed to reprocess message'
 
         if (!response.ok) {
-          const errorText = await response.text()
-          toast.error(
-            errorText ||
-              (isExperimental ? 'Experimental reprocess failed' : 'Failed to reprocess message'),
-          )
-          return
+          throw await createApiError(response, fallbackMessage)
         }
 
         toast.success(
@@ -184,7 +184,7 @@ export function useChatMessageActions({
         )
       } catch (error) {
         console.error('[Reprocess] Error:', error)
-        toast.error('Experimental reprocess failed')
+        toast.error(error instanceof Error ? error.message : fallbackMessage)
       } finally {
         setReprocessingMessageId(null)
       }

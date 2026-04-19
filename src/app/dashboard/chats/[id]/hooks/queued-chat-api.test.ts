@@ -5,12 +5,10 @@ import type { Message } from '@/types/database.types'
 import { fetchChatJobStatus, fetchLatestChatMessage, requestQueuedChatJob } from './queued-chat-api'
 
 function createJsonResponse(payload: unknown, ok = true, status = 200) {
-  return {
-    ok,
+  return new Response(JSON.stringify(payload), {
     status,
-    json: vi.fn(async () => payload),
-    text: vi.fn(async () => JSON.stringify(payload)),
-  }
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 function stubFetch(mockImpl: () => Promise<unknown>) {
@@ -80,6 +78,19 @@ describe('queued-chat-api', () => {
         deliveryMode: 'streaming',
       }),
     ).rejects.toThrow('queue failed')
+  })
+
+  it('throws the parsed API error when queue creation fails with JSON', async () => {
+    stubFetch(async () => createJsonResponse({ error: 'Unauthorized' }, false, 401))
+
+    await expect(
+      requestQueuedChatJob({
+        chatId: 'chat-1',
+        apiKeyId: 'key-1',
+        userMessage: 'hello',
+        deliveryMode: 'streaming',
+      }),
+    ).rejects.toThrow('Unauthorized')
   })
 
   it('returns the job id when queue creation succeeds with a slim userMessage payload', async () => {

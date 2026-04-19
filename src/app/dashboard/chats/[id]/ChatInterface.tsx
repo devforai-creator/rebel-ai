@@ -1,19 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { useAutosizeTextArea } from '@/hooks/useAutosizeTextArea'
 
 // Local imports
-import { type ChatInterfaceProps, type DebugInfo } from './utils'
+import { type ChatInterfaceProps } from './utils'
 import {
   useChatInterfaceSettings,
-  useQueuedChat,
-  useChatMessageActions,
-  useChatDebugModal,
-  useChatHistory,
-  combineHistoryWithLiveMessages,
-  useChatRealtimeSubscription,
+  useChatMessageLifecycle,
   useChatRuntimeVariables,
   useChatUsageStats,
   useChatMetadataViews,
@@ -83,51 +78,11 @@ export default function ChatInterface({
     active: statsExpanded,
   })
 
-  // Debug info and persisted IDs tracking
-  const debugInfoMap = useRef<Map<string, DebugInfo>>(new Map())
-  const persistedMessageIds = useRef<Set<string>>(new Set())
-
-  // Initialize debug info map
-  useEffect(() => {
-    const map = new Map<string, DebugInfo>()
-    const idSet = new Set<string>()
-
-    for (const msg of initialMessages) {
-      idSet.add(msg.id)
-      if (msg.debug_info) {
-        map.set(msg.id, msg.debug_info as DebugInfo)
-      }
-    }
-
-    debugInfoMap.current = map
-    persistedMessageIds.current = idSet
-  }, [initialMessages])
-
-  const { historyMessages, historyHasMore, isHistoryLoading, loadOlderMessages } = useChatHistory({
-    chatId,
-    initialHistoryCursor,
-    hasMoreHistory,
-    persistedMessageIds,
-    debugInfoMap,
-  })
-
-  // Use the queued chat hook
-  const {
-    messages,
-    setMessages,
-    streamingDraft,
-    input,
-    insertInputText,
-    handleInputChange,
-    handleSubmit,
-    isLoading,
-    reload,
-    handleRealtimeMessageChange,
-    handleAssistantStreamEvent,
-  } = useQueuedChat({
+  const { composer, history, messageState, actions, debug } = useChatMessageLifecycle({
     chatId,
     initialMessages,
-    historyMessages,
+    initialHistoryCursor,
+    hasMoreHistory,
     selectedApiKeyId,
     deliveryMode,
     alternateModels: {
@@ -136,64 +91,12 @@ export default function ChatInterface({
       secondaryApiKeyId: secondaryApiKeyId || null,
     },
     fetchLatestUsage,
-    debugInfoMap,
-    persistedMessageIds,
+    onMessageChangeSideEffect: handleUsageRealtime,
   })
 
-  const handleMessageRealtime = useCallback(
-    (payload: Parameters<typeof handleRealtimeMessageChange>[0]) => {
-      handleUsageRealtime(payload)
-      handleRealtimeMessageChange(payload)
-    },
-    [handleRealtimeMessageChange, handleUsageRealtime],
-  )
-
-  useChatRealtimeSubscription({
-    chatId,
-    onMessageChange: handleMessageRealtime,
-    onAssistantStreamEvent: handleAssistantStreamEvent,
-  })
-
-  useAutosizeTextArea(composerRef, input, { minHeight: 96, maxHeight: 600 })
-
-  const combinedMessages = useMemo(
-    () => combineHistoryWithLiveMessages(historyMessages, messages),
-    [historyMessages, messages],
-  )
+  useAutosizeTextArea(composerRef, composer.input, { minHeight: 96, maxHeight: 600 })
   const { defaultVariables, mergedVariables, uiCard, uiCardRegistry, imageDisplay } =
     useChatMetadataViews(character, runtimeVariables)
-
-  const {
-    editingMessageId,
-    editContent,
-    setEditContent,
-    reprocessingMessageId,
-    retranslatingMessageId,
-    pendingDeleteMessage,
-    deleteDialogDescription,
-    startEdit,
-    cancelEdit,
-    saveEdit,
-    requestDelete,
-    closeDeleteDialog,
-    confirmDelete,
-    handleRegenerate,
-    handleReprocess,
-    handleRetranslate,
-  } = useChatMessageActions({
-    combinedMessages,
-    persistedMessageIds,
-    debugInfoMap,
-    setMessages,
-    reload,
-  })
-
-  const { debugModal, debugMessage, openMessageDebug, openAssetDiagnostics, closeDebugModal } =
-    useChatDebugModal({
-      chatId,
-      combinedMessages,
-      debugInfoMap,
-    })
 
   // Scroll to bottom on initial load
   useEffect(() => {
@@ -226,7 +129,7 @@ export default function ChatInterface({
         isDeveloper={isDeveloper}
         developerMode={developerMode}
         onToggleDeveloperMode={toggleDeveloperMode}
-        onOpenAssetDiagnostics={openAssetDiagnostics}
+        onOpenAssetDiagnostics={debug.openAssetDiagnostics}
       />
 
       {/* Message list */}
@@ -236,31 +139,31 @@ export default function ChatInterface({
       >
         <div className="max-w-4xl mx-auto p-4 space-y-4">
           <MessageList
-            messages={combinedMessages}
-            streamingDraft={streamingDraft}
+            messages={messageState.combinedMessages}
+            streamingDraft={messageState.streamingDraft}
             character={character}
             characterAssets={characterAssets}
             assetUrlMap={assetUrlMap}
             imageCommandUrlMap={imageCommandUrlMap}
-            editingMessageId={editingMessageId}
-            editContent={editContent}
-            onChangeEditContent={setEditContent}
-            onStartEdit={startEdit}
-            onSaveEdit={saveEdit}
-            onCancelEdit={cancelEdit}
-            onDelete={requestDelete}
-            onRegenerate={handleRegenerate}
-            onReprocess={handleReprocess}
-            onRetranslate={handleRetranslate}
-            onShowDebugInfo={openMessageDebug}
+            editingMessageId={actions.editingMessageId}
+            editContent={actions.editContent}
+            onChangeEditContent={actions.setEditContent}
+            onStartEdit={actions.startEdit}
+            onSaveEdit={actions.saveEdit}
+            onCancelEdit={actions.cancelEdit}
+            onDelete={actions.requestDelete}
+            onRegenerate={actions.handleRegenerate}
+            onReprocess={actions.handleReprocess}
+            onRetranslate={actions.handleRetranslate}
+            onShowDebugInfo={debug.openMessageDebug}
             developerMode={developerMode}
-            persistedMessageIds={persistedMessageIds.current}
-            isLoading={isLoading}
-            reprocessingMessageId={reprocessingMessageId}
-            retranslatingMessageId={retranslatingMessageId}
-            hasMoreHistory={historyHasMore}
-            isHistoryLoading={isHistoryLoading}
-            onLoadHistory={loadOlderMessages}
+            persistedMessageIds={messageState.persistedMessageIds}
+            isLoading={messageState.isLoading}
+            reprocessingMessageId={actions.reprocessingMessageId}
+            retranslatingMessageId={actions.retranslatingMessageId}
+            hasMoreHistory={history.hasMore}
+            isHistoryLoading={history.isLoading}
+            onLoadHistory={history.loadOlderMessages}
             messagesEndRef={messagesEndRef}
             moduleRegex={moduleRegex}
             defaultVariables={mergedVariables}
@@ -274,18 +177,18 @@ export default function ChatInterface({
 
       <ChatComposer
         composerRef={composerRef}
-        input={input}
-        isLoading={isLoading}
-        onInputChange={handleInputChange}
-        onQuickInsert={insertInputText}
-        onSubmit={handleSubmit}
+        input={composer.input}
+        isLoading={messageState.isLoading}
+        onInputChange={composer.handleInputChange}
+        onQuickInsert={composer.insertInputText}
+        onSubmit={composer.handleSubmit}
       />
 
       {/* Debug modal */}
       <DebugModal
-        isOpen={debugModal.isOpen}
-        debugInfo={debugModal.debugInfo}
-        message={debugMessage}
+        isOpen={debug.debugModal.isOpen}
+        debugInfo={debug.debugModal.debugInfo}
+        message={debug.debugMessage}
         moduleRegex={moduleRegex}
         assetUrlMap={assetUrlMap}
         defaultVariables={defaultVariables}
@@ -294,17 +197,17 @@ export default function ChatInterface({
         characterAssetCount={characterAssets.length}
         characterAssets={characterAssets}
         imageCommandUrlMap={imageCommandUrlMap}
-        mode={debugModal.mode}
-        onClose={closeDebugModal}
+        mode={debug.debugModal.mode}
+        onClose={debug.closeDebugModal}
       />
 
       <ConfirmDialog
-        isOpen={pendingDeleteMessage !== null}
+        isOpen={actions.pendingDeleteMessage !== null}
         title="Delete message?"
-        description={deleteDialogDescription}
+        description={actions.deleteDialogDescription}
         confirmLabel="Delete message"
-        onConfirm={() => void confirmDelete()}
-        onClose={closeDeleteDialog}
+        onConfirm={() => void actions.confirmDelete()}
+        onClose={actions.closeDeleteDialog}
       />
     </div>
   )

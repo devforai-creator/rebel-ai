@@ -2,6 +2,15 @@ export { useQueuedChat } from './useQueuedChat'
 export type { UseQueuedChatParams, UseQueuedChatReturn } from './useQueuedChat'
 export { useChatInterfaceSettings } from './useChatInterfaceSettings'
 export { useChatSummariesState } from './useChatSummariesState'
+export {
+  useChatMessageLifecycle,
+  buildInitialChatMessageTrackingState,
+} from './useChatMessageLifecycle'
+export type {
+  UseChatMessageLifecycleArgs,
+  UseChatMessageLifecycleReturn,
+  ChatMessageTrackingState,
+} from './useChatMessageLifecycle'
 export { useChatMessageActions } from './useChatMessageActions'
 export { useChatDebugModal } from './useChatDebugModal'
 export { useChatHistory, combineHistoryWithLiveMessages } from './useChatHistory'

@@ -129,7 +129,7 @@ Verification:
 
 ### Phase 3. Split the Chat Detail Shell by State Ownership
 
-Status: not started
+Status: completed locally on 2026-04-19
 
 Why third:
 
@@ -146,9 +146,9 @@ Primary scope:
 
 Entry checklist:
 
-- [ ] identify current state owners inside `ChatInterface`
-- [ ] choose the target seams before moving code
-- [ ] confirm which refs and mutable maps still need to stay together
+- [x] identify current state owners inside `ChatInterface`
+- [x] choose the target seams before moving code
+- [x] confirm which refs and mutable maps still need to stay together
 
 Preferred seams:
 
@@ -160,23 +160,23 @@ Preferred seams:
 
 Implementation checklist:
 
-- [ ] keep `ChatInterface` as an orchestration layer, not the default home for new behavior
-- [ ] move message lifecycle concerns behind a tighter boundary than the current mixed hook surface
-- [ ] separate asset/runtime-variable behavior from queue/message behavior
-- [ ] reduce cross-hook hidden coupling where possible
-- [ ] add or extend tests around the extracted boundaries instead of relying on one large integration surface
+- [x] keep `ChatInterface` as an orchestration layer, not the default home for new behavior
+- [x] move message lifecycle concerns behind a tighter boundary than the current mixed hook surface
+- [x] separate asset/runtime-variable behavior from queue/message behavior
+- [x] reduce cross-hook hidden coupling where possible
+- [x] add or extend tests around the extracted boundaries instead of relying on one large integration surface
 
 Done when:
 
-- [ ] `ChatInterface` is materially smaller and more orchestration-focused
-- [ ] message lifecycle, settings, and runtime-variable behavior have clearer ownership boundaries
-- [ ] future chat work no longer defaults to editing the same large route shell file
-- [ ] the extracted seams have explicit test coverage
+- [x] `ChatInterface` is materially smaller and more orchestration-focused
+- [x] message lifecycle, settings, and runtime-variable behavior have clearer ownership boundaries
+- [x] future chat work no longer defaults to editing the same large route shell file
+- [x] the extracted seams have explicit test coverage
 
 Verification:
 
-- [ ] relevant unit tests pass
-- [ ] `npx tsc --noEmit`
+- [x] relevant unit tests pass
+- [x] `npx tsc --noEmit`
 
 ## Stop Conditions
 

@@ -63,5 +63,6 @@ Backlogs are execution queues, not contract documents.
 - [backlogs/production-readiness-gate-backlog-2026-04-14.md](./backlogs/production-readiness-gate-backlog-2026-04-14.md)
 - [backlogs/realtime-boundary-followup-2026-04-17.md](./backlogs/realtime-boundary-followup-2026-04-17.md)
 - [backlogs/rag-retrieval-followup-2026-04-14.md](./backlogs/rag-retrieval-followup-2026-04-14.md)
+- [backlogs/ssot-dry-followup-2026-04-19.md](./backlogs/ssot-dry-followup-2026-04-19.md)
 - [backlogs/stability-backlog.md](./backlogs/stability-backlog.md)
 - [backlogs/vercel-usage-followup-2026-04-14.md](./backlogs/vercel-usage-followup-2026-04-14.md)

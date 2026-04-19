@@ -48,7 +48,6 @@ export default function AddApiKeyForm() {
   const [serviceTier, setServiceTier] = useState<ServiceTierValue>('standard')
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffortValue>('none')
   const [isGuideOpen, setIsGuideOpen] = useState(false)
-  const [displayError, setDisplayError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const [formState, formAction] = useActionState<ApiKeyFormState, FormData>(
     createApiKey,
@@ -59,15 +58,10 @@ export default function AddApiKeyForm() {
 
   useEffect(() => {
     if (formState.error) {
-      setDisplayError(formState.error)
       setShowSuccess(false)
       return
     }
 
-    setDisplayError(null)
-  }, [formState.error])
-
-  useEffect(() => {
     if (!formState.success) {
       return
     }
@@ -79,7 +73,7 @@ export default function AddApiKeyForm() {
     setReasoningEffort('none')
     const timeout = setTimeout(() => setShowSuccess(false), 3000)
     return () => clearTimeout(timeout)
-  }, [formState.success])
+  }, [formState.error, formState.success])
 
   useEffect(() => {
     if (provider !== 'openai') {
@@ -120,9 +114,9 @@ export default function AddApiKeyForm() {
           </Button>
         )}
 
-        {displayError && (
+        {formState.error && (
           <InlineFeedback tone="error" className="mb-4">
-            {displayError}
+            {formState.error}
           </InlineFeedback>
         )}
 

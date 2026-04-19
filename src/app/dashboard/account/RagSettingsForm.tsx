@@ -3,10 +3,11 @@
 import { useActionState, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import Button from '@/app/dashboard/components/Button'
-import InlineFeedback, { type InlineFeedbackTone } from '@/app/dashboard/components/InlineFeedback'
+import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { updateRagSettings, type RagSettingsState } from './actions'
 import type { VoyageEmbeddingsKeyOption } from './options'
+import { type FormFeedback, useActionStateFeedback } from './useActionStateFeedback'
 
 interface RagSettingsFormProps {
   initialEnabled: boolean
@@ -34,15 +35,10 @@ export default function RagSettingsForm({
     return firstActive?.id ?? ''
   }, [initialKeyId, voyageKeys])
   const [selectedKey, setSelectedKey] = useState(defaultKeyId)
-  const [statusMessage, setStatusMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (state.success) {
-      setStatusMessage('Saved successfully.')
-    } else if (state.error) {
-      setStatusMessage(state.error)
-    }
-  }, [state])
+  const [localFeedback, setLocalFeedback] = useState<FormFeedback | null>(null)
+  const { feedback: actionFeedback, clearFeedback } = useActionStateFeedback(state, {
+    successMessage: 'Saved successfully.',
+  })
 
   useEffect(() => {
     if (enableRag && !selectedKey) {
@@ -56,13 +52,7 @@ export default function RagSettingsForm({
   const hasKeys = voyageKeys.length > 0
   const hasActiveKey = voyageKeys.some((key) => key.is_active)
   const allowToggle = hasActiveKey
-  const statusTone: InlineFeedbackTone | null = statusMessage
-    ? state.error
-      ? 'error'
-      : state.success
-        ? 'success'
-        : 'warning'
-    : null
+  const feedback = localFeedback ?? actionFeedback
 
   return (
     <form action={formAction} className="space-y-6">
@@ -85,11 +75,16 @@ export default function RagSettingsForm({
             checked={enableRag}
             onChange={(event) => {
               if (!allowToggle && event.target.checked) {
-                setStatusMessage('Please register and activate a Voyage Embeddings key first.')
+                setLocalFeedback({
+                  message: 'Please register and activate a Voyage Embeddings key first.',
+                  tone: 'warning',
+                })
+                clearFeedback()
                 return
               }
               setEnableRag(event.target.checked)
-              setStatusMessage(null)
+              setLocalFeedback(null)
+              clearFeedback()
             }}
             disabled={!allowToggle}
           />
@@ -118,7 +113,11 @@ export default function RagSettingsForm({
           name="voyage_key_id"
           className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-60"
           value={selectedKey}
-          onChange={(event) => setSelectedKey(event.target.value)}
+          onChange={(event) => {
+            setSelectedKey(event.target.value)
+            setLocalFeedback(null)
+            clearFeedback()
+          }}
           disabled={!hasKeys}
         >
           <option value="">None</option>
@@ -133,9 +132,7 @@ export default function RagSettingsForm({
         </p>
       </div>
 
-      {statusMessage && statusTone && (
-        <InlineFeedback tone={statusTone}>{statusMessage}</InlineFeedback>
-      )}
+      {feedback && <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback>}
 
       <Button type="submit" disabled={enableRag && (!selectedKey || !hasActiveKey)}>
         Save

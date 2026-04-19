@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useActionState, useEffect, useState } from 'react'
+import React, { useActionState, useState } from 'react'
 import Button from '@/app/dashboard/components/Button'
 import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import { updateChatUsageSettings, type ChatUsageSettingsState } from './actions'
+import { useActionStateFeedback } from './useActionStateFeedback'
 
 type ChatUsageSettingsFormProps = {
   initialEnabled: boolean
@@ -17,15 +18,9 @@ const initialState: ChatUsageSettingsState = {
 export default function ChatUsageSettingsForm({ initialEnabled }: ChatUsageSettingsFormProps) {
   const [state, formAction] = useActionState(updateChatUsageSettings, initialState)
   const [enabled, setEnabled] = useState(initialEnabled)
-  const [statusMessage, setStatusMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (state.success) {
-      setStatusMessage('Saved successfully.')
-    } else if (state.error) {
-      setStatusMessage(state.error)
-    }
-  }, [state])
+  const { feedback, clearFeedback } = useActionStateFeedback(state, {
+    successMessage: 'Saved successfully.',
+  })
 
   return (
     <form action={formAction} className="space-y-6">
@@ -46,15 +41,13 @@ export default function ChatUsageSettingsForm({ initialEnabled }: ChatUsageSetti
             checked={enabled}
             onChange={(event) => {
               setEnabled(event.target.checked)
-              setStatusMessage(null)
+              clearFeedback()
             }}
           />
         </label>
       </div>
 
-      {statusMessage && (
-        <InlineFeedback tone={state.error ? 'error' : 'success'}>{statusMessage}</InlineFeedback>
-      )}
+      {feedback && <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback>}
 
       <Button type="submit">Save</Button>
     </form>

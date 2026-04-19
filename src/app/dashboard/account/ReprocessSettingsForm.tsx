@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useActionState, useEffect, useState } from 'react'
+import React, { useActionState, useState } from 'react'
 import Link from 'next/link'
 import Button from '@/app/dashboard/components/Button'
 import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { updateReprocessSettings, type ReprocessSettingsState } from './actions'
 import { formatSelectableLlmApiKeyLabel, type SelectableLlmApiKey } from './options'
+import { useActionStateFeedback } from './useActionStateFeedback'
 
 interface Props {
   initialPrompt: string | null
@@ -23,15 +24,9 @@ export default function ReprocessSettingsForm({ initialPrompt, initialKeyId, api
   const [state, formAction] = useActionState(updateReprocessSettings, initialState)
   const [selectedKey, setSelectedKey] = useState(initialKeyId ?? '')
   const [prompt, setPrompt] = useState(initialPrompt ?? '')
-  const [statusMessage, setStatusMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (state.success) {
-      setStatusMessage('Saved successfully.')
-    } else if (state.error) {
-      setStatusMessage(state.error)
-    }
-  }, [state])
+  const { feedback, clearFeedback } = useActionStateFeedback(state, {
+    successMessage: 'Saved successfully.',
+  })
 
   const hasKeys = apiKeys.length > 0
 
@@ -44,7 +39,10 @@ export default function ReprocessSettingsForm({ initialPrompt, initialKeyId, api
         <textarea
           name="reprocess_prompt"
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={(e) => {
+            setPrompt(e.target.value)
+            clearFeedback()
+          }}
           placeholder="Enter a system prompt for reprocessing (e.g., 'Translate the following text to Korean while preserving the original tone and style.')"
           className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 min-h-[100px] resize-y"
           rows={4}
@@ -63,7 +61,10 @@ export default function ReprocessSettingsForm({ initialPrompt, initialKeyId, api
           name="reprocess_key_id"
           className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50"
           value={selectedKey}
-          onChange={(event) => setSelectedKey(event.target.value)}
+          onChange={(event) => {
+            setSelectedKey(event.target.value)
+            clearFeedback()
+          }}
           disabled={!hasKeys}
         >
           <option value="">Select an API key</option>
@@ -92,9 +93,7 @@ export default function ReprocessSettingsForm({ initialPrompt, initialKeyId, api
         </SurfaceCard>
       )}
 
-      {statusMessage && (
-        <InlineFeedback tone={state.error ? 'error' : 'success'}>{statusMessage}</InlineFeedback>
-      )}
+      {feedback && <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback>}
 
       <Button type="submit">Save</Button>
     </form>

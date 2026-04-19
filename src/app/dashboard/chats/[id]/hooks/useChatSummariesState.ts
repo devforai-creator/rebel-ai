@@ -44,6 +44,18 @@ type StatsResponse = {
   summaryCount?: number
 }
 
+type ChatSummariesServerSnapshot = {
+  initialSummaries: SummaryEntry[]
+  initialFacts: FactEntry[]
+  totalMessages: number
+}
+
+type ChatSummariesCacheState = {
+  summaries: SummaryEntry[]
+  facts: FactEntry[]
+  messageCount: number
+}
+
 type UseChatSummariesStateArgs = {
   chatId: string
   initialSummaries: SummaryEntry[]
@@ -152,6 +164,28 @@ export function parseStatsResponse(value: unknown): StatsResponse | null {
   return result
 }
 
+export function createChatSummariesCacheState({
+  initialSummaries,
+  initialFacts,
+  totalMessages,
+}: ChatSummariesServerSnapshot): ChatSummariesCacheState {
+  return {
+    summaries: initialSummaries,
+    facts: initialFacts,
+    messageCount: totalMessages,
+  }
+}
+
+export function applyServerSnapshotToChatSummariesCache(
+  previousState: ChatSummariesCacheState,
+  snapshot: ChatSummariesServerSnapshot,
+): ChatSummariesCacheState {
+  return {
+    ...previousState,
+    ...createChatSummariesCacheState(snapshot),
+  }
+}
+
 export function parseRealtimeCollectionPayload<T extends { id: string }>(
   payload: unknown,
   isEntry: (value: unknown) => value is T,
@@ -195,10 +229,13 @@ export function useChatSummariesState({
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
-  const [summaries, setSummaries] = useState<SummaryEntry[]>(initialSummaries)
-  const [facts, setFacts] = useState<FactEntry[]>(initialFacts)
-  const [messageCount, setMessageCount] = useState(totalMessages)
-  const [currentLatestSequence, setCurrentLatestSequence] = useState(latestSequence)
+  const [cacheState, setCacheState] = useState<ChatSummariesCacheState>(() =>
+    createChatSummariesCacheState({
+      initialSummaries,
+      initialFacts,
+      totalMessages,
+    }),
+  )
   const [editingSummaryId, setEditingSummaryId] = useState<string | null>(null)
   const [summaryEditContent, setSummaryEditContent] = useState('')
   const [editingFactId, setEditingFactId] = useState<string | null>(null)
@@ -207,6 +244,7 @@ export function useChatSummariesState({
   const [regeneratingSummaryId, setRegeneratingSummaryId] = useState<string | null>(null)
   const [regeneratingFactId, setRegeneratingFactId] = useState<string | null>(null)
   const [isRefreshingStats, setIsRefreshingStats] = useState(false)
+  const { summaries, facts, messageCount } = cacheState
 
   const refreshPanel = useCallback(() => {
     startTransition(() => {
@@ -224,7 +262,11 @@ export function useChatSummariesState({
 
       const data = parseStatsResponse(await response.json())
       if (typeof data?.messageCount === 'number') {
-        setMessageCount(data.messageCount)
+        const nextMessageCount = data.messageCount
+        setCacheState((previousState) => ({
+          ...previousState,
+          messageCount: nextMessageCount,
+        }))
       }
       if (typeof data?.summaryCount === 'number' && data.summaryCount !== summaries.length) {
         refreshPanel()
@@ -238,20 +280,15 @@ export function useChatSummariesState({
   }, [chatId, refreshPanel, summaries.length])
 
   useEffect(() => {
-    setSummaries(initialSummaries)
-  }, [initialSummaries])
-
-  useEffect(() => {
-    setFacts(initialFacts)
-  }, [initialFacts])
-
-  useEffect(() => {
-    setMessageCount(totalMessages)
-  }, [totalMessages])
-
-  useEffect(() => {
-    setCurrentLatestSequence(latestSequence)
-  }, [latestSequence])
+    // Route refresh remains authoritative; local state only caches realtime changes between snapshots.
+    setCacheState((previousState) =>
+      applyServerSnapshotToChatSummariesCache(previousState, {
+        initialSummaries,
+        initialFacts,
+        totalMessages,
+      }),
+    )
+  }, [initialFacts, initialSummaries, totalMessages])
 
   useEffect(() => {
     let isActive = true
@@ -284,9 +321,10 @@ export function useChatSummariesState({
               return
             }
 
-            setSummaries((previousItems) =>
-              applyRealtimeCollectionChange(previousItems, nextPayload),
-            )
+            setCacheState((previousState) => ({
+              ...previousState,
+              summaries: applyRealtimeCollectionChange(previousState.summaries, nextPayload),
+            }))
           },
         )
         .on(
@@ -303,7 +341,10 @@ export function useChatSummariesState({
               return
             }
 
-            setFacts((previousItems) => applyRealtimeCollectionChange(previousItems, nextPayload))
+            setCacheState((previousState) => ({
+              ...previousState,
+              facts: applyRealtimeCollectionChange(previousState.facts, nextPayload),
+            }))
           },
         )
         .subscribe()
@@ -448,7 +489,7 @@ export function useChatSummariesState({
     summaries,
     facts,
     messageCount,
-    currentLatestSequence,
+    currentLatestSequence: latestSequence,
     editingSummaryId,
     summaryEditContent,
     setSummaryEditContent,

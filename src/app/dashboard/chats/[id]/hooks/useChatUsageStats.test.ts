@@ -203,6 +203,46 @@ describe('useChatUsageStats', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('stops manual refreshes after the panel becomes inactive again', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        latestMessage: {
+          id: 'message-1',
+        },
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result, rerender } = renderHook(
+      ({ active }) =>
+        useChatUsageStats({
+          chatId: 'chat-1',
+          initialUsageStats: null,
+          enabled: true,
+          active,
+        }),
+      {
+        initialProps: {
+          active: true,
+        },
+      },
+    )
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    fetchMock.mockClear()
+    rerender({ active: false })
+
+    await act(async () => {
+      await result.current.fetchLatestUsage()
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('logs parsed API errors for non-ok stats responses', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.stubGlobal(

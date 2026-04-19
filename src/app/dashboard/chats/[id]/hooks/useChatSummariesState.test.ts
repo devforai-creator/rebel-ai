@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   applyRealtimeCollectionChange,
+  applyServerSnapshotToChatSummariesCache,
+  createChatSummariesCacheState,
   parseRealtimeCollectionPayload,
   parseStatsResponse,
   type FactEntry,
@@ -122,6 +124,84 @@ describe('parseStatsResponse', () => {
   it('rejects non-object payloads', () => {
     expect(parseStatsResponse(null)).toBeNull()
     expect(parseStatsResponse('bad')).toBeNull()
+  })
+})
+
+describe('chat summaries cache snapshot helpers', () => {
+  it('creates an initial cache state from server snapshot props', () => {
+    const summary = {
+      id: 'summary-1',
+      level: 0,
+      start_seq: 1,
+      end_seq: 20,
+      summary: 'First chunk',
+      created_at: '2026-04-12T00:00:00.000Z',
+    } satisfies SummaryEntry
+    const fact = {
+      id: 'fact-1',
+      start_seq: 1,
+      end_seq: 8,
+      facts: 'Fact block',
+      created_at: '2026-04-12T00:00:00.000Z',
+    } satisfies FactEntry
+
+    expect(
+      createChatSummariesCacheState({
+        initialSummaries: [summary],
+        initialFacts: [fact],
+        totalMessages: 42,
+      }),
+    ).toEqual({
+      summaries: [summary],
+      facts: [fact],
+      messageCount: 42,
+    })
+  })
+
+  it('treats refreshed server snapshots as authoritative over local realtime cache', () => {
+    const summaryOne = {
+      id: 'summary-1',
+      level: 0,
+      start_seq: 1,
+      end_seq: 20,
+      summary: 'First chunk',
+      created_at: '2026-04-12T00:00:00.000Z',
+    } satisfies SummaryEntry
+    const summaryTwo = {
+      ...summaryOne,
+      id: 'summary-2',
+      summary: 'Realtime chunk',
+    } satisfies SummaryEntry
+    const refreshedSummary = {
+      ...summaryOne,
+      id: 'summary-3',
+      summary: 'Server refresh chunk',
+    } satisfies SummaryEntry
+    const factOne = {
+      id: 'fact-1',
+      start_seq: 1,
+      end_seq: 8,
+      facts: 'Fact block',
+      created_at: '2026-04-12T00:00:00.000Z',
+    } satisfies FactEntry
+
+    const cacheAfterRealtime = {
+      summaries: [summaryOne, summaryTwo],
+      facts: [factOne],
+      messageCount: 20,
+    }
+
+    expect(
+      applyServerSnapshotToChatSummariesCache(cacheAfterRealtime, {
+        initialSummaries: [summaryOne, summaryTwo, refreshedSummary],
+        initialFacts: [factOne],
+        totalMessages: 32,
+      }),
+    ).toEqual({
+      summaries: [summaryOne, summaryTwo, refreshedSummary],
+      facts: [factOne],
+      messageCount: 32,
+    })
   })
 })
 

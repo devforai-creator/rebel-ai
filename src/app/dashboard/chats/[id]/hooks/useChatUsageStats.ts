@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { readApiErrorMessage } from '@/lib/http/api-contract'
 import type { LatestMessageTokenStats, MessageChangePayload } from '../utils'
 import { shouldRefreshTokenStats } from '../utils'
@@ -57,19 +57,10 @@ export function useChatUsageStats({
 }) {
   const [latestUsage, setLatestUsage] = useState<LatestMessageTokenStats | null>(initialUsageStats)
   const [isLoading, setIsLoading] = useState(false)
-  const enabledRef = useRef(enabled)
-  const activeRef = useRef(active)
-
-  useEffect(() => {
-    enabledRef.current = enabled
-  }, [enabled])
-
-  useEffect(() => {
-    activeRef.current = active
-  }, [active])
+  const canFetchUsage = enabled && active
 
   const fetchLatestUsage = useCallback(async () => {
-    if (!enabledRef.current || !activeRef.current) {
+    if (!canFetchUsage) {
       return
     }
 
@@ -91,17 +82,17 @@ export function useChatUsageStats({
     } finally {
       setIsLoading(false)
     }
-  }, [chatId])
+  }, [canFetchUsage, chatId])
 
   useEffect(() => {
     setLatestUsage(enabled ? initialUsageStats : null)
   }, [enabled, initialUsageStats])
 
   useEffect(() => {
-    if (enabled && active) {
+    if (canFetchUsage) {
       void fetchLatestUsage()
     }
-  }, [active, enabled, fetchLatestUsage])
+  }, [canFetchUsage, fetchLatestUsage])
 
   const handleUsageRealtime = useCallback(
     (payload: MessageChangePayload) => {

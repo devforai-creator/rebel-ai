@@ -3,11 +3,9 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import type { Database, PersonaUpdate } from '@/types/database.types'
+import { MAX_PERSONA_DESCRIPTION_LENGTH, MAX_PERSONA_NAME_LENGTH } from './constants'
 
 type Supabase = SupabaseClient<Database>
-
-export const MAX_PERSONA_NAME_LENGTH = 100
-export const MAX_PERSONA_DESCRIPTION_LENGTH = 5000
 
 export const personaUpdateSchema = z
   .object({

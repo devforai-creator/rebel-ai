@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { PersonaInsert } from '@/types/database.types'
+import { MAX_PERSONA_DESCRIPTION_LENGTH, MAX_PERSONA_NAME_LENGTH } from '@/lib/personas/constants'
 import { parsePersonaUpdateInput, updateOwnedPersona } from '@/lib/personas/update'
 
 /**
@@ -47,22 +48,27 @@ export async function createPersona(data: { name: string; description?: string }
   }
 
   // Validate input
-  if (!data.name || data.name.trim().length === 0) {
+  const trimmedName = data.name.trim()
+  const trimmedDescription = data.description?.trim()
+
+  if (!trimmedName) {
     return { error: 'Persona name is required' }
   }
 
-  if (data.name.length > 100) {
-    return { error: 'Persona name must be 100 characters or less' }
+  if (trimmedName.length > MAX_PERSONA_NAME_LENGTH) {
+    return { error: `Persona name must be ${MAX_PERSONA_NAME_LENGTH} characters or less` }
   }
 
-  if (data.description && data.description.length > 5000) {
-    return { error: 'Persona description must be 5000 characters or less' }
+  if (trimmedDescription && trimmedDescription.length > MAX_PERSONA_DESCRIPTION_LENGTH) {
+    return {
+      error: `Persona description must be ${MAX_PERSONA_DESCRIPTION_LENGTH} characters or less`,
+    }
   }
 
   const personaData: PersonaInsert = {
     user_id: user.id,
-    name: data.name.trim(),
-    description: data.description ? data.description.trim() : null,
+    name: trimmedName,
+    description: trimmedDescription || null,
   }
 
   const { data: persona, error } = await supabase

@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import type { Persona } from '@/types/database.types'
+import { MAX_PERSONA_DESCRIPTION_LENGTH, MAX_PERSONA_NAME_LENGTH } from '@/lib/personas/constants'
 import { createPersona, updatePersona, deletePersona } from './actions'
 import { Plus, Edit2, Trash2, X, Check } from 'lucide-react'
 
@@ -139,11 +140,11 @@ export default function PersonaList({ initialPersonas }: Props) {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g., Student Mode, Office Worker"
-                maxLength={100}
+                maxLength={MAX_PERSONA_NAME_LENGTH}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {formData.name.length}/100
+                {formData.name.length}/{MAX_PERSONA_NAME_LENGTH}
               </p>
             </div>
 
@@ -156,11 +157,11 @@ export default function PersonaList({ initialPersonas }: Props) {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Enter just the name, or freely write age/gender/appearance/personality/background..."
                 rows={6}
-                maxLength={5000}
+                maxLength={MAX_PERSONA_DESCRIPTION_LENGTH}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {formData.description.length}/5000
+                {formData.description.length}/{MAX_PERSONA_DESCRIPTION_LENGTH}
               </p>
             </div>
 
@@ -215,11 +216,11 @@ export default function PersonaList({ initialPersonas }: Props) {
                     type="text"
                     value={editFormData.name}
                     onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                    maxLength={100}
+                    maxLength={MAX_PERSONA_NAME_LENGTH}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {editFormData.name.length}/100
+                    {editFormData.name.length}/{MAX_PERSONA_NAME_LENGTH}
                   </p>
                 </div>
 
@@ -233,11 +234,11 @@ export default function PersonaList({ initialPersonas }: Props) {
                       setEditFormData({ ...editFormData, description: e.target.value })
                     }
                     rows={6}
-                    maxLength={5000}
+                    maxLength={MAX_PERSONA_DESCRIPTION_LENGTH}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {editFormData.description.length}/5000
+                    {editFormData.description.length}/{MAX_PERSONA_DESCRIPTION_LENGTH}
                   </p>
                 </div>
 

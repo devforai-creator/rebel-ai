@@ -163,17 +163,35 @@ export function resolveNextRuntimeVariables(
   }
 }
 
+function sanitizeRuntimeVariables(variables: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(variables).filter(([, value]) => typeof value !== 'undefined'),
+  )
+}
+
 export function useChatRuntimeVariables(chatId: string) {
   const [assetData, setAssetData] = useState<ChatAssetData>(EMPTY_ASSET_DATA)
   const [runtimeVariables, setRuntimeVariables] = useState<Record<string, unknown>>({})
   const runtimeVariablesRef = useRef<Record<string, unknown>>({})
+  const persistedRuntimeVariablesRef = useRef<Record<string, unknown>>({})
+  const pendingPersistVariablesRef = useRef<Record<string, unknown> | null>(null)
+  const persistLoopSessionRef = useRef<number | null>(null)
+  const persistenceSessionRef = useRef(0)
 
-  useEffect(() => {
-    runtimeVariablesRef.current = runtimeVariables
-  }, [runtimeVariables])
+  const applyRuntimeVariables = useCallback((nextVariables: Record<string, unknown>) => {
+    runtimeVariablesRef.current = nextVariables
+    setRuntimeVariables(nextVariables)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
+    const sessionId = persistenceSessionRef.current + 1
+    persistenceSessionRef.current = sessionId
+    pendingPersistVariablesRef.current = null
+    persistedRuntimeVariablesRef.current = {}
+    runtimeVariablesRef.current = {}
+    setRuntimeVariables({})
+    setAssetData(EMPTY_ASSET_DATA)
 
     const loadAssets = async () => {
       try {
@@ -188,9 +206,12 @@ export function useChatRuntimeVariables(chatId: string) {
           return
         }
 
-        runtimeVariablesRef.current = nextAssetData.globalVariables ?? {}
+        const initialRuntimeVariables = sanitizeRuntimeVariables(
+          nextAssetData.globalVariables ?? {},
+        )
+        persistedRuntimeVariablesRef.current = initialRuntimeVariables
         setAssetData(nextAssetData)
-        setRuntimeVariables(nextAssetData.globalVariables ?? {})
+        applyRuntimeVariables(initialRuntimeVariables)
       } catch (error) {
         console.error('[ChatInterface] Error loading assets:', error)
       }
@@ -200,31 +221,70 @@ export function useChatRuntimeVariables(chatId: string) {
     return () => {
       cancelled = true
     }
-  }, [chatId])
+  }, [applyRuntimeVariables, chatId])
 
-  const persistRuntimeVariables = useCallback(
-    async (nextVariables: Record<string, unknown>) => {
-      const sanitized = Object.fromEntries(
-        Object.entries(nextVariables).filter(([, value]) => typeof value !== 'undefined'),
-      )
+  const flushRuntimeVariablePersistence = useCallback(async () => {
+    const sessionId = persistenceSessionRef.current
+    if (persistLoopSessionRef.current === sessionId) {
+      return
+    }
 
-      try {
-        const response = await fetch(`/api/chats/${chatId}/variables`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ variables: sanitized }),
-        })
+    persistLoopSessionRef.current = sessionId
 
-        if (!response.ok) {
-          throw await createApiError(response, 'Failed to save variables')
+    try {
+      while (
+        sessionId === persistenceSessionRef.current &&
+        pendingPersistVariablesRef.current !== null
+      ) {
+        const nextVariables = pendingPersistVariablesRef.current
+        pendingPersistVariablesRef.current = null
+        const sanitized = sanitizeRuntimeVariables(nextVariables)
+
+        try {
+          const response = await fetch(`/api/chats/${chatId}/variables`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ variables: sanitized }),
+          })
+
+          if (!response.ok) {
+            throw await createApiError(response, 'Failed to save variables')
+          }
+
+          if (sessionId !== persistenceSessionRef.current) {
+            return
+          }
+
+          persistedRuntimeVariablesRef.current = sanitized
+        } catch (error) {
+          console.error('[TriggerClick] Failed to persist variables', error)
+
+          if (sessionId !== persistenceSessionRef.current) {
+            return
+          }
+
+          if (pendingPersistVariablesRef.current !== null) {
+            continue
+          }
+
+          applyRuntimeVariables(persistedRuntimeVariablesRef.current)
+          toast.error(error instanceof Error ? error.message : '변수 저장 실패')
+          return
         }
-      } catch (error) {
-        console.error('[TriggerClick] Failed to persist variables', error)
-        toast.error('변수 저장 실패')
       }
-    },
-    [chatId],
-  )
+    } finally {
+      if (persistLoopSessionRef.current === sessionId) {
+        persistLoopSessionRef.current = null
+      }
+
+      if (
+        sessionId === persistenceSessionRef.current &&
+        pendingPersistVariablesRef.current !== null
+      ) {
+        void flushRuntimeVariablePersistence()
+      }
+    }
+  }, [applyRuntimeVariables, chatId])
 
   const handleUiCardAction = useCallback(
     (type: string, actionId: string, payload?: unknown) => {
@@ -235,11 +295,15 @@ export function useChatRuntimeVariables(chatId: string) {
         payload,
       )
 
-      runtimeVariablesRef.current = nextVariables
-      setRuntimeVariables(nextVariables)
-      void persistRuntimeVariables(nextVariables)
+      if (nextVariables === runtimeVariablesRef.current) {
+        return
+      }
+
+      applyRuntimeVariables(nextVariables)
+      pendingPersistVariablesRef.current = nextVariables
+      void flushRuntimeVariablePersistence()
     },
-    [persistRuntimeVariables],
+    [applyRuntimeVariables, flushRuntimeVariablePersistence],
   )
 
   return {

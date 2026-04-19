@@ -3,13 +3,13 @@ import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAIWithServiceTier } from '@/lib/openai/service-tier'
-import type { ApiServiceTier } from '@/types/database.types'
+import type { ApiServiceTier, LlmProvider } from '@/types/database.types'
 import type { LanguageModel } from 'ai'
 
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 
 type BuildLanguageModelInput = {
-  provider: string
+  provider: LlmProvider
   modelName: string
   apiKey: string
   serviceTier?: ApiServiceTier | null

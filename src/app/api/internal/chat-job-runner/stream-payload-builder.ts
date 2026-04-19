@@ -5,6 +5,7 @@ import type { MemoryPromptBlock } from '@/lib/chat-memory'
 import { buildAnthropicCacheControl } from '@/lib/llm/provider-options'
 import type { AnthropicCacheDecision } from '@/lib/llm/prompt-cache'
 import type { CreateGoogleCacheResult } from '@/lib/llm/google-cache'
+import type { LlmProvider } from '@/types/database.types'
 import type { ChatRunnerActualPayload } from './usage-debug'
 
 type ConversationMessage = { role: 'user' | 'assistant'; content: string }
@@ -91,7 +92,7 @@ function findSystemBreakpointBeforeDynamicSuffix(promptBlocks: MemoryPromptBlock
 }
 
 type BuildStreamPayloadPlanArgs = {
-  provider: string
+  provider: LlmProvider
   finalSystemPrompt: string
   staticSystemPrompt: string
   dynamicContext: string | null

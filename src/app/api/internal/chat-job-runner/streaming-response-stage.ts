@@ -6,6 +6,7 @@ import {
   CHAT_JOB_LIFECYCLE_STAGE_EMPTY_RESPONSE,
   CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
 } from '@/lib/chat/job-lifecycle'
+import type { LlmProvider } from '@/types/database.types'
 import {
   broadcastAssistantStreamError,
   broadcastAssistantStreamSnapshot,
@@ -39,7 +40,7 @@ async function collectTextFromStreamWithSnapshots({
   chatId: string
   jobId: string
   stream: ProviderTextStream
-  provider: string
+  provider: LlmProvider
   regenerateAssistantMessageId: string | null
   updateIntervalMs?: number
   now?: () => number
@@ -161,7 +162,7 @@ export async function consumeStreamingResponseStage({
   chatId: string
   jobId: string
   stream: ProviderTextStream
-  provider: string
+  provider: LlmProvider
   regenerateAssistantMessageId: string | null
   logDebug?: (...args: unknown[]) => void
   updateIntervalMs?: number

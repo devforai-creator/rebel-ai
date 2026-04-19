@@ -78,6 +78,15 @@ describe('chat job payload parsing', () => {
     expect(parsed).toBeNull()
   })
 
+  it('rejects embedding-only providers in chat job payloads', () => {
+    const parsed = parseChatJobPayload({
+      ...basePayload,
+      provider: 'voyage_embeddings',
+    })
+
+    expect(parsed).toBeNull()
+  })
+
   it('normalizes regenerateAssistantMessageId to null when not a string', () => {
     const parsed = parseChatJobPayload({
       ...basePayload,

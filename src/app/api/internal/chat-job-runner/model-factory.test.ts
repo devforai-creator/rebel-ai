@@ -136,7 +136,7 @@ describe('buildLanguageModel', () => {
 
     expect(() =>
       buildLanguageModel({
-        provider: 'unsupported',
+        provider: 'unsupported' as never,
         modelName: 'x',
         apiKey: 'k',
         serviceTier: 'standard',

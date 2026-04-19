@@ -3,6 +3,7 @@ import type { UsageCostBreakdown } from '@/lib/model-pricing'
 import type {
   ApiKeyUpdate,
   Json,
+  LlmProvider,
   Message,
   MessageInsert,
   MessageUpdate,
@@ -17,13 +18,11 @@ import {
   type SummaryModelConfig,
 } from '@/lib/chat/summary-model-preference'
 import { triggerSummaryGeneration, type TriggerResult } from '@/lib/chat/summary-trigger'
-import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import {
   buildChatUsageEvent,
   appendSummaryWarningToDebugInfo,
   type UsageMetrics,
 } from './usage-debug'
-import type { LlmProvider } from '@/types/database.types'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type MessageIdRow = Pick<Message, 'id'>
@@ -57,7 +56,7 @@ type RunPostGenerationPipelineArgs = {
   chatId: string
   userId: string
   apiKeyId: string
-  provider: string
+  provider: LlmProvider
   modelName: string
   origin: string
   requestId: string
@@ -175,7 +174,7 @@ function scheduleSummaryGeneration({
   chatId: string
   userId: string
   apiKeyId: string
-  provider: string
+  provider: LlmProvider
   modelName: string
   origin: string
   assistantMessageId: string
@@ -190,24 +189,7 @@ function scheduleSummaryGeneration({
 
     try {
       const summaryPreference = await resolveSummaryModelPreferenceFn({ supabase, userId })
-      const fallbackSummaryConfig = isKnownLLMProvider(provider)
-        ? { provider, modelName, apiKeyId }
-        : null
-
-      if (!summaryPreference && !fallbackSummaryConfig) {
-        summaryFailure = { error: `Unsupported summary provider: ${provider}` }
-        console.warn('[Chat Job Runner] Skipping summary generation for unsupported provider', {
-          chatId,
-          userId,
-          provider,
-        })
-        return
-      }
-
-      const summaryConfig = summaryPreference ?? fallbackSummaryConfig
-      if (!summaryConfig) {
-        return
-      }
+      const summaryConfig = summaryPreference ?? { provider, modelName, apiKeyId }
 
       if (summaryPreference) {
         logPostGenerationDebug('[Chat Job Runner] Using summary-specific model', {

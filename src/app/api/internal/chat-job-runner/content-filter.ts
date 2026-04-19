@@ -1,11 +1,12 @@
 import type { FinishReason } from 'ai'
+import type { LlmProvider } from '@/types/database.types'
 
 export function evaluateContentFilter({
   provider,
   finishReason,
   metadata,
 }: {
-  provider: string
+  provider: LlmProvider
   finishReason: FinishReason | undefined
   metadata: unknown
 }): { blocked: boolean; categories: string[] } {

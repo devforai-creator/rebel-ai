@@ -1,5 +1,6 @@
 import type { SanitizedMessage } from '@/lib/chat-summaries'
-import type { Json, Provider } from '@/types/database.types'
+import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
+import type { Json, LlmProvider } from '@/types/database.types'
 import {
   CHAT_DELIVERY_MODE_STREAMING,
   isChatDeliveryMode,
@@ -17,7 +18,7 @@ export interface ChatGenerationJobPayload {
   turnId: string | null
   userId: string
   apiKeyId: string
-  provider: Provider
+  provider: LlmProvider
   modelName: string
   deliveryMode: ChatDeliveryMode
   sanitizedMessages: SanitizedMessage[]
@@ -25,22 +26,12 @@ export interface ChatGenerationJobPayload {
   regenerateAssistantMessageId: string | null
 }
 
-const CHAT_JOB_PROVIDERS: Provider[] = [
-  'google',
-  'openai',
-  'anthropic',
-  'deepseek',
-  'openrouter',
-  'voyage_embeddings',
-]
-const CHAT_JOB_PROVIDER_SET = new Set<string>(CHAT_JOB_PROVIDERS)
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function isProvider(value: unknown): value is Provider {
-  return typeof value === 'string' && CHAT_JOB_PROVIDER_SET.has(value)
+function isLlmProvider(value: unknown): value is LlmProvider {
+  return typeof value === 'string' && isKnownLLMProvider(value)
 }
 
 function isSanitizedMessage(value: unknown): value is SanitizedMessage {
@@ -90,7 +81,7 @@ export function parseChatJobPayload(payload: unknown): ChatGenerationJobPayload 
     typeof payload.chatId !== 'string' ||
     typeof payload.userId !== 'string' ||
     typeof payload.apiKeyId !== 'string' ||
-    !isProvider(payload.provider) ||
+    !isLlmProvider(payload.provider) ||
     typeof payload.modelName !== 'string' ||
     !Array.isArray(payload.sanitizedMessages) ||
     typeof payload.isRegeneration !== 'boolean'

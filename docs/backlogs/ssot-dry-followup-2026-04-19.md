@@ -86,43 +86,50 @@ Verification:
 - [x] `npm run lint`
 - [ ] `npm run ops:smoke` after deploy if route or runner behavior changes
 
-### P1. Extend Feature-Scoped Provider Contracts Beyond Summary
+### P1. Close Queue/Runtime LLM-Only Provider Contracts
+
+Status: completed locally on 2026-04-19
 
 Why second:
 
-- the summary slice already proved the pattern is manageable
-- feature-scoped tightening improves DX without committing to a repo-wide type campaign
-- this reduces accidental use of embedding-only or unknown providers in LLM-only paths
+- the remaining high-risk gap after `P0` was no longer route selection, but the queue/runtime contract
+- chat send paths were already narrowed at the ingress boundary, but the serialized job payload still
+  allowed non-LLM providers to be represented
+- this is the point where an accidental embedding-only provider could survive until deep runner logic
 
 Primary scope:
 
-- [src/lib/chat/translation-service.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/translation-service.ts)
-- [src/app/api/messages/reprocess/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/messages/reprocess/route.ts)
-- [src/app/api/chat/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.ts)
-- supporting feature-local contracts under [src/lib/chat](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat)
+- [src/lib/chat/job-payload.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat/job-payload.ts)
+- [src/lib/llm/model-factory.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/llm/model-factory.ts)
+- [src/app/api/internal/chat-job-runner/provider-request-stage.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/provider-request-stage.ts)
+- [src/app/api/internal/chat-job-runner/streaming-response-stage.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/streaming-response-stage.ts)
+- supporting runner helpers under [src/app/api/internal/chat-job-runner](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner)
 
 Entry checklist:
 
-- [ ] choose whether the next slice should start with `translation`, `reprocess`, or `chat`
-- [ ] confirm where raw provider strings still need to remain allowed at the DB boundary
-- [ ] identify tests that should fail if an embedding-only provider reaches an LLM-only flow
+- [x] confirm that raw DB rows can remain permissive while job payloads and runner contracts should not
+- [x] identify the smallest end-to-end slice where `voyage_embeddings` was still representable
+- [x] identify tests that should fail if an embedding-only provider reaches an LLM-only flow
 
 Implementation checklist:
 
-- [ ] tighten feature-local contracts to `LlmProvider` or another narrower local type where appropriate
-- [ ] keep runtime narrowing close to request or DB ingress points
-- [ ] avoid rewriting unrelated `llm/*` infrastructure unless the feature cannot be completed otherwise
+- [x] narrow `ChatGenerationJobPayload.provider` to `LlmProvider`
+- [x] reject embedding-only providers during payload parsing instead of later runner stages
+- [x] propagate the narrower provider contract through runner helpers that directly consume payload provider
+- [x] narrow `buildLanguageModel` so the final LLM construction boundary also rejects illegal provider values
 
 Done when:
 
-- [ ] at least one more non-summary LLM feature uses explicit LLM-only provider contracts
-- [ ] compile-time signals catch more provider drift before runtime
-- [ ] the change stays feature-scoped rather than turning into a global refactor
+- [x] embedding-only providers are no longer representable in serialized chat job payloads
+- [x] compile-time signals catch more provider drift before runtime execution
+- [x] the change stays bounded to queue/runtime LLM execution rather than turning into a repo-wide cleanup
 
 Verification:
 
-- [ ] relevant unit tests pass
-- [ ] `npm run typecheck`
+- [x] relevant unit tests pass
+- [x] `npm run typecheck`
+- [x] `npm run lint`
+- [ ] `npm run ops:smoke` after deploy because runner behavior changed
 
 ### P2. Trim Remaining Chat-Screen API Key DTO Duplication
 
@@ -175,8 +182,10 @@ Pause before continuing to the next item if any of these become true:
 As of 2026-04-19:
 
 - `P0 Canonicalize LLM Config Resolution` is completed locally
+- `P1 Close Queue/Runtime LLM-Only Provider Contracts` is completed locally
 - `P2 Trim Remaining Chat-Screen API Key DTO Duplication` is completed locally
-- start with `P1 Extend Feature-Scoped Provider Contracts Beyond Summary` if this cleanup continues
+- there is no remaining must-do item from this backlog
+- only continue if a new bounded slice with clear drift risk appears
 - do not start with repo-wide `provider: string` replacement
 - keep experimental memory invalidation rules out of this backlog unless the product contract changes
 

@@ -1,4 +1,4 @@
-import type { Database } from '@/types/database.types'
+import type { Database, LlmProvider } from '@/types/database.types'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import type { UsageCostBreakdown } from '@/lib/model-pricing'
 import type { PromptCacheDecision, AnthropicCacheDecision } from '@/lib/llm/prompt-cache'
@@ -7,7 +7,7 @@ import type { CreateGoogleCacheResult } from '@/lib/llm/google-cache'
 type ConversationMessage = { role: string; content: string }
 
 export type ChatRunnerActualPayload = {
-  provider: string
+  provider: LlmProvider
   strategy: 'anthropic-split-system' | 'google-explicit-cache' | 'default'
   systemMessages: Array<{ role: string; content: string; cached?: boolean }>
   conversationMessages: Array<{ role: string; content: string }>
@@ -47,7 +47,7 @@ type BuildChatDebugInfoArgs = {
   rawResponse: string
   processedResponse: string
   apiKeyId: string
-  provider: string
+  provider: LlmProvider
   modelName: string
   finishReason?: string | null
   usage: UsageMetrics
@@ -60,7 +60,7 @@ type BuildChatUsageEventArgs = {
   userId: string
   chatId: string
   apiKeyId: string
-  provider: string
+  provider: LlmProvider
   modelName: string
   usage: UsageMetrics
   usageCost: UsageCostBreakdown | null

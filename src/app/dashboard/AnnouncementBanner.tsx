@@ -3,16 +3,9 @@
 import { useMemo, useEffect, useState } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
+import type { AnnouncementPayload, AnnouncementResponse } from '@/lib/announcements/contracts'
 
-type Announcement = {
-  id: string
-  message: string
-  ctaLabel: string | null
-  ctaUrl: string | null
-  severity: 'info' | 'warning' | 'critical'
-}
-
-const fetchAnnouncement = async (url: string) => {
+const fetchAnnouncement = async (url: string): Promise<AnnouncementPayload | null> => {
   const response = await fetch(url, { cache: 'no-store' })
 
   if (!response.ok) {
@@ -22,8 +15,8 @@ const fetchAnnouncement = async (url: string) => {
     throw new Error('Failed to load announcement')
   }
 
-  const payload = await response.json()
-  return (payload?.announcement ?? null) as Announcement | null
+  const payload = (await response.json()) as AnnouncementResponse
+  return payload.announcement ?? null
 }
 
 const severityTokens = {
@@ -54,7 +47,7 @@ const severityTokens = {
 } as const
 
 export default function AnnouncementBanner() {
-  const { data: announcement } = useSWR<Announcement | null>(
+  const { data: announcement } = useSWR<AnnouncementPayload | null>(
     '/api/announcements',
     fetchAnnouncement,
     {

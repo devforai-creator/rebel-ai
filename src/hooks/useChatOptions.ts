@@ -1,24 +1,7 @@
 import useSWR from 'swr'
+import type { ChatOptionsResponse } from '@/lib/chat-options/contracts'
 
-export interface ApiKey {
-  id: string
-  key_name: string
-  provider: string
-  model_preference: string | null
-}
-
-export interface Persona {
-  id: string
-  name: string
-  description: string | null
-}
-
-export interface ChatOptions {
-  apiKeys: ApiKey[]
-  personas: Persona[]
-}
-
-const fetcher = async (url: string): Promise<ChatOptions> => {
+const fetcher = async (url: string): Promise<ChatOptionsResponse> => {
   const response = await fetch(url, { cache: 'no-store' })
   if (!response.ok) {
     throw new Error('Failed to load chat options')
@@ -27,7 +10,7 @@ const fetcher = async (url: string): Promise<ChatOptions> => {
 }
 
 export function useChatOptions(enabled: boolean) {
-  return useSWR<ChatOptions>(enabled ? '/api/chat-options' : null, fetcher, {
+  return useSWR<ChatOptionsResponse>(enabled ? '/api/chat-options' : null, fetcher, {
     revalidateOnFocus: false,
     revalidateIfStale: false,
   })

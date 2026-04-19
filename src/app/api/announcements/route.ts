@@ -3,20 +3,11 @@ import {
   createUnexpectedRouteErrorResponse,
   requireAuthenticatedUser,
 } from '@/lib/http/api-contract'
+import type { AnnouncementPayload, AnnouncementResponse } from '@/lib/announcements/contracts'
 import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-type AnnouncementPayload = {
-  id: string
-  message: string
-  ctaLabel: string | null
-  ctaUrl: string | null
-  severity: string
-  startsAt: string
-  endsAt: string | null
-}
 
 export async function GET() {
   try {
@@ -48,13 +39,14 @@ export async function GET() {
           message: data.message,
           ctaLabel: data.cta_label,
           ctaUrl: data.cta_url,
-          severity: data.severity,
+          severity: data.severity as AnnouncementPayload['severity'],
           startsAt: data.starts_at,
           endsAt: data.ends_at,
         }
       : null
 
-    return Response.json({ announcement: payload })
+    const responseBody: AnnouncementResponse = { announcement: payload }
+    return Response.json(responseBody)
   } catch (error) {
     return createUnexpectedRouteErrorResponse('[Announcements API] Unexpected error:', error)
   }

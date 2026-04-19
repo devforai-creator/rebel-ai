@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { CHAT_SELECTABLE_API_KEY_OPTION_COLUMNS } from '../api-key-options'
 import NewChatForm from './NewChatForm'
 
 interface Props {
@@ -35,7 +36,7 @@ export default async function NewChatPage({ searchParams }: Props) {
       .maybeSingle(),
     supabase
       .from('api_keys')
-      .select('id, key_name, provider, model_preference')
+      .select(CHAT_SELECTABLE_API_KEY_OPTION_COLUMNS)
       .eq('user_id', user.id)
       .eq('is_active', true)
       .order('provider'),

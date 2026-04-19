@@ -18,6 +18,7 @@ import { normalizeChatModelConfig } from '@/lib/chat/model-config'
 import { isLLMProvider } from '@/lib/api-keys/provider-utils'
 import { loadProjectedChatWindow } from '@/lib/chat/turns'
 import type { Persona } from '@/types/database.types'
+import { CHAT_RUNTIME_API_KEY_OPTION_COLUMNS } from '../api-key-options'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -123,7 +124,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
   ] = await Promise.all([
     supabase
       .from('api_keys')
-      .select('id, key_name, provider, model_preference, service_tier')
+      .select(CHAT_RUNTIME_API_KEY_OPTION_COLUMNS)
       .eq('user_id', user.id)
       .eq('is_active', true)
       .order('key_name', { ascending: true }),

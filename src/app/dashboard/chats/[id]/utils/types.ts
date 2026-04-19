@@ -1,7 +1,8 @@
 import type { CharacterAsset } from '@/lib/asset-resolver'
-import type { Message, ApiKey } from '@/types/database.types'
+import type { Message } from '@/types/database.types'
 import type { ChatModelConfig } from '@/lib/chat/model-config'
 import type { ChatDeliveryMode } from '@/lib/chat/delivery-mode'
+import type { ChatRuntimeApiKeyOption } from '../../api-key-options'
 
 /**
  * Display-optimized message type for UI rendering
@@ -81,13 +82,7 @@ export type ModuleAssetSummary = {
   expectedAssetCount: number
 }
 
-/**
- * API key option for dropdown selection
- */
-export type ApiKeyOption = Pick<
-  ApiKey,
-  'id' | 'key_name' | 'provider' | 'model_preference' | 'service_tier'
->
+export type ApiKeyOption = ChatRuntimeApiKeyOption
 
 /**
  * Debug information stored with assistant messages

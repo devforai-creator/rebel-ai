@@ -43,6 +43,8 @@ Do not reopen those finished slices from this backlog.
 
 ### P0. Canonicalize LLM Config Resolution
 
+Status: completed locally on 2026-04-19
+
 Why first:
 
 - this is the highest-value remaining SSoT gap from the review
@@ -60,28 +62,28 @@ Primary scope:
 
 Entry checklist:
 
-- [ ] define the exact canonical output shape for resolved LLM config
-- [ ] decide which callers need `provider + modelName` only and which also need `serviceTier` or `apiKeyId`
-- [ ] identify current fallback precedence differences that must remain intentional versus ones that should converge
+- [x] define the exact canonical output shape for resolved LLM config
+- [x] decide which callers need `provider + modelName` only and which also need `serviceTier` or `apiKeyId`
+- [x] identify current fallback precedence differences that must remain intentional versus ones that should converge
 
 Implementation checklist:
 
-- [ ] extract one narrow shared resolver for active LLM config selection
-- [ ] make summary, translation, reprocess, and chat-send paths use that resolver or an explicit wrapper around it
-- [ ] remove duplicated default-model fallback logic where the resolver becomes canonical
-- [ ] keep embedding-only providers rejected at the canonical boundary rather than at scattered call sites
+- [x] extract one narrow shared resolver for active LLM config selection
+- [x] make summary, translation, reprocess, and chat-send paths use that resolver or an explicit wrapper around it
+- [x] remove duplicated default-model fallback logic where the resolver becomes canonical
+- [x] keep embedding-only providers rejected at the canonical boundary rather than at scattered call sites
 
 Done when:
 
-- [ ] changing provider fallback rules no longer requires editing several feature paths
-- [ ] model selection semantics are described by one shared boundary instead of repeated local branches
-- [ ] tests state the intended fallback precedence directly
+- [x] changing provider fallback rules no longer requires editing several feature paths
+- [x] model selection semantics are described by one shared boundary instead of repeated local branches
+- [x] tests state the intended fallback precedence directly
 
 Verification:
 
-- [ ] relevant unit tests pass
-- [ ] `npm run typecheck`
-- [ ] `npm run lint`
+- [x] relevant unit tests pass
+- [x] `npm run typecheck`
+- [x] `npm run lint`
 - [ ] `npm run ops:smoke` after deploy if route or runner behavior changes
 
 ### P1. Extend Feature-Scoped Provider Contracts Beyond Summary
@@ -124,6 +126,8 @@ Verification:
 
 ### P2. Trim Remaining Chat-Screen API Key DTO Duplication
 
+Status: completed locally on 2026-04-19
+
 Why last:
 
 - this is useful DX cleanup, but lower impact than canonical model-resolution work
@@ -138,24 +142,24 @@ Primary scope:
 
 Entry checklist:
 
-- [ ] confirm the minimal shared shape actually used by chat-screen API key selectors
-- [ ] decide whether the shared type belongs next to the chat feature or in an existing account/chat-options contract file
+- [x] confirm the minimal shared shape actually used by chat-screen API key selectors
+- [x] decide whether the shared type belongs next to the chat feature or in an existing account/chat-options contract file
 
 Implementation checklist:
 
-- [ ] extract one shared chat-facing API key option type if at least two callers need the same exact shape
-- [ ] remove repeated projection and label-formatting logic where it is materially duplicated
-- [ ] keep view-only fields local if they do not improve real reuse
+- [x] extract one shared chat-facing API key option type if at least two callers need the same exact shape
+- [x] remove repeated projection and label-formatting logic where it is materially duplicated
+- [x] keep view-only fields local if they do not improve real reuse
 
 Done when:
 
-- [ ] changing the chat-screen API key option shape touches one shared definition instead of several local copies
-- [ ] the extraction stays local to the chat-facing selector use case
+- [x] changing the chat-screen API key option shape touches one shared definition instead of several local copies
+- [x] the extraction stays local to the chat-facing selector use case
 
 Verification:
 
-- [ ] relevant unit tests pass
-- [ ] `npm run typecheck`
+- [x] relevant unit tests pass
+- [x] `npm run typecheck`
 
 ## Stop Conditions
 
@@ -170,7 +174,9 @@ Pause before continuing to the next item if any of these become true:
 
 As of 2026-04-19:
 
-- start with `P0 Canonicalize LLM Config Resolution`
+- `P0 Canonicalize LLM Config Resolution` is completed locally
+- `P2 Trim Remaining Chat-Screen API Key DTO Duplication` is completed locally
+- start with `P1 Extend Feature-Scoped Provider Contracts Beyond Summary` if this cleanup continues
 - do not start with repo-wide `provider: string` replacement
 - keep experimental memory invalidation rules out of this backlog unless the product contract changes
 

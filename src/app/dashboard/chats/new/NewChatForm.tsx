@@ -4,17 +4,17 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import type { Character, ApiKey, Persona } from '@/types/database.types'
+import type { Character, Persona } from '@/types/database.types'
+import { formatChatApiKeyOptionLabel, type ChatSelectableApiKeyOption } from '../api-key-options'
 import { createChat } from '../actions'
 import { getCharacterGreetingOptions } from './greeting-options'
 
 interface Props {
   character: CharacterOption
-  apiKeys: ApiKeyOption[]
+  apiKeys: ChatSelectableApiKeyOption[]
   personas: PersonaOption[]
 }
 
-type ApiKeyOption = Pick<ApiKey, 'id' | 'key_name' | 'provider' | 'model_preference'>
 type CharacterOption = Pick<Character, 'id' | 'user_id' | 'name' | 'greeting_message' | 'metadata'>
 type PersonaOption = Pick<Persona, 'id' | 'name' | 'description'>
 
@@ -162,8 +162,7 @@ export default function NewChatForm({ character, apiKeys, personas }: Props) {
             <option value="">API 키를 선택하세요</option>
             {apiKeys.map((key) => (
               <option key={key.id} value={key.id}>
-                {key.key_name} ({key.provider})
-                {key.model_preference && ` - ${key.model_preference}`}
+                {formatChatApiKeyOptionLabel(key, { includeModelPreference: true })}
               </option>
             ))}
           </select>

@@ -2,6 +2,7 @@
 
 import React, { memo } from 'react'
 import Button from '@/app/dashboard/components/Button'
+import { formatChatApiKeyOptionLabel } from '../../api-key-options'
 import type { ChatMemoryMode } from '@/lib/chat/model-config'
 import {
   LatestMessageTokenStats,
@@ -71,7 +72,7 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
             >
               {apiKeys.map((key) => (
                 <option key={key.id} value={key.id}>
-                  {key.key_name} ({key.provider})
+                  {formatChatApiKeyOptionLabel(key)}
                 </option>
               ))}
             </select>
@@ -171,7 +172,7 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
           >
             {apiKeys.map((key) => (
               <option key={key.id} value={key.id}>
-                보조: {key.key_name} ({key.provider})
+                {formatChatApiKeyOptionLabel(key, { prefix: '보조' })}
               </option>
             ))}
           </select>
@@ -190,11 +191,10 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
               >
                 {apiKeys.map((key) => (
                   <option key={key.id} value={key.id}>
-                    {key.key_name} ({key.provider}
-                    {key.provider === 'openai'
-                      ? ` · ${formatServiceTierLabel(key.service_tier)}`
-                      : ''}
-                    )
+                    {formatChatApiKeyOptionLabel(key, {
+                      extraProviderDetail:
+                        key.provider === 'openai' ? formatServiceTierLabel(key.service_tier) : null,
+                    })}
                   </option>
                 ))}
               </select>
@@ -247,11 +247,13 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                 >
                   {apiKeys.map((key) => (
                     <option key={key.id} value={key.id}>
-                      보조: {key.key_name} ({key.provider}
-                      {key.provider === 'openai'
-                        ? ` · ${formatServiceTierLabel(key.service_tier)}`
-                        : ''}
-                      )
+                      {formatChatApiKeyOptionLabel(key, {
+                        prefix: '보조',
+                        extraProviderDetail:
+                          key.provider === 'openai'
+                            ? formatServiceTierLabel(key.service_tier)
+                            : null,
+                      })}
                     </option>
                   ))}
                 </select>

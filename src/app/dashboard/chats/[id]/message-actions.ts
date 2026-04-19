@@ -75,7 +75,9 @@ export async function editMessage(messageId: string, newContent: string) {
     return { error: 'Unauthorized' }
   }
 
-  // Update message content
+  // Direct edits intentionally stop at the canonical message row. Rebuilding summaries/facts
+  // is owned by the queued chat pipeline and explicit regeneration flows, not this lightweight
+  // dashboard action.
   const { error } = await supabase
     .from('messages')
     .update(buildEditedMessageUpdate(newContent.trim()))

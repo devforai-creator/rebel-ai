@@ -144,7 +144,10 @@ export async function POST(request: Request) {
     serviceTier: apiKeyData.service_tier,
   })
 
-  // 6. Stream text and update message in DB
+  // 6. Stream text and update message in DB.
+  // This experimental rewrite path updates the canonical message text in place, but intentionally
+  // does not rebuild summaries/facts. Those derived memory artifacts are maintained separately by
+  // the main queued chat pipeline and explicit regeneration flows.
   try {
     const stream = await streamText({
       model,

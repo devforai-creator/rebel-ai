@@ -156,6 +156,10 @@ async function claimPendingCharacterImportJob(
 
   const processingUpdate: ImportJobUpdate = {
     status: 'processing',
+    started_at: new Date().toISOString(),
+    completed_at: null,
+    error_message: null,
+    result: null,
   }
   const { data: claimedJob, error: claimError } = await supabase
     .from('charx_import_jobs')

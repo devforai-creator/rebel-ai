@@ -20,6 +20,7 @@ export async function resetStuckImportProcessingJobs(
     status: 'error',
     error_message: 'Processing timed out – automatically marked as error by janitor',
     completed_at: new Date(now).toISOString(),
+    result: null,
   }
 
   const { data, error } = await supabase

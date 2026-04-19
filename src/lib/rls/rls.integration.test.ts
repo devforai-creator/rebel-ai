@@ -1013,6 +1013,157 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
       expect(usageCosts.error).toBeTruthy()
       expect(usageCosts.error?.message.toLowerCase()).toContain('not authorized')
     })
+
+    it('rejects duplicate usage events for the same request_id', async () => {
+      const requestId = randomUUID()
+      const baseUsageEvent = {
+        chat_id: testData.chatA.id,
+        user_id: testData.userA.id,
+        model_provider: 'openai',
+        model_name: 'gpt-test',
+        prompt_tokens: 10,
+        completion_tokens: 4,
+        total_tokens: 14,
+        request_id: requestId,
+      }
+
+      const firstInsert = await adminClient.from('chat_usage_events').insert(baseUsageEvent)
+      expect(firstInsert.error).toBeNull()
+
+      const duplicateInsert = await adminClient.from('chat_usage_events').insert(baseUsageEvent)
+      expect(duplicateInsert.error).toBeTruthy()
+      expect(duplicateInsert.error?.code).toBe('23505')
+    })
+  })
+
+  describe('job state integrity', () => {
+    it('requires successful CharX jobs to persist a result payload', async () => {
+      const { data: job, error: insertError } = await adminClient
+        .from('charx_import_jobs')
+        .insert({
+          user_id: testData.userA.id,
+          storage_path: `${testData.userA.id}/${randomUUID()}.rbx`,
+          original_filename: 'import.rbx',
+          file_type: 'application/octet-stream',
+          rights_status: 'self_owned',
+          rights_attested: true,
+          license_type: 'self_owned',
+        })
+        .select('id')
+        .single()
+
+      expect(insertError).toBeNull()
+      expect(job).not.toBeNull()
+
+      const invalidSuccess = await adminClient
+        .from('charx_import_jobs')
+        .update({
+          status: 'success',
+          started_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+          result: null,
+        })
+        .eq('id', job!.id)
+
+      expect(invalidSuccess.error).toBeTruthy()
+      expect(invalidSuccess.error?.message.toLowerCase()).toContain('charx_import_jobs_state_shape')
+    })
+
+    it('requires processing risum jobs to record started_at', async () => {
+      const { data: job, error: insertError } = await adminClient
+        .from('risum_import_jobs')
+        .insert({
+          user_id: testData.userA.id,
+          character_id: testData.characterA.id,
+          storage_path: `${testData.userA.id}/${randomUUID()}.risum`,
+          original_filename: 'archive.risum',
+          file_type: 'application/octet-stream',
+          rights_status: 'self_owned',
+          rights_attested: true,
+          license_type: 'self_owned',
+        })
+        .select('id')
+        .single()
+
+      expect(insertError).toBeNull()
+      expect(job).not.toBeNull()
+
+      const invalidProcessing = await adminClient
+        .from('risum_import_jobs')
+        .update({
+          status: 'processing',
+          started_at: null,
+        })
+        .eq('id', job!.id)
+
+      expect(invalidProcessing.error).toBeTruthy()
+      expect(invalidProcessing.error?.message.toLowerCase()).toContain(
+        'risum_import_jobs_state_shape',
+      )
+    })
+  })
+
+  describe('memory range integrity', () => {
+    it('blocks overlapping summaries within the same chat and level', async () => {
+      const firstSummary = await adminClient.from('chat_summaries').insert({
+        chat_id: testData.chatA.id,
+        user_id: testData.userA.id,
+        level: 0,
+        start_seq: 1,
+        end_seq: 8,
+        summary: 'Chunk one',
+      })
+
+      expect(firstSummary.error).toBeNull()
+
+      const overlappingSummary = await adminClient.from('chat_summaries').insert({
+        chat_id: testData.chatA.id,
+        user_id: testData.userA.id,
+        level: 0,
+        start_seq: 5,
+        end_seq: 12,
+        summary: 'Overlapping chunk',
+      })
+
+      expect(overlappingSummary.error).toBeTruthy()
+      expect(overlappingSummary.error?.message.toLowerCase()).toContain(
+        'overlapping chat summary range',
+      )
+
+      const differentLevelSummary = await adminClient.from('chat_summaries').insert({
+        chat_id: testData.chatA.id,
+        user_id: testData.userA.id,
+        level: 1,
+        start_seq: 1,
+        end_seq: 12,
+        summary: 'Meta summary covering the same chunk rows',
+      })
+
+      expect(differentLevelSummary.error).toBeNull()
+    })
+
+    it('blocks overlapping fact ranges within the same chat', async () => {
+      const firstFact = await adminClient.from('chat_facts').insert({
+        chat_id: testData.chatA.id,
+        user_id: testData.userA.id,
+        start_seq: 1,
+        end_seq: 8,
+        facts: 'Fact block one',
+      })
+
+      expect(firstFact.error).toBeNull()
+
+      const overlappingFact = await adminClient.from('chat_facts').insert({
+        chat_id: testData.chatA.id,
+        user_id: testData.userA.id,
+        start_seq: 8,
+        end_seq: 12,
+        facts: 'Fact block two',
+      })
+
+      expect(overlappingFact.error).toBeTruthy()
+      expect(overlappingFact.error?.message.toLowerCase()).toContain('overlapping chat fact range')
+    })
   })
 
   describe('cross-tenant isolation', () => {

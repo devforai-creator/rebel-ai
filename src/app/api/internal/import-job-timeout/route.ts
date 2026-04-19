@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
     status: 'error' as const,
     completed_at: new Date().toISOString(),
     error_message: errorMessage,
+    result: null,
   }
   const typedUpdatePayload: ImportJobUpdate = updatePayload
 

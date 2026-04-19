@@ -391,6 +391,77 @@ describe('runPostGenerationPipeline', () => {
     }
   })
 
+  it('treats duplicate usage event inserts as idempotent and does not warn', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    try {
+      const supabase = withFromOverride(createChatJobRunnerSupabaseMock(), (table, handler) => {
+        if (table === 'chat_usage_events') {
+          const duplicateInsertResult = {
+            data: [] as Array<Record<string, unknown>>,
+            error: { message: 'duplicate key value violates unique constraint', code: '23505' },
+          }
+
+          return {
+            ...handler,
+            insert: () => ({
+              then<TResult1 = typeof duplicateInsertResult, TResult2 = never>(
+                onfulfilled?:
+                  | ((value: typeof duplicateInsertResult) => TResult1 | PromiseLike<TResult1>)
+                  | null
+                  | undefined,
+                onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+              ) {
+                return Promise.resolve(duplicateInsertResult).then(onfulfilled, onrejected)
+              },
+            }),
+          }
+        }
+
+        return null
+      })
+
+      const result = await runPostGenerationPipeline({
+        supabase: supabase as unknown as SupabaseClientType,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        apiKeyId: 'key-1',
+        provider: 'openai',
+        modelName: 'gpt-4o-mini',
+        origin: 'https://internal.example.com',
+        requestId: 'req-postgen-duplicate',
+        assistantText: 'final answer',
+        assistantMessageId: 'assistant-1',
+        turnId: null,
+        regenerateAssistantMessageId: null,
+        promptTokens: 11,
+        completionTokens: 22,
+        debugInfo: { requestId: 'req-postgen-duplicate' },
+        bilingualEnabled: false,
+        messageInsertDuration: 9,
+        usage: buildUsageMetrics(),
+        usageCost: null,
+        triggerMessageTranslationFn: vi.fn(),
+        resolveSummaryModelPreferenceFn: vi.fn(async () => null),
+        triggerSummaryGenerationFn: vi.fn(async () => ({ success: true, attempts: 1 })),
+        now: () => 0,
+      })
+
+      expect(result).toMatchObject({
+        assistantMessageId: 'assistant-1',
+        messageInsertDuration: 9,
+        summaryTriggerDurationMs: 0,
+      })
+      expect(supabase.usageEvents).toHaveLength(0)
+      expect(warnSpy).not.toHaveBeenCalledWith(
+        '[Chat Job Runner] Failed to insert chat usage event',
+        expect.anything(),
+      )
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
   it('logs and continues when stale assistant debug_info cleanup fails', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 

@@ -38,6 +38,7 @@ export async function processCharacterImportJob(
       status: 'error',
       completed_at: new Date().toISOString(),
       error_message: 'Security validation failed: unauthorized storage path',
+      result: null,
     }
     await supabase
       .from('charx_import_jobs')
@@ -49,7 +50,9 @@ export async function processCharacterImportJob(
   const processingUpdate: ImportJobUpdate = {
     status: 'processing',
     started_at: new Date().toISOString(),
+    completed_at: null,
     error_message: null,
+    result: null,
   }
   await supabase
     .from('charx_import_jobs')
@@ -92,6 +95,7 @@ export async function processCharacterImportJob(
     const successUpdate: ImportJobUpdate = {
       status: 'success',
       completed_at: new Date().toISOString(),
+      error_message: null,
       result: successResult,
     }
     await supabase
@@ -109,6 +113,7 @@ export async function processCharacterImportJob(
       status: 'error',
       completed_at: new Date().toISOString(),
       error_message: errorMessage,
+      result: null,
     }
     await supabase
       .from('charx_import_jobs')

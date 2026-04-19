@@ -116,6 +116,10 @@ function logPostGenerationPersistenceWarning({
   })
 }
 
+function isUniqueViolation(error: { code?: string | null } | null | undefined): boolean {
+  return error?.code === '23505'
+}
+
 async function clearStaleAssistantDebugInfo({
   supabase,
   chatId,
@@ -507,14 +511,23 @@ export async function runPostGenerationPipeline({
   const usageEventInsertDurationMs = now() - usageEventInsertStart
 
   if (usageEventInsertError) {
-    logPostGenerationPersistenceWarning({
-      action: '[Chat Job Runner] Failed to insert chat usage event',
-      chatId,
-      userId,
-      apiKeyId,
-      requestId,
-      error: usageEventInsertError.message,
-    })
+    if (isUniqueViolation(usageEventInsertError)) {
+      logPostGenerationDebug('[Chat Job Runner] Skipped duplicate chat usage event insert', {
+        chatId,
+        userId,
+        apiKeyId,
+        requestId,
+      })
+    } else {
+      logPostGenerationPersistenceWarning({
+        action: '[Chat Job Runner] Failed to insert chat usage event',
+        chatId,
+        userId,
+        apiKeyId,
+        requestId,
+        error: usageEventInsertError.message,
+      })
+    }
   }
 
   // Summary generation is best-effort and should not block the chat worker.

@@ -1,63 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { toast } from 'sonner'
+import { useCallback, useMemo, useState } from 'react'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
-
-type ModuleSummary = {
-  id: string
-  name: string
-  description?: string | null
-  source_file?: string | null
-  hide_icon?: boolean | null
-  created_at?: string
-  updated_at?: string
-  counts?: {
-    lorebook: number
-    regex: number
-    assets: number
-  }
-}
-
-type FetchState = {
-  loading: boolean
-  error: string | null
-}
+import { useModulesAdmin } from './useModulesAdmin'
+import type { ModuleSummary } from './module-admin-client'
 
 export default function ModuleManagementSection() {
-  const [modules, setModules] = useState<ModuleSummary[]>([])
-  const [{ loading, error }, setState] = useState<FetchState>({
-    loading: true,
-    error: null,
-  })
-  const [deleting, setDeleting] = useState<string | null>(null)
+  const { modules, loading, error, deleting, loadModules, removeModule } = useModulesAdmin()
   const [pendingDeleteModule, setPendingDeleteModule] = useState<ModuleSummary | null>(null)
-
-  const loadModules = useCallback(async () => {
-    setState({ loading: true, error: null })
-    try {
-      const response = await fetch('/api/modules', { cache: 'no-store' })
-      if (!response.ok) {
-        throw new Error('Failed to load module list.')
-      }
-
-      const payload = await response.json()
-      const list = Array.isArray(payload?.modules) ? payload.modules : []
-      setModules(list)
-      setState({ loading: false, error: null })
-    } catch (err) {
-      console.error('[Module Admin] Failed to load modules', err)
-      setState({
-        loading: false,
-        error: err instanceof Error ? err.message : 'An unknown error occurred.',
-      })
-    }
-  }, [])
-
-  useEffect(() => {
-    void loadModules()
-  }, [loadModules])
 
   const handleDelete = useCallback(async (id: string, label: string) => {
     setPendingDeleteModule({ id, name: label })
@@ -68,26 +19,9 @@ export default function ModuleManagementSection() {
     setPendingDeleteModule(null)
 
     await runConfirmedAction(pendingModule, async ({ id }) => {
-      setDeleting(id)
-      try {
-        const response = await fetch(`/api/modules?id=${encodeURIComponent(id)}`, {
-          method: 'DELETE',
-        })
-
-        if (!response.ok) {
-          const { error: apiError } = await response.json().catch(() => ({ error: null }))
-          throw new Error(apiError || 'Failed to delete module.')
-        }
-
-        setModules((prev) => prev.filter((module) => module.id !== id))
-      } catch (err) {
-        console.error('[Module Admin] Failed to delete module', err)
-        toast.error(err instanceof Error ? err.message : 'An error occurred during deletion.')
-      } finally {
-        setDeleting((current) => (current === id ? null : current))
-      }
+      await removeModule(id)
     })
-  }, [pendingDeleteModule])
+  }, [pendingDeleteModule, removeModule])
 
   const hasModules = modules.length > 0
 

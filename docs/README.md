@@ -57,6 +57,7 @@ Backlogs are execution queues, not contract documents.
 - [backlogs/db-query-audit-backlog-2026-04-14.md](./backlogs/db-query-audit-backlog-2026-04-14.md)
 - [backlogs/FIRST_CLASS_HARDENING_BACKLOG.md](./backlogs/FIRST_CLASS_HARDENING_BACKLOG.md)
 - [backlogs/auth-session-hardening-backlog-2026-04-16.md](./backlogs/auth-session-hardening-backlog-2026-04-16.md)
+- [backlogs/dashboard-ui-boundary-backlog-2026-04-19.md](./backlogs/dashboard-ui-boundary-backlog-2026-04-19.md)
 - [backlogs/production-audit-backlog-2026-04-12.md](./backlogs/production-audit-backlog-2026-04-12.md)
 - [backlogs/production-readiness-backlog-2026-04-14.md](./backlogs/production-readiness-backlog-2026-04-14.md)
 - [backlogs/production-readiness-gate-backlog-2026-04-14.md](./backlogs/production-readiness-gate-backlog-2026-04-14.md)

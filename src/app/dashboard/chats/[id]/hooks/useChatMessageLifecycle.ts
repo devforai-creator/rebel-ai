@@ -110,19 +110,20 @@ export function useChatMessageLifecycle({
     debugInfoMap,
     persistedMessageIds,
   })
+  const { handleRealtimeMessageChange, handleAssistantStreamEvent } = queuedChat
 
   const handleMessageRealtime = useCallback(
     (payload: MessageChangePayload) => {
       onMessageChangeSideEffect?.(payload)
-      queuedChat.handleRealtimeMessageChange(payload)
+      handleRealtimeMessageChange(payload)
     },
-    [onMessageChangeSideEffect, queuedChat.handleRealtimeMessageChange],
+    [handleRealtimeMessageChange, onMessageChangeSideEffect],
   )
 
   useChatRealtimeSubscription({
     chatId,
     onMessageChange: handleMessageRealtime,
-    onAssistantStreamEvent: queuedChat.handleAssistantStreamEvent,
+    onAssistantStreamEvent: handleAssistantStreamEvent,
   })
 
   const combinedMessages = useMemo(

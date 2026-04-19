@@ -7,6 +7,33 @@ on:
   pull_request:
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      db: ${{ steps.filter.outputs.db }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Detect DB-related changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            db:
+              - 'supabase/migrations/**'
+              - 'supabase/schema.sql'
+              - 'src/lib/rls/**'
+              - 'scripts/build-hosted-schema.sh'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'docs/DB_CHANGE_WORKFLOW.md'
+              - '.github/workflows/test.yml'
+
   test:
     runs-on: ubuntu-latest
 
@@ -87,6 +114,8 @@ jobs:
 
   # Validate Supabase migrations and RLS policies
   migrations:
+    needs: changes
+    if: needs.changes.outputs.db == 'true'
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -124,23 +153,11 @@ jobs:
           supabase db reset --local --no-seed
           echo "✅ All migrations reapplied successfully"
 
-      - name: Run RLS policy tests
-        run: |
-          echo "🔒 Running RLS policy tests..."
-          # Get Supabase local credentials
-          SUPABASE_STATUS=$(supabase status --output json)
-          SUPABASE_URL=$(echo "$SUPABASE_STATUS" | jq -r '.API_URL')
-          SERVICE_ROLE_KEY=$(echo "$SUPABASE_STATUS" | jq -r '.SERVICE_ROLE_KEY')
-          ANON_KEY=$(echo "$SUPABASE_STATUS" | jq -r '.ANON_KEY')
+      - name: Check hosted schema snapshot
+        run: npm run db:schema:check
 
-          # Run RLS tests with anon key for accurate user simulation
-          SUPABASE_URL="$SUPABASE_URL" \
-          SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
-          SUPABASE_ANON_KEY="$ANON_KEY" \
-          RLS_TESTS_ENABLED=true \
-          npm run test -- src/lib/rls/
-
-          echo "✅ RLS policy tests passed"
+      - name: Run DB integration tests
+        run: npm run test:db
 
       - name: Stop Supabase
         if: always()

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { readApiErrorMessage } from '@/lib/http/api-contract'
 import type { LatestMessageTokenStats, MessageChangePayload } from '../utils'
 import { shouldRefreshTokenStats } from '../utils'
 
@@ -77,6 +78,10 @@ export function useChatUsageStats({
     try {
       const response = await fetch(`/api/chats/${chatId}/stats`, { cache: 'no-store' })
       if (!response.ok) {
+        console.error(
+          'Failed to load chat usage stats',
+          await readApiErrorMessage(response, 'Failed to load chat usage stats'),
+        )
         return
       }
 

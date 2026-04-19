@@ -4,6 +4,7 @@ import { useMemo, useEffect, useState } from 'react'
 import useSWR from 'swr'
 import Link from 'next/link'
 import type { AnnouncementPayload, AnnouncementResponse } from '@/lib/announcements/contracts'
+import { createApiError } from '@/lib/http/api-contract'
 
 const fetchAnnouncement = async (url: string): Promise<AnnouncementPayload | null> => {
   const response = await fetch(url, { cache: 'no-store' })
@@ -12,7 +13,7 @@ const fetchAnnouncement = async (url: string): Promise<AnnouncementPayload | nul
     if (response.status === 401) {
       return null
     }
-    throw new Error('Failed to load announcement')
+    throw await createApiError(response, 'Failed to load announcement')
   }
 
   const payload = (await response.json()) as AnnouncementResponse

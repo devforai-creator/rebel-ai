@@ -10,6 +10,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import type { ChatFacts, ChatSummary } from '@/types/database.types'
+import { createApiError } from '@/lib/http/api-contract'
 import { createClient } from '@/lib/supabase/client'
 import {
   deleteSummary,
@@ -218,7 +219,7 @@ export function useChatSummariesState({
     try {
       const response = await fetch(`/api/chats/${chatId}/stats`, { cache: 'no-store' })
       if (!response.ok) {
-        throw new Error('Failed to fetch stats')
+        throw await createApiError(response, 'Failed to fetch stats')
       }
 
       const data = parseStatsResponse(await response.json())
@@ -228,7 +229,8 @@ export function useChatSummariesState({
       if (typeof data?.summaryCount === 'number' && data.summaryCount !== summaries.length) {
         refreshPanel()
       }
-    } catch {
+    } catch (error) {
+      console.error('[Chat summaries] Failed to refresh stats', error)
       toast.error('통계를 불러오지 못했습니다')
     } finally {
       setIsRefreshingStats(false)

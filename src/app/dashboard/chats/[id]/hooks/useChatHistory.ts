@@ -1,4 +1,5 @@
 import { useCallback, useState, type MutableRefObject } from 'react'
+import { readApiErrorMessage } from '@/lib/http/api-contract'
 import type { Message } from '@/types/database.types'
 import { mapMessageToDisplay, type DebugInfo, type DisplayMessage } from '../utils'
 
@@ -59,7 +60,10 @@ export function useChatHistory({
       )
 
       if (!response.ok) {
-        console.error('Failed to load older messages:', response.statusText)
+        console.error(
+          'Failed to load older messages:',
+          await readApiErrorMessage(response, 'Failed to load older messages'),
+        )
         setHistoryHasMore(false)
         return
       }

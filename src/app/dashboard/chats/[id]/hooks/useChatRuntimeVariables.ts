@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { readApiErrorMessage } from '@/lib/http/api-contract'
+import { createApiError } from '@/lib/http/api-contract'
 import type {
   ChatAssetData,
   ChatCharacterAsset,
@@ -216,8 +216,7 @@ export function useChatRuntimeVariables(chatId: string) {
         })
 
         if (!response.ok) {
-          const errorText = await readApiErrorMessage(response, 'Failed to save variables')
-          throw new Error(errorText || 'Failed to save variables')
+          throw await createApiError(response, 'Failed to save variables')
         }
       } catch (error) {
         console.error('[TriggerClick] Failed to persist variables', error)

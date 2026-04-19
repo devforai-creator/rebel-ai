@@ -94,6 +94,7 @@ describe('parseLatestUsageStatsResponse', () => {
 describe('useChatUsageStats', () => {
   beforeEach(() => {
     vi.unstubAllGlobals()
+    vi.restoreAllMocks()
   })
 
   it('does not fetch on mount when the usage panel is disabled', () => {
@@ -200,5 +201,34 @@ describe('useChatUsageStats', () => {
     })
 
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('logs parsed API errors for non-ok stats responses', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+
+    renderHook(() =>
+      useChatUsageStats({
+        chatId: 'chat-1',
+        initialUsageStats: null,
+        enabled: true,
+        active: true,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Failed to load chat usage stats',
+        'Unauthorized',
+      )
+    })
   })
 })

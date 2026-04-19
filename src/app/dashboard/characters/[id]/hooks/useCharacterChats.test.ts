@@ -80,6 +80,28 @@ describe('useCharacterChats', () => {
     expect(result.current.exportingChatId).toBeNull()
   })
 
+  it('surfaces the extracted export error message to the toast layer', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    fetchCharacterChatExportMock.mockRejectedValue(new Error('Export denied'))
+
+    const { result } = renderHook(() =>
+      useCharacterChats({
+        characterId: 'char-1',
+        initialChats: [],
+        initialChatCursor: null,
+        initialHasMoreChats: false,
+      }),
+    )
+
+    await act(async () => {
+      await result.current.exportChat('chat-1')
+    })
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Export denied')
+    expect(result.current.exportingChatId).toBeNull()
+    consoleErrorSpy.mockRestore()
+  })
+
   it('appends the next chat page through the extracted page loader', async () => {
     fetchCharacterChatsPageMock.mockResolvedValue({
       chats: [

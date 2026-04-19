@@ -43,7 +43,7 @@ export function useCharacterChats({
       downloadBlob(blob, filename)
     } catch (error) {
       console.error('Export failed:', error)
-      toast.error('Failed to export chat')
+      toast.error(error instanceof Error ? error.message : 'Failed to export chat')
     } finally {
       setExportingChatId(null)
     }

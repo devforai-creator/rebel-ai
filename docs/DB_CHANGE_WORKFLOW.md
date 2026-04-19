@@ -51,6 +51,13 @@ npm run db:schema
 ```bash
 npm run typecheck
 npm run test
+npm run test:db
+```
+
+If the change touches Vault helpers or secret access paths, also run:
+
+```bash
+npm run test:vault
 ```
 
 5. Commit the migration file and generated `supabase/schema.sql`.

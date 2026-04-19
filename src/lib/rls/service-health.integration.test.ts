@@ -75,7 +75,7 @@ describe.skipIf(shouldSkip)('Service health RPC boundary', () => {
     }
   })
 
-  it('denies record_service_health_status RPC for authenticated users', async () => {
+  it('denies record_service_health_status RPC for authenticated users before function execution', async () => {
     const result = await authenticatedClient.rpc('record_service_health_status', {
       p_service_label: serviceLabel,
       p_was_success: false,
@@ -84,7 +84,7 @@ describe.skipIf(shouldSkip)('Service health RPC boundary', () => {
     } as never)
 
     expect(result.error).toBeTruthy()
-    expect(result.error?.message.toLowerCase()).toContain('not authorized')
+    expect(result.error?.message.toLowerCase()).toContain('permission denied')
   })
 
   it('allows record_service_health_status RPC for service role and persists the snapshot', async () => {

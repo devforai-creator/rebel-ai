@@ -10,6 +10,7 @@
  * Skip in regular test runs if env not configured
  */
 
+import { randomUUID } from 'node:crypto'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { beforeAll, afterAll, describe, it, expect } from 'vitest'
 
@@ -35,6 +36,7 @@ interface TestData {
   characterB: { id: string }
   publicCharacter: { id: string }
   chatA: { id: string }
+  chatB: { id: string }
   apiKeyA: { id: string }
 }
 
@@ -185,6 +187,17 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
       .select('id')
       .single()
 
+    // User B's chat
+    const { data: chatB } = await adminClient
+      .from('chats')
+      .insert({
+        user_id: userB.id,
+        character_id: characterB!.id,
+        title: 'User B Chat',
+      })
+      .select('id')
+      .single()
+
     // User A's API key
     const { data: apiKeyA } = await adminClient
       .from('api_keys')
@@ -205,6 +218,7 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
       characterB: characterB!,
       publicCharacter: publicCharacter!,
       chatA: chatA!,
+      chatB: chatB!,
       apiKeyA: apiKeyA!,
     }
   })
@@ -747,6 +761,30 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
       await adminClient.from('chats').delete().eq('id', chatB!.id)
     })
 
+    it('user cannot inject system messages into other users chats by spoofing user_id', async () => {
+      const { data, error } = await testData.userA.client
+        .from('messages')
+        .insert({
+          chat_id: testData.chatB.id,
+          user_id: testData.userA.id,
+          role: 'system',
+          content: 'Injected system prompt',
+        })
+        .select('id')
+        .single()
+
+      expect(error).toBeTruthy()
+      expect(data).toBeNull()
+
+      const { data: checkData } = await adminClient
+        .from('messages')
+        .select('id')
+        .eq('chat_id', testData.chatB.id)
+        .eq('content', 'Injected system prompt')
+
+      expect(checkData).toHaveLength(0)
+    })
+
     // Positive-path tests: user CAN modify their own data
     it('user can create messages in their own chats', async () => {
       const { data, error } = await testData.userA.client
@@ -823,6 +861,157 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
         .eq('id', newMsg!.id)
 
       expect(checkData).toHaveLength(0)
+    })
+  })
+
+  describe('chat-scoped ownership writes', () => {
+    it('user cannot insert chat turns into other users chats by spoofing user_id', async () => {
+      const { data, error } = await testData.userA.client
+        .from('chat_turns')
+        .insert({
+          chat_id: testData.chatB.id,
+          user_id: testData.userA.id,
+          turn_index: 999,
+        })
+        .select('id')
+        .single()
+
+      expect(error).toBeTruthy()
+      expect(data).toBeNull()
+
+      const { data: checkData } = await adminClient
+        .from('chat_turns')
+        .select('id')
+        .eq('chat_id', testData.chatB.id)
+        .eq('turn_index', 999)
+
+      expect(checkData).toHaveLength(0)
+    })
+
+    it('user cannot enqueue chat jobs into other users chats by spoofing user_id', async () => {
+      const { data, error } = await testData.userA.client
+        .from('chat_generation_jobs')
+        .insert({
+          chat_id: testData.chatB.id,
+          user_id: testData.userA.id,
+          status: 'pending',
+          payload: { prompt: 'forged job payload' },
+        })
+        .select('id')
+        .single()
+
+      expect(error).toBeTruthy()
+      expect(data).toBeNull()
+
+      const { data: checkData } = await adminClient
+        .from('chat_generation_jobs')
+        .select('id')
+        .eq('chat_id', testData.chatB.id)
+        .eq('status', 'pending')
+
+      expect(checkData).toHaveLength(0)
+    })
+  })
+
+  describe('chat aggregate RPCs', () => {
+    it('user can read their own chat aggregates', async () => {
+      const { data: chat } = await adminClient
+        .from('chats')
+        .insert({
+          user_id: testData.userA.id,
+          character_id: testData.characterA.id,
+          title: `RPC Aggregate Chat ${randomUUID()}`,
+        })
+        .select('id')
+        .single()
+
+      expect(chat).not.toBeNull()
+
+      try {
+        const { error: messageError } = await adminClient.from('messages').insert({
+          chat_id: chat!.id,
+          user_id: testData.userA.id,
+          role: 'assistant',
+          content: 'Aggregate test message',
+          prompt_tokens: 12,
+          completion_tokens: 5,
+        })
+
+        expect(messageError).toBeNull()
+
+        const { error: usageError } = await adminClient.from('chat_usage_events').insert({
+          chat_id: chat!.id,
+          user_id: testData.userA.id,
+          model_provider: 'openai',
+          model_name: 'gpt-test',
+          prompt_tokens: 12,
+          completion_tokens: 5,
+          total_tokens: 17,
+          cached_input_tokens: 4,
+          reasoning_tokens: 2,
+          prompt_cost_usd: 0.5,
+          completion_cost_usd: 0.25,
+          cached_input_cost_usd: 0.125,
+          reasoning_cost_usd: 0.0625,
+          total_cost_usd: 0.9375,
+          request_id: randomUUID(),
+        })
+
+        expect(usageError).toBeNull()
+
+        const tokenTotals = await testData.userA.client.rpc('get_chat_token_totals', {
+          p_chat_id: chat!.id,
+          p_requester: testData.userA.id,
+        })
+
+        expect(tokenTotals.error).toBeNull()
+        expect(tokenTotals.data).toEqual([
+          {
+            prompt_tokens: 12,
+            completion_tokens: 5,
+          },
+        ])
+
+        const usageCosts = await testData.userA.client.rpc('get_chat_usage_costs', {
+          p_chat_id: chat!.id,
+          p_requester: testData.userA.id,
+        })
+
+        expect(usageCosts.error).toBeNull()
+        expect(usageCosts.data).toEqual([
+          {
+            prompt_tokens: 12,
+            completion_tokens: 5,
+            cached_input_tokens: 4,
+            reasoning_tokens: 2,
+            prompt_cost_usd: 0.5,
+            completion_cost_usd: 0.25,
+            cached_input_cost_usd: 0.125,
+            reasoning_cost_usd: 0.0625,
+            total_cost_usd: 0.9375,
+          },
+        ])
+      } finally {
+        await adminClient.from('chats').delete().eq('id', chat!.id)
+      }
+    })
+
+    it('user cannot read another users chat aggregates by passing a forged requester', async () => {
+      const tokenTotals = await testData.userB.client.rpc('get_chat_token_totals', {
+        p_chat_id: testData.chatA.id,
+        p_requester: testData.userA.id,
+      })
+
+      expect(tokenTotals.error).toBeTruthy()
+      expect(tokenTotals.error?.message.toLowerCase()).toContain('not authorized')
+
+      const usageCosts = await testData.userB.client.rpc('get_chat_usage_costs', {
+        p_chat_id: testData.chatA.id,
+        p_requester: testData.userA.id,
+      })
+
+      expect(usageCosts.error).toBeTruthy()
+      expect(usageCosts.error?.message.toLowerCase()).toContain('not authorized')
     })
   })
 

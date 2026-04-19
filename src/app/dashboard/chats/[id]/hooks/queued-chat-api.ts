@@ -10,7 +10,8 @@ export interface ChatJobStatusResponse {
 export interface QueueChatRequestPayload {
   chatId: string
   apiKeyId: string
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>
+  userMessage?: string
+  messages?: Array<{ role: 'user' | 'assistant'; content: string }>
   deliveryMode: ChatDeliveryMode
   isRegeneration?: boolean
   regenerateAssistantMessageId?: string | null

@@ -387,4 +387,132 @@ describe('useQueuedChat', () => {
     expect(result.current.isLoading).toBe(false)
     expect(result.current.messages.map((message) => message.id)).toContain('assistant-1')
   })
+
+  it('uses a slim userMessage request shape for normal sends', async () => {
+    vi.useFakeTimers()
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      value: false,
+    })
+
+    const latestUser = createMessage({
+      id: 'user-2',
+      role: 'user',
+      content: 'queued hello',
+      sequence: 2,
+    })
+    const latestAssistant = createMessage({
+      id: 'assistant-1',
+      role: 'assistant',
+      content: 'assistant reply',
+      sequence: 3,
+    })
+
+    let latestFetchCount = 0
+    const fetchMock = vi.fn(async (input: unknown) => {
+      const url = String(input)
+      if (url === '/api/chat') {
+        return createJsonResponse({ jobId: 'job-1' })
+      }
+      if (url === '/api/chats/chat-1/messages/latest') {
+        latestFetchCount += 1
+        return createJsonResponse(latestFetchCount === 1 ? latestUser : latestAssistant)
+      }
+      if (url === '/api/chat/jobs/job-1') {
+        return createJsonResponse({ status: 'success' })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() =>
+      useQueuedChat(createHookParams({ selectedApiKeyId: 'key-1' })),
+    )
+
+    act(() => {
+      result.current.handleInputChange({
+        target: { value: 'queued hello' },
+      } as Parameters<typeof result.current.handleInputChange>[0])
+    })
+
+    act(() => {
+      result.current.handleSubmit({
+        preventDefault: vi.fn(),
+      } as unknown as FormEvent<HTMLFormElement>)
+    })
+
+    await flushChatRequestStart()
+
+    const firstCall = fetchMock.mock.calls[0] as unknown as [unknown, RequestInit]
+    const requestInit = firstCall[1]
+    expect(JSON.parse(String(requestInit.body))).toEqual({
+      chatId: 'chat-1',
+      apiKeyId: 'key-1',
+      userMessage: 'queued hello',
+      deliveryMode: 'streaming',
+      isRegeneration: false,
+      regenerateAssistantMessageId: null,
+    })
+  })
+
+  it('omits transcript messages from regeneration requests', async () => {
+    vi.useFakeTimers()
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      value: false,
+    })
+
+    const assistantMessage = createMessage({
+      id: 'assistant-1',
+      role: 'assistant',
+      content: 'assistant reply',
+      sequence: 2,
+    })
+    const fetchMock = vi.fn(async (input: unknown) => {
+      const url = String(input)
+      if (url === '/api/chat') {
+        return createJsonResponse({ jobId: 'job-1' })
+      }
+      if (url === '/api/chats/chat-1/messages/latest') {
+        return createJsonResponse(assistantMessage)
+      }
+      if (url === '/api/chat/jobs/job-1') {
+        return createJsonResponse({ status: 'success' })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const persistedMessageIds = { current: new Set<string>(['assistant-1']) }
+    const { result } = renderHook(() =>
+      useQueuedChat(
+        createHookParams({
+          initialMessages: [createMessage({ id: 'user-1' }), assistantMessage],
+          selectedApiKeyId: 'key-1',
+          persistedMessageIds,
+        }),
+      ),
+    )
+
+    act(() => {
+      result.current.reload({
+        body: {
+          isRegeneration: true,
+          regenerateAssistantMessageId: 'assistant-1',
+        },
+      })
+    })
+
+    await flushChatRequestStart()
+
+    const firstCall = fetchMock.mock.calls[0] as unknown as [unknown, RequestInit]
+    const requestInit = firstCall[1]
+    expect(JSON.parse(String(requestInit.body))).toEqual({
+      chatId: 'chat-1',
+      apiKeyId: 'key-1',
+      deliveryMode: 'streaming',
+      isRegeneration: true,
+      regenerateAssistantMessageId: 'assistant-1',
+    })
+  })
 })

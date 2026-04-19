@@ -1041,6 +1041,41 @@ describe('POST /api/chat', () => {
     await expectJsonError(response, 400, 'Last message must be a non-empty user message')
   })
 
+  it('accepts the slim userMessage request path without requiring transcript messages', async () => {
+    const supabase = createSupabaseMock(buildDefaultAuthenticatedFixture())
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        userMessage: 'hello from userMessage',
+      }),
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(202)
+
+    expect(supabase.messages).toHaveLength(1)
+    expect(supabase.messages[0]).toMatchObject({
+      role: 'user',
+      content: 'hello from userMessage',
+    })
+
+    expect(supabase.chatJobs).toHaveLength(1)
+    expect(supabase.chatJobs[0].payload).toMatchObject({
+      sanitizedMessages: [
+        {
+          role: 'user',
+          content: 'hello from userMessage',
+          messageId: supabase.messages[0].id,
+        },
+      ],
+      isRegeneration: false,
+      regenerateAssistantMessageId: null,
+    })
+  })
+
   it('returns 401 for anonymous users when the rate limit allows the request', async () => {
     createSupabaseMock({
       user: null,
@@ -2104,6 +2139,77 @@ describe('POST /api/chat', () => {
     expect(supabase.chatJobs[0].payload).toMatchObject({
       isRegeneration: true,
       regenerateAssistantMessageId: 'assistant-1',
+    })
+  })
+
+  it('accepts regeneration requests without a client transcript payload', async () => {
+    const supabase = createSupabaseMock({
+      user: { id: 'user-1' },
+      apiKeys: [
+        {
+          id: 'api-key-1',
+          user_id: 'user-1',
+          provider: 'google',
+          is_active: true,
+          vault_secret_name: 'secret-key',
+          model_preference: 'gemini-2.5-flash',
+        },
+      ],
+      chats: [
+        {
+          id: 'chat-1',
+          user_id: 'user-1',
+          character_id: 'character-1',
+          max_context_messages: 20,
+        },
+      ],
+      characters: [
+        {
+          id: 'character-1',
+          system_prompt: 'character system prompt',
+        },
+      ],
+      userRateLimit: {
+        allowed: true,
+      },
+      messages: [
+        {
+          id: 'assistant-1',
+          chat_id: 'chat-1',
+          role: 'assistant',
+          content: 'old reply',
+        },
+      ],
+      chatTurns: [
+        {
+          id: 'turn-1',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          turn_index: 1,
+          user_message_id: 'user-1-msg',
+          active_assistant_message_id: 'assistant-1',
+        },
+      ],
+    })
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        isRegeneration: true,
+        regenerateAssistantMessageId: 'assistant-1',
+      }),
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(202)
+
+    expect(supabase.chatJobs).toHaveLength(1)
+    expect(supabase.chatJobs[0].payload).toMatchObject({
+      isRegeneration: true,
+      regenerateAssistantMessageId: 'assistant-1',
+      sanitizedMessages: [],
     })
   })
 

@@ -25,8 +25,9 @@ The main decision is to stop treating regeneration as "delete the old assistant 
 
 Current regeneration behavior is split across the UI, chat API, and job runner:
 
-- The client removes the target assistant message from local state before the server accepts or completes the regeneration request.
-- The chat API accepts a client-built `messages` array and uses it as generation context.
+- The supported normal-send path now submits `userMessage` instead of a full client transcript.
+- Regeneration requests can target the latest assistant message by id without submitting transcript state.
+- The chat API still accepts a client-built `messages` array as a temporary compatibility path during migration.
 - The job runner generates a new assistant message row.
 - The post-generation pipeline deletes the old assistant message row for regeneration.
 
@@ -207,9 +208,9 @@ These invariants should remain true after the refactor.
 
 ### Chat send API
 
-The send API should move away from accepting a full client transcript for regeneration.
+The send API should treat the database as the source of truth and accept slim command-like requests.
 
-Preferred request shapes:
+Supported request shapes:
 
 ```ts
 type SendChatRequest = {
@@ -224,6 +225,12 @@ type RegenerateChatRequest = {
   targetAssistantMessageId: string
 }
 ```
+
+Temporary compatibility:
+
+- The route may still accept `messages` while the migration is in progress.
+- The supported path should not require `messages` for either normal sends or regeneration.
+- Any reuse of payload transcripts in the runner should remain an optimization, not the source of truth.
 
 ### Server responsibility
 

@@ -63,6 +63,7 @@ function createErrorResponse(
 const chatRequestSchema = z
   .object({
     messages: z.array(z.unknown()).optional().nullable(),
+    userMessage: z.unknown().optional(),
     chatId: z.unknown().optional(),
     apiKeyId: z.unknown().optional(),
     deliveryMode: z.unknown().optional(),
@@ -125,6 +126,7 @@ export async function POST(req: Request) {
 
     const {
       messages,
+      userMessage: rawUserMessage,
       chatId,
       apiKeyId,
       deliveryMode: rawDeliveryMode,
@@ -140,7 +142,7 @@ export async function POST(req: Request) {
       return createErrorResponse('Invalid apiKeyId', 400)
     }
 
-    const sanitizedMessages: SanitizedMessage[] = Array.isArray(messages)
+    const sanitizedMessagesFromRequest: SanitizedMessage[] = Array.isArray(messages)
       ? messages
           .filter((message): message is { role: string; content: string } => {
             if (!message || typeof message !== 'object') {
@@ -160,6 +162,8 @@ export async function POST(req: Request) {
           })
       : []
 
+    const normalizedUserMessage = typeof rawUserMessage === 'string' ? rawUserMessage.trim() : ''
+
     const regenerateAssistantMessageId =
       typeof rawRegenerateAssistantMessageId === 'string' &&
       rawRegenerateAssistantMessageId.trim().length > 0
@@ -168,24 +172,44 @@ export async function POST(req: Request) {
 
     const isRegeneration = rawIsRegeneration === true || regenerateAssistantMessageId !== null
     const textEncoder = new TextEncoder()
+    let messageToPersist: string | null = null
+    let payloadSanitizedMessages = sanitizedMessagesFromRequest
 
     if (isRegeneration && !regenerateAssistantMessageId) {
       return createErrorResponse('regenerateAssistantMessageId is required', 400)
     }
 
     if (!isRegeneration) {
-      if (sanitizedMessages.length === 0) {
-        return createErrorResponse('Messages array required', 400)
-      }
+      if (normalizedUserMessage) {
+        const byteLength = textEncoder.encode(normalizedUserMessage).length
+        if (byteLength > CHAT_REQUEST_LIMITS.maxMessageBytes) {
+          return createErrorResponse('Message exceeds allowed size', 400)
+        }
 
-      const lastMessage = sanitizedMessages[sanitizedMessages.length - 1]
-      if (lastMessage.role !== 'user' || !lastMessage.content.trim()) {
-        return createErrorResponse('Last message must be a non-empty user message', 400)
-      }
+        messageToPersist = normalizedUserMessage
+        payloadSanitizedMessages = [
+          {
+            role: 'user',
+            content: normalizedUserMessage,
+            messageId: null,
+          },
+        ]
+      } else {
+        if (sanitizedMessagesFromRequest.length === 0) {
+          return createErrorResponse('Messages array required', 400)
+        }
 
-      const byteLength = textEncoder.encode(lastMessage.content).length
-      if (byteLength > CHAT_REQUEST_LIMITS.maxMessageBytes) {
-        return createErrorResponse('Message exceeds allowed size', 400)
+        const lastMessage = sanitizedMessagesFromRequest[sanitizedMessagesFromRequest.length - 1]
+        if (lastMessage.role !== 'user' || !lastMessage.content.trim()) {
+          return createErrorResponse('Last message must be a non-empty user message', 400)
+        }
+
+        const byteLength = textEncoder.encode(lastMessage.content).length
+        if (byteLength > CHAT_REQUEST_LIMITS.maxMessageBytes) {
+          return createErrorResponse('Message exceeds allowed size', 400)
+        }
+
+        messageToPersist = lastMessage.content
       }
     }
 
@@ -317,9 +341,7 @@ export async function POST(req: Request) {
     let insertedTurnId: string | null = targetTurnId
 
     if (!isRegeneration) {
-      const userMessage = sanitizedMessages[sanitizedMessages.length - 1]
-
-      if (userMessage?.role !== 'user' || !userMessage.content.trim()) {
+      if (!messageToPersist) {
         return createErrorResponse('Invalid user message', 400)
       }
 
@@ -328,7 +350,7 @@ export async function POST(req: Request) {
         chatId,
         userId: user.id,
         requestId,
-        content: userMessage.content,
+        content: messageToPersist,
       })
 
       if (persistResult.status === 'conflict') {
@@ -341,6 +363,16 @@ export async function POST(req: Request) {
 
       insertedUserMessageId = persistResult.userMessageId
       insertedTurnId = persistResult.turnId
+
+      if (normalizedUserMessage && insertedUserMessageId) {
+        payloadSanitizedMessages = [
+          {
+            role: 'user',
+            content: messageToPersist,
+            messageId: insertedUserMessageId,
+          },
+        ]
+      }
     }
 
     const jobPayload: ChatGenerationJobPayload = {
@@ -353,7 +385,7 @@ export async function POST(req: Request) {
       provider,
       modelName,
       deliveryMode,
-      sanitizedMessages,
+      sanitizedMessages: payloadSanitizedMessages,
       isRegeneration,
       regenerateAssistantMessageId,
     }

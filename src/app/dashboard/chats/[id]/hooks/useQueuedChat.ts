@@ -11,7 +11,6 @@ import {
   DebugInfo,
   StreamingAssistantDraft,
   mapMessageToDisplay,
-  buildSanitizedMessages,
 } from '../utils'
 import { MESSAGE_STATUS_COMPLETED, isVisibleMessageStatus } from '@/lib/chat/message-status'
 import { resolveAlternateApiKeyId } from '@/lib/chat/alternate-models'
@@ -65,7 +64,6 @@ export interface UseQueuedChatReturn {
 export function useQueuedChat({
   chatId,
   initialMessages,
-  historyMessages,
   selectedApiKeyId,
   deliveryMode = CHAT_DELIVERY_MODE_STREAMING,
   alternateModels,
@@ -355,13 +353,13 @@ export function useQueuedChat({
 
   const sendChatRequest = useCallback(
     async ({
-      messagesPayload,
+      userMessage,
       isRegeneration = false,
       regenerateAssistantMessageId = null,
       removeTempMessage,
       syncUser = false,
     }: {
-      messagesPayload: Array<{ role: 'user' | 'assistant'; content: string }>
+      userMessage?: string
       isRegeneration?: boolean
       regenerateAssistantMessageId?: string | null
       removeTempMessage?: () => void
@@ -382,7 +380,7 @@ export function useQueuedChat({
         const data = await requestQueuedChatJob({
           chatId,
           apiKeyId: resolvedApiKeyId,
-          messages: messagesPayload,
+          userMessage,
           deliveryMode,
           isRegeneration,
           regenerateAssistantMessageId,
@@ -448,9 +446,8 @@ export function useQueuedChat({
       setMessages(nextMessages)
       setInput('')
 
-      const payload = buildSanitizedMessages(historyMessages, nextMessages)
       void sendChatRequest({
-        messagesPayload: payload,
+        userMessage: trimmed,
         syncUser: true,
         removeTempMessage: () => {
           setMessages((prev) => prev.filter((msg) => msg.id !== tempMessage.id))
@@ -459,7 +456,7 @@ export function useQueuedChat({
         // No-op: error state already set in sendChatRequest
       })
     },
-    [historyMessages, input, messages, pendingJobId, sending, sendChatRequest],
+    [input, messages, pendingJobId, sending, sendChatRequest],
   )
 
   const reload = useCallback(
@@ -476,16 +473,14 @@ export function useQueuedChat({
 
       pendingRegenerationTargetIdRef.current = targetId
 
-      const payload = buildSanitizedMessages(historyMessages, messages)
       void sendChatRequest({
-        messagesPayload: payload,
         isRegeneration: true,
         regenerateAssistantMessageId: targetId,
       }).catch(() => {
         // Error state handled inside sendChatRequest
       })
     },
-    [messages, historyMessages, persistedMessageIds, sendChatRequest],
+    [persistedMessageIds, sendChatRequest],
   )
 
   return {

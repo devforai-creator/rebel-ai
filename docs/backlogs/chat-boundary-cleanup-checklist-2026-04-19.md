@@ -39,7 +39,7 @@ Use this document before starting implementation on the three agreed cleanup are
 
 ### Phase 1. Converge Persona Write Paths
 
-Status: not started
+Status: completed locally on 2026-04-19
 
 Why first:
 
@@ -55,32 +55,32 @@ Primary scope:
 
 Entry checklist:
 
-- [ ] choose the canonical server-side persona update path
-- [ ] confirm whether chat-screen persona editing should use server actions, route handlers, or a shared service function
-- [ ] identify current validation and ownership checks that must remain identical after convergence
+- [x] choose the canonical server-side persona update path
+- [x] confirm whether chat-screen persona editing should use server actions, route handlers, or a shared service function
+- [x] identify current validation and ownership checks that must remain identical after convergence
 
 Implementation checklist:
 
-- [ ] move shared persona update rules into one canonical server-side function
-- [ ] make both the dashboard persona manager and chat persona editor call that same logic
-- [ ] remove duplicated validation and ownership checks where practical
-- [ ] keep response semantics predictable for the caller that remains
+- [x] move shared persona update rules into one canonical server-side function
+- [x] make both the dashboard persona manager and chat persona editor call that same logic
+- [x] remove duplicated validation and ownership checks where practical
+- [x] keep response semantics predictable for the caller that remains
 
 Done when:
 
-- [ ] persona update validation exists in one canonical place
-- [ ] persona ownership enforcement exists in one canonical place
-- [ ] chat persona editing and persona management no longer risk contract drift
-- [ ] regression tests cover success, unauthorized access, and invalid payload behavior
+- [x] persona update validation exists in one canonical place
+- [x] persona ownership enforcement exists in one canonical place
+- [x] chat persona editing and persona management no longer risk contract drift
+- [x] regression tests cover success, unauthorized access, and invalid payload behavior
 
 Verification:
 
-- [ ] relevant unit tests pass
-- [ ] `npx tsc --noEmit`
+- [x] relevant unit tests pass
+- [x] `npx tsc --noEmit`
 
 ### Phase 2. Tighten Chat Send and Regeneration Contracts
 
-Status: not started
+Status: completed locally on 2026-04-19, deploy smoke pending
 
 Why second:
 
@@ -99,32 +99,32 @@ Primary scope:
 
 Entry checklist:
 
-- [ ] decide the desired request contract for normal send
-- [ ] decide the desired request contract for regeneration
-- [ ] confirm what temporary compatibility layer, if any, is needed for `messages` payload support
-- [ ] identify the exact tests that currently lock in client-transcript behavior
+- [x] decide the desired request contract for normal send
+- [x] decide the desired request contract for regeneration
+- [x] confirm what temporary compatibility layer, if any, is needed for `messages` payload support
+- [x] identify the exact tests that currently lock in client-transcript behavior
 
 Implementation checklist:
 
-- [ ] define a slimmer request shape for normal send, centered on `chatId`, `apiKeyId`, and the new user input
-- [ ] define a slimmer request shape for regeneration, centered on `chatId`, `apiKeyId`, and the target assistant message id
-- [ ] stop requiring the client to build full transcript state for the supported core path
-- [ ] keep the runner responsible for reconstructing generation context from DB-backed state
-- [ ] preserve current queue, rate-limit, and active-job admission behavior
-- [ ] update docs to match the new supported request contract
+- [x] define a slimmer request shape for normal send, centered on `chatId`, `apiKeyId`, and the new user input
+- [x] define a slimmer request shape for regeneration, centered on `chatId`, `apiKeyId`, and the target assistant message id
+- [x] stop requiring the client to build full transcript state for the supported core path
+- [x] keep the runner responsible for reconstructing generation context from DB-backed state
+- [x] preserve current queue, rate-limit, and active-job admission behavior
+- [x] update docs to match the new supported request contract
 
 Done when:
 
-- [ ] the supported chat API no longer depends on a full client-built transcript for normal send
-- [ ] regeneration no longer relies on client transcript state as the authoritative context source
-- [ ] tests state clearly when payload transcript is allowed as an optimization and when it is not
-- [ ] route tests and runner tests cover the updated contract directly
-- [ ] docs describe the new steady-state contract instead of the old compatibility shape
+- [x] the supported chat API no longer depends on a full client-built transcript for normal send
+- [x] regeneration no longer relies on client transcript state as the authoritative context source
+- [x] tests state clearly when payload transcript is allowed as an optimization and when it is not
+- [x] route tests and runner tests cover the updated contract directly
+- [x] docs describe the new steady-state contract instead of the old compatibility shape
 
 Verification:
 
-- [ ] relevant unit tests pass
-- [ ] `npx tsc --noEmit`
+- [x] relevant unit tests pass
+- [x] `npx tsc --noEmit`
 - [ ] `npm run ops:smoke` after deploy
 
 ### Phase 3. Split the Chat Detail Shell by State Ownership

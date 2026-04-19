@@ -76,22 +76,61 @@ describe('queued-chat-api', () => {
       requestQueuedChatJob({
         chatId: 'chat-1',
         apiKeyId: 'key-1',
-        messages: [{ role: 'user', content: 'hello' }],
+        userMessage: 'hello',
         deliveryMode: 'streaming',
       }),
     ).rejects.toThrow('queue failed')
   })
 
-  it('returns the job id when queue creation succeeds', async () => {
-    stubFetch(async () => createJsonResponse({ jobId: 'job-1' }))
+  it('returns the job id when queue creation succeeds with a slim userMessage payload', async () => {
+    const fetchMock = vi.fn(async () => createJsonResponse({ jobId: 'job-1' }))
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
 
     await expect(
       requestQueuedChatJob({
         chatId: 'chat-1',
         apiKeyId: 'key-1',
-        messages: [{ role: 'user', content: 'hello' }],
+        userMessage: 'hello',
         deliveryMode: 'streaming',
       }),
     ).resolves.toEqual({ jobId: 'job-1' })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'key-1',
+        userMessage: 'hello',
+        deliveryMode: 'streaming',
+      }),
+    })
+  })
+
+  it('sends regeneration requests without a transcript payload', async () => {
+    const fetchMock = vi.fn(async () => createJsonResponse({ jobId: 'job-1' }))
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+    await expect(
+      requestQueuedChatJob({
+        chatId: 'chat-1',
+        apiKeyId: 'key-1',
+        deliveryMode: 'streaming',
+        isRegeneration: true,
+        regenerateAssistantMessageId: 'assistant-1',
+      }),
+    ).resolves.toEqual({ jobId: 'job-1' })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'key-1',
+        deliveryMode: 'streaming',
+        isRegeneration: true,
+        regenerateAssistantMessageId: 'assistant-1',
+      }),
+    })
   })
 })

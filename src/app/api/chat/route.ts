@@ -198,6 +198,12 @@ export async function POST(req: Request) {
         // Temporary compatibility path for legacy callers that still send a client-built
         // transcript body. Remove this once /api/chat callers have fully migrated to the
         // slim userMessage / regenerateAssistantMessageId request contract.
+        console.warn('[Chat API] Legacy transcript fallback used', {
+          requestId,
+          chatId,
+          messageCount: sanitizedMessagesFromRequest.length,
+        })
+
         if (sanitizedMessagesFromRequest.length === 0) {
           return createErrorResponse('Messages array required', 400)
         }

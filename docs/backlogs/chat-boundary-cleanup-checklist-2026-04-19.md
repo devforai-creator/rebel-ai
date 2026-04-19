@@ -210,6 +210,8 @@ Why this stays deferred:
 
 Before removing it:
 
+- review production logs for `[Chat API] Legacy transcript fallback used`
+- treat `2026-05-03` as the first explicit removal review date for this fallback
 - confirm no remaining first-party callers depend on `messages` as the request contract
 - if possible, add short-lived observability for legacy fallback hits before removal
 - then remove the fallback branch in [src/app/api/chat/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.ts)

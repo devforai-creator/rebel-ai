@@ -6,30 +6,17 @@ import Button from '@/app/dashboard/components/Button'
 import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { updateReprocessSettings, type ReprocessSettingsState } from './actions'
-
-type ApiKeyOption = {
-  id: string
-  key_name: string
-  provider: string
-  model_preference: string | null
-  service_tier: string | null
-}
+import { formatSelectableLlmApiKeyLabel, type SelectableLlmApiKey } from './options'
 
 interface Props {
   initialPrompt: string | null
   initialKeyId: string | null
-  apiKeys: ApiKeyOption[]
+  apiKeys: SelectableLlmApiKey[]
 }
 
 const initialState: ReprocessSettingsState = {
   error: null,
   success: false,
-}
-
-function formatOptionLabel(key: ApiKeyOption): string {
-  const modelInfo = key.model_preference ? key.model_preference : 'No model set'
-  const serviceTier = key.service_tier ? ` · ${key.service_tier}` : ''
-  return `${key.key_name} · ${key.provider}${serviceTier} · ${modelInfo}`
 }
 
 export default function ReprocessSettingsForm({ initialPrompt, initialKeyId, apiKeys }: Props) {
@@ -82,7 +69,7 @@ export default function ReprocessSettingsForm({ initialPrompt, initialKeyId, api
           <option value="">Select an API key</option>
           {apiKeys.map((key) => (
             <option key={key.id} value={key.id}>
-              {formatOptionLabel(key)}
+              {formatSelectableLlmApiKeyLabel(key)}
             </option>
           ))}
         </select>

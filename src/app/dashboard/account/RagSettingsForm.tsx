@@ -6,17 +6,12 @@ import Button from '@/app/dashboard/components/Button'
 import InlineFeedback, { type InlineFeedbackTone } from '@/app/dashboard/components/InlineFeedback'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { updateRagSettings, type RagSettingsState } from './actions'
-
-type VoyageKey = {
-  id: string
-  key_name: string
-  is_active: boolean
-}
+import type { VoyageEmbeddingsKeyOption } from './options'
 
 interface RagSettingsFormProps {
   initialEnabled: boolean
   initialKeyId: string | null
-  voyageKeys: VoyageKey[]
+  voyageKeys: VoyageEmbeddingsKeyOption[]
 }
 
 const initialState: RagSettingsState = {

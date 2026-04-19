@@ -10,6 +10,7 @@ import ChangePasswordForm from './ChangePasswordForm'
 import ReprocessSettingsForm from './ReprocessSettingsForm'
 import TranslationModelSettingsForm from './TranslationModelSettingsForm'
 import { isLLMProvider } from '@/lib/api-keys/provider-utils'
+import type { SelectableLlmApiKey, VoyageEmbeddingsKeyOption } from './options'
 
 export default async function AccountPage() {
   const supabase = await createClient()
@@ -44,7 +45,22 @@ export default async function AccountPage() {
     .eq('is_active', true)
     .order('created_at', { ascending: true })
 
-  const summaryModelKeys = summaryKeys?.filter((key) => isLLMProvider(key.provider)) ?? []
+  const voyageKeyOptions: VoyageEmbeddingsKeyOption[] = (voyageKeys ?? []).map((key) => ({
+    id: key.id,
+    key_name: key.key_name,
+    is_active: key.is_active,
+  }))
+
+  const selectableLlmApiKeys: SelectableLlmApiKey[] =
+    summaryKeys
+      ?.filter((key) => isLLMProvider(key.provider))
+      .map((key) => ({
+        id: key.id,
+        key_name: key.key_name,
+        provider: key.provider,
+        model_preference: key.model_preference,
+        service_tier: key.service_tier,
+      })) ?? []
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -80,11 +96,7 @@ export default async function AccountPage() {
                 <RagSettingsForm
                   initialEnabled={profile?.enable_episodic_rag ?? false}
                   initialKeyId={profile?.voyage_embedding_api_key_id ?? null}
-                  voyageKeys={(voyageKeys ?? []).map((key) => ({
-                    id: key.id,
-                    key_name: key.key_name,
-                    is_active: key.is_active,
-                  }))}
+                  voyageKeys={voyageKeyOptions}
                 />
               </div>
             </section>
@@ -140,13 +152,7 @@ export default async function AccountPage() {
               <div className="mt-6">
                 <SummaryModelSettingsForm
                   initialKeyId={profile?.summary_api_key_id ?? null}
-                  apiKeys={summaryModelKeys.map((key) => ({
-                    id: key.id,
-                    key_name: key.key_name,
-                    provider: key.provider,
-                    model_preference: key.model_preference,
-                    service_tier: key.service_tier,
-                  }))}
+                  apiKeys={selectableLlmApiKeys}
                 />
               </div>
             </section>
@@ -169,13 +175,7 @@ export default async function AccountPage() {
                 <ReprocessSettingsForm
                   initialPrompt={profile?.reprocess_prompt ?? null}
                   initialKeyId={profile?.reprocess_api_key_id ?? null}
-                  apiKeys={summaryModelKeys.map((key) => ({
-                    id: key.id,
-                    key_name: key.key_name,
-                    provider: key.provider,
-                    model_preference: key.model_preference,
-                    service_tier: key.service_tier,
-                  }))}
+                  apiKeys={selectableLlmApiKeys}
                 />
               </div>
             </section>
@@ -197,13 +197,7 @@ export default async function AccountPage() {
               <div className="mt-6">
                 <TranslationModelSettingsForm
                   initialKeyId={profile?.translation_api_key_id ?? null}
-                  apiKeys={summaryModelKeys.map((key) => ({
-                    id: key.id,
-                    key_name: key.key_name,
-                    provider: key.provider,
-                    model_preference: key.model_preference,
-                    service_tier: key.service_tier,
-                  }))}
+                  apiKeys={selectableLlmApiKeys}
                 />
               </div>
             </section>

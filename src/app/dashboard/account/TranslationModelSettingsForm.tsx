@@ -6,29 +6,16 @@ import Button from '@/app/dashboard/components/Button'
 import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { updateTranslationModelPreference, type TranslationModelPreferenceState } from './actions'
-
-type TranslationApiKey = {
-  id: string
-  key_name: string
-  provider: string
-  model_preference: string | null
-  service_tier: string | null
-}
+import { formatSelectableLlmApiKeyLabel, type SelectableLlmApiKey } from './options'
 
 interface Props {
   initialKeyId: string | null
-  apiKeys: TranslationApiKey[]
+  apiKeys: SelectableLlmApiKey[]
 }
 
 const initialState: TranslationModelPreferenceState = {
   error: null,
   success: false,
-}
-
-function formatOptionLabel(key: TranslationApiKey): string {
-  const modelInfo = key.model_preference ? key.model_preference : 'No model set'
-  const serviceTier = key.service_tier ? ` · ${key.service_tier}` : ''
-  return `${key.key_name} · ${key.provider}${serviceTier} · ${modelInfo}`
 }
 
 export default function TranslationModelSettingsForm({ initialKeyId, apiKeys }: Props) {
@@ -62,7 +49,7 @@ export default function TranslationModelSettingsForm({ initialKeyId, apiKeys }: 
           <option value="">Disabled (default)</option>
           {apiKeys.map((key) => (
             <option key={key.id} value={key.id}>
-              {formatOptionLabel(key)}
+              {formatSelectableLlmApiKeyLabel(key)}
             </option>
           ))}
         </select>

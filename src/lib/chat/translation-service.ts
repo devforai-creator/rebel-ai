@@ -1,18 +1,14 @@
 import { generateText } from 'ai'
+import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import { buildLanguageModel } from '@/lib/llm/model-factory'
-import { getDefaultModelForProvider } from '@/lib/models'
 import { getDecryptedSecret } from '@/lib/supabase/rpc'
 import { TRANSLATION_SYSTEM_PROMPT } from '@/lib/chat/bilingual-context'
 import type { createAdminClient } from '@/lib/supabase/admin'
-import type { ApiKey, ApiKeyUpdate, MessageUpdate, Profile } from '@/types/database.types'
+import type { ApiKeyUpdate, MessageUpdate, Profile } from '@/types/database.types'
 
 type TranslationSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'from'>
 type TranslationAdminSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'rpc'>
 type TranslationProfileRow = Pick<Profile, 'translation_api_key_id'>
-type TranslationApiKeyRow = Pick<
-  ApiKey,
-  'id' | 'provider' | 'vault_secret_name' | 'model_preference' | 'service_tier'
->
 
 export type TranslationResult =
   | { status: 'success'; content: string }
@@ -56,18 +52,22 @@ export async function translateMessageForUser({
 
   const apiKeyId = profile.translation_api_key_id
 
-  const { data: apiKeyData, error: apiKeyError } = await supabase
-    .from('api_keys')
-    .select<'id, provider, vault_secret_name, model_preference, service_tier'>(
-      'id, provider, vault_secret_name, model_preference, service_tier',
-    )
-    .eq('id', apiKeyId)
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .single<TranslationApiKeyRow>()
+  const resolvedConfig = await resolveActiveLlmConfigForUser({
+    supabase,
+    userId,
+    apiKeyId,
+    defaultModelMode: 'lightweight',
+  })
 
-  if (apiKeyError || !apiKeyData) {
+  if (resolvedConfig.status === 'missing_api_key') {
     return { status: 'invalid_api_key', apiKeyId }
+  }
+
+  if (resolvedConfig.status === 'unsupported_provider') {
+    return {
+      status: 'translation_error',
+      error: new Error(`Unsupported provider: ${resolvedConfig.provider}`),
+    }
   }
 
   let decryptedApiKey: string
@@ -75,7 +75,7 @@ export async function translateMessageForUser({
     const adminSupabase = getAdminClient()
     decryptedApiKey = await decryptSecret({
       supabase: adminSupabase,
-      secretName: apiKeyData.vault_secret_name,
+      secretName: resolvedConfig.config.vaultSecretName,
       requester: userId,
     })
   } catch (error) {
@@ -85,12 +85,10 @@ export async function translateMessageForUser({
   let translatedText: string
   try {
     const model = buildLanguageModel({
-      provider: apiKeyData.provider,
-      modelName:
-        apiKeyData.model_preference ??
-        getDefaultModelForProvider(apiKeyData.provider, { lightweight: true }),
+      provider: resolvedConfig.config.provider,
+      modelName: resolvedConfig.config.modelName,
       apiKey: decryptedApiKey,
-      serviceTier: apiKeyData.service_tier,
+      serviceTier: resolvedConfig.config.serviceTier,
     })
 
     const { text } = await generateText({
@@ -119,7 +117,7 @@ export async function translateMessageForUser({
   await supabase
     .from('api_keys')
     .update(apiKeyUpdate as never)
-    .eq('id', apiKeyData.id)
+    .eq('id', resolvedConfig.config.apiKeyId)
 
   return { status: 'success', content: translatedText }
 }

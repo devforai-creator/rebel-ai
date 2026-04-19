@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
-import { getDefaultModelForProvider } from '@/lib/llm/default-model'
+import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import type { Database, LlmProvider } from '@/types/database.types'
 
 export type SummaryModelConfig = {
@@ -35,51 +34,33 @@ export async function resolveSummaryModelPreference({
     return null
   }
 
-  const { data: apiKey, error: apiKeyError } = await supabase
-    .from('api_keys')
-    .select<'id, provider, model_preference, is_active'>(
-      'id, provider, model_preference, is_active',
-    )
-    .eq('id', summaryKeyId)
-    .eq('user_id', userId)
-    .maybeSingle<{
-      id: string
-      provider: string
-      model_preference: string | null
-      is_active: boolean
-    }>()
+  const resolvedConfig = await resolveActiveLlmConfigForUser({
+    supabase,
+    userId,
+    apiKeyId: summaryKeyId,
+  })
 
-  if (apiKeyError || !apiKey) {
+  if (resolvedConfig.status === 'missing_api_key') {
     console.warn('[Summary Model] Stored summary API key is not available', {
       userId,
       summaryKeyId,
-      error: apiKeyError?.message,
+      error: resolvedConfig.errorMessage,
     })
     return null
   }
 
-  if (!apiKey.is_active) {
-    console.warn('[Summary Model] Stored summary API key is inactive', {
-      userId,
-      summaryKeyId,
-    })
-    return null
-  }
-
-  if (!isKnownLLMProvider(apiKey.provider)) {
+  if (resolvedConfig.status === 'unsupported_provider') {
     console.warn('[Summary Model] Stored summary API key uses unsupported provider', {
       userId,
       summaryKeyId,
-      provider: apiKey.provider,
+      provider: resolvedConfig.provider,
     })
     return null
   }
 
-  const modelName = apiKey.model_preference || getDefaultModelForProvider(apiKey.provider)
-
   return {
-    provider: apiKey.provider,
-    modelName,
-    apiKeyId: apiKey.id,
+    provider: resolvedConfig.config.provider,
+    modelName: resolvedConfig.config.modelName,
+    apiKeyId: resolvedConfig.config.apiKeyId,
   }
 }

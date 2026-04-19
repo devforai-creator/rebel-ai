@@ -494,6 +494,30 @@ describe('POST /api/messages/reprocess', () => {
     expect(await response.text()).toBe('API key not found or inactive')
   })
 
+  it('returns 400 when the configured API key uses an unsupported provider', async () => {
+    hoistedMocks.createClientMock.mockReturnValue(
+      createRouteSupabase({
+        apiKeyRows: [
+          {
+            id: 'key-1',
+            user_id: 'user-1',
+            is_active: true,
+            provider: 'voyage_embeddings',
+            model_preference: null,
+            vault_secret_name: 'vault-key',
+            service_tier: 'standard',
+          },
+        ],
+      }),
+    )
+
+    const response = await POST(buildRequest({ messageId: 'assistant-msg-1' }))
+
+    expect(response.status).toBe(400)
+    expect(await response.text()).toBe('Unsupported provider')
+    expect(hoistedMocks.buildLanguageModelMock).not.toHaveBeenCalled()
+  })
+
   it('returns 500 when Vault decryption fails', async () => {
     hoistedMocks.createClientMock.mockReturnValue(createRouteSupabase())
     hoistedMocks.createAdminClientMock.mockReturnValue(

@@ -4,7 +4,7 @@ import { createSupabaseMock } from '@/tests/mocks/supabase'
 
 const getDefaultModelForProviderMock = vi.fn((provider: string) => `default-${provider}`)
 
-vi.mock('@/lib/llm/default-model', () => ({
+vi.mock('@/lib/models', () => ({
   getDefaultModelForProvider: (...args: Parameters<typeof getDefaultModelForProviderMock>) =>
     getDefaultModelForProviderMock(...args),
 }))
@@ -175,6 +175,6 @@ describe('resolveSummaryModelPreference', () => {
       modelName: 'default-anthropic',
       apiKeyId: 'key-1',
     })
-    expect(getDefaultModelForProviderMock).toHaveBeenCalledWith('anthropic')
+    expect(getDefaultModelForProviderMock).toHaveBeenCalledWith('anthropic', {})
   })
 })

@@ -1,10 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import { checkUserRateLimit } from '@/lib/chat/rate-limiter'
 import { CHAT_REPROCESS_LIMITS } from '@/lib/chat/runtime-limits'
 import { streamText } from 'ai'
 import { buildLanguageModel } from '@/lib/llm/model-factory'
-import { getDefaultModelForProvider } from '@/lib/models'
 import {
   SUPPORT_TIER_FEATURES,
   withSupportTierHeaders as withSupportTierHeadersBase,
@@ -108,17 +108,19 @@ export async function POST(request: Request) {
     )
   }
 
-  // 3. Fetch API key details
-  const { data: apiKeyData, error: apiKeyError } = await supabase
-    .from('api_keys')
-    .select('*')
-    .eq('id', profile.reprocess_api_key_id)
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single()
+  const resolvedConfig = await resolveActiveLlmConfigForUser({
+    supabase,
+    userId: user.id,
+    apiKeyId: profile.reprocess_api_key_id,
+    defaultModelMode: 'lightweight',
+  })
 
-  if (apiKeyError || !apiKeyData) {
+  if (resolvedConfig.status === 'missing_api_key') {
     return createReprocessTextResponse('API key not found or inactive', { status: 400 })
+  }
+
+  if (resolvedConfig.status === 'unsupported_provider') {
+    return createReprocessTextResponse('Unsupported provider', { status: 400 })
   }
 
   // 4. Decrypt API key from Vault (requires admin client)
@@ -127,7 +129,7 @@ export async function POST(request: Request) {
   try {
     decryptedApiKey = await decryptSecret({
       supabase: adminSupabase,
-      secretName: apiKeyData.vault_secret_name,
+      secretName: resolvedConfig.config.vaultSecretName,
       requester: user.id,
     })
   } catch {
@@ -136,12 +138,10 @@ export async function POST(request: Request) {
 
   // 5. Build language model
   const model = buildLanguageModel({
-    provider: apiKeyData.provider,
-    modelName:
-      apiKeyData.model_preference ??
-      getDefaultModelForProvider(apiKeyData.provider, { lightweight: true }),
+    provider: resolvedConfig.config.provider,
+    modelName: resolvedConfig.config.modelName,
     apiKey: decryptedApiKey,
-    serviceTier: apiKeyData.service_tier,
+    serviceTier: resolvedConfig.config.serviceTier,
   })
 
   // 6. Stream text and update message in DB.
@@ -231,9 +231,7 @@ export async function POST(request: Request) {
       .from('messages')
       .update({
         ...buildReprocessedMessageUpdate(fullText),
-        model_used:
-          apiKeyData.model_preference ??
-          getDefaultModelForProvider(apiKeyData.provider, { lightweight: true }),
+        model_used: resolvedConfig.config.modelName,
       })
       .eq('id', messageId)
       .eq('user_id', user.id)
@@ -247,7 +245,7 @@ export async function POST(request: Request) {
     await supabase
       .from('api_keys')
       .update({ last_used_at: new Date().toISOString() })
-      .eq('id', apiKeyData.id)
+      .eq('id', resolvedConfig.config.apiKeyId)
 
     return createReprocessJsonResponse({ success: true, content: fullText })
   } catch (error) {

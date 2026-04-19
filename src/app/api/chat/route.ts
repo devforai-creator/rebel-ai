@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
+import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import { CHAT_JOB_PAYLOAD_VERSION, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { checkUserRateLimit, checkAnonRateLimit } from '@/lib/chat/rate-limiter'
 import { CHAT_REQUEST_LIMITS } from '@/lib/chat/runtime-limits'
@@ -9,8 +10,6 @@ import {
   MAX_ACTIVE_CHAT_JOBS_PER_USER,
   buildActiveChatJobLimitMessage,
 } from '@/lib/queue/admission'
-import { isLLMProvider } from '@/lib/api-keys/provider-utils'
-import { getDefaultModelForProvider } from '@/lib/llm/default-model'
 import {
   CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
   CHAT_DELIVERY_MODE_STREAMING,
@@ -222,15 +221,13 @@ export async function POST(req: Request) {
       }
     }
 
-    const { data: apiKeyData, error: apiKeyError } = await supabase
-      .from('api_keys')
-      .select('id, provider, model_preference')
-      .eq('id', apiKeyId)
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .single()
+    const resolvedConfig = await resolveActiveLlmConfigForUser({
+      supabase,
+      userId: user.id,
+      apiKeyId,
+    })
 
-    if (apiKeyError || !apiKeyData) {
+    if (resolvedConfig.status === 'missing_api_key') {
       return createErrorResponse('API key not found or inactive', 404)
     }
 
@@ -323,12 +320,11 @@ export async function POST(req: Request) {
       targetTurnId = targetTurn.id
     }
 
-    if (!isLLMProvider(apiKeyData.provider)) {
+    if (resolvedConfig.status === 'unsupported_provider') {
       return createErrorResponse('Unsupported provider', 400)
     }
 
-    const provider = apiKeyData.provider
-    const modelName = apiKeyData.model_preference || getDefaultModelForProvider(provider)
+    const { provider, modelName } = resolvedConfig.config
     const deliveryMode = isChatDeliveryMode(rawDeliveryMode)
       ? rawDeliveryMode
       : CHAT_DELIVERY_MODE_STREAMING

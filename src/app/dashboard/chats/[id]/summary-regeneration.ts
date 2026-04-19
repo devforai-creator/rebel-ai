@@ -1,6 +1,5 @@
-import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
+import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import { resolveSummaryModelPreference } from '@/lib/chat/summary-model-preference'
-import { getDefaultModelForProvider } from '@/lib/llm/default-model'
 import { readApiErrorMessage } from '@/lib/http/api-contract'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
 import type { createClient } from '@/lib/supabase/server'
@@ -80,50 +79,29 @@ export async function resolveSummaryRegenerationModelConfig(
     }
   }
 
-  const { data: apiKeyRow, error: apiKeyError } = await supabase
-    .from('api_keys')
-    .select('id, provider, model_preference, is_active')
-    .eq('id', usage.api_key_id)
-    .eq('user_id', userId)
-    .maybeSingle<{
-      id: string
-      provider: string
-      model_preference: string | null
-      is_active: boolean
-    }>()
+  const resolvedConfig = await resolveActiveLlmConfigForUser({
+    supabase,
+    userId,
+    apiKeyId: usage.api_key_id,
+  })
 
-  if (apiKeyError) {
-    console.error('[Summary Actions] Failed to resolve API key for regeneration', apiKeyError)
-  }
-
-  if (!apiKeyRow || !apiKeyRow.is_active) {
+  if (resolvedConfig.status === 'missing_api_key') {
     return { error: 'Could not find an active API key for regeneration.' }
   }
 
-  const usageProvider =
-    usage.model_provider && isKnownLLMProvider(usage.model_provider) ? usage.model_provider : null
-  const storedProvider = isKnownLLMProvider(apiKeyRow.provider) ? apiKeyRow.provider : null
-
-  if (!storedProvider) {
+  if (resolvedConfig.status === 'unsupported_provider') {
     return { error: 'Could not find an active LLM API key for regeneration.' }
   }
 
-  const provider = usageProvider ?? storedProvider
   const modelName =
-    (usageProvider ? usage.model_name : null) ||
-    apiKeyRow.model_preference ||
-    (provider ? getDefaultModelForProvider(provider) : null)
-
-  if (!provider || !modelName) {
-    return {
-      error: 'Cannot proceed with regeneration because model information could not be verified.',
-    }
-  }
+    usage.model_provider === resolvedConfig.config.provider && usage.model_name
+      ? usage.model_name
+      : resolvedConfig.config.modelName
 
   return {
-    provider,
+    provider: resolvedConfig.config.provider,
     modelName,
-    apiKeyId: apiKeyRow.id,
+    apiKeyId: resolvedConfig.config.apiKeyId,
   }
 }
 

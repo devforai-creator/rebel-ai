@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createChatJobRunnerSupabaseMock, type SupabaseClientType } from '@/tests/mocks/supabase'
+import type { SummaryModelConfig } from '@/lib/chat/summary-model-preference'
 import { runPostGenerationPipeline } from './post-generation-pipeline'
 import type { UsageMetrics } from './usage-debug'
 
@@ -560,11 +561,13 @@ describe('runPostGenerationPipeline', () => {
       ],
     })
 
-    const resolveSummaryModelPreferenceFn = vi.fn(async () => ({
-      provider: 'anthropic',
-      modelName: 'claude-3-5-sonnet',
-      apiKeyId: 'summary-key',
-    }))
+    const resolveSummaryModelPreferenceFn = vi.fn(
+      async (): Promise<SummaryModelConfig> => ({
+        provider: 'anthropic',
+        modelName: 'claude-3-5-sonnet',
+        apiKeyId: 'summary-key',
+      }),
+    )
     const triggerSummaryGenerationFn = vi.fn(async () => ({
       success: false,
       error: 'summary failed',

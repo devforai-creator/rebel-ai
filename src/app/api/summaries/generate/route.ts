@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { hasMemoryUpdateWork, updateMemoryState } from '@/lib/chat-memory'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
 import { getDecryptedSecret } from '@/lib/supabase/rpc'
+import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import type { ApiServiceTier, Database } from '@/types/database.types'
 import { buildLanguageModel } from '@/lib/llm/model-factory'
 import {
@@ -198,6 +199,10 @@ export async function POST(request: NextRequest) {
         payloadProvider: provider,
         storedProvider: apiKeyRow.provider,
       })
+    }
+
+    if (!isKnownLLMProvider(resolvedProvider)) {
+      return createApiErrorResponse(`Unsupported provider: ${resolvedProvider}`, 400)
     }
 
     const resolvedModelName = modelName || apiKeyRow.model_preference || ''

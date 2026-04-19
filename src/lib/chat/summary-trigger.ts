@@ -1,11 +1,12 @@
 import { createTriggerTracker } from '@/lib/monitoring/trigger-tracker'
 import { persistServiceHealthRecord } from '@/lib/monitoring/service-health-store'
+import type { LlmProvider } from '@/types/database.types'
 
 type TriggerArgs = {
   origin: string
   chatId: string
   userId: string
-  provider: string
+  provider: LlmProvider
   modelName: string
   apiKeyId: string
 }

@@ -1,4 +1,5 @@
-import { EMBEDDING_ONLY_PROVIDERS, LLM_PROVIDERS } from '@/lib/providers/catalog'
+import { EMBEDDING_ONLY_PROVIDERS, LLM_PROVIDERS, PROVIDERS } from '@/lib/providers/catalog'
+import type { LlmProvider, Provider } from '@/types/database.types'
 
 /**
  * Provider type utilities for API key management
@@ -7,6 +8,8 @@ import { EMBEDDING_ONLY_PROVIDERS, LLM_PROVIDERS } from '@/lib/providers/catalog
  * and embedding-only providers (for vector search).
  */
 const EMBEDDING_ONLY_PROVIDER_SET = new Set<string>(EMBEDDING_ONLY_PROVIDERS)
+const KNOWN_PROVIDER_SET = new Set<string>(PROVIDERS)
+const KNOWN_LLM_PROVIDER_SET = new Set<string>(LLM_PROVIDERS)
 
 export { LLM_PROVIDERS }
 
@@ -26,6 +29,14 @@ export { LLM_PROVIDERS }
  */
 export function isLLMProvider(provider: string): boolean {
   return !EMBEDDING_ONLY_PROVIDER_SET.has(provider)
+}
+
+export function isKnownProvider(provider: string): provider is Provider {
+  return KNOWN_PROVIDER_SET.has(provider)
+}
+
+export function isKnownLLMProvider(provider: string): provider is LlmProvider {
+  return KNOWN_LLM_PROVIDER_SET.has(provider)
 }
 
 /**

@@ -1,10 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/types/database.types'
-import { isLLMProvider } from '@/lib/api-keys/provider-utils'
+import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import { getDefaultModelForProvider } from '@/lib/llm/default-model'
+import type { Database, LlmProvider } from '@/types/database.types'
 
 export type SummaryModelConfig = {
-  provider: string
+  provider: LlmProvider
   modelName: string
   apiKeyId: string
 }
@@ -66,7 +66,7 @@ export async function resolveSummaryModelPreference({
     return null
   }
 
-  if (!isLLMProvider(apiKey.provider)) {
+  if (!isKnownLLMProvider(apiKey.provider)) {
     console.warn('[Summary Model] Stored summary API key uses unsupported provider', {
       userId,
       summaryKeyId,

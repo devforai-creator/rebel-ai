@@ -17,11 +17,13 @@ import {
   type SummaryModelConfig,
 } from '@/lib/chat/summary-model-preference'
 import { triggerSummaryGeneration, type TriggerResult } from '@/lib/chat/summary-trigger'
+import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import {
   buildChatUsageEvent,
   appendSummaryWarningToDebugInfo,
   type UsageMetrics,
 } from './usage-debug'
+import type { LlmProvider } from '@/types/database.types'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type MessageIdRow = Pick<Message, 'id'>
@@ -43,7 +45,7 @@ type TriggerSummaryGenerationFn = (args: {
   origin: string
   chatId: string
   userId: string
-  provider: string
+  provider: LlmProvider
   modelName: string
   apiKeyId: string
 }) => Promise<TriggerResult>
@@ -188,7 +190,24 @@ function scheduleSummaryGeneration({
 
     try {
       const summaryPreference = await resolveSummaryModelPreferenceFn({ supabase, userId })
-      const summaryConfig = summaryPreference ?? { provider, modelName, apiKeyId }
+      const fallbackSummaryConfig = isKnownLLMProvider(provider)
+        ? { provider, modelName, apiKeyId }
+        : null
+
+      if (!summaryPreference && !fallbackSummaryConfig) {
+        summaryFailure = { error: `Unsupported summary provider: ${provider}` }
+        console.warn('[Chat Job Runner] Skipping summary generation for unsupported provider', {
+          chatId,
+          userId,
+          provider,
+        })
+        return
+      }
+
+      const summaryConfig = summaryPreference ?? fallbackSummaryConfig
+      if (!summaryConfig) {
+        return
+      }
 
       if (summaryPreference) {
         logPostGenerationDebug('[Chat Job Runner] Using summary-specific model', {

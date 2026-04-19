@@ -1,13 +1,15 @@
+import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import { resolveSummaryModelPreference } from '@/lib/chat/summary-model-preference'
 import { getDefaultModelForProvider } from '@/lib/llm/default-model'
 import { readApiErrorMessage } from '@/lib/http/api-contract'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
 import type { createClient } from '@/lib/supabase/server'
+import type { LlmProvider } from '@/types/database.types'
 
 type SummaryActionSupabase = Awaited<ReturnType<typeof createClient>>
 
 export type SummaryRegenerationModelConfig = {
-  provider: string
+  provider: LlmProvider
   modelName: string
   apiKeyId: string
 }
@@ -62,7 +64,11 @@ export async function resolveSummaryRegenerationModelConfig(
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(1)
-    .maybeSingle()
+    .maybeSingle<{
+      api_key_id: string | null
+      model_provider: string | null
+      model_name: string | null
+    }>()
 
   if (usageError) {
     console.error('[Summary Actions] Failed to resolve usage event', usageError)
@@ -79,7 +85,12 @@ export async function resolveSummaryRegenerationModelConfig(
     .select('id, provider, model_preference, is_active')
     .eq('id', usage.api_key_id)
     .eq('user_id', userId)
-    .maybeSingle()
+    .maybeSingle<{
+      id: string
+      provider: string
+      model_preference: string | null
+      is_active: boolean
+    }>()
 
   if (apiKeyError) {
     console.error('[Summary Actions] Failed to resolve API key for regeneration', apiKeyError)
@@ -89,9 +100,17 @@ export async function resolveSummaryRegenerationModelConfig(
     return { error: 'Could not find an active API key for regeneration.' }
   }
 
-  const provider = usage.model_provider || apiKeyRow.provider
+  const usageProvider =
+    usage.model_provider && isKnownLLMProvider(usage.model_provider) ? usage.model_provider : null
+  const storedProvider = isKnownLLMProvider(apiKeyRow.provider) ? apiKeyRow.provider : null
+
+  if (!storedProvider) {
+    return { error: 'Could not find an active LLM API key for regeneration.' }
+  }
+
+  const provider = usageProvider ?? storedProvider
   const modelName =
-    usage.model_name ||
+    (usageProvider ? usage.model_name : null) ||
     apiKeyRow.model_preference ||
     (provider ? getDefaultModelForProvider(provider) : null)
 

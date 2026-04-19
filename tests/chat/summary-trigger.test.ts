@@ -13,7 +13,7 @@ const baseArgs = {
   provider: 'openai',
   modelName: 'gpt-4o-mini',
   apiKeyId: 'key-1',
-}
+} satisfies Parameters<typeof triggerSummaryGeneration>[0]
 
 const originalSummarySecret = process.env.SUMMARY_GENERATION_SECRET
 const originalRetryDelay = process.env.SUMMARY_TRIGGER_RETRY_DELAY_MS

@@ -1,4 +1,4 @@
-import type { ChatSummary, Message } from '@/types/database.types'
+import type { ChatSummary, LlmProvider, Message } from '@/types/database.types'
 import type { createClient as createServerClient } from '@/lib/supabase/server'
 import type { LanguageModel } from 'ai'
 
@@ -88,7 +88,7 @@ export interface UpdateSummariesOptions {
   chatId: string
   userId: string
   model: LanguageModel
-  provider: string
+  provider: LlmProvider
   modelName: string
   regenerate?: RegenerateConfig
 }
@@ -99,7 +99,7 @@ export interface ProcessChunkOptions {
   chatId: string
   userId: string
   model: LanguageModel
-  provider: string
+  provider: LlmProvider
   modelName: string
   totalMessages: number
   previousEnd: number
@@ -113,7 +113,7 @@ export interface ProcessMetaOptions {
   chatId: string
   userId: string
   model: LanguageModel
-  provider: string
+  provider: LlmProvider
   modelName: string
   metaPrompt: string
 }
@@ -124,7 +124,7 @@ export interface CreateChunkSummaryOptions {
   chatId: string
   userId: string
   model: LanguageModel
-  provider: string
+  provider: LlmProvider
   modelName: string
   startSeq: number
   endSeq: number
@@ -139,7 +139,7 @@ export interface CreateChunkFactsOptions {
   chatId: string
   userId: string
   model: LanguageModel
-  provider: string
+  provider: LlmProvider
   modelName: string
   startSeq: number
   endSeq: number
@@ -153,7 +153,7 @@ export interface CreateHigherLevelSummaryOptions {
   chatId: string
   userId: string
   model: LanguageModel
-  provider: string
+  provider: LlmProvider
   modelName: string
   segments: Array<Pick<ChatSummary, 'start_seq' | 'end_seq' | 'summary'>>
   startSeq: number
@@ -169,7 +169,7 @@ export interface RegenerationProcessOptions {
   chatId: string
   userId: string
   model: LanguageModel
-  provider: string
+  provider: LlmProvider
   modelName: string
   chunkPrompt: string
   metaPrompt: string
@@ -181,7 +181,7 @@ export interface RegenerationProcessOptions {
 // Summary generation with fallback
 export interface SummaryWithFallbackOptions {
   model: LanguageModel
-  provider: string
+  provider: LlmProvider
   systemPrompt: string
   prompt: string
   maxTokens: number

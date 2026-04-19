@@ -28,6 +28,8 @@ export type Provider =
   | 'deepseek'
   | 'openrouter'
   | 'voyage_embeddings'
+export type LlmProvider = Exclude<Provider, 'voyage_embeddings'>
+export type EmbeddingOnlyProvider = Exclude<Provider, LlmProvider>
 export type ApiServiceTier = 'batch' | 'flex' | 'priority' | 'standard'
 export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high'
 export type AnnouncementSeverity = 'info' | 'warning' | 'critical'

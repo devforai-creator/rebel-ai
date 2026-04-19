@@ -19,7 +19,7 @@ const summaryArgs = {
   provider: 'openai',
   modelName: 'gpt-4o-mini',
   apiKeyId: 'key-1',
-}
+} satisfies Parameters<typeof triggerSummaryGeneration>[0]
 
 function buildRequest(authHeader?: string) {
   return new NextRequest(baseHealthUrl, {

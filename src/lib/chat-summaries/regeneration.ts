@@ -1,5 +1,6 @@
 import type { LanguageModel } from 'ai'
 import type { ChatSummary } from '@/types/database.types'
+import type { LlmProvider } from '@/types/database.types'
 import type { ServerSupabaseClient, SummaryRange, RegenerationProcessOptions } from './types'
 import {
   CHUNK_SIZE,
@@ -74,7 +75,7 @@ async function regenerateChunkRanges({
   chatId: string
   userId: string
   model: LanguageModel
-  provider: string
+  provider: LlmProvider
   modelName: string
   chunkPrompt: string
   factPrompt: string
@@ -164,7 +165,7 @@ async function regenerateFactRanges({
   chatId: string
   userId: string
   model: LanguageModel
-  provider: string
+  provider: LlmProvider
   modelName: string
   factPrompt: string
   ranges: SummaryRange[]
@@ -240,7 +241,7 @@ async function rebuildSuperMetaRange({
   chatId: string
   userId: string
   model: LanguageModel
-  provider: string
+  provider: LlmProvider
   modelName: string
   metaPrompt: string
   startSeq: number
@@ -327,7 +328,7 @@ async function regenerateMetaRanges({
   chatId: string
   userId: string
   model: LanguageModel
-  provider: string
+  provider: LlmProvider
   modelName: string
   metaPrompt: string
   ranges: SummaryRange[]

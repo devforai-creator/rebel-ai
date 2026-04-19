@@ -1,4 +1,4 @@
-import type { Provider } from '@/types/database.types'
+import type { EmbeddingOnlyProvider, LlmProvider, Provider } from '@/types/database.types'
 
 export type ProviderKeyRule = {
   placeholder: string
@@ -111,9 +111,9 @@ export const PROVIDER_CATALOG: Record<Provider, ProviderCatalogEntry> = {
 export const PROVIDERS = Object.keys(PROVIDER_CATALOG) as Provider[]
 
 export const LLM_PROVIDERS = PROVIDERS.filter(
-  (provider): provider is Provider => PROVIDER_CATALOG[provider].supportsLLM,
+  (provider): provider is LlmProvider => PROVIDER_CATALOG[provider].supportsLLM,
 )
 
 export const EMBEDDING_ONLY_PROVIDERS = PROVIDERS.filter(
-  (provider): provider is Provider => !PROVIDER_CATALOG[provider].supportsLLM,
+  (provider): provider is EmbeddingOnlyProvider => !PROVIDER_CATALOG[provider].supportsLLM,
 )

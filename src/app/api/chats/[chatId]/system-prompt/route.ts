@@ -5,6 +5,8 @@ import {
   parseJsonRequest,
   requireAuthenticatedUser,
 } from '@/lib/http/api-contract'
+import { BASE_GLOBAL_SYSTEM_PROMPT } from '@/lib/chat/global-system-prompt'
+import { parseSystemPromptOverrideInput } from '@/lib/chat/system-prompt-override'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
@@ -45,20 +47,15 @@ export async function POST(request: Request, context: Context) {
       return parsed.response
     }
     const rawPrompt = parsed.data.systemPrompt
-    let normalizedPrompt: string | null = null
+    const normalizedPrompt = parseSystemPromptOverrideInput(rawPrompt, BASE_GLOBAL_SYSTEM_PROMPT)
 
-    if (typeof rawPrompt === 'string') {
-      const trimmed = rawPrompt.trim()
-      normalizedPrompt = trimmed.length > 0 ? trimmed : null
-    } else if (rawPrompt === null) {
-      normalizedPrompt = null
-    } else {
+    if (!normalizedPrompt.success) {
       return createApiErrorResponse('Invalid systemPrompt', 400)
     }
 
     const { error: updateError } = await supabase
       .from('chats')
-      .update({ custom_system_prompt: normalizedPrompt })
+      .update({ custom_system_prompt: normalizedPrompt.systemPrompt })
       .eq('id', chatId)
       .eq('user_id', user.id)
 

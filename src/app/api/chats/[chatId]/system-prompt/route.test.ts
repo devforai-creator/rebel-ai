@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { createSupabaseMock } from '@/tests/mocks/supabase'
+import { BASE_GLOBAL_SYSTEM_PROMPT } from '@/lib/chat/global-system-prompt'
 
 const createClientMock = vi.fn()
 
@@ -129,6 +130,30 @@ describe('POST /api/chats/[chatId]/system-prompt', () => {
       new NextRequest('http://localhost/api/chats/chat-1/system-prompt', {
         method: 'POST',
         body: JSON.stringify({ systemPrompt: null }),
+      }),
+      buildContext('chat-1'),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual({ success: true })
+    expect(supabase.state.chats).toEqual([
+      { id: 'chat-1', user_id: 'user-1', custom_system_prompt: null },
+    ])
+  })
+
+  it('stores null when the submitted prompt matches the default prompt', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      chats: [{ id: 'chat-1', user_id: 'user-1', custom_system_prompt: 'Old override' }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { POST } = await import('./route')
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/chats/chat-1/system-prompt', {
+        method: 'POST',
+        body: JSON.stringify({ systemPrompt: `  ${BASE_GLOBAL_SYSTEM_PROMPT}  ` }),
       }),
       buildContext('chat-1'),
     )

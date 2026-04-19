@@ -37,6 +37,19 @@ describe('SystemPromptEditorButton', () => {
     expect(html).toContain('System Prompt')
     expect(html).toContain('Custom')
   })
+
+  it('does not show a custom badge when the stored value matches the default prompt', () => {
+    const html = renderToStaticMarkup(
+      <SystemPromptEditorButton
+        chatId="chat-1"
+        initialPrompt="  default prompt  "
+        defaultPrompt="default prompt"
+      />,
+    )
+
+    expect(html).toContain('System Prompt')
+    expect(html).not.toContain('Custom')
+  })
 })
 
 describe('LorebookPanelContent', () => {

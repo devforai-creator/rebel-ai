@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Button from '@/app/dashboard/components/Button'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
+import {
+  hasCustomSystemPromptOverride,
+  normalizeSystemPromptOverride,
+} from '@/lib/chat/system-prompt-override'
 
 interface Props {
   chatId: string
@@ -21,21 +25,25 @@ export default function SystemPromptEditorButton({
 }: Props) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
-  const [value, setValue] = useState(initialPrompt ?? defaultPrompt)
+  const [value, setValue] = useState(
+    normalizeSystemPromptOverride(initialPrompt, defaultPrompt) ?? defaultPrompt,
+  )
   const [isSaving, setIsSaving] = useState(false)
-  const [hasCustomPrompt, setHasCustomPrompt] = useState(Boolean(initialPrompt))
+  const [hasCustomPrompt, setHasCustomPrompt] = useState(
+    hasCustomSystemPromptOverride(initialPrompt, defaultPrompt),
+  )
 
   useEffect(() => {
-    setValue(initialPrompt ?? defaultPrompt)
-    setHasCustomPrompt(Boolean(initialPrompt))
+    const normalizedInitialPrompt = normalizeSystemPromptOverride(initialPrompt, defaultPrompt)
+    setValue(normalizedInitialPrompt ?? defaultPrompt)
+    setHasCustomPrompt(hasCustomSystemPromptOverride(initialPrompt, defaultPrompt))
   }, [initialPrompt, defaultPrompt])
 
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      const trimmed = value.trim()
       const body = {
-        systemPrompt: trimmed.length === 0 || trimmed === defaultPrompt.trim() ? null : trimmed,
+        systemPrompt: normalizeSystemPromptOverride(value, defaultPrompt),
       }
 
       const response = await fetch(`/api/chats/${chatId}/system-prompt`, {
@@ -49,6 +57,7 @@ export default function SystemPromptEditorButton({
       }
 
       setHasCustomPrompt(body.systemPrompt !== null)
+      setValue(body.systemPrompt ?? defaultPrompt)
       setIsOpen(false)
       router.refresh()
     } catch (error) {

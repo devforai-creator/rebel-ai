@@ -1,5 +1,8 @@
 # Memory Modes V1
 
+Historical note: this document captures the first implementation/design pass for switchable memory modes.
+For the current top-level doctrine, use [LONG_TERM_MEMORY_STRATEGY.md](./LONG_TERM_MEMORY_STRATEGY.md).
+
 This document defines the first implementation of switchable chat memory modes in RebelAI.
 
 The goal is to let one chat choose between the current summary-window behavior and a new prefix-optimized behavior without hard-binding the feature to a single provider.

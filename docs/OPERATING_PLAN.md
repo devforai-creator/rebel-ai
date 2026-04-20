@@ -16,7 +16,8 @@ Status: first-class now
 - The real first-class environment is the low-cost profile the maintainer actually runs and can reproduce locally.
 - Keep one storage/backend path only. Do not add R2 or another asset backend until there is measured pressure that the current path cannot absorb.
 - `character-assets` and `module-assets` stay private by default. Asset delivery for the supported path is authenticated or signed at runtime, not anonymous public bucket reads.
-- For maintainer-operated chats, the active first-class memory profile is `prefix_live_blocks + episodic RAG` because that is the path the maintainer actually uses and should keep verifying.
+- For maintainer-operated chats, the active first-class memory profile is `prefix_live_blocks + summaries + ATR`.
+- Episodic RAG remains available as a secondary experimental path, but it is no longer part of the first-class default memory contract.
 - The code-level fallback remains `summary_window` when memory settings are missing or public-safe defaults are needed.
 - Treat `RBX + SUU`, authenticated chat, and background job execution as the supported core.
 
@@ -40,7 +41,9 @@ Status: target mode, not first-class yet
 - Public use is allowed only after the open gates in section 4 are closed.
 - Start with a small invite-only alpha before general signup.
 - When public traffic is accepted, the default public profile becomes `Vercel Pro + Supabase Pro`.
-- The public product default memory profile stays `summary_window` at first. `prefix_live_blocks` and episodic RAG remain opt-in until they are proven stable enough for outside users.
+- The public product default memory profile stays `summary_window` at first.
+- `prefix_live_blocks` can remain an opt-in advanced path for later public evaluation.
+- Episodic RAG stays experimental and off by default unless it is being explicitly evaluated.
 - Public mode should still keep one official storage/backend path first. Do not combine public launch with an R2 migration.
 - Public opening does not imply public asset buckets. Keep `character-assets` and `module-assets` private unless there is an explicit written decision to reopen anonymous reads and the operator checks are updated with that new contract.
 - Public mode should optimize for operator simplicity, not lowest cost.
@@ -88,9 +91,10 @@ Evidence:
 ### 3.3 Memory tiers
 
 - Separate operator default, public default, and system fallback instead of forcing one memory mode to serve every job.
-- Operator default: `prefix_live_blocks + episodic RAG` for maintainer-operated chats.
+- Operator default: `prefix_live_blocks + summaries + ATR`.
 - Public default: `summary_window` until the higher-complexity path has stronger operational evidence.
 - System fallback: `summary_window` whenever memory config is missing or needs a safe default.
+- Episodic RAG: optional secondary / experimental overlay, not part of the first-class default path.
 
 Evidence:
 
@@ -98,7 +102,8 @@ Evidence:
 - [index.ts](../src/lib/chat-memory/index.ts)
 - [index.ts](../src/lib/chat-summaries/index.ts)
 - [embeddings.ts](../src/lib/embeddings.ts)
-- [memory-modes-v1.md](./memory-modes-v1.md)
+- [LONG_TERM_MEMORY_STRATEGY.md](./LONG_TERM_MEMORY_STRATEGY.md)
+- [experimental-agentic-transcript-recall.md](./experimental-agentic-transcript-recall.md)
 
 ### 3.4 Secret ownership and privileged boundaries
 

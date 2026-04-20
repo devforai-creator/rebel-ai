@@ -88,9 +88,10 @@ set is_admin = true
 where id = 'YOUR_USER_ID';
 ```
 
-### Episodic RAG
+### Episodic RAG (Experimental / Optional)
 
-If you want embeddings-backed episodic retrieval:
+The default long-chat path does not require embeddings-backed episodic retrieval.
+Use this only if you explicitly want to evaluate the secondary episodic RAG path:
 
 1. Add a Voyage embeddings key in `/dashboard/api-keys`
 2. Open `/dashboard/account`

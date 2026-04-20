@@ -104,6 +104,31 @@ describe('DebugModal', () => {
     expect(html).toContain('No message selected for unresolved asset checks')
     expect(html).not.toContain('No server debug_info stored')
   })
+
+  it('renders arbitrary debug_info fields without bespoke UI wiring', () => {
+    const html = renderToStaticMarkup(
+      <DebugModal
+        isOpen
+        debugInfo={
+          {
+            experimental: {
+              agenticTranscriptRecall: {
+                toolCallCount: 2,
+                toolFetchCount: 1,
+              },
+            },
+          } as never
+        }
+        message={null}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('Raw debug_info')
+    expect(html).toContain('agenticTranscriptRecall')
+    expect(html).toContain('toolCallCount')
+    expect(html).toContain('toolFetchCount')
+  })
 })
 
 describe('ChatComposer', () => {

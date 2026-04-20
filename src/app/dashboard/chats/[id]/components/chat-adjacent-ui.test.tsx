@@ -6,6 +6,7 @@ import SystemPromptEditorButton from '../SystemPromptEditorButton'
 import { ChatComposer, shouldSubmitChatComposerOnEnter } from './ChatComposer'
 import { DebugModal } from './DebugModal'
 import { LorebookPanelContent } from './LorebookPanelContent'
+import { MessageBubble } from './MessageBubble'
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -189,5 +190,29 @@ describe('ChatComposer', () => {
         mobileViewport: true,
       }),
     ).toBe(false)
+  })
+})
+
+describe('MessageBubble', () => {
+  it('keeps message content shrinkable and aggressively wrappable to avoid right-edge clipping', () => {
+    const html = renderToStaticMarkup(
+      <MessageBubble
+        message={{
+          id: 'message-1',
+          role: 'user',
+          content: 'averyveryveryveryveryveryveryveryveryverylongtoken',
+        }}
+        character={{ name: 'AI', avatar_url: null, metadata: null }}
+        characterAssets={[]}
+        isLatestAssistant={false}
+        isReprocessing={false}
+        isRetranslating={false}
+      />,
+    )
+
+    expect(html).toContain('relative min-w-0 max-w-full rounded-lg')
+    expect(html).toContain(
+      'overflow-x-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere]',
+    )
   })
 })

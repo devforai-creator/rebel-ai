@@ -88,14 +88,17 @@ function renderMarkdownDocument(text: string, keyPrefix: string): React.ReactNod
           </a>
         ),
         blockquote: ({ children }) => (
-          <blockquote className="my-2 border-l-2 border-zinc-300 pl-3 italic opacity-80">
+          <blockquote className="my-2 min-w-0 border-l-2 border-zinc-300 pl-3 italic opacity-80 break-words [overflow-wrap:anywhere]">
             {children}
           </blockquote>
         ),
         code: ({ className, children, ...props }) => (
           <code
             {...props}
-            className={['rounded bg-black/5 px-1 py-0.5 font-mono text-[0.95em]', className]
+            className={[
+              'rounded bg-black/5 px-1 py-0.5 font-mono text-[0.95em] break-all whitespace-pre-wrap',
+              className,
+            ]
               .filter(Boolean)
               .join(' ')}
           >
@@ -103,21 +106,33 @@ function renderMarkdownDocument(text: string, keyPrefix: string): React.ReactNod
           </code>
         ),
         hr: () => <hr className="my-3 border-zinc-300" />,
-        ol: ({ children }) => (
-          <ol className="my-2 list-inside list-decimal space-y-1">{children}</ol>
+        li: ({ children }) => (
+          <li className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</li>
         ),
-        p: ({ children }) => <p className="my-0 leading-relaxed">{children}</p>,
+        ol: ({ children }) => (
+          <ol className="my-2 min-w-0 list-inside list-decimal space-y-1">{children}</ol>
+        ),
+        p: ({ children }) => (
+          <p className="my-0 min-w-0 break-words leading-relaxed [overflow-wrap:anywhere]">
+            {children}
+          </p>
+        ),
         pre: ({ className, children, ...props }) => (
           <pre
             {...props}
-            className={['my-2 overflow-x-auto rounded-lg bg-black/5 p-3', className]
+            className={[
+              'my-2 max-w-full overflow-x-auto rounded-lg bg-black/5 p-3 whitespace-pre-wrap break-words [overflow-wrap:anywhere] sm:whitespace-pre',
+              className,
+            ]
               .filter(Boolean)
               .join(' ')}
           >
             {children}
           </pre>
         ),
-        ul: ({ children }) => <ul className="my-2 list-inside list-disc space-y-1">{children}</ul>,
+        ul: ({ children }) => (
+          <ul className="my-2 min-w-0 list-inside list-disc space-y-1">{children}</ul>
+        ),
       }}
     >
       {text}

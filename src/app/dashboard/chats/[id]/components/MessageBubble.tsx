@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, type ReactNode } from 'react'
+import React, { useMemo, type ReactNode } from 'react'
 import type {
   ChatCharacter,
   DisplayMessage,
@@ -112,11 +112,11 @@ export function MessageBubble({
 
   return (
     <div
-      className={`msg-${message.id} relative max-w-full rounded-lg px-4 py-2 ${bubbleClassName}`}
+      className={`msg-${message.id} relative min-w-0 max-w-full rounded-lg px-4 py-2 ${bubbleClassName}`}
     >
       {isReprocessing ? renderBusyOverlay('Reprocessing...', 'border-orange-500') : null}
       {isRetranslating ? renderBusyOverlay('Translating...', 'border-cyan-500') : null}
-      <div className="max-w-full overflow-x-auto whitespace-pre-wrap break-words [&_img]:block [&_img]:h-auto [&_img]:max-w-full">
+      <div className="max-w-full overflow-x-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] [&_img]:block [&_img]:h-auto [&_img]:max-w-full">
         {isStreaming && !message.content ? (
           <div className="flex items-center gap-2 py-1">
             <div className="h-2 w-2 animate-bounce rounded-full bg-gray-400" />

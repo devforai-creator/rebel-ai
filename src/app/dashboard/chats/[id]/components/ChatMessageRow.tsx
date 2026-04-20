@@ -84,7 +84,7 @@ export const ChatMessageRow = memo(function ChatMessageRow({
   const isPersisted = persistedMessageIds.has(message.id)
 
   return (
-    <div className={`flex gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex min-w-0 gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
       {isAssistant ? <AssistantAvatar character={character} /> : null}
       <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
         {isEditing ? (

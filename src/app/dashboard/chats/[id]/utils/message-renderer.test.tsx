@@ -252,6 +252,26 @@ describe('renderMessageContent', () => {
       expect(html).toContain('속으로만 중얼거렸다')
     })
 
+    it('aggressively wraps long pipe-delimited diagnostic tokens for narrow mobile layouts', () => {
+      const node = renderMessageContent(
+        `› Failed during provider stream handling: CachedContent can not be used with GenerateContent request setting
+
+  system_instruction, tools or tool_config. Proposed fix: move those values to CachedContent from GenerateContent request.
+
+  재밌는 오류를 봤네요.... 이건 뭘까요?
+
+• Explored
+
+  └ Search google-explicit-cache|cachedContent|cached_content|tools|tool_config|system_instruction in chat-job-runner`,
+        [],
+      )
+      const html = renderToStaticMarkup(<>{node}</>)
+
+      expect(html).toContain('break-words')
+      expect(html).toContain('[overflow-wrap:anywhere]')
+      expect(html).toContain('google-explicit-cache|cachedContent|cached_content')
+    })
+
     it('renders fenced code blocks', () => {
       const node = renderMessageContent('```ts\nconst mood = "calm"\n```', [])
       const html = renderToStaticMarkup(<>{node}</>)

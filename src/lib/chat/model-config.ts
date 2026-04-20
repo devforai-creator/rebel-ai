@@ -209,6 +209,24 @@ export function buildOperatorDefaultChatModelConfig(input: unknown): ChatModelCo
   }
 }
 
+export function buildOperatorDefaultPersistedChatModelConfig(input: unknown): ChatModelConfig {
+  const normalized = buildOperatorDefaultChatModelConfig(input)
+  const existingRecall = normalized.experimental?.agenticTranscriptRecall
+
+  return {
+    ...normalized,
+    experimental: {
+      ...(normalized.experimental ?? {}),
+      agenticTranscriptRecall:
+        existingRecall === undefined || existingRecall === null
+          ? {
+              enabled: true,
+            }
+          : existingRecall,
+    },
+  }
+}
+
 export function hasPersistableChatModelConfig(config: ChatModelConfig): boolean {
   const hasAlternate = !!config.alternateModels
   const memory = resolveChatMemoryConfig(config)

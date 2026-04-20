@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS,
+  buildOperatorDefaultPersistedChatModelConfig,
   CHAT_MEMORY_MODE_SUPPORT_TIERS,
   buildOperatorDefaultChatModelConfig,
   DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_MESSAGES_PER_CALL,
@@ -197,6 +198,51 @@ describe('buildOperatorDefaultChatModelConfig', () => {
         mode: 'prefix_live_blocks',
         sealEveryMessages: DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
         retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
+      },
+    })
+  })
+})
+
+describe('buildOperatorDefaultPersistedChatModelConfig', () => {
+  it('enables transcript recall by default for newly persisted operator chats', () => {
+    expect(buildOperatorDefaultPersistedChatModelConfig({})).toEqual({
+      memory: {
+        mode: 'prefix_live_blocks',
+        sealEveryMessages: DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
+        retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
+      },
+      experimental: {
+        agenticTranscriptRecall: {
+          enabled: true,
+        },
+      },
+    })
+  })
+
+  it('preserves explicit transcript recall config when one is already provided', () => {
+    expect(
+      buildOperatorDefaultPersistedChatModelConfig({
+        experimental: {
+          agenticTranscriptRecall: {
+            enabled: false,
+            maxToolCalls: 4,
+          },
+        },
+      }),
+    ).toEqual({
+      memory: {
+        mode: 'prefix_live_blocks',
+        sealEveryMessages: DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
+        retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
+      },
+      experimental: {
+        agenticTranscriptRecall: {
+          enabled: false,
+          maxToolCalls: 4,
+          maxMessagesPerCall: undefined,
+          maxTotalMessages: undefined,
+          providerAllowlist: undefined,
+        },
       },
     })
   })

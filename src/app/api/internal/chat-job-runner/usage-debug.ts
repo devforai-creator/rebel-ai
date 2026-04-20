@@ -92,6 +92,9 @@ type AnthropicThinkingDebugInfo = {
   type: string | null
   effort: string | null
   interleavedThinkingBetaRequested: boolean | null
+  observedThinkingBlock: boolean | null
+  observedReasoningDeltaCount: number | null
+  observedSignatureDelta: boolean | null
   reasoningTokensReported: number | null
   used: boolean | null
 }
@@ -317,6 +320,12 @@ function buildAnthropicThinkingDebugInfo(
     debugMetrics,
     'anthropic_interleaved_thinking_requested',
   )
+  const observedThinkingBlock = readBooleanMetric(debugMetrics, 'anthropic_thinking_block_seen')
+  const observedReasoningDeltaCount = readNumberMetric(
+    debugMetrics,
+    'anthropic_reasoning_delta_count',
+  )
+  const observedSignatureDelta = readBooleanMetric(debugMetrics, 'anthropic_signature_delta_seen')
   const reasoningTokensReported = readNumberMetric(
     debugMetrics,
     'anthropic_reasoning_tokens_reported',
@@ -328,6 +337,9 @@ function buildAnthropicThinkingDebugInfo(
     type,
     effort,
     interleavedThinkingBetaRequested,
+    observedThinkingBlock,
+    observedReasoningDeltaCount,
+    observedSignatureDelta,
     reasoningTokensReported,
     used,
   ].some((value) => value !== null)
@@ -341,6 +353,9 @@ function buildAnthropicThinkingDebugInfo(
     type,
     effort,
     interleavedThinkingBetaRequested,
+    observedThinkingBlock,
+    observedReasoningDeltaCount,
+    observedSignatureDelta,
     reasoningTokensReported,
     used,
   }

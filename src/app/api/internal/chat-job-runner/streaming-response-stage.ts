@@ -34,6 +34,7 @@ async function collectTextFromStreamWithSnapshots({
   stream,
   provider,
   regenerateAssistantMessageId,
+  debugMetrics,
   updateIntervalMs = 120,
   now = () => performance.now(),
 }: {
@@ -43,6 +44,7 @@ async function collectTextFromStreamWithSnapshots({
   stream: ProviderTextStream
   provider: LlmProvider
   regenerateAssistantMessageId: string | null
+  debugMetrics?: Record<string, DebugMetricValue>
   updateIntervalMs?: number
   now?: () => number
 }) {
@@ -93,6 +95,29 @@ async function collectTextFromStreamWithSnapshots({
   try {
     if (stream.fullStream) {
       for await (const part of stream.fullStream) {
+        if (provider === 'anthropic' && debugMetrics) {
+          if (part.type === 'reasoning-start') {
+            debugMetrics['anthropic_thinking_block_seen'] = true
+          }
+
+          if (part.type === 'reasoning-delta') {
+            const currentCount =
+              typeof debugMetrics['anthropic_reasoning_delta_count'] === 'number'
+                ? debugMetrics['anthropic_reasoning_delta_count']
+                : 0
+            debugMetrics['anthropic_reasoning_delta_count'] = currentCount + 1
+
+            const providerMetadata =
+              part.providerMetadata?.anthropic &&
+              typeof part.providerMetadata.anthropic === 'object'
+                ? (part.providerMetadata.anthropic as Record<string, unknown>)
+                : null
+            if (typeof providerMetadata?.signature === 'string' && providerMetadata.signature) {
+              debugMetrics['anthropic_signature_delta_seen'] = true
+            }
+          }
+        }
+
         if (part.type === 'text-delta' && typeof part.text === 'string') {
           fullText += part.text
 
@@ -181,6 +206,7 @@ export async function consumeStreamingResponseStage({
       stream,
       provider,
       regenerateAssistantMessageId,
+      debugMetrics,
       updateIntervalMs,
       now,
     })
@@ -256,9 +282,17 @@ export async function consumeStreamingResponseStage({
 
   const usage = await stream.usage
   if (provider === 'anthropic' && debugMetrics) {
+    const thinkingBlockSeen = debugMetrics['anthropic_thinking_block_seen'] === true
+    const signatureDeltaSeen = debugMetrics['anthropic_signature_delta_seen'] === true
+    const reasoningDeltaCount =
+      typeof debugMetrics['anthropic_reasoning_delta_count'] === 'number'
+        ? debugMetrics['anthropic_reasoning_delta_count']
+        : null
     debugMetrics['anthropic_reasoning_tokens_reported'] = usage?.reasoningTokens ?? null
     debugMetrics['anthropic_thinking_used'] =
-      typeof usage?.reasoningTokens === 'number' ? usage.reasoningTokens > 0 : null
+      typeof usage?.reasoningTokens === 'number'
+        ? usage.reasoningTokens > 0
+        : thinkingBlockSeen || signatureDeltaSeen || reasoningDeltaCount !== null
   }
 
   return {

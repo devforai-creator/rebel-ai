@@ -25,7 +25,14 @@ async function* textDeltaStream(parts: string[]) {
   }
 }
 
-async function* fullDeltaStream(parts: Array<{ type: string; text?: string; error?: unknown }>) {
+async function* fullDeltaStream(
+  parts: Array<{
+    type: string
+    text?: string
+    error?: unknown
+    providerMetadata?: Record<string, unknown>
+  }>,
+) {
   for (const part of parts) {
     yield part
   }
@@ -119,6 +126,50 @@ describe('consumeStreamingResponseStage', () => {
 
     expect(debugMetrics).toMatchObject({
       anthropic_reasoning_tokens_reported: 7,
+      anthropic_thinking_used: true,
+    })
+  })
+
+  it('detects anthropic thinking usage from streamed reasoning blocks when reasoning tokens are absent', async () => {
+    const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
+    const debugMetrics: Record<string, string | number | boolean | null> = {}
+
+    await consumeStreamingResponseStage({
+      supabase: {} as never,
+      chatId: 'chat-1',
+      jobId: 'job-anthropic-streamed-thinking',
+      stream: {
+        textStream: textDeltaStream([]),
+        fullStream: fullDeltaStream([
+          { type: 'reasoning-start' },
+          {
+            type: 'reasoning-delta',
+            providerMetadata: {
+              anthropic: { signature: 'sig_123' },
+            },
+          },
+          { type: 'text-delta', text: 'ok' },
+        ]),
+        finishReason: Promise.resolve('stop'),
+        providerMetadata: Promise.resolve({ anthropic: { usage: { input_tokens: 1 } } }),
+        usage: Promise.resolve({
+          inputTokens: 10,
+          outputTokens: 20,
+          totalTokens: 30,
+          cachedInputTokens: 0,
+          reasoningTokens: null,
+        }),
+      } as never,
+      provider: 'anthropic',
+      regenerateAssistantMessageId: null,
+      debugMetrics,
+    })
+
+    expect(debugMetrics).toMatchObject({
+      anthropic_thinking_block_seen: true,
+      anthropic_reasoning_delta_count: 1,
+      anthropic_signature_delta_seen: true,
+      anthropic_reasoning_tokens_reported: null,
       anthropic_thinking_used: true,
     })
   })

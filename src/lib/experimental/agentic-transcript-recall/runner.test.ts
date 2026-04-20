@@ -215,7 +215,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
     })
   })
 
-  it('adds a stronger recall-priority instruction for exact-detail older-memory questions', () => {
+  it('always adds the stronger recall-priority instruction when transcript recall tools are available', () => {
     const result = prepareExperimentalAgenticTranscriptRecallRequest({
       supabase: createTranscriptSupabase(),
       chatId,
@@ -271,7 +271,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
         messages: [
           {
             role: 'user',
-            content: '설지야 우리 마지막으로 하연이와 헌쇼 했을 때, 마지막으로 싸운 곳이 어디더라?',
+            content: 'Hello',
           },
         ],
       },
@@ -279,12 +279,12 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
       logDebug: vi.fn(),
     })
 
-    expect(result.streamRequest.system).toContain('=== Recall Priority For This User Message ===')
+    expect(result.streamRequest.system).toContain('=== Recall Priority ===')
     expect(result.streamRequest.system).toContain(
-      'Do not answer that kind of question from summaries alone when transcript recall tools are available for the relevant older range.',
+      'When the user asks about an exact older detail such as a first or last event, a location, an order of actions, a speaker, or exact wording, do not answer from summaries alone when transcript recall tools are available for the relevant older range.',
     )
     expect(result.streamRequest.system).toContain(
-      'If the user asks about the last/final/end of an older event, inspect the latest relevant child range first.',
+      'If the user asks about the last or final part of an older event, inspect the latest relevant child range first.',
     )
   })
 

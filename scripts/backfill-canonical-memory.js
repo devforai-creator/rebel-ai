@@ -380,7 +380,11 @@ async function fetchChatMemoryState(supabase, chatId) {
     .eq('id', chatId)
     .single()
 
-  if (chatError || !chat) {
+  if (chatError) {
+    throw new Error(`Failed to load chat ${chatId}: ${chatError.message}`)
+  }
+
+  if (!chat) {
     throw new Error(`Chat not found: ${chatId}`)
   }
 

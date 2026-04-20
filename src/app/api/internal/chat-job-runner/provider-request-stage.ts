@@ -168,6 +168,26 @@ export async function requestProviderStage({
     promptCacheRetention: promptCache?.retention,
     reasoningEffort: apiKeyData.reasoning_effort,
   })
+  const anthropicOptions =
+    provider === 'anthropic' &&
+    providerOptions?.anthropic &&
+    typeof providerOptions.anthropic === 'object'
+      ? (providerOptions.anthropic as Record<string, unknown>)
+      : null
+  const anthropicThinking =
+    anthropicOptions?.thinking && typeof anthropicOptions.thinking === 'object'
+      ? (anthropicOptions.thinking as Record<string, unknown>)
+      : null
+  debugMetrics['anthropic_thinking_requested'] =
+    provider === 'anthropic' ? !!anthropicThinking : null
+  debugMetrics['anthropic_thinking_type'] =
+    provider === 'anthropic' && typeof anthropicThinking?.type === 'string'
+      ? anthropicThinking.type
+      : null
+  debugMetrics['anthropic_thinking_effort'] =
+    provider === 'anthropic' && typeof anthropicOptions?.effort === 'string'
+      ? anthropicOptions.effort
+      : null
   const samplingOptions = resolveInvocationSamplingOptions({
     provider,
     modelName,

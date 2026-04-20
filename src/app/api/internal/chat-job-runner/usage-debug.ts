@@ -87,6 +87,14 @@ type AgenticTranscriptRecallDebugInfo = {
   stepCount: number | null
 }
 
+type AnthropicThinkingDebugInfo = {
+  requested: boolean | null
+  type: string | null
+  effort: string | null
+  reasoningTokensReported: number | null
+  used: boolean | null
+}
+
 type BuildChatUsageEventArgs = {
   userId: string
   chatId: string
@@ -294,6 +302,39 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
   }
 }
 
+function buildAnthropicThinkingDebugInfo(
+  debugMetrics: Record<string, DebugMetricValue> | undefined,
+): AnthropicThinkingDebugInfo | null {
+  if (!debugMetrics) {
+    return null
+  }
+
+  const requested = readBooleanMetric(debugMetrics, 'anthropic_thinking_requested')
+  const type = readStringMetric(debugMetrics, 'anthropic_thinking_type')
+  const effort = readStringMetric(debugMetrics, 'anthropic_thinking_effort')
+  const reasoningTokensReported = readNumberMetric(
+    debugMetrics,
+    'anthropic_reasoning_tokens_reported',
+  )
+  const used = readBooleanMetric(debugMetrics, 'anthropic_thinking_used')
+
+  const hasAnyValue = [requested, type, effort, reasoningTokensReported, used].some(
+    (value) => value !== null,
+  )
+
+  if (!hasAnyValue) {
+    return null
+  }
+
+  return {
+    requested,
+    type,
+    effort,
+    reasoningTokensReported,
+    used,
+  }
+}
+
 export function buildChatDebugInfo(args: BuildChatDebugInfoArgs): Record<string, unknown> {
   const {
     requestId,
@@ -327,6 +368,7 @@ export function buildChatDebugInfo(args: BuildChatDebugInfoArgs): Record<string,
 
   const experimentalAgenticTranscriptRecall =
     buildExperimentalAgenticTranscriptRecallDebugInfo(debugMetrics)
+  const anthropicThinking = buildAnthropicThinkingDebugInfo(debugMetrics)
 
   return {
     requestId,
@@ -384,6 +426,7 @@ export function buildChatDebugInfo(args: BuildChatDebugInfoArgs): Record<string,
         reasoningTokens: usage.reasoningTokens,
       },
     },
+    anthropicThinking,
     systemPromptLength: finalSystemPrompt.length,
     sanitizedMessageCount,
     rag: ragInfo,

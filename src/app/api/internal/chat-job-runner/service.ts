@@ -231,6 +231,7 @@ async function executeJob({
       stream,
       provider,
       regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
+      debugMetrics,
       logDebug: logChatJobRunnerDebug,
     })
     timings['8_llm_generation'] = performance.now() - stepStart

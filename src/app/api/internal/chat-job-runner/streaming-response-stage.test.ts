@@ -92,6 +92,37 @@ describe('consumeStreamingResponseStage', () => {
     })
   })
 
+  it('records anthropic thinking usage metrics when reasoning tokens are reported', async () => {
+    const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
+    const debugMetrics: Record<string, string | number | boolean | null> = {}
+
+    await consumeStreamingResponseStage({
+      supabase: {} as never,
+      chatId: 'chat-1',
+      jobId: 'job-anthropic-thinking',
+      stream: {
+        textStream: textDeltaStream(['ok']),
+        finishReason: Promise.resolve('stop'),
+        providerMetadata: Promise.resolve({ anthropic: { usage: { input_tokens: 1 } } }),
+        usage: Promise.resolve({
+          inputTokens: 10,
+          outputTokens: 20,
+          totalTokens: 30,
+          cachedInputTokens: 0,
+          reasoningTokens: 7,
+        }),
+      } as never,
+      provider: 'anthropic',
+      regenerateAssistantMessageId: null,
+      debugMetrics,
+    })
+
+    expect(debugMetrics).toMatchObject({
+      anthropic_reasoning_tokens_reported: 7,
+      anthropic_thinking_used: true,
+    })
+  })
+
   it('normalizes stream failures and broadcasts an error payload', async () => {
     const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
 

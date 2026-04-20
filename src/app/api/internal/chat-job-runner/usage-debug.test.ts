@@ -281,6 +281,60 @@ describe('usage-debug helpers', () => {
         },
       })
     })
+
+    it('includes anthropic thinking request and usage metrics when provided', () => {
+      const result = buildChatDebugInfo({
+        requestId: 'req-4',
+        finalSystemPrompt: 'SYSTEM',
+        recentMessages: [],
+        anthropicConversationMessages: [{ role: 'user', content: 'hello' }],
+        anthropicPlaceholderAdded: false,
+        promptCache: null,
+        totalInputTokens: 0,
+        anthropicCache: null,
+        anthropicCacheCreationInputTokens: null,
+        anthropicCacheReadInputTokens: null,
+        staticPromptTokens: 0,
+        dynamicContext: null,
+        dynamicContextTokens: 0,
+        googleExplicitCacheEnabled: false,
+        googleCacheResult: null,
+        googleCacheDecision: null,
+        rawResponse: 'raw',
+        processedResponse: 'processed',
+        apiKeyId: 'key-4',
+        provider: 'anthropic',
+        modelName: 'claude-opus-4-7',
+        finishReason: 'stop',
+        usage: {
+          promptTokens: 10,
+          completionTokens: 20,
+          totalTokens: 30,
+          cachedInputTokens: null,
+          reasoningTokens: 7,
+        },
+        sanitizedMessageCount: 1,
+        ragInfo: null,
+        actualPayload: null,
+        debugMetrics: {
+          anthropic_thinking_requested: true,
+          anthropic_thinking_type: 'adaptive',
+          anthropic_thinking_effort: 'medium',
+          anthropic_reasoning_tokens_reported: 7,
+          anthropic_thinking_used: true,
+        },
+      })
+
+      expect(result).toMatchObject({
+        anthropicThinking: {
+          requested: true,
+          type: 'adaptive',
+          effort: 'medium',
+          reasoningTokensReported: 7,
+          used: true,
+        },
+      })
+    })
   })
 
   describe('buildChatUsageEvent', () => {

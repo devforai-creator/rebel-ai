@@ -197,6 +197,11 @@ describe('requestProviderStage', () => {
         apiKey: 'sk-test',
       }),
     )
+    expect(context.debugMetrics).toMatchObject({
+      anthropic_thinking_requested: null,
+      anthropic_thinking_type: null,
+      anthropic_thinking_effort: null,
+    })
     expect(streamTextMock).toHaveBeenCalledWith({
       model: { kind: 'model' },
       temperature: 0.7,
@@ -214,6 +219,35 @@ describe('requestProviderStage', () => {
         provider: 'openai',
         strategy: 'default',
       }),
+    })
+  })
+
+  it('records anthropic adaptive-thinking request metrics when anthropic options are present', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const payload = buildPayload({
+      provider: 'anthropic',
+      modelName: 'claude-opus-4-7',
+    })
+    const context = buildContext()
+    getProviderOptionsMock.mockReturnValue({
+      anthropic: {
+        thinking: { type: 'adaptive' },
+        effort: 'medium',
+      },
+    })
+
+    await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-anthropic-1',
+      payload,
+      context,
+      timings: {},
+    })
+
+    expect(context.debugMetrics).toMatchObject({
+      anthropic_thinking_requested: true,
+      anthropic_thinking_type: 'adaptive',
+      anthropic_thinking_effort: 'medium',
     })
   })
 

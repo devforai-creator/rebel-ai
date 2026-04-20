@@ -17,6 +17,7 @@ import type { UsageMetrics } from './usage-debug'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type ProviderTextStream = Awaited<ReturnType<typeof streamText>>
+type DebugMetricValue = string | number | boolean | null
 
 export type StreamingResponseStageResult = {
   fullText: string
@@ -154,6 +155,7 @@ export async function consumeStreamingResponseStage({
   stream,
   provider,
   regenerateAssistantMessageId,
+  debugMetrics,
   logDebug = () => undefined,
   updateIntervalMs,
   now,
@@ -164,6 +166,7 @@ export async function consumeStreamingResponseStage({
   stream: ProviderTextStream
   provider: LlmProvider
   regenerateAssistantMessageId: string | null
+  debugMetrics?: Record<string, DebugMetricValue>
   logDebug?: (...args: unknown[]) => void
   updateIntervalMs?: number
   now?: () => number
@@ -252,6 +255,11 @@ export async function consumeStreamingResponseStage({
   }
 
   const usage = await stream.usage
+  if (provider === 'anthropic' && debugMetrics) {
+    debugMetrics['anthropic_reasoning_tokens_reported'] = usage?.reasoningTokens ?? null
+    debugMetrics['anthropic_thinking_used'] =
+      typeof usage?.reasoningTokens === 'number' ? usage.reasoningTokens > 0 : null
+  }
 
   return {
     fullText,

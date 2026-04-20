@@ -38,6 +38,7 @@ vi.mock('@/lib/llm/google-cache', () => ({
 }))
 
 vi.mock('@/lib/llm/provider-options', () => ({
+  ANTHROPIC_INTERLEAVED_THINKING_BETA: 'interleaved-thinking-2025-05-14',
   getProviderOptions: (...args: unknown[]) => getProviderOptionsMock(...args),
 }))
 
@@ -201,6 +202,7 @@ describe('requestProviderStage', () => {
       anthropic_thinking_requested: null,
       anthropic_thinking_type: null,
       anthropic_thinking_effort: null,
+      anthropic_interleaved_thinking_requested: null,
     })
     expect(streamTextMock).toHaveBeenCalledWith({
       model: { kind: 'model' },
@@ -233,6 +235,7 @@ describe('requestProviderStage', () => {
       anthropic: {
         thinking: { type: 'adaptive' },
         effort: 'medium',
+        anthropicBeta: ['interleaved-thinking-2025-05-14'],
       },
     })
 
@@ -248,6 +251,7 @@ describe('requestProviderStage', () => {
       anthropic_thinking_requested: true,
       anthropic_thinking_type: 'adaptive',
       anthropic_thinking_effort: 'medium',
+      anthropic_interleaved_thinking_requested: true,
     })
   })
 

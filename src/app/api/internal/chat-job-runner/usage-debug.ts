@@ -91,6 +91,7 @@ type AnthropicThinkingDebugInfo = {
   requested: boolean | null
   type: string | null
   effort: string | null
+  interleavedThinkingBetaRequested: boolean | null
   reasoningTokensReported: number | null
   used: boolean | null
 }
@@ -312,15 +313,24 @@ function buildAnthropicThinkingDebugInfo(
   const requested = readBooleanMetric(debugMetrics, 'anthropic_thinking_requested')
   const type = readStringMetric(debugMetrics, 'anthropic_thinking_type')
   const effort = readStringMetric(debugMetrics, 'anthropic_thinking_effort')
+  const interleavedThinkingBetaRequested = readBooleanMetric(
+    debugMetrics,
+    'anthropic_interleaved_thinking_requested',
+  )
   const reasoningTokensReported = readNumberMetric(
     debugMetrics,
     'anthropic_reasoning_tokens_reported',
   )
   const used = readBooleanMetric(debugMetrics, 'anthropic_thinking_used')
 
-  const hasAnyValue = [requested, type, effort, reasoningTokensReported, used].some(
-    (value) => value !== null,
-  )
+  const hasAnyValue = [
+    requested,
+    type,
+    effort,
+    interleavedThinkingBetaRequested,
+    reasoningTokensReported,
+    used,
+  ].some((value) => value !== null)
 
   if (!hasAnyValue) {
     return null
@@ -330,6 +340,7 @@ function buildAnthropicThinkingDebugInfo(
     requested,
     type,
     effort,
+    interleavedThinkingBetaRequested,
     reasoningTokensReported,
     used,
   }

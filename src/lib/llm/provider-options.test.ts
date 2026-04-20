@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   ANTHROPIC_CACHE_MIN_TOKENS,
+  ANTHROPIC_INTERLEAVED_THINKING_BETA,
   DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT,
   buildAnthropicCacheControl,
   getAnthropicMinCacheTokens,
@@ -121,6 +122,7 @@ describe('getProviderOptions', () => {
           type: 'adaptive',
         },
         effort: DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT,
+        anthropicBeta: [ANTHROPIC_INTERLEAVED_THINKING_BETA],
       },
     })
   })
@@ -137,6 +139,7 @@ describe('getProviderOptions', () => {
           type: 'adaptive',
         },
         effort: 'medium',
+        anthropicBeta: [ANTHROPIC_INTERLEAVED_THINKING_BETA],
       },
     })
   })

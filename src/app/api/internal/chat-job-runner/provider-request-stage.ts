@@ -8,7 +8,7 @@ import {
   resolveGoogleCacheDecision,
   type CreateGoogleCacheResult,
 } from '@/lib/llm/google-cache'
-import { getProviderOptions } from '@/lib/llm/provider-options'
+import { ANTHROPIC_INTERLEAVED_THINKING_BETA, getProviderOptions } from '@/lib/llm/provider-options'
 import { resolveInvocationSamplingOptions } from '@/lib/llm/invocation-sampling'
 import { normalizeProviderError } from '@/lib/llm/provider-error'
 import {
@@ -188,6 +188,14 @@ export async function requestProviderStage({
     provider === 'anthropic' && typeof anthropicOptions?.effort === 'string'
       ? anthropicOptions.effort
       : null
+  debugMetrics['anthropic_interleaved_thinking_requested'] =
+    provider === 'anthropic' &&
+    Array.isArray(anthropicOptions?.anthropicBeta) &&
+    anthropicOptions.anthropicBeta.includes(ANTHROPIC_INTERLEAVED_THINKING_BETA)
+      ? true
+      : provider === 'anthropic'
+        ? false
+        : null
   const samplingOptions = resolveInvocationSamplingOptions({
     provider,
     modelName,

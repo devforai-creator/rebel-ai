@@ -4,6 +4,7 @@ import type { AgenticTranscriptRecallRuntimeConfig } from './config'
 import {
   createAgenticTranscriptRecallExpandBudgetState,
   executeExpandSourceRange,
+  EXPAND_SOURCE_RANGE_TOOL_DESCRIPTION,
   EXPAND_SOURCE_RANGE_TOOL_NAME,
   expandSourceRangeToolInputSchema,
 } from './expand-tool'
@@ -12,6 +13,7 @@ import type { AgenticTranscriptRecallSourceMap } from './source-map'
 import type { AgenticTranscriptRecallSourceHints } from './source-hints'
 import {
   executeFetchSourceRange,
+  FETCH_SOURCE_RANGE_TOOL_DESCRIPTION,
   FETCH_SOURCE_RANGE_TOOL_NAME,
   fetchSourceRangeToolInputSchema,
 } from './tool'
@@ -122,8 +124,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
 
   if (sourceMap && sourceMap.navigationParents.length > 0) {
     tools[EXPAND_SOURCE_RANGE_TOOL_NAME] = tool({
-      description:
-        'Expand one surfaced parent range into bounded child ranges that are legal raw transcript fetch targets for this reply.',
+      description: EXPAND_SOURCE_RANGE_TOOL_DESCRIPTION,
       inputSchema: expandSourceRangeToolInputSchema,
       async execute(input) {
         debugMetrics['experimental_agentic_transcript_recall_expand_call_count'] =
@@ -174,8 +175,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
 
   if (sourceMap && sourceMap.directFetchRanges.length > 0) {
     tools[FETCH_SOURCE_RANGE_TOOL_NAME] = tool({
-      description:
-        'Fetch the raw transcript messages for one older summary or fact range when exact wording matters for the current reply.',
+      description: FETCH_SOURCE_RANGE_TOOL_DESCRIPTION,
       inputSchema: fetchSourceRangeToolInputSchema,
       async execute(input) {
         debugMetrics['experimental_agentic_transcript_recall_tool_call_count'] =

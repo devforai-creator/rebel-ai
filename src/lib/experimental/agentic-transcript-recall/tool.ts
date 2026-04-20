@@ -11,12 +11,40 @@ import {
 import type { AgenticTranscriptRecallSourceMap } from './source-map'
 
 export const FETCH_SOURCE_RANGE_TOOL_NAME = 'fetch_source_range'
+export const FETCH_SOURCE_RANGE_TOOL_DESCRIPTION = [
+  'Fetch the raw transcript messages for one older summary range, fact range, or expanded child range when exact wording or exact sequencing matters for the current reply.',
+  'Use this only after you already know the exact bounded range you want to inspect. That range must exactly match either a directly fetchable surfaced range such as `[1-10]` or one child range returned by `expand_source_range`.',
+  'Do not guess or invent new subranges, and do not merge adjacent child ranges into a larger fetch. For example, if expansion returned `281-290` and `291-300`, you must fetch only one of those exact child ranges at a time.',
+  'Use fetched transcript lines as the raw evidence for your answer. If you still cannot verify the detail after one fetch, either fetch one adjacent child range if budget remains or say that you could not fully verify the transcript.',
+].join(' ')
 export const fetchSourceRangeToolInputSchema = z
   .object({
-    startSeq: z.number().int().min(1),
-    endSeq: z.number().int().min(1),
-    reason: z.string().trim().min(1).max(400),
+    startSeq: z
+      .number()
+      .int()
+      .min(1)
+      .describe(
+        'The exact inclusive start sequence number of one directly fetchable surfaced range or one child range returned by `expand_source_range`.',
+      ),
+    endSeq: z
+      .number()
+      .int()
+      .min(1)
+      .describe(
+        'The exact inclusive end sequence number of the same directly fetchable range. It must match one allowed range exactly.',
+      ),
+    reason: z
+      .string()
+      .trim()
+      .min(1)
+      .max(400)
+      .describe(
+        'A short explanation of what exact older detail you are trying to verify from the raw transcript, such as `Need the exact final fight location.`',
+      ),
   })
+  .describe(
+    'Fetch one exact bounded transcript range as raw evidence for an older detail question.',
+  )
   .refine((value) => value.endSeq >= value.startSeq, {
     message: 'endSeq must be greater than or equal to startSeq',
     path: ['endSeq'],

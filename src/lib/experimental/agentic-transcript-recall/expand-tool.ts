@@ -9,12 +9,40 @@ import {
 const MAX_EXPAND_SOURCE_RANGE_CALLS = 1
 
 export const EXPAND_SOURCE_RANGE_TOOL_NAME = 'expand_source_range'
+export const EXPAND_SOURCE_RANGE_TOOL_DESCRIPTION = [
+  'Expand one surfaced navigation parent range into smaller child ranges that are legal raw transcript fetch targets for this reply.',
+  'Use this when the relevant evidence is likely inside a large older range such as `[Meta Summary 201-300]` and you need help choosing a smaller raw transcript span to inspect next.',
+  'Call this only with the exact start and end sequence numbers of one surfaced navigation parent range. Do not call it for recent raw context, directly fetchable small ranges, or invented subranges such as `210-220` unless those exact child ranges were already returned by this tool.',
+  'The result is a list of bounded child ranges. Expansion narrows the search space, but it is not raw evidence by itself. After expansion, fetch at most one exact child range at a time with `fetch_source_range`.',
+].join(' ')
 export const expandSourceRangeToolInputSchema = z
   .object({
-    parentStartSeq: z.number().int().min(1),
-    parentEndSeq: z.number().int().min(1),
-    reason: z.string().trim().min(1).max(400),
+    parentStartSeq: z
+      .number()
+      .int()
+      .min(1)
+      .describe(
+        'The exact inclusive start sequence number of one surfaced navigation parent range, such as `201` from `[Meta Summary 201-300]`.',
+      ),
+    parentEndSeq: z
+      .number()
+      .int()
+      .min(1)
+      .describe(
+        'The exact inclusive end sequence number of the same surfaced navigation parent range, such as `300` from `[Meta Summary 201-300]`.',
+      ),
+    reason: z
+      .string()
+      .trim()
+      .min(1)
+      .max(400)
+      .describe(
+        'A short explanation of what exact older detail you are trying to verify, such as `Need the final fight location.`',
+      ),
   })
+  .describe(
+    'Expand one surfaced parent transcript range into smaller child ranges that can later be fetched exactly.',
+  )
   .refine((value) => value.parentEndSeq >= value.parentStartSeq, {
     message: 'parentEndSeq must be greater than or equal to parentStartSeq',
     path: ['parentEndSeq'],

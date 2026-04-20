@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   ANTHROPIC_CACHE_MIN_TOKENS,
+  DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT,
   buildAnthropicCacheControl,
   getAnthropicMinCacheTokens,
   getProviderOptions,
@@ -119,6 +120,7 @@ describe('getProviderOptions', () => {
         thinking: {
           type: 'adaptive',
         },
+        effort: DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT,
       },
     })
   })

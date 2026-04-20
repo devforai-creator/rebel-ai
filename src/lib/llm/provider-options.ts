@@ -1,6 +1,7 @@
 import type { JSONValue, SharedV2ProviderOptions } from '@ai-sdk/provider'
 
 export type AnthropicCacheTTL = '5m' | '1h'
+export const DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT = 'high'
 
 type ProviderOptionsInput = {
   modelName?: string | null
@@ -54,10 +55,10 @@ export function getProviderOptions(
       thinking: {
         type: 'adaptive',
       },
-    }
-
-    if (overrides?.reasoningEffort && overrides.reasoningEffort !== 'none') {
-      anthropicOptions.effort = overrides.reasoningEffort
+      effort:
+        overrides?.reasoningEffort && overrides.reasoningEffort !== 'none'
+          ? overrides.reasoningEffort
+          : DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT,
     }
 
     options.anthropic = anthropicOptions

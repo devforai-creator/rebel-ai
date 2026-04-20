@@ -26,53 +26,38 @@ function formatMessageCountLabel(count: number): string {
   return `${count} message${count === 1 ? '' : 's'}`
 }
 
-function getMemoryModeLabel(memoryConfig: Required<ChatMemoryConfig>): string {
+export function getMemoryModeLabel(memoryConfig: Required<ChatMemoryConfig>): string {
   return memoryConfig.mode === 'summary_window' ? 'Summary Window' : 'Prefix'
 }
 
-function getMemoryDescription(memoryConfig: Required<ChatMemoryConfig>): string {
+export function getMemoryDescription(memoryConfig: Required<ChatMemoryConfig>): string {
   if (memoryConfig.mode === 'summary_window') {
     return `Summary Window mode keeps the most recent ${CHAT_CONTEXT_WINDOW} messages raw and summarizes older conversation in ${CHUNK_SIZE}-message chunks. Updates are generated automatically and may appear with a short delay.`
   }
 
-  return `Prefix mode keeps the live conversation raw until ${formatMessageCountLabel(memoryConfig.sealEveryMessages)}, then seals older messages into memory while keeping the latest ${formatMessageCountLabel(memoryConfig.retainTailMessages)} raw. Updates are generated automatically and may appear with a short delay.`
+  return `Prefix mode keeps the latest ${formatMessageCountLabel(memoryConfig.retainTailMessages)} raw while generating canonical ${CHUNK_SIZE}-message memory chunks from the sealed prefix. Higher-level ${CHUNK_SIZE * 10}-message recaps appear after enough canonical chunks accumulate. Updates are generated automatically and may appear with a short delay.`
 }
 
-function getNextMemoryCheckpoint(
+function getArtifactRawTail(memoryConfig: Required<ChatMemoryConfig>): number {
+  return memoryConfig.mode === 'summary_window' ? CHUNK_SIZE : memoryConfig.retainTailMessages
+}
+
+export function getNextMemoryCheckpoint(
   messageCount: number,
   memoryConfig: Required<ChatMemoryConfig>,
 ): number {
-  if (memoryConfig.mode === 'summary_window') {
-    const firstCheckpoint = CHUNK_SIZE * 2
-    if (messageCount < firstCheckpoint) {
-      return firstCheckpoint
-    }
-
-    return Math.floor(messageCount / CHUNK_SIZE) * CHUNK_SIZE + CHUNK_SIZE
-  }
-
-  if (messageCount < memoryConfig.sealEveryMessages) {
-    return memoryConfig.sealEveryMessages
-  }
-
-  const sealedChunkSize = memoryConfig.sealEveryMessages - memoryConfig.retainTailMessages
-  if (sealedChunkSize < 1) {
-    return memoryConfig.sealEveryMessages
-  }
-
-  return (
-    memoryConfig.retainTailMessages +
-    (Math.floor((messageCount - memoryConfig.retainTailMessages) / sealedChunkSize) + 1) *
-      sealedChunkSize
-  )
+  const rawTail = getArtifactRawTail(memoryConfig)
+  const effectiveSealedThrough = Math.max(0, messageCount - rawTail)
+  const nextChunkEnd = (Math.floor(effectiveSealedThrough / CHUNK_SIZE) + 1) * CHUNK_SIZE
+  return rawTail + nextChunkEnd
 }
 
-function getEmptyStateText(memoryConfig: Required<ChatMemoryConfig>): string {
+export function getEmptyStateText(memoryConfig: Required<ChatMemoryConfig>): string {
   if (memoryConfig.mode === 'summary_window') {
     return `No memory summaries yet. This mode starts generating them after ${formatMessageCountLabel(CHUNK_SIZE * 2)}.`
   }
 
-  return `No sealed memory blocks yet. This mode starts sealing them after ${formatMessageCountLabel(memoryConfig.sealEveryMessages)}.`
+  return `No sealed memory blocks yet. This mode starts generating canonical chunks after ${formatMessageCountLabel(memoryConfig.retainTailMessages + CHUNK_SIZE)} while keeping the latest ${formatMessageCountLabel(memoryConfig.retainTailMessages)} raw.`
 }
 
 export default function ChatSummariesPanel({

@@ -290,6 +290,9 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
       'If the user asks a character to remember, describe, relive, or explain a specific older moment, treat that as a strong recall trigger whenever the needed detail is not already visible in the current raw context.',
     )
     expect(result.streamRequest.system).toContain(
+      'If you used `expand_source_range` because exact older scene detail is needed, normally fetch one exact child range before narrating specific actions, sensations, wording, or sequence. Do not treat expansion previews as enough for those specifics.',
+    )
+    expect(result.streamRequest.system).toContain(
       'If the user asks about the last or final part of an older event, inspect the latest relevant child range first.',
     )
   })

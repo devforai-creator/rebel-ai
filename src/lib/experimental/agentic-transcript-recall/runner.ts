@@ -49,6 +49,7 @@ function buildExperimentalInstruction({ maxToolCalls }: { maxToolCalls: number }
     'When the user asks about an exact older detail such as a first or last event, a location, an order of actions, a speaker, or exact wording, do not answer from summaries alone when transcript recall tools are available for the relevant older range.',
     'During RP or scene-writing, if your next reply depends on a concrete older scene detail such as what someone was doing, feeling, touching, wearing, saying, or remembering, use transcript recall instead of inventing specifics from summaries alone when the relevant older range is available.',
     'If the user asks a character to remember, describe, relive, or explain a specific older moment, treat that as a strong recall trigger whenever the needed detail is not already visible in the current raw context.',
+    'If you used `expand_source_range` because exact older scene detail is needed, normally fetch one exact child range before narrating specific actions, sensations, wording, or sequence. Do not treat expansion previews as enough for those specifics.',
     'If the likely evidence sits inside a surfaced parent range, expand first.',
     'If the user asks about the last or final part of an older event, inspect the latest relevant child range first.',
     'If the user asks about the first or beginning of an older event, inspect the earliest relevant child range first.',

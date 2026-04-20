@@ -9,7 +9,10 @@ import {
   EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV,
   resolveAgenticTranscriptRecallRuntimeConfig,
 } from './config'
-import { DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS } from '@/lib/chat/model-config'
+import {
+  DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS,
+  DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOTAL_MESSAGES,
+} from '@/lib/chat/model-config'
 
 const ORIGINAL_ENV = process.env[EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV]
 
@@ -46,7 +49,7 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
       skipReason: 'disabled_by_global_flag',
       maxToolCalls: DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS,
       maxMessagesPerCall: 12,
-      maxTotalMessages: 12,
+      maxTotalMessages: DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOTAL_MESSAGES,
       providerAllowlist: [...AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS],
     })
   })

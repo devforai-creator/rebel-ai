@@ -24,7 +24,11 @@ import {
   type AgenticTranscriptRecallSourceMap,
 } from '@/lib/experimental/agentic-transcript-recall/source-map'
 import { getLastSummaryEnd } from '@/lib/chat-summaries/db-helpers'
-import { CONTEXT_WINDOW, SUMMARY_LEVEL_CHUNK } from '@/lib/chat-summaries/config'
+import {
+  CONTEXT_WINDOW,
+  SUMMARY_LEVEL_CHUNK,
+  SUMMARY_LEVEL_META,
+} from '@/lib/chat-summaries/config'
 import {
   loadChatLorebookState,
   lorebookNeedsChatHistory,
@@ -163,14 +167,14 @@ export function resolveTranscriptSourcePlan({
   effectiveConversationMessageCount,
   payloadTranscriptCanRepresentGeneration,
   lorebookRequiresHistory,
-  lastChunkEnd,
+  visibleSummaryEnd,
 }: {
   memoryMode: ChatMemoryMode
   payloadTranscriptLength: number
   effectiveConversationMessageCount: number
   payloadTranscriptCanRepresentGeneration: boolean
   lorebookRequiresHistory: boolean
-  lastChunkEnd: number | null
+  visibleSummaryEnd: number | null
 }): {
   requiredMessageCount: number
   payloadCoversFullConversation: boolean
@@ -181,7 +185,7 @@ export function resolveTranscriptSourcePlan({
   const requiredMessageCount =
     memoryMode === 'summary_window'
       ? Math.min(effectiveConversationMessageCount, CONTEXT_WINDOW)
-      : Math.max(0, effectiveConversationMessageCount - (lastChunkEnd ?? 0))
+      : Math.max(0, effectiveConversationMessageCount - (visibleSummaryEnd ?? 0))
 
   const payloadCoversFullConversation =
     payloadTranscriptCanRepresentGeneration &&
@@ -438,6 +442,7 @@ export async function loadChatJobExecutionContext({
   let lorebookEntries: Awaited<ReturnType<typeof loadChatLorebookState>>['entries'] = []
   let lorebookOverrideMap = new Map<string, boolean>()
   let lastChunkEnd: number | null = null
+  let visibleSummaryEnd: number | null = null
 
   if (payload.turnId) {
     const totalConversationMessageCount = await countProjectedConversationMessages({
@@ -467,8 +472,16 @@ export async function loadChatJobExecutionContext({
     debugMetrics['lorebook_requires_history'] = lorebookRequiresHistory
 
     if (memoryConfig.mode === 'prefix_live_blocks') {
-      lastChunkEnd = (await getLastSummaryEnd(supabase as never, chatId, SUMMARY_LEVEL_CHUNK)) ?? 0
+      const resolvedSummaryEnds = await Promise.all([
+        getLastSummaryEnd(supabase as never, chatId, SUMMARY_LEVEL_CHUNK),
+        getLastSummaryEnd(supabase as never, chatId, SUMMARY_LEVEL_META),
+      ])
+      lastChunkEnd = resolvedSummaryEnds[0]
+      visibleSummaryEnd = resolvedSummaryEnds[1]
+      lastChunkEnd ??= 0
+      visibleSummaryEnd ??= 0
       debugMetrics['memory_last_chunk_end'] = lastChunkEnd
+      debugMetrics['memory_visible_summary_end'] = visibleSummaryEnd
     }
 
     const transcriptPlan = resolveTranscriptSourcePlan({
@@ -477,7 +490,7 @@ export async function loadChatJobExecutionContext({
       effectiveConversationMessageCount,
       payloadTranscriptCanRepresentGeneration,
       lorebookRequiresHistory,
-      lastChunkEnd,
+      visibleSummaryEnd,
     })
 
     let fullConversationTranscript: GenerationTranscript | null = null

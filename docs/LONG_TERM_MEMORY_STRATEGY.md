@@ -62,7 +62,19 @@ The real task is:
 
 That means the core problem is better described as **context admission policy** or **context assembly policy**, not just retrieval.
 
-## 4. Role Split
+## 4. Evolution Of Context Selection
+
+The current doctrine should be read as a three-stage shift:
+
+- past: rely heavily on embedding-backed semantic retrieval to decide which older context should come back
+- present: let the main LLM, with summaries plus ATR, do more of the judgment about whether older exact source detail is actually needed
+- future: build a smaller planner / reranker / distilled policy layer whose explicit job is deciding what context should be admitted
+
+This is the main philosophical change.
+The real target is not "better retrieval" in the abstract.
+The real target is a system that is specialized for selecting the right context for the next answer.
+
+## 5. Role Split
 
 The current intended role split is:
 
@@ -76,7 +88,7 @@ This is the key doctrine shift:
 - ATR is closer to the preferred "exactness recovery" mechanism
 - episodic RAG is no longer the primary answer to long-term memory quality
 
-## 5. Support Stance
+## 6. Support Stance
 
 Current stance:
 
@@ -90,7 +102,7 @@ Implications:
 - it should be safe to reduce investment there when the cost/benefit is poor
 - future changes should avoid making episodic RAG a hidden dependency of the first-class path
 
-## 6. Current Product Policy
+## 7. Current Product Policy
 
 Near-term policy:
 
@@ -107,7 +119,7 @@ When episodic RAG is disabled:
 
 This makes the toggle meaning clearer and avoids paying ongoing cost for a path that is not active.
 
-## 7. Future Target
+## 8. Future Target
 
 The future target is not "a better embedding stack" by itself.
 The future target is a smaller memory-policy model that decides how context should be assembled.
@@ -126,7 +138,7 @@ This is intentionally different from the final response model.
 Its job is not to answer the user directly.
 Its job is to decide what historical material is worth admitting into the answering context.
 
-## 8. What "Future Planner" Means Here
+## 9. What "Future Planner" Means Here
 
 This does **not** mean training a brand-new large foundation model first.
 
@@ -144,7 +156,7 @@ So the likely future stack is:
 - ATR for exact source verification
 - the main chat model for final generation
 
-## 9. Historical Notes
+## 10. Historical Notes
 
 Older docs are still useful, but they are no longer the best single statement of the current doctrine.
 

@@ -107,7 +107,7 @@ describe('resolveTranscriptSourcePlan', () => {
         effectiveConversationMessageCount: 40,
         payloadTranscriptCanRepresentGeneration: true,
         lorebookRequiresHistory: true,
-        lastChunkEnd: null,
+        visibleSummaryEnd: null,
       }),
     ).toEqual({
       requiredMessageCount: 20,
@@ -128,7 +128,7 @@ describe('resolveTranscriptSourcePlan', () => {
         effectiveConversationMessageCount: 14,
         payloadTranscriptCanRepresentGeneration: false,
         lorebookRequiresHistory: false,
-        lastChunkEnd: 10,
+        visibleSummaryEnd: 10,
       }),
     ).toEqual({
       requiredMessageCount: 4,
@@ -136,6 +136,27 @@ describe('resolveTranscriptSourcePlan', () => {
       shouldLoadFullConversationTranscript: false,
       shouldUsePayloadWindow: false,
       reason: 'payload_missing_regeneration_exclusion',
+    })
+  })
+
+  it('uses the visible summary cutoff for prefix-live chats instead of the latest chunk end', async () => {
+    const { resolveTranscriptSourcePlan } = await import('./execution-context')
+
+    expect(
+      resolveTranscriptSourcePlan({
+        memoryMode: 'prefix_live_blocks',
+        payloadTranscriptLength: 8,
+        effectiveConversationMessageCount: 110,
+        payloadTranscriptCanRepresentGeneration: true,
+        lorebookRequiresHistory: false,
+        visibleSummaryEnd: 90,
+      }),
+    ).toEqual({
+      requiredMessageCount: 20,
+      payloadCoversFullConversation: false,
+      shouldLoadFullConversationTranscript: false,
+      shouldUsePayloadWindow: false,
+      reason: 'payload_shorter_than_required_window',
     })
   })
 })
@@ -645,9 +666,9 @@ describe('loadChatJobExecutionContext', () => {
     )
   })
 
-  it('falls back to a DB tail window for prefix-live chats when the payload is too short', async () => {
+  it('uses the visible summary cutoff for prefix-live chats when the payload is too short', async () => {
     const { loadChatJobExecutionContext } = await import('./execution-context')
-    const projectedTail = Array.from({ length: 14 }, (_, index) => ({
+    const projectedTail = Array.from({ length: 20 }, (_, index) => ({
       id: `db-msg-${index + 1}`,
       role: (index + 1) % 2 === 0 ? 'assistant' : 'user',
       content: `db-message-${index + 1}`,
@@ -669,7 +690,7 @@ describe('loadChatJobExecutionContext', () => {
     })
 
     countProjectedConversationMessagesMock.mockResolvedValueOnce(110)
-    getLastSummaryEndMock.mockResolvedValueOnce(96)
+    getLastSummaryEndMock.mockResolvedValueOnce(96).mockResolvedValueOnce(90)
     loadProjectedConversationTailMock.mockResolvedValueOnce(projectedTail)
     loadChatLorebookStateMock.mockResolvedValueOnce({
       entries: [],
@@ -696,7 +717,7 @@ describe('loadChatJobExecutionContext', () => {
     expect(loadProjectedConversationTailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         chatId: 'chat-1',
-        limitMessages: 14,
+        limitMessages: 20,
         excludeAssistantForTurnId: null,
       }),
     )
@@ -709,21 +730,22 @@ describe('loadChatJobExecutionContext', () => {
         })),
         totalConversationMessages: 110,
         transcriptCoverage: 'window',
-        transcriptStartOrdinal: 97,
+        transcriptStartOrdinal: 91,
       }),
     )
     expect(result.debugMetrics).toEqual(
       expect.objectContaining({
         transcript_source: 'db_tail',
         transcript_source_reason: 'payload_shorter_than_required_window',
-        transcript_required_message_count: 14,
+        transcript_required_message_count: 20,
         lorebook_history_source: 'not_needed',
         lorebook_history_source_reason: 'history_not_needed',
         lorebook_history_message_count: 0,
-        transcript_message_count: 14,
+        transcript_message_count: 20,
         transcript_total_message_count: 110,
-        transcript_start_ordinal: 97,
+        transcript_start_ordinal: 91,
         memory_last_chunk_end: 96,
+        memory_visible_summary_end: 90,
       }),
     )
   })
@@ -750,7 +772,7 @@ describe('loadChatJobExecutionContext', () => {
     })
 
     countProjectedConversationMessagesMock.mockResolvedValueOnce(7)
-    getLastSummaryEndMock.mockResolvedValueOnce(4)
+    getLastSummaryEndMock.mockResolvedValueOnce(4).mockResolvedValueOnce(4)
     loadProjectedConversationTailMock.mockResolvedValueOnce(projectedTail)
     loadChatLorebookStateMock.mockResolvedValueOnce({
       entries: [],

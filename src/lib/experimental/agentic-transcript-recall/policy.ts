@@ -22,6 +22,7 @@ export type AgenticTranscriptRecallFetchBlockedReason =
   | 'max_messages_per_call_exceeded'
   | 'max_total_messages_exceeded'
   | 'range_not_in_chat'
+  | 'tool_execution_failed'
 
 type AgenticTranscriptRecallFetchBlocked = {
   status: 'blocked'

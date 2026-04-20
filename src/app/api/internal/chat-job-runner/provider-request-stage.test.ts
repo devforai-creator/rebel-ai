@@ -243,6 +243,14 @@ describe('requestProviderStage', () => {
       timings: {},
     })
 
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: { kind: 'model' },
+        temperature: 0.7,
+        system: 'FINAL',
+        messages: [{ role: 'user', content: 'Hello' }],
+      }),
+    )
     expect(prepareExperimentalAgenticTranscriptRecallRequestMock).toHaveBeenCalledWith(
       expect.objectContaining({
         streamRequest: expect.objectContaining({
@@ -304,6 +312,86 @@ describe('requestProviderStage', () => {
       '[Agentic Transcript Recall] Experimental wrapper failed; falling back',
       expect.objectContaining({
         error: 'wrapper exploded',
+        provider: 'openai',
+        modelName: 'gpt-4o-mini',
+      }),
+    )
+  })
+
+  it('falls back to the standard stream request when the experimental stream invocation fails', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const payload = buildPayload()
+    const context = buildContext({
+      agenticTranscriptRecall: {
+        configured: true,
+        globallyEnabled: true,
+        providerSupported: true,
+        providerAllowed: true,
+        enabled: true,
+        skipReason: null,
+        maxToolCalls: 1,
+        maxMessagesPerCall: 12,
+        maxTotalMessages: 12,
+        providerAllowlist: ['openai'],
+      },
+      debugMetrics: {},
+    })
+    const logDebug = vi.fn()
+
+    prepareExperimentalAgenticTranscriptRecallRequestMock.mockReturnValueOnce({
+      streamRequest: {
+        system: 'FINAL\n\nExperimental',
+        messages: [{ role: 'user', content: 'Hello' }],
+      },
+      streamTextSettings: {
+        tools: {
+          fetch_source_range: {},
+        },
+      },
+    })
+
+    streamTextMock
+      .mockRejectedValueOnce(new Error('experimental stream failed'))
+      .mockResolvedValueOnce({
+        textStream: [],
+        finishReason: Promise.resolve('stop'),
+        providerMetadata: Promise.resolve({}),
+        usage: Promise.resolve(null),
+      })
+
+    await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-1',
+      payload,
+      context,
+      timings: {},
+      logDebug,
+    })
+
+    expect(streamTextMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        system: 'FINAL\n\nExperimental',
+        tools: {
+          fetch_source_range: {},
+        },
+      }),
+    )
+    expect(streamTextMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        system: 'FINAL',
+        messages: [{ role: 'user', content: 'Hello' }],
+      }),
+    )
+    expect(context.debugMetrics).toMatchObject({
+      experimental_agentic_transcript_recall_wrapper_used: true,
+      experimental_agentic_transcript_recall_fallback_to_standard: true,
+    })
+    expect(logDebug).toHaveBeenCalledWith(
+      '[Agentic Transcript Recall] Experimental stream request failed; falling back',
+      expect.objectContaining({
+        error: 'experimental stream failed',
         provider: 'openai',
         modelName: 'gpt-4o-mini',
       }),

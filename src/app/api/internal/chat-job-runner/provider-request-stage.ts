@@ -73,6 +73,7 @@ export async function requestProviderStage({
     recentMessages,
     ragInfo,
     agenticTranscriptRecall,
+    agenticTranscriptRecallSourceHints,
     bilingualEnabled,
     anthropicConversationMessages,
     anthropicPlaceholderAdded,
@@ -258,17 +259,27 @@ export async function requestProviderStage({
     debugMetrics['experimental_agentic_transcript_recall_wrapper_used'] = false
     debugMetrics['experimental_agentic_transcript_recall_fallback_to_standard'] = false
 
-    let finalStreamRequest = streamPayloadPlan.streamRequest
+    const standardStreamRequest = streamPayloadPlan.streamRequest
+    let finalStreamRequest = standardStreamRequest
+    let experimentalStreamTextSettings:
+      | ReturnType<typeof prepareExperimentalAgenticTranscriptRecallRequest>['streamTextSettings']
+      | undefined
 
     if (agenticTranscriptRecall.enabled) {
       debugMetrics['experimental_agentic_transcript_recall_wrapper_used'] = true
 
       try {
         const experimentalResult = prepareExperimentalAgenticTranscriptRecallRequest({
+          supabase,
+          chatId: payload.chatId,
+          runtimeConfig: agenticTranscriptRecall,
+          sourceHints: agenticTranscriptRecallSourceHints,
           streamRequest: streamPayloadPlan.streamRequest,
+          debugMetrics,
           logDebug,
         })
         finalStreamRequest = experimentalResult.streamRequest
+        experimentalStreamTextSettings = experimentalResult.streamTextSettings
       } catch (error) {
         debugMetrics['experimental_agentic_transcript_recall_fallback_to_standard'] = true
         logDebug('[Agentic Transcript Recall] Experimental wrapper failed; falling back', {
@@ -279,11 +290,38 @@ export async function requestProviderStage({
       }
     }
 
-    const stream = await streamText({
-      model,
-      ...samplingOptions,
-      ...finalStreamRequest,
-    })
+    let stream: Awaited<ReturnType<typeof streamText>>
+
+    try {
+      stream = await streamText({
+        model,
+        ...samplingOptions,
+        ...finalStreamRequest,
+        ...experimentalStreamTextSettings,
+      })
+    } catch (error) {
+      const usedExperimentalInvocation =
+        agenticTranscriptRecall.enabled &&
+        (finalStreamRequest !== standardStreamRequest ||
+          experimentalStreamTextSettings !== undefined)
+
+      if (!usedExperimentalInvocation) {
+        throw error
+      }
+
+      debugMetrics['experimental_agentic_transcript_recall_fallback_to_standard'] = true
+      logDebug('[Agentic Transcript Recall] Experimental stream request failed; falling back', {
+        error: error instanceof Error ? error.message : String(error),
+        provider,
+        modelName,
+      })
+
+      stream = await streamText({
+        model,
+        ...samplingOptions,
+        ...standardStreamRequest,
+      })
+    }
 
     return {
       status: 'streaming',

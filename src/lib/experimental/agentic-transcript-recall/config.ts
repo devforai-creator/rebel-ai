@@ -1,6 +1,7 @@
 import type { LlmProvider } from '@/types/database.types'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH, type ChatDeliveryMode } from '@/lib/chat/delivery-mode'
 import {
+  AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS,
   DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_MESSAGES_PER_CALL,
   DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS,
   DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOTAL_MESSAGES,
@@ -11,9 +12,10 @@ import {
 
 export const EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV =
   'EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED'
-export const AGENTIC_TRANSCRIPT_RECALL_MVP_PROVIDERS = ['openai', 'anthropic'] as const
-export type AgenticTranscriptRecallMvpProvider =
-  (typeof AGENTIC_TRANSCRIPT_RECALL_MVP_PROVIDERS)[number]
+export const AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS =
+  AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS
+export type AgenticTranscriptRecallSupportedProvider =
+  (typeof AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS)[number]
 export type AgenticTranscriptRecallSkipReason =
   | 'disabled_by_global_flag'
   | 'disabled_in_chat_config'
@@ -60,13 +62,13 @@ export function resolveAgenticTranscriptRecallRuntimeConfig({
   const chatConfig = normalizedModelConfig.experimental?.agenticTranscriptRecall ?? null
   const configured = chatConfig !== null && chatConfig !== undefined
   const globallyEnabled = isExperimentalAgenticTranscriptRecallGloballyEnabled()
-  const providerSupported = AGENTIC_TRANSCRIPT_RECALL_MVP_PROVIDERS.includes(
-    provider as AgenticTranscriptRecallMvpProvider,
+  const providerSupported = AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS.includes(
+    provider as AgenticTranscriptRecallSupportedProvider,
   )
   const providerAllowlist =
     chatConfig?.providerAllowlist?.length && chatConfig.providerAllowlist.length > 0
       ? [...chatConfig.providerAllowlist]
-      : [...AGENTIC_TRANSCRIPT_RECALL_MVP_PROVIDERS]
+      : [...AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS]
   const providerAllowed = providerAllowlist.includes(
     provider as AgenticTranscriptRecallConfigProvider,
   )

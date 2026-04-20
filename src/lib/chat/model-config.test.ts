@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS,
   CHAT_MEMORY_MODE_SUPPORT_TIERS,
   buildOperatorDefaultChatModelConfig,
   DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_MESSAGES_PER_CALL,
@@ -108,7 +109,15 @@ describe('normalizeChatModelConfig', () => {
           maxToolCalls: 1.9,
           maxMessagesPerCall: 12.2,
           maxTotalMessages: 18.7,
-          providerAllowlist: ['openai', 'anthropic', 'bad-provider', 'openai'],
+          providerAllowlist: [
+            'google',
+            'openai',
+            'anthropic',
+            'deepseek',
+            'openrouter',
+            'bad-provider',
+            'openai',
+          ],
         },
       },
     })
@@ -120,7 +129,7 @@ describe('normalizeChatModelConfig', () => {
           maxToolCalls: 1,
           maxMessagesPerCall: 12,
           maxTotalMessages: 18,
-          providerAllowlist: ['openai', 'anthropic'],
+          providerAllowlist: [...AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS],
         },
       },
     })

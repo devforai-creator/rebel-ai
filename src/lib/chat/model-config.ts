@@ -1,4 +1,5 @@
 import { SUPPORT_TIER_FEATURES, type SupportTier } from '@/lib/support-tier'
+import type { LlmProvider } from '@/types/database.types'
 
 export type AlternateModelsConfig = {
   enabled: boolean
@@ -14,7 +15,13 @@ export type ChatMemoryConfig = {
   retainTailMessages?: number
 }
 
-export const AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS = ['openai', 'anthropic'] as const
+export const AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS = [
+  'google',
+  'openai',
+  'anthropic',
+  'deepseek',
+  'openrouter',
+] as const satisfies readonly LlmProvider[]
 export type AgenticTranscriptRecallConfigProvider =
   (typeof AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS)[number]
 
@@ -34,7 +41,7 @@ export const DEFAULT_CHAT_MEMORY_MODE: ChatMemoryMode = 'summary_window'
 export const OPERATOR_DEFAULT_CHAT_MEMORY_MODE: ChatMemoryMode = 'prefix_live_blocks'
 export const DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES = 100
 export const DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES = 4
-export const DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS = 1
+export const DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS = 2
 export const DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_MESSAGES_PER_CALL = 12
 export const DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOTAL_MESSAGES = 12
 export const CHAT_MEMORY_MODE_SUPPORT_TIERS: Record<ChatMemoryMode, SupportTier> = {

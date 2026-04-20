@@ -5,9 +5,11 @@ import {
   CHAT_DELIVERY_MODE_STREAMING,
 } from '@/lib/chat/delivery-mode'
 import {
+  AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS,
   EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV,
   resolveAgenticTranscriptRecallRuntimeConfig,
 } from './config'
+import { DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS } from '@/lib/chat/model-config'
 
 const ORIGINAL_ENV = process.env[EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV]
 
@@ -42,10 +44,10 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
       providerAllowed: true,
       enabled: false,
       skipReason: 'disabled_by_global_flag',
-      maxToolCalls: 1,
+      maxToolCalls: DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS,
       maxMessagesPerCall: 12,
       maxTotalMessages: 12,
-      providerAllowlist: ['openai', 'anthropic'],
+      providerAllowlist: [...AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS],
     })
   })
 
@@ -77,7 +79,34 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
       maxToolCalls: 2,
       maxMessagesPerCall: 8,
       maxTotalMessages: 10,
-      providerAllowlist: ['openai', 'anthropic'],
+      providerAllowlist: [...AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS],
+    })
+  })
+
+  it('enables recall for opted-in google streaming chats when no provider allowlist is set', () => {
+    process.env[EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV] = 'true'
+
+    expect(
+      resolveAgenticTranscriptRecallRuntimeConfig({
+        modelConfig: {
+          experimental: {
+            agenticTranscriptRecall: {
+              enabled: true,
+            },
+          },
+        },
+        provider: 'google',
+        deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
+      }),
+    ).toMatchObject({
+      configured: true,
+      globallyEnabled: true,
+      providerSupported: true,
+      providerAllowed: true,
+      enabled: true,
+      skipReason: null,
+      maxToolCalls: DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS,
+      providerAllowlist: [...AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS],
     })
   })
 

@@ -1,12 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
-import { CHAT_JOB_PAYLOAD_VERSION, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { checkUserRateLimit, checkAnonRateLimit } from '@/lib/chat/rate-limiter'
 import { CHAT_REQUEST_LIMITS } from '@/lib/chat/runtime-limits'
-import {
-  ACTIVE_CHAT_JOB_CONFLICT_MESSAGE,
-  buildActiveChatJobLimitMessage,
-} from '@/lib/queue/admission'
 import {
   CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
   CHAT_DELIVERY_MODE_STREAMING,
@@ -14,15 +9,12 @@ import {
   isAnthropicBatchChatSupported,
   isChatDeliveryMode,
 } from '@/lib/chat/delivery-mode'
-import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
-import { dispatchNonBlockingSupportEffect, SUPPORT_TIER_FEATURES } from '@/lib/support-tier'
 import { NextResponse } from 'next/server'
 import { ensureChatRequestAdmission, resolveRegenerationTargetTurnId } from './chat-admission'
-import { scheduleChatJobRunnerTrigger } from './background-trigger'
-import { enqueueChatGenerationJob, persistUserTurn } from './job-persistence'
 import { parseChatRequest } from './request-contract'
 import { extractClientIdentifier, parseDeclaredContentLength } from './request-metadata'
 import { createErrorResponse } from './responses'
+import { submitChatGenerationRequest } from './submit-chat-job'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60 // 60 second timeout
@@ -99,7 +91,7 @@ export async function POST(req: Request) {
       normalizedUserMessage,
       messageToPersist,
     } = parsedRequest.value
-    let { payloadSanitizedMessages } = parsedRequest.value
+    const { payloadSanitizedMessages } = parsedRequest.value
 
     const resolvedConfig = await resolveActiveLlmConfigForUser({
       supabase,
@@ -156,108 +148,31 @@ export async function POST(req: Request) {
         )
       }
     }
-
-    let insertedUserMessageId: string | null = null
-    let insertedTurnId: string | null = targetTurnId
-
-    if (!isRegeneration) {
-      if (!messageToPersist) {
-        return createErrorResponse('Invalid user message', 400)
-      }
-
-      const persistResult = await persistUserTurn({
-        supabase,
-        chatId,
-        userId: user.id,
-        requestId,
-        content: messageToPersist,
-      })
-
-      if (persistResult.status === 'conflict') {
-        return createErrorResponse(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, 409)
-      }
-
-      if (persistResult.status === 'error') {
-        return createErrorResponse(persistResult.responseMessage, 500)
-      }
-
-      insertedUserMessageId = persistResult.userMessageId
-      insertedTurnId = persistResult.turnId
-
-      if (normalizedUserMessage && insertedUserMessageId) {
-        payloadSanitizedMessages = [
-          {
-            role: 'user',
-            content: messageToPersist,
-            messageId: insertedUserMessageId,
-          },
-        ]
-      }
-    }
-
-    const jobPayload: ChatGenerationJobPayload = {
-      version: CHAT_JOB_PAYLOAD_VERSION,
+    const submissionResult = await submitChatGenerationRequest({
+      supabase,
       requestId,
       chatId,
-      turnId: insertedTurnId,
       userId: user.id,
       apiKeyId,
       provider,
       modelName,
       deliveryMode,
-      sanitizedMessages: payloadSanitizedMessages,
       isRegeneration,
       regenerateAssistantMessageId,
-    }
-
-    const enqueueResult = await enqueueChatGenerationJob({
-      supabase,
-      chatId,
-      userId: user.id,
-      requestId,
-      payload: jobPayload,
-      insertedTurnId,
-      insertedUserMessageId,
-    })
-
-    if (enqueueResult.status !== 'success') {
-      if (enqueueResult.status === 'conflict') {
-        return createErrorResponse(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, 409)
-      }
-
-      if (enqueueResult.status === 'user-limit') {
-        return createErrorResponse(buildActiveChatJobLimitMessage(), 429)
-      }
-
-      return createErrorResponse(enqueueResult.responseMessage, 500)
-    }
-
-    const jobId = enqueueResult.jobId
-
-    if (insertedUserMessageId) {
-      dispatchNonBlockingSupportEffect({
-        feature: SUPPORT_TIER_FEATURES.MESSAGE_TRANSLATION_TRIGGER,
-        execute: () => triggerMessageTranslation(insertedUserMessageId, user.id),
-        context: {
-          chatId,
-          jobId,
-          messageId: insertedUserMessageId,
-          userId: user.id,
-        },
-        logPrefix: '[Chat API]',
-      })
-    }
-
-    scheduleChatJobRunnerTrigger({
-      chatId,
-      jobId,
-      requestId,
+      targetTurnId,
+      messageToPersist,
+      normalizedUserMessage,
+      payloadSanitizedMessages,
       logDebug: logChatApiDebug,
     })
 
+    if (submissionResult.status === 'error') {
+      return submissionResult.response
+    }
+
     return NextResponse.json(
       {
-        jobId,
+        jobId: submissionResult.jobId,
         requestId,
       },
       { status: 202 },

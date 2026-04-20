@@ -16,7 +16,7 @@ Remaining runtime call sites:
 - [src/app/dashboard/chats/[id]/hooks/useChatSummariesState.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/dashboard/chats/[id]/hooks/useChatSummariesState.ts)
 
 This document is intentionally deferred work. It should not be treated as an immediate execution queue unless a trigger from
-[docs/realtime-boundary-checklist.md](../realtime-boundary-checklist.md) has fired.
+[docs/realtime-boundary-checklist.md](../../../realtime-boundary-checklist.md) has fired.
 
 ## Phase 1. Design Spike
 

@@ -7,9 +7,9 @@ batches.
 
 It does not replace:
 
-- `docs/backlogs/production-readiness-backlog-2026-04-14.md`, which closes the earlier
+- `docs/backlogs/archive/2026/production-readiness-backlog-2026-04-14.md`, which closes the earlier
   `2026-04-12` review delta
-- `docs/backlogs/FIRST_CLASS_HARDENING_BACKLOG.md`, which tracks broader operating-model work
+- `docs/backlogs/archive/2026/FIRST_CLASS_HARDENING_BACKLOG.md`, which tracks broader operating-model work
   outside this gate
 
 ## Current Gate Snapshot

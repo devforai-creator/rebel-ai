@@ -52,18 +52,10 @@ Reviews are evidence and recommendations, not the source of truth for the curren
 
 ## Backlogs
 
-Backlogs are execution queues, not contract documents.
+Backlogs are execution queues, not contract documents. Use the backlog index
+for the current queue and the archive split.
 
-- [backlogs/db-hygiene-followup-2026-04-14.md](./backlogs/db-hygiene-followup-2026-04-14.md)
-- [backlogs/db-query-audit-backlog-2026-04-14.md](./backlogs/db-query-audit-backlog-2026-04-14.md)
-- [backlogs/FIRST_CLASS_HARDENING_BACKLOG.md](./backlogs/FIRST_CLASS_HARDENING_BACKLOG.md)
-- [backlogs/auth-session-hardening-backlog-2026-04-16.md](./backlogs/auth-session-hardening-backlog-2026-04-16.md)
-- [backlogs/dashboard-ui-boundary-backlog-2026-04-19.md](./backlogs/dashboard-ui-boundary-backlog-2026-04-19.md)
-- [backlogs/production-audit-backlog-2026-04-12.md](./backlogs/production-audit-backlog-2026-04-12.md)
-- [backlogs/production-readiness-backlog-2026-04-14.md](./backlogs/production-readiness-backlog-2026-04-14.md)
-- [backlogs/production-readiness-gate-backlog-2026-04-14.md](./backlogs/production-readiness-gate-backlog-2026-04-14.md)
-- [backlogs/realtime-boundary-followup-2026-04-17.md](./backlogs/realtime-boundary-followup-2026-04-17.md)
-- [backlogs/rag-retrieval-followup-2026-04-14.md](./backlogs/rag-retrieval-followup-2026-04-14.md)
-- [backlogs/ssot-dry-followup-2026-04-19.md](./backlogs/ssot-dry-followup-2026-04-19.md)
-- [backlogs/stability-backlog.md](./backlogs/stability-backlog.md)
-- [backlogs/vercel-usage-followup-2026-04-14.md](./backlogs/vercel-usage-followup-2026-04-14.md)
+- [backlogs/README.md](./backlogs/README.md): backlog structure, current entry
+  point, and archive policy
+- [backlogs/active/core-path-hardening-backlog-2026-04-20.md](./backlogs/active/core-path-hardening-backlog-2026-04-20.md):
+  current active backlog

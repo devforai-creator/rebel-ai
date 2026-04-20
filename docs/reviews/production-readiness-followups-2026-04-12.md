@@ -4,7 +4,7 @@ Updated: 2026-04-12
 
 This document turns the latest production-readiness gate review into execution batches.
 
-It is intentionally narrower than [production-audit-backlog-2026-04-12.md](../backlogs/production-audit-backlog-2026-04-12.md):
+It is intentionally narrower than [production-audit-backlog-2026-04-12.md](../backlogs/archive/2026/production-audit-backlog-2026-04-12.md):
 
 - that backlog tracks the broader architectural hardening program
 - this backlog tracks the remaining work needed to close the current review findings cleanly

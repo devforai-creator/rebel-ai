@@ -10,7 +10,7 @@ It is not:
 - a full repo security backlog
 - a broad auth rewrite plan
 - a substitute for the architecture note in
-  [docs/auth-session-hardening-architecture.md](../auth-session-hardening-architecture.md)
+  [docs/auth-session-hardening-architecture.md](../../../auth-session-hardening-architecture.md)
 
 Use this backlog to sequence bounded work sessions against the current confirmed gap.
 

@@ -5,7 +5,7 @@ Updated: 2026-04-15
 Status:
 
 - Non-RAG batches in this backlog are closed as of `2026-04-15`
-- Remaining RAG follow-up work continues in [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/rag-retrieval-followup-2026-04-14.md)
+- Remaining RAG follow-up work continues in [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/archive/2026/rag-retrieval-followup-2026-04-14.md)
 
 This document turns the current DB and query-path review into execution batches.
 
@@ -223,7 +223,7 @@ Status on 2026-04-15:
 
 - Initial pass complete for this backlog
 - Landed via `3f00731` (`Cache RAG embedding access metadata`)
-- Remaining retrieval-specific optimization continues in [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/rag-retrieval-followup-2026-04-14.md)
+- Remaining retrieval-specific optimization continues in [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/archive/2026/rag-retrieval-followup-2026-04-14.md)
 
 ### P1-3. Validate Vector Search and Fact Lookup With Real Plans
 
@@ -255,7 +255,7 @@ Status on 2026-04-15:
 
 - Baseline complete for this backlog
 - Landed via `356f46f` (`Document match_chat_facts plan baselines`)
-- The follow-on tuning and retrieval redesign work now belongs to [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/rag-retrieval-followup-2026-04-14.md)
+- The follow-on tuning and retrieval redesign work now belongs to [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/archive/2026/rag-retrieval-followup-2026-04-14.md)
 
 ## Not In Scope
 
@@ -270,7 +270,7 @@ Do not use this backlog to justify:
 
 Start in this order unless new production evidence overrides it:
 
-1. Continue only with [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/rag-retrieval-followup-2026-04-14.md) for retrieval-specific work
+1. Continue only with [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/archive/2026/rag-retrieval-followup-2026-04-14.md) for retrieval-specific work
 2. Do not reopen the non-RAG batches in this document unless a new measured regression appears
 
 ## Batch Close Checklist
@@ -285,4 +285,4 @@ Before closing a batch:
 
 ## Next Session Start Point
 
-The next session should start from [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/rag-retrieval-followup-2026-04-14.md), not by reopening the already-closed non-RAG batches here.
+The next session should start from [rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/archive/2026/rag-retrieval-followup-2026-04-14.md), not by reopening the already-closed non-RAG batches here.

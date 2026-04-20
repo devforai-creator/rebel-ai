@@ -7,13 +7,13 @@ state.
 
 It tracks the review-driven work from the `2026-04-12` gate and records completed batches inline.
 Completed batches from
-[production-readiness-followups-2026-04-12.md](../reviews/production-readiness-followups-2026-04-12.md) and
+[production-readiness-followups-2026-04-12.md](../../../reviews/production-readiness-followups-2026-04-12.md) and
 [production-audit-backlog-2026-04-12.md](./production-audit-backlog-2026-04-12.md) are not copied
 forward.
 
 It also does not replace:
 
-- [review-followups.md](../reviews/review-followups.md) for visual direction and UI polish
+- [review-followups.md](../../../reviews/review-followups.md) for visual direction and UI polish
 - [FIRST_CLASS_HARDENING_BACKLOG.md](./FIRST_CLASS_HARDENING_BACKLOG.md) for operating-model work
   outside the original review delta
 
@@ -278,6 +278,6 @@ Current evidence as of `2026-04-14`:
 These are real tasks, but they already have better owners elsewhere:
 
 - visual direction, page-level polish, and responsive cleanup:
-  [review-followups.md](../reviews/review-followups.md)
+  [review-followups.md](../../../reviews/review-followups.md)
 - first-class operator runbook and non-review operating work:
   [FIRST_CLASS_HARDENING_BACKLOG.md](./FIRST_CLASS_HARDENING_BACKLOG.md)

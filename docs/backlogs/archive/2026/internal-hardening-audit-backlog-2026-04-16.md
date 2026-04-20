@@ -2,7 +2,7 @@
 
 Updated: 2026-04-16
 
-This document turns [`internal-hardening-audit-2026-04-16.html`](../reviews/internal-hardening-audit-2026-04-16.html) into execution batches.
+This document turns [`internal-hardening-audit-2026-04-16.html`](../../../reviews/internal-hardening-audit-2026-04-16.html) into execution batches.
 
 It is not a generic repo-quality wishlist.
 It is the follow-up backlog for the specific production-risk findings that remain open after the 2026-04-16 internal hardening audit.
@@ -93,7 +93,7 @@ Status: open
 
 Scope:
 
-- [docs/FIRST_CLASS_SMOKE_CHECKS.md](../FIRST_CLASS_SMOKE_CHECKS.md)
+- [docs/FIRST_CLASS_SMOKE_CHECKS.md](../../../FIRST_CLASS_SMOKE_CHECKS.md)
 - [package.json](/home/tmdduq96kr/projects/rebel-ai/package.json)
 - [.github/workflows/test.yml](/home/tmdduq96kr/projects/rebel-ai/.github/workflows/test.yml)
 - any supporting workflow or release doc changes needed for deployed verification
@@ -119,7 +119,7 @@ Scope:
 
 - [DATABASE_SCHEMA.md](/home/tmdduq96kr/projects/rebel-ai/DATABASE_SCHEMA.md)
 - [README.md](/home/tmdduq96kr/projects/rebel-ai/README.md)
-- [docs/OPERATING_PLAN.md](../OPERATING_PLAN.md)
+- [docs/OPERATING_PLAN.md](../../../OPERATING_PLAN.md)
 - any directly affected reference docs under [docs](/home/tmdduq96kr/projects/rebel-ai/docs)
 
 Why:
@@ -229,8 +229,8 @@ Note:
 Scope:
 
 - [README.md](/home/tmdduq96kr/projects/rebel-ai/README.md)
-- [docs/HOSTING_PROFILES.md](../HOSTING_PROFILES.md)
-- [docs/OPERATING_PLAN.md](../OPERATING_PLAN.md)
+- [docs/HOSTING_PROFILES.md](../../../HOSTING_PROFILES.md)
+- [docs/OPERATING_PLAN.md](../../../OPERATING_PLAN.md)
 
 Why:
 

@@ -274,7 +274,7 @@ Current decision:
 
 Scope:
 
-- [docs/backlogs/rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/rag-retrieval-followup-2026-04-14.md)
+- [docs/backlogs/archive/2026/rag-retrieval-followup-2026-04-14.md](/home/tmdduq96kr/projects/rebel-ai/docs/backlogs/archive/2026/rag-retrieval-followup-2026-04-14.md)
 - related schema and function work for `match_chat_facts`
 
 Why:

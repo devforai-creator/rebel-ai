@@ -195,4 +195,4 @@ Run this after the change is deployed to the target environment whenever the bat
 - [HOSTING_PROFILES.md](./HOSTING_PROFILES.md)
 - [GETTING_STARTED.md](./GETTING_STARTED.md)
 - [OPERATING_PLAN.md](./OPERATING_PLAN.md)
-- [FIRST_CLASS_HARDENING_BACKLOG.md](./backlogs/FIRST_CLASS_HARDENING_BACKLOG.md)
+- [core-path-hardening-backlog-2026-04-20.md](./backlogs/active/core-path-hardening-backlog-2026-04-20.md)

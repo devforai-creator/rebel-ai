@@ -1,4 +1,5 @@
 import type { LlmProvider } from '@/types/database.types'
+import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH, type ChatDeliveryMode } from '@/lib/chat/delivery-mode'
 import {
   DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_MESSAGES_PER_CALL,
   DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS,
@@ -10,7 +11,7 @@ import {
 
 export const EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV =
   'EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED'
-export const AGENTIC_TRANSCRIPT_RECALL_MVP_PROVIDERS = ['openai'] as const
+export const AGENTIC_TRANSCRIPT_RECALL_MVP_PROVIDERS = ['openai', 'anthropic'] as const
 export type AgenticTranscriptRecallMvpProvider =
   (typeof AGENTIC_TRANSCRIPT_RECALL_MVP_PROVIDERS)[number]
 export type AgenticTranscriptRecallSkipReason =
@@ -18,6 +19,7 @@ export type AgenticTranscriptRecallSkipReason =
   | 'disabled_in_chat_config'
   | 'provider_not_supported'
   | 'provider_not_allowed'
+  | 'delivery_mode_not_supported'
 
 export type AgenticTranscriptRecallRuntimeConfig = {
   configured: boolean
@@ -48,9 +50,11 @@ export function isExperimentalAgenticTranscriptRecallGloballyEnabled(): boolean 
 export function resolveAgenticTranscriptRecallRuntimeConfig({
   modelConfig,
   provider,
+  deliveryMode,
 }: {
   modelConfig: ChatModelConfig | unknown
   provider: LlmProvider
+  deliveryMode: ChatDeliveryMode
 }): AgenticTranscriptRecallRuntimeConfig {
   const normalizedModelConfig = normalizeChatModelConfig(modelConfig)
   const chatConfig = normalizedModelConfig.experimental?.agenticTranscriptRecall ?? null
@@ -67,6 +71,9 @@ export function resolveAgenticTranscriptRecallRuntimeConfig({
     provider as AgenticTranscriptRecallConfigProvider,
   )
   const chatEnabled = chatConfig?.enabled === true
+  const deliveryModeSupported = !(
+    provider === 'anthropic' && deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
+  )
 
   let skipReason: AgenticTranscriptRecallSkipReason | null = null
   if (!globallyEnabled) {
@@ -77,6 +84,8 @@ export function resolveAgenticTranscriptRecallRuntimeConfig({
     skipReason = 'provider_not_supported'
   } else if (!providerAllowed) {
     skipReason = 'provider_not_allowed'
+  } else if (!deliveryModeSupported) {
+    skipReason = 'delivery_mode_not_supported'
   }
 
   return {

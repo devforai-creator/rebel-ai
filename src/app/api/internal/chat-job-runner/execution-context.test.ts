@@ -319,6 +319,7 @@ describe('loadChatJobExecutionContext', () => {
     expect(resolveAgenticTranscriptRecallRuntimeConfigMock).toHaveBeenCalledWith({
       modelConfig: {},
       provider: 'openai',
+      deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
     })
     expect(timings).toEqual(
       expect.objectContaining({

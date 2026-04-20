@@ -403,6 +403,7 @@ export async function loadChatJobExecutionContext({
   const agenticTranscriptRecall = resolveAgenticTranscriptRecallRuntimeConfig({
     modelConfig: normalizedModelConfig,
     provider,
+    deliveryMode: payload.deliveryMode,
   })
   debugMetrics['experimental_agentic_transcript_recall_configured'] =
     agenticTranscriptRecall.configured

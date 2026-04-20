@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
+  CHAT_DELIVERY_MODE_STREAMING,
+} from '@/lib/chat/delivery-mode'
+import {
   EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV,
   resolveAgenticTranscriptRecallRuntimeConfig,
 } from './config'
@@ -29,6 +33,7 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
           },
         },
         provider: 'openai',
+        deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
       }),
     ).toMatchObject({
       configured: true,
@@ -40,7 +45,7 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
       maxToolCalls: 1,
       maxMessagesPerCall: 12,
       maxTotalMessages: 12,
-      providerAllowlist: ['openai'],
+      providerAllowlist: ['openai', 'anthropic'],
     })
   })
 
@@ -60,6 +65,7 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
           },
         },
         provider: 'openai',
+        deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
       }),
     ).toMatchObject({
       configured: true,
@@ -71,11 +77,11 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
       maxToolCalls: 2,
       maxMessagesPerCall: 8,
       maxTotalMessages: 10,
-      providerAllowlist: ['openai'],
+      providerAllowlist: ['openai', 'anthropic'],
     })
   })
 
-  it('keeps unsupported providers disabled even when the chat config allows them', () => {
+  it('enables recall for opted-in anthropic streaming chats when the global flag is on', () => {
     process.env[EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV] = 'true'
 
     expect(
@@ -89,14 +95,42 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
           },
         },
         provider: 'anthropic',
+        deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
       }),
     ).toMatchObject({
       configured: true,
       globallyEnabled: true,
-      providerSupported: false,
+      providerSupported: true,
+      providerAllowed: true,
+      enabled: true,
+      skipReason: null,
+      providerAllowlist: ['anthropic'],
+    })
+  })
+
+  it('keeps anthropic batch delivery disabled even when the chat config allows anthropic', () => {
+    process.env[EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV] = 'true'
+
+    expect(
+      resolveAgenticTranscriptRecallRuntimeConfig({
+        modelConfig: {
+          experimental: {
+            agenticTranscriptRecall: {
+              enabled: true,
+              providerAllowlist: ['anthropic'],
+            },
+          },
+        },
+        provider: 'anthropic',
+        deliveryMode: CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
+      }),
+    ).toMatchObject({
+      configured: true,
+      globallyEnabled: true,
+      providerSupported: true,
       providerAllowed: true,
       enabled: false,
-      skipReason: 'provider_not_supported',
+      skipReason: 'delivery_mode_not_supported',
     })
   })
 })

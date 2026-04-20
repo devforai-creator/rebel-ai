@@ -442,6 +442,177 @@ function createLatestAssistantQueryShapeSupabase() {
   }
 }
 
+function createChunkedTranscriptQueryShapeSupabase(turnCount = 120) {
+  const turns = Array.from({ length: turnCount }, (_, index) => {
+    const turnIndex = index + 1
+    return {
+      id: `turn-${turnIndex}`,
+      chat_id: chatId,
+      turn_index: turnIndex,
+      user_message_id: `user-${turnIndex}`,
+      active_assistant_message_id: `assistant-${turnIndex}`,
+    }
+  })
+
+  const messages = turns.flatMap((turn) => [
+    {
+      id: turn.user_message_id,
+      role: 'user',
+      content: `User ${turn.turn_index}`,
+      chat_id: chatId,
+      sequence: turn.turn_index * 2 - 1,
+      turn_id: turn.id,
+      message_status: MESSAGE_STATUS_COMPLETED,
+    },
+    {
+      id: turn.active_assistant_message_id,
+      role: 'assistant',
+      content: `Assistant ${turn.turn_index}`,
+      chat_id: chatId,
+      sequence: turn.turn_index * 2,
+      turn_id: turn.id,
+      variant_index: 1,
+      supersedes_message_id: null,
+      message_status: MESSAGE_STATUS_COMPLETED,
+    },
+  ])
+
+  const messageCalls: Array<{ ids: unknown[] }> = []
+
+  const supabase = {
+    from(table: string) {
+      if (table === 'chat_turns') {
+        const filters: Array<{ method: string; field: string; value: unknown }> = []
+        let order: { field: string; ascending: boolean } | null = null
+        let limit: number | null = null
+        let columns: string | undefined
+
+        const builder = {
+          select(nextColumns?: string) {
+            columns = nextColumns
+            return builder
+          },
+          eq(field: string, value: unknown) {
+            filters.push({ method: 'eq', field, value })
+            return builder
+          },
+          lte(field: string, value: unknown) {
+            filters.push({ method: 'lte', field, value })
+            return builder
+          },
+          order(field: string, options?: { ascending?: boolean }) {
+            order = { field, ascending: options?.ascending ?? true }
+            return builder
+          },
+          limit(count: number) {
+            limit = count
+            return builder
+          },
+          single() {
+            const idFilter = filters.find(
+              (filter) => filter.field === 'id' && filter.method === 'eq',
+            )
+            const row = turns.find((turn) => turn.id === idFilter?.value) ?? null
+
+            return Promise.resolve({
+              data: row,
+              error: row ? null : { code: 'PGRST116', message: 'Not found' },
+            })
+          },
+          then(
+            onfulfilled?: (value: {
+              data: Array<Record<string, unknown>>
+              error: null
+              count?: number
+            }) => unknown,
+          ) {
+            let rows = turns.slice()
+
+            for (const filter of filters) {
+              if (filter.method === 'eq') {
+                rows = rows.filter(
+                  (row) => row[filter.field as keyof (typeof turns)[number]] === filter.value,
+                )
+              }
+              if (filter.method === 'lte') {
+                rows = rows.filter(
+                  (row) =>
+                    Number(row[filter.field as keyof (typeof turns)[number]]) <=
+                    Number(filter.value),
+                )
+              }
+            }
+
+            if (order) {
+              const currentOrder = order
+              rows.sort((left, right) =>
+                currentOrder.ascending
+                  ? Number(left[currentOrder.field as keyof typeof left]) -
+                    Number(right[currentOrder.field as keyof typeof right])
+                  : Number(right[currentOrder.field as keyof typeof right]) -
+                    Number(left[currentOrder.field as keyof typeof left]),
+              )
+            }
+
+            if (typeof limit === 'number') {
+              rows = rows.slice(0, limit)
+            }
+
+            const result = {
+              data: rows.map((row) => {
+                if (!columns) {
+                  return row
+                }
+
+                return columns.split(',').reduce<Record<string, unknown>>((acc, column) => {
+                  const key = column.trim() as keyof typeof row
+                  acc[key] = row[key]
+                  return acc
+                }, {})
+              }),
+              error: null,
+            }
+
+            return Promise.resolve(onfulfilled ? onfulfilled(result) : result)
+          },
+        }
+
+        return builder
+      }
+
+      const messageCall = { ids: [] as unknown[] }
+
+      const builder = {
+        select() {
+          return builder
+        },
+        in(_field: string, ids: unknown[]) {
+          messageCall.ids = ids
+          return builder
+        },
+        then(
+          onfulfilled?: (value: { data: Array<Record<string, unknown>>; error: null }) => unknown,
+        ) {
+          messageCalls.push(messageCall)
+          const idSet = new Set(messageCall.ids)
+          const result = {
+            data: messages.filter((message) => idSet.has(message.id)),
+            error: null,
+          }
+          return Promise.resolve(onfulfilled ? onfulfilled(result) : result)
+        },
+      }
+
+      return builder
+    },
+  }
+
+  return {
+    supabase: supabase as unknown as SupabaseClientType,
+    messageCalls,
+  }
+}
+
 describe('chat turn projections', () => {
   it('loads the latest turn window with interleaved system messages', async () => {
     const supabase = createTurnProjectionSupabase()
@@ -510,6 +681,19 @@ describe('chat turn projections', () => {
     expect(latestConversationMessage?.id).toBe('user-3')
     expect(latestAssistant?.id).toBe('assistant-2')
     expect(messageCount).toBe(9)
+  })
+
+  it('chunks projected conversation message id fetches for large chats', async () => {
+    const { supabase, messageCalls } = createChunkedTranscriptQueryShapeSupabase(130)
+
+    const result = await loadProjectedConversationMessages({
+      supabase,
+      chatId,
+    })
+
+    expect(result).toHaveLength(260)
+    expect(messageCalls.length).toBe(3)
+    expect(messageCalls.map((call) => call.ids.length)).toEqual([100, 100, 60])
   })
 })
 
@@ -817,6 +1001,20 @@ describe('loadGenerationTranscript', () => {
       { role: 'user', content: 'Hello second', messageId: 'user-2' },
       { role: 'assistant', content: 'Reply second', messageId: 'assistant-2' },
     ])
+  })
+
+  it('chunks transcript message id fetches for large chats', async () => {
+    const { supabase, messageCalls } = createChunkedTranscriptQueryShapeSupabase(120)
+
+    const result = await loadGenerationTranscript({
+      supabase,
+      chatId,
+      turnId: 'turn-120',
+    })
+
+    expect(result).toHaveLength(240)
+    expect(messageCalls.length).toBe(3)
+    expect(messageCalls.map((call) => call.ids.length)).toEqual([100, 100, 40])
   })
 })
 

@@ -8,6 +8,7 @@ import {
   getLowerSequenceBound,
   getTurnMessageIds,
   loadLatestActiveAssistantMessageId,
+  loadMessageRowsByIds,
   loadProjectedMessagesByIds,
   loadStandaloneSystemMessages,
   loadTurnsForChat,
@@ -87,16 +88,21 @@ export async function loadGenerationTranscript({
     return []
   }
 
-  const messagesResult = await supabase
-    .from('messages')
-    .select('id, role, content')
-    .in('id', messageIds)
+  const transcriptMessages = await loadMessageRowsByIds<{
+    id: string
+    role: string
+    content: string
+  }>({
+    supabase,
+    columns: 'id, role, content',
+    messageIds,
+  }).catch((error) => {
+    throw new Error(
+      `Failed to load transcript messages: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  })
 
-  if (messagesResult.error) {
-    throw new Error(`Failed to load transcript messages: ${messagesResult.error.message}`)
-  }
-
-  const messageMap = new Map(messagesResult.data.map((message) => [message.id, message]))
+  const messageMap = new Map(transcriptMessages.map((message) => [message.id, message]))
   const transcript: SanitizedMessage[] = []
 
   for (const turn of turns) {
@@ -129,7 +135,7 @@ export async function loadGenerationTranscript({
   onMetrics?.({
     targetTurnIndex: targetTurn.data.turn_index,
     turnCount: turns.length,
-    fetchedMessageCount: messagesResult.data?.length ?? 0,
+    fetchedMessageCount: transcriptMessages.length,
     transcriptMessageCount: transcript.length,
     excludedAssistant: excludeAssistantForTurnId !== null,
   })

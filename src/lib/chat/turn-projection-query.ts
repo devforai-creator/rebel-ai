@@ -8,6 +8,38 @@ import type {
 } from './turn-types'
 import { PROJECTED_CHAT_MESSAGE_COLUMNS } from './turn-types'
 
+const MESSAGE_ID_QUERY_CHUNK_SIZE = 100
+
+export async function loadMessageRowsByIds<Row extends { id: string }>({
+  supabase,
+  columns,
+  messageIds,
+}: {
+  supabase: TurnClient
+  columns: string
+  messageIds: string[]
+}): Promise<Row[]> {
+  if (messageIds.length === 0) {
+    return []
+  }
+
+  const uniqueMessageIds = [...new Set(messageIds)]
+  const rows: Row[] = []
+
+  for (let index = 0; index < uniqueMessageIds.length; index += MESSAGE_ID_QUERY_CHUNK_SIZE) {
+    const chunk = uniqueMessageIds.slice(index, index + MESSAGE_ID_QUERY_CHUNK_SIZE)
+    const { data, error } = await supabase.from('messages').select(columns).in('id', chunk)
+
+    if (error) {
+      throw new Error(`Failed to load messages by id: ${error.message}`)
+    }
+
+    rows.push(...((data ?? []) as unknown as Row[]))
+  }
+
+  return rows
+}
+
 export function getTurnMessageIds(turn: PersistedTurnRow | null): string[] {
   if (!turn) return []
 
@@ -77,14 +109,17 @@ export async function loadProjectedMessagesByIds({
     return new Map()
   }
 
-  const { data, error } = await supabase
-    .from('messages')
-    .select(PROJECTED_CHAT_MESSAGE_COLUMNS)
-    .in('id', [...new Set(messageIds)])
-
-  if (error) {
-    throw new Error(`Failed to load projected messages: ${error.message}`)
-  }
+  const data = await loadMessageRowsByIds<ProjectedTurnMessage>({
+    supabase,
+    columns: PROJECTED_CHAT_MESSAGE_COLUMNS,
+    messageIds,
+  }).catch((error) => {
+    throw new Error(
+      `Failed to load projected messages: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    )
+  })
 
   return new Map(
     ((data ?? []) as ProjectedTurnMessage[]).map((message) => [message.id, message] as const),

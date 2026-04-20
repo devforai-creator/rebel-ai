@@ -31,6 +31,18 @@ function createPrefixModeSupabaseStub(options?: {
 
   return createSupabaseMock({
     tables: {
+      chats: {
+        rows: [{ id: 'chat-1', user_id: 'user-1' }],
+      },
+      profiles: {
+        rows: [
+          {
+            id: 'user-1',
+            enable_episodic_rag: false,
+            voyage_embedding_api_key_id: null,
+          },
+        ],
+      },
       chat_summaries: {
         rows:
           typeof options?.visibleSummaryEnd === 'number'

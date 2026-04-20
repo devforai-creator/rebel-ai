@@ -190,17 +190,24 @@ function mapColumns<T extends Record<string, unknown>>(columns: string) {
 }
 
 class SupabaseMock {
-  constructor(messages: MessageRow[]) {
+  constructor(
+    messages: MessageRow[],
+    options?: {
+      enableEpisodicRag?: boolean
+    },
+  ) {
     this.messages = messages
     this.chatTurns = deriveChatTurns(messages)
     this.chatSummaries = []
     this.chatFacts = []
+    this.enableEpisodicRag = options?.enableEpisodicRag ?? false
   }
 
   messages: MessageRow[]
   chatTurns: ChatTurnRow[]
   chatSummaries: ChatSummaryRow[]
   chatFacts: Array<Record<string, unknown>>
+  enableEpisodicRag: boolean
 
   from(table: string) {
     if (table === 'messages') {
@@ -421,12 +428,13 @@ class ProfilesQuery {
   }
 
   async single() {
-    // Return null custom prompts (use defaults)
     return {
       data: {
         chunk_summary_prompt: null,
         meta_summary_prompt: null,
         fact_extraction_prompt: null,
+        enable_episodic_rag: this.mock.enableEpisodicRag,
+        voyage_embedding_api_key_id: null,
       },
       error: null,
     }
@@ -460,8 +468,13 @@ function makeMessages(total: number, chatId = 'chat-1'): MessageRow[] {
 
 const MODEL = {} as LanguageModel
 
-function createSupabaseMock(messages: MessageRow[]) {
-  return new SupabaseMock(messages)
+function createSupabaseMock(
+  messages: MessageRow[],
+  options?: {
+    enableEpisodicRag?: boolean
+  },
+) {
+  return new SupabaseMock(messages, options)
 }
 
 describe('updateSummaries integration smoke tests', () => {
@@ -484,8 +497,7 @@ describe('updateSummaries integration smoke tests', () => {
       modelName: 'test-model',
     })
 
-    // Expect 2 calls: 1 for summary, 1 for facts
-    expect(generateTextMock).toHaveBeenCalledTimes(2)
+    expect(generateTextMock).toHaveBeenCalledTimes(1)
 
     const chunkSummaries = supabaseMock.chatSummaries.filter(
       (row) => row.level === SUMMARY_LEVEL_CHUNK,
@@ -502,6 +514,29 @@ describe('updateSummaries integration smoke tests', () => {
     expect(
       supabaseMock.chatSummaries.filter((row) => row.level === SUMMARY_LEVEL_META),
     ).toHaveLength(0)
+    expect(supabaseMock.chatFacts).toHaveLength(0)
+  })
+
+  it('also creates facts when episodic RAG is enabled', async () => {
+    const supabaseMock = createSupabaseMock(makeMessages(CHUNK_SIZE * 2), {
+      enableEpisodicRag: true,
+    })
+
+    generateTextMock
+      .mockResolvedValueOnce(createGenerateTextResult('chunk summary result', 55))
+      .mockResolvedValueOnce(createGenerateTextResult('- fact one', 12))
+
+    await updateSummaries({
+      supabase: supabaseMock as unknown as ChatSummariesSupabaseClient,
+      chatId: 'chat-1',
+      userId: 'test-user-id',
+      model: MODEL,
+      provider: 'google',
+      modelName: 'test-model',
+    })
+
+    expect(generateTextMock).toHaveBeenCalledTimes(2)
+    expect(supabaseMock.chatFacts).toHaveLength(1)
   })
 
   it('builds sequential chunk summaries and a meta summary when enough history accumulates', async () => {

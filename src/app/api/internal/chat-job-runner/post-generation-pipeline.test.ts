@@ -733,6 +733,69 @@ describe('runPostGenerationPipeline', () => {
     })
   })
 
+  it('keeps the pipeline successful when the translation trigger throws synchronously', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const supabase = createChatJobRunnerSupabaseMock({
+      initialMessages: [
+        {
+          id: 'assistant-1',
+          chat_id: 'chat-1',
+          role: 'assistant',
+          content: 'draft',
+          model_used: null,
+          prompt_tokens: null,
+          completion_tokens: null,
+          debug_info: null,
+          user_id: 'user-1',
+        },
+      ],
+    })
+
+    const triggerMessageTranslationFn = vi.fn(() => {
+      throw new Error('translation trigger escaped')
+    })
+    const supabaseClient = supabase as unknown as SupabaseClientType
+
+    const result = await runPostGenerationPipeline({
+      supabase: supabaseClient,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      apiKeyId: 'key-1',
+      provider: 'openai',
+      modelName: 'gpt-4o-mini',
+      origin: 'https://internal.example.com',
+      requestId: 'req-translation-escape',
+      assistantText: 'final answer',
+      assistantMessageId: 'assistant-1',
+      turnId: null,
+      regenerateAssistantMessageId: null,
+      promptTokens: 11,
+      completionTokens: 22,
+      debugInfo: { requestId: 'req-translation-escape' },
+      bilingualEnabled: true,
+      messageInsertDuration: 9,
+      usage: buildUsageMetrics(),
+      usageCost: null,
+      triggerMessageTranslationFn,
+      resolveSummaryModelPreferenceFn: vi.fn(async () => null),
+      triggerSummaryGenerationFn: vi.fn(async () => ({ success: true, attempts: 1 })),
+      now: () => 100,
+    })
+
+    await flushSummaryBackgroundTask()
+
+    expect(result).toEqual({
+      assistantMessageId: 'assistant-1',
+      messageInsertDuration: 9,
+      usageEventInsertDurationMs: 0,
+      summaryTriggerDurationMs: 0,
+    })
+    expect(triggerMessageTranslationFn).toHaveBeenCalledWith('assistant-1', 'user-1')
+    expect(supabase.usageEvents).toHaveLength(1)
+
+    errorSpy.mockRestore()
+  })
+
   it('removes the old assistant message for legacy regeneration without turn state', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       initialMessages: [

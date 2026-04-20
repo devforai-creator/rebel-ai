@@ -159,11 +159,14 @@ Done when:
 Current progress:
 
 - `src/app/api/internal/chat-job-runner/post-generation-pipeline.ts` is down to
-  `278` lines after extracting `assistant-finalization.ts` and
-  `post-generation-metadata.ts`
+  `142` lines after extracting `assistant-finalization.ts`,
+  `post-generation-metadata.ts`, and `post-generation-followups.ts`
 - assistant message finalization, regeneration rollback, stale `debug_info`
   cleanup, `api_keys.last_used_at`, and `chat_usage_events` writes now live
   behind narrower runner boundaries before touching experimental follow-ups
+- runner post-generation follow-ups now dispatch the experimental translation
+  trigger behind a non-blocking support-effect boundary, so translation escapes
+  do not fail the durable chat success path
 
 ### P1-2. Publish a Small First-Class Path Map
 

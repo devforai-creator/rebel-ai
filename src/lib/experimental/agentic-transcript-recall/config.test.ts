@@ -83,7 +83,7 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
     })
   })
 
-  it('enables recall for opted-in google streaming chats when no provider allowlist is set', () => {
+  it('keeps google disabled even when a chat opts in', () => {
     process.env[EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV] = 'true'
 
     expect(
@@ -101,10 +101,10 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
     ).toMatchObject({
       configured: true,
       globallyEnabled: true,
-      providerSupported: true,
-      providerAllowed: true,
-      enabled: true,
-      skipReason: null,
+      providerSupported: false,
+      providerAllowed: false,
+      enabled: false,
+      skipReason: 'provider_not_supported',
       maxToolCalls: DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS,
       providerAllowlist: [...AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS],
     })

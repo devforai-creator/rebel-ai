@@ -9,7 +9,6 @@ import {
   DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOTAL_MESSAGES,
   DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
   DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
-  OPERATOR_DEFAULT_AGENTIC_TRANSCRIPT_RECALL_PROVIDER_ALLOWLIST,
   OPERATOR_DEFAULT_CHAT_MEMORY_MODE,
   hasPersistableChatModelConfig,
   normalizeChatModelConfig,
@@ -215,7 +214,6 @@ describe('buildOperatorDefaultPersistedChatModelConfig', () => {
       experimental: {
         agenticTranscriptRecall: {
           enabled: true,
-          providerAllowlist: [...OPERATOR_DEFAULT_AGENTIC_TRANSCRIPT_RECALL_PROVIDER_ALLOWLIST],
         },
       },
     })

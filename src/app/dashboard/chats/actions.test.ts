@@ -234,7 +234,6 @@ describe('dashboard chats actions', () => {
           experimental: {
             agenticTranscriptRecall: {
               enabled: true,
-              providerAllowlist: ['openai', 'anthropic', 'deepseek', 'openrouter'],
             },
           },
         },
@@ -422,7 +421,6 @@ describe('dashboard chats actions', () => {
           experimental: {
             agenticTranscriptRecall: {
               enabled: true,
-              providerAllowlist: ['openai', 'anthropic', 'deepseek', 'openrouter'],
             },
           },
         },

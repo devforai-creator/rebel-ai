@@ -44,8 +44,6 @@ export const DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES = 4
 export const DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS = 2
 export const DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_MESSAGES_PER_CALL = 12
 export const DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOTAL_MESSAGES = 12
-export const OPERATOR_DEFAULT_AGENTIC_TRANSCRIPT_RECALL_PROVIDER_ALLOWLIST =
-  AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS.filter((provider) => provider !== 'google')
 export const CHAT_MEMORY_MODE_SUPPORT_TIERS: Record<ChatMemoryMode, SupportTier> = {
   summary_window: SUPPORT_TIER_FEATURES.SUMMARY_WINDOW_MEMORY.tier,
   prefix_live_blocks: SUPPORT_TIER_FEATURES.PREFIX_LIVE_BLOCKS_MEMORY.tier,
@@ -223,7 +221,6 @@ export function buildOperatorDefaultPersistedChatModelConfig(input: unknown): Ch
         existingRecall === undefined || existingRecall === null
           ? {
               enabled: true,
-              providerAllowlist: [...OPERATOR_DEFAULT_AGENTIC_TRANSCRIPT_RECALL_PROVIDER_ALLOWLIST],
             }
           : existingRecall,
     },

@@ -42,10 +42,15 @@ These are useful design notes and transition records, but they should not be tre
 - [chat-regeneration-architecture.md](./chat-regeneration-architecture.md)
 - [claude-batch-chat-mode-plan.md](./claude-batch-chat-mode-plan.md)
 - [experimental-agentic-transcript-recall.md](./experimental-agentic-transcript-recall.md)
-- [experimental-agentic-transcript-recall-eval.md](./experimental-agentic-transcript-recall-eval.md)
 - [lorebook-prefix-cache-plan.md](./lorebook-prefix-cache-plan.md)
 - [memory-modes-v1.md](./memory-modes-v1.md)
 - [suu-import-validation-plan.md](./suu-import-validation-plan.md)
+
+## Archived Sidecars
+
+These exist for optional local maintenance work, not as active product or rollout surfaces.
+
+- [experimental-agentic-transcript-recall-eval.md](./experimental-agentic-transcript-recall-eval.md): dormant local comparison harness for transcript-recall experiments
 
 ## Reviews
 

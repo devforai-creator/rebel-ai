@@ -1,14 +1,26 @@
 # Experimental Agentic Transcript Recall Eval
 
+Status: archived sidecar
+
 Updated: 2026-04-20
 
-This document defines the smallest local workflow for evaluating the
-experimental transcript-recall path that now exists in the chat runner.
+This document defines a small local comparison workflow for the experimental
+transcript-recall path.
 
-Use this only for the current experimental queue.
+This is no longer part of the active rollout contract.
+Keep it only as an optional maintainer-side script for ad hoc comparison work.
 It is not a product feature and it is not a durable operator surface.
 
-## Goal
+## When To Use This
+
+Use this only if you explicitly want to compare paired baseline vs experimental
+assistant replies after the fact.
+
+Do not treat this as required for normal experimental operation.
+The active product-facing surface is the runtime itself plus request-level
+`debug_info.experimental.agenticTranscriptRecall`.
+
+## Historical Goal
 
 Produce one compact comparison between:
 
@@ -81,7 +93,7 @@ npm run eval:transcript-recall -- docs/evals/experimental-agentic-transcript-rec
 
 The script prints the markdown report and writes it to the chosen output file.
 
-## Recommended Manual Workflow
+## Optional Manual Workflow
 
 1. Pick `3-5` long-chat cases where exact historical wording matters.
 2. Produce one baseline reply with the experiment disabled.
@@ -91,13 +103,14 @@ The script prints the markdown report and writes it to the chosen output file.
 6. Run the eval script.
 7. Copy the resulting metrics into the exit report template.
 
-## Result
+## Output
 
-The generated report is meant to support one decision only:
+Historically, the generated report was meant to support one decision only:
 
 - keep
 - iterate
 - park
 
-Do not widen provider scope or product surface until that decision is written
-down explicitly.
+That is no longer a hard rollout gate.
+Provider support and experimental surface decisions may now be driven by direct
+runtime testing and debug telemetry instead.

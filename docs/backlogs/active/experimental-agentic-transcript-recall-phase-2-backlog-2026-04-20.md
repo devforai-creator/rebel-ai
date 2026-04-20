@@ -224,7 +224,7 @@ Done when:
   - invalid direct parent fetch blocked
   - wrapper fallback
 
-### P2-6. Extend Debug Signals And Evaluation
+### P2-6. Extend Debug Signals
 
 Why before rollout confidence:
 
@@ -234,8 +234,9 @@ Why before rollout confidence:
 Primary scope:
 
 - runner debug surfaces
-- [docs/experimental-agentic-transcript-recall-eval.md](/home/tmdduq96kr/projects/rebel-ai/docs/experimental-agentic-transcript-recall-eval.md)
-- [scripts/run-agentic-transcript-recall-eval.js](/home/tmdduq96kr/projects/rebel-ai/scripts/run-agentic-transcript-recall-eval.js)
+- optional sidecar references only:
+  [docs/experimental-agentic-transcript-recall-eval.md](/home/tmdduq96kr/projects/rebel-ai/docs/experimental-agentic-transcript-recall-eval.md),
+  [scripts/run-agentic-transcript-recall-eval.js](/home/tmdduq96kr/projects/rebel-ai/scripts/run-agentic-transcript-recall-eval.js)
 
 Done when:
 
@@ -245,11 +246,9 @@ Done when:
   - how many child ranges were returned
   - which child range was selected for raw fetch
   - whether the model attempted an invalid direct parent fetch first
-- the evaluation harness can compare:
-  - baseline summary-only behavior
-  - phase 1 exact-range recall behavior
-  - phase 2 navigation-plus-fetch behavior
-- the queue closes with a short decision note: keep, iterate, or park
+- optional local comparison tooling may stay dormant
+- this queue does not require paired baseline-vs-experimental reporting before
+  moving forward
 
 ## Explicitly Parked
 

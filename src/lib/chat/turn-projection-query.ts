@@ -31,7 +31,7 @@ export async function loadMessageRowsByIds<Row extends { id: string }>({
     const { data, error } = await supabase.from('messages').select(columns).in('id', chunk)
 
     if (error) {
-      throw new Error(`Failed to load messages by id: ${error.message}`)
+      throw new Error(error.message)
     }
 
     rows.push(...((data ?? []) as unknown as Row[]))

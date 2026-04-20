@@ -61,19 +61,27 @@ export function useChatDebugModal({
 
       try {
         const response = await fetch(`/api/chats/${chatId}/messages/${messageId}/debug`)
-        if (response.ok) {
-          const data = await response.json()
-          const serverDebugInfo = data.debugInfo as DebugInfo | null
-          if (serverDebugInfo) {
-            debugInfoMap.current.set(messageId, serverDebugInfo)
-          }
-
+        if (!response.ok) {
+          console.error('Failed to fetch debug info:', response.status, response.statusText)
           setDebugModal((previous) =>
             previous.isOpen && previous.messageId === messageId
-              ? { ...previous, debugInfo: serverDebugInfo, mode: 'message' }
+              ? { ...previous, debugInfo: null, mode: 'message' }
               : previous,
           )
+          return
         }
+
+        const data = await response.json()
+        const serverDebugInfo = data.debugInfo as DebugInfo | null
+        if (serverDebugInfo) {
+          debugInfoMap.current.set(messageId, serverDebugInfo)
+        }
+
+        setDebugModal((previous) =>
+          previous.isOpen && previous.messageId === messageId
+            ? { ...previous, debugInfo: serverDebugInfo, mode: 'message' }
+            : previous,
+        )
       } catch (error) {
         console.error('Failed to fetch debug info:', error)
         setDebugModal((previous) =>

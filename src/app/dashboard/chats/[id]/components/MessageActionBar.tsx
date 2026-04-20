@@ -16,6 +16,7 @@ type ResolveMessageActionItemsArgs = {
   role: DisplayMessage['role']
   isPersisted: boolean
   isLastMessage: boolean
+  isLatestAssistant: boolean
   developerMode: boolean
   isLoading: boolean
   isReprocessing: boolean
@@ -48,6 +49,7 @@ export function resolveMessageActionItems({
   role,
   isPersisted,
   isLastMessage,
+  isLatestAssistant,
   developerMode,
   isLoading,
   isReprocessing,
@@ -86,7 +88,7 @@ export function resolveMessageActionItems({
     })
   }
 
-  if (developerMode && role === 'assistant' && isPersisted) {
+  if (developerMode && role === 'assistant' && isPersisted && isLatestAssistant) {
     items.push({
       id: 'debug',
       label: 'Debug',
@@ -112,6 +114,7 @@ export const MessageActionBar = memo(function MessageActionBar({
   role,
   isPersisted,
   isLastMessage,
+  isLatestAssistant,
   developerMode,
   isLoading,
   isReprocessing,
@@ -129,6 +132,7 @@ export const MessageActionBar = memo(function MessageActionBar({
     role,
     isPersisted,
     isLastMessage,
+    isLatestAssistant,
     developerMode,
     isLoading,
     isReprocessing,

@@ -9,6 +9,7 @@ describe('resolveMessageActionItems', () => {
         role: 'assistant',
         isPersisted: true,
         isLastMessage: true,
+        isLatestAssistant: true,
         developerMode: true,
         isLoading: false,
         isReprocessing: false,
@@ -25,6 +26,7 @@ describe('resolveMessageActionItems', () => {
         role: 'user',
         isPersisted: false,
         isLastMessage: false,
+        isLatestAssistant: false,
         developerMode: true,
         isLoading: false,
         isReprocessing: false,
@@ -41,6 +43,7 @@ describe('resolveMessageActionItems', () => {
         role: 'assistant',
         isPersisted: true,
         isLastMessage: false,
+        isLatestAssistant: false,
         developerMode: false,
         isLoading: false,
         isReprocessing: true,
@@ -72,5 +75,22 @@ describe('resolveMessageActionItems', () => {
         disabled: true,
       },
     ])
+  })
+
+  it('hides debug for non-latest assistant messages even in developer mode', () => {
+    expect(
+      resolveMessageActionItems({
+        role: 'assistant',
+        isPersisted: true,
+        isLastMessage: false,
+        isLatestAssistant: false,
+        developerMode: true,
+        isLoading: false,
+        isReprocessing: false,
+        reprocessingMessageId: null,
+        isRetranslating: false,
+        retranslatingMessageId: null,
+      }).map((item) => item.id),
+    ).toEqual(['edit', 'delete', 'reprocess', 'translate'])
   })
 })

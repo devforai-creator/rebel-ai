@@ -119,6 +119,7 @@ export const ChatMessageRow = memo(function ChatMessageRow({
               role={message.role}
               isPersisted={isPersisted}
               isLastMessage={isLastMessage}
+              isLatestAssistant={isLatestAssistant}
               developerMode={developerMode}
               isLoading={isLoading}
               isReprocessing={isReprocessing}

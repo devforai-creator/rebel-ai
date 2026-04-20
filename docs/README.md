@@ -19,6 +19,8 @@ Keep human-facing docs short and directional. Exact runtime behavior should come
 - [OPERATING_PLAN.md](./OPERATING_PLAN.md): maintainer operating note for current mode, support boundaries, and public-opening gates
 - [PROJECT_SCALING_HARDENING.md](./PROJECT_SCALING_HARDENING.md): design direction for keeping the repo maintainable as scope, complexity, and contributor surface area grow
 - [FIRST_CLASS_SMOKE_CHECKS.md](./FIRST_CLASS_SMOKE_CHECKS.md): repeatable operator verification
+- [FIRST_CLASS_PATH_MAP.md](./FIRST_CLASS_PATH_MAP.md): compact map of the
+  maintained chat request -> queue -> runner -> durable-write path
 - [CHAT_RUNTIME_TUNING.md](./CHAT_RUNTIME_TUNING.md): supported chat and runner tuning knobs
 - [DB_CHANGE_WORKFLOW.md](./DB_CHANGE_WORKFLOW.md): database migration and schema workflow
 

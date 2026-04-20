@@ -134,6 +134,8 @@ Completion notes:
 
 ### P1-1. Push Experimental Side Effects Further from the Core Sync Path
 
+Status: completed on 2026-04-20
+
 Why next:
 
 - experimental behavior is conceptually separated better than it is physically
@@ -173,8 +175,14 @@ Current progress:
 - runner post-generation follow-ups now dispatch the experimental translation
   trigger behind a non-blocking support-effect boundary, so translation escapes
   do not fail the durable chat success path
+- route delivery-mode validation now lives in
+  `src/app/api/chat/delivery-mode-admission.ts`
+- route post-submit translation dispatch now lives in
+  `src/app/api/chat/post-submit-effects.ts`
 
 ### P1-2. Publish a Small First-Class Path Map
+
+Status: completed on 2026-04-20
 
 Why last:
 
@@ -193,6 +201,14 @@ Done when:
 - one short doc answers what the supported chat path is
 - it names which modules own durable writes versus best-effort side effects
 - it stays compact enough to remain useful during real implementation work
+
+Completion notes:
+
+- [FIRST_CLASS_PATH_MAP.md](../../FIRST_CLASS_PATH_MAP.md) now names the
+  maintained request acceptance, queue, runner, durable-write, and best-effort
+  follow-up boundaries in one compact map
+- [docs/README.md](../../README.md) now links the path map alongside the active
+  runbooks
 
 ## Explicitly Parked
 

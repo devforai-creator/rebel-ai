@@ -44,6 +44,27 @@ That means:
 
 This doc follows the doctrine in [SUPPORT_BOUNDARIES.md](./SUPPORT_BOUNDARIES.md).
 
+## Current Position After MVP
+
+The bounded transcript-recall MVP now exists.
+
+The next target is not core graduation.
+The next target is a narrower and more honest state:
+
+- an official experimental feature
+- opt-in only
+- best-effort across ATR-capable streaming provider paths
+- explicitly allowed to differ by provider/model
+- still fully isolated from the supported core chat contract
+
+This means the active contract is no longer "prove one-provider MVP only".
+It is now:
+
+- keep the feature bounded and fail-closed
+- make it usable without SQL-only operator rituals forever
+- allow broader experimental provider coverage without pretending it is part of the supported core
+- rely on request-level debug telemetry and smoke testing for day-to-day operation
+
 ## Primary Decision
 
 Do **not** fold this into the main memory architecture as a new first-class mode.
@@ -64,16 +85,16 @@ The experiment should be able to break on its own without forcing repairs in sum
 - Keep summary/fact memory as the default baseline.
 - Allow limited model-initiated retrieval of raw source messages.
 - Preserve the current supported chat path when the experiment is disabled or fails.
-- Make the experiment easy to gate by chat, provider, and global runtime flag.
+- Make the experiment easy to gate by chat and global runtime flag, with optional provider narrowing when needed.
 
 ## Non-Goals
 
 - Replacing the existing summary/fact memory pipeline.
 - Introducing a general-purpose agent framework into the core runtime.
 - Shipping semantic transcript search in the first version.
-- Making this behavior available to every provider in the first version.
 - Changing message persistence, summary generation, or regeneration semantics.
 - Guaranteeing better answers on every long chat.
+- Guaranteeing identical tool-use behavior across every provider or model.
 
 ## Experimental Contract
 
@@ -139,12 +160,14 @@ The experiment should earn its right to become more integrated later.
 
 ## Scope Contract
 
-### In Scope For MVP
+### In Scope For The Current Experimental Contract
 
 - Per-chat experimental opt-in.
 - Global runtime kill switch.
-- Provider allowlist.
+- Optional provider allowlist.
+- Capability-based experimental provider support for streaming request paths that can carry the bounded tool loop.
 - One bounded tool: fetch raw messages for a specific sequence range.
+- One bounded navigation tool for large surfaced parent ranges.
 - Range requests limited to ranges that are already surfaced by summaries or facts.
 - Hard caps on:
   - number of tool calls
@@ -158,7 +181,7 @@ The experiment should earn its right to become more integrated later.
   - what range was fetched
   - did the request fall back to standard behavior
 
-### Explicitly Out Of Scope For MVP
+### Explicitly Out Of Scope For The Current Experimental Contract
 
 - free-text transcript search
 - vector retrieval over raw transcript
@@ -168,7 +191,7 @@ The experiment should earn its right to become more integrated later.
 - user-facing citation UI
 - model-written memory updates based on recalled transcript
 - older-turn branching or transcript rewrites
-- provider-wide rollout
+- any promise that every provider/model combination will use tools equally well
 
 ## User-Visible Product Behavior
 
@@ -200,7 +223,7 @@ type ExperimentalAgenticTranscriptRecallConfig = {
   maxToolCalls?: number
   maxMessagesPerCall?: number
   maxTotalMessages?: number
-  providerAllowlist?: Array<'openai' | 'anthropic'>
+  providerAllowlist?: ChatModelProvider[]
 }
 
 type ChatExperimentalConfig = {
@@ -218,7 +241,8 @@ Rules:
 
 - missing config means disabled
 - `memory` behavior remains unchanged
-- unsupported providers are treated as disabled even when chat config says enabled
+- missing `providerAllowlist` means "allow every ATR-capable provider path"
+- unsupported providers or delivery modes are treated as disabled even when chat config says enabled
 
 ### Runtime Boundary
 
@@ -299,41 +323,33 @@ Do not return hidden internal metadata unless it is required for rendering the t
 
 ### Budget Defaults
 
-Conservative first-pass defaults:
+Current experimental defaults:
 
-- `maxToolCalls = 1`
+- `maxToolCalls = 2`
 - `maxMessagesPerCall = 12`
 - `maxTotalMessages = 12`
 
-These should be deliberately small.
-The first goal is to learn whether bounded recall improves answers at all.
+These should remain deliberately small.
+The goal is to let the model recover from one bad expansion or child-range choice
+without opening the door to long uncontrolled tool loops.
 
 ## Provider Scope
 
-Do not try to ship this everywhere at once.
+Do not hard-code the feature to one provider forever.
 
-Recommended rollout:
+Current direction:
 
-### Phase A
+- allow ATR on streaming provider paths that can carry the bounded tool loop
+- keep known-incompatible delivery modes explicitly blocked
+- treat provider/model differences as experimental behavior, not as a reason to force one-by-one product rollout gates
 
-- `openai` only
+Examples of valid exclusions:
 
-Reason:
+- batch-only paths that do not participate in the same request-time tool loop
+- provider-specific delivery modes that bypass the normal `streamText()` orchestration contract
 
-- simplest initial operator surface
-- easiest place to validate the tool loop behavior
-
-### Phase B
-
-- consider `anthropic` after Phase A proves stable and useful
-
-### Not In Initial Rollout
-
-- `google`
-- `deepseek`
-- `openrouter`
-
-Those providers can remain hard-disabled until evaluated one by one.
+`providerAllowlist` should remain an optional narrowing tool.
+It should not be the primary mechanism for making the feature usable.
 
 ## Failure Model
 
@@ -458,33 +474,18 @@ This wrapper should:
 - tool results are not persisted as chat messages
 - summaries/facts are not rewritten because recall occurred
 
-## Backlog Admission Criteria
-
-Do not create an active implementation backlog until these are accepted:
-
-- exact experimental config shape
-- exact global kill-switch mechanism
-- MVP provider scope
-- MVP recall budget defaults
-- success metric for the experiment
-- fallback behavior when the tool path errors
-
-If those are not agreed first, the work will sprawl.
-
 ## Success Metrics
 
-The experiment should justify itself with evidence, not intuition.
+The experiment should justify itself with evidence, not intuition, but it does
+not require a heavy paired-comparison harness to remain active.
 
-Minimum evaluation questions:
+Day-to-day operating evidence should come from:
 
-- Does bounded source recall improve answer quality on a small long-chat eval set?
-- How often does the model request source ranges?
-- How often are the requests obviously unnecessary?
-- What is the latency increase?
-- What is the token-cost increase?
-- Does the path fail closed in practice?
+- request-level `debug_info.experimental.agenticTranscriptRecall`
+- manual smoke prompts that test exact older-detail recall
+- direct maintainer inspection of tool-use quality on real chats
 
-The feature should remain experimental until those answers are favorable.
+Optional sidecar comparison tooling may still exist, but it is not a rollout gate.
 
 ## Phase Plan
 
@@ -528,24 +529,26 @@ Exit condition:
 - one provider can complete a chat turn with zero tool calls, one expansion, or
   one expansion followed by one raw fetch
 
-### Phase 3: Evaluation And Triage
+### Phase 3: Operational Hardening As Official Experimental
 
-- run focused evals
-- compare quality, latency, and cost
-- decide keep / iterate / remove
+- widen support to ATR-capable streaming provider paths
+- improve UI and settings ergonomics
+- harden prompt guidance and debug visibility
+- keep the feature opt-in and fail-closed
 
 Exit condition:
 
-- the feature earns an active backlog for broader rollout, or it is parked
+- the feature is usable as an official experimental toggle without pretending it is supported core
 
 ## Decision Rule After MVP
 
-After MVP and evaluation, choose one:
+After MVP, choose one:
 
 1. remove it
-2. keep it as a narrow experiment
-3. harden it into a supported feature with a new contract
+2. keep it as an official experimental feature with a bounded contract
+3. harden it into a supported core feature with a new contract
 
 Do not silently let it become "kind of core" through drift.
 
-If it graduates, write a new architecture document and a real operating contract.
+The current intended outcome is option 2, not option 3.
+If it ever graduates to core, write a new architecture document and a real operating contract.

@@ -163,6 +163,7 @@ export async function requestProviderStage({
   })
 
   const providerOptions = getProviderOptions(provider, {
+    modelName,
     promptCacheKey: promptCache?.key,
     promptCacheRetention: promptCache?.retention,
     reasoningEffort: apiKeyData.reasoning_effort,

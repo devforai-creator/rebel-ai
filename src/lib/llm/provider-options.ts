@@ -3,9 +3,10 @@ import type { JSONValue, SharedV2ProviderOptions } from '@ai-sdk/provider'
 export type AnthropicCacheTTL = '5m' | '1h'
 
 type ProviderOptionsInput = {
+  modelName?: string | null
   promptCacheKey?: string | null
   promptCacheRetention?: '24h' | 'in_memory'
-  // OpenAI-specific reasoning options
+  // Provider-specific reasoning options
   reasoningEffort?: string | null
   // Anthropic-specific cache options
   anthropicCacheEnabled?: boolean
@@ -48,7 +49,48 @@ export function getProviderOptions(
     }
   }
 
+  if (provider === 'anthropic' && supportsAnthropicAdaptiveThinking(overrides?.modelName)) {
+    const anthropicOptions: Record<string, JSONValue> = {
+      thinking: {
+        type: 'adaptive',
+      },
+    }
+
+    if (overrides?.reasoningEffort && overrides.reasoningEffort !== 'none') {
+      anthropicOptions.effort = overrides.reasoningEffort
+    }
+
+    options.anthropic = anthropicOptions
+  }
+
   return Object.keys(options).length > 0 ? options : undefined
+}
+
+export function supportsAnthropicAdaptiveThinking(modelName?: string | null): boolean {
+  if (typeof modelName !== 'string') {
+    return false
+  }
+
+  const normalized = modelName.trim().toLowerCase().replaceAll('.', '-')
+  if (!normalized) {
+    return false
+  }
+
+  if (normalized.includes('claude-mythos-preview')) {
+    return true
+  }
+
+  const opusMatch = normalized.match(/claude-opus-4-(\d+)/)
+  if (opusMatch && Number(opusMatch[1]) >= 6) {
+    return true
+  }
+
+  const sonnetMatch = normalized.match(/claude-sonnet-4-(\d+)/)
+  if (sonnetMatch && Number(sonnetMatch[1]) >= 6) {
+    return true
+  }
+
+  return false
 }
 
 /**

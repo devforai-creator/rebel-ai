@@ -5,6 +5,7 @@ import {
   buildAnthropicCacheControl,
   getAnthropicMinCacheTokens,
   getProviderOptions,
+  supportsAnthropicAdaptiveThinking,
 } from './provider-options'
 
 describe('getProviderOptions', () => {
@@ -107,6 +108,44 @@ describe('getProviderOptions', () => {
       },
     })
   })
+
+  it('enables adaptive thinking for supported anthropic models', () => {
+    const options = getProviderOptions('anthropic', {
+      modelName: 'claude-opus-4-7',
+    })
+
+    expect(options).toEqual({
+      anthropic: {
+        thinking: {
+          type: 'adaptive',
+        },
+      },
+    })
+  })
+
+  it('passes reasoningEffort through as anthropic effort when adaptive thinking is enabled', () => {
+    const options = getProviderOptions('anthropic', {
+      modelName: 'claude-opus-4-7',
+      reasoningEffort: 'medium',
+    })
+
+    expect(options).toEqual({
+      anthropic: {
+        thinking: {
+          type: 'adaptive',
+        },
+        effort: 'medium',
+      },
+    })
+  })
+
+  it('does not enable adaptive thinking for unsupported anthropic models', () => {
+    const options = getProviderOptions('anthropic', {
+      modelName: 'claude-opus-4-5',
+    })
+
+    expect(options).toBeUndefined()
+  })
 })
 
 describe('buildAnthropicCacheControl', () => {
@@ -154,5 +193,21 @@ describe('getAnthropicMinCacheTokens', () => {
 
   it('falls back to most restrictive minimum for unknown models', () => {
     expect(getAnthropicMinCacheTokens('claude-unknown')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.haiku)
+  })
+})
+
+describe('supportsAnthropicAdaptiveThinking', () => {
+  it('supports current adaptive-thinking Anthropic models and aliases', () => {
+    expect(supportsAnthropicAdaptiveThinking('claude-opus-4-7')).toBe(true)
+    expect(supportsAnthropicAdaptiveThinking('claude-opus-4.7')).toBe(true)
+    expect(supportsAnthropicAdaptiveThinking('claude-opus-4-6')).toBe(true)
+    expect(supportsAnthropicAdaptiveThinking('claude-sonnet-4-6')).toBe(true)
+    expect(supportsAnthropicAdaptiveThinking('claude-mythos-preview')).toBe(true)
+  })
+
+  it('rejects older anthropic models without adaptive thinking support', () => {
+    expect(supportsAnthropicAdaptiveThinking('claude-opus-4-5')).toBe(false)
+    expect(supportsAnthropicAdaptiveThinking('claude-sonnet-4-5')).toBe(false)
+    expect(supportsAnthropicAdaptiveThinking('claude-3-7-sonnet')).toBe(false)
   })
 })

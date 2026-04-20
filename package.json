@@ -40,7 +40,8 @@
     "cleanup:character-assets": "node scripts/cleanup-orphaned-character-assets.js",
     "cleanup:module-assets": "node scripts/cleanup-orphaned-module-assets.js",
     "backfill:facts": "node scripts/backfill-facts.js",
-    "backfill:embeddings": "node scripts/backfill-embeddings.js"
+    "backfill:embeddings": "node scripts/backfill-embeddings.js",
+    "backfill:canonical-memory": "node scripts/backfill-canonical-memory.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.70",

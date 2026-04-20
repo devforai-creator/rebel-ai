@@ -2,15 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import { checkUserRateLimit, checkAnonRateLimit } from '@/lib/chat/rate-limiter'
 import { CHAT_REQUEST_LIMITS } from '@/lib/chat/runtime-limits'
-import {
-  CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
-  CHAT_DELIVERY_MODE_STREAMING,
-  isAnthropicBatchChatEnabled,
-  isAnthropicBatchChatSupported,
-  isChatDeliveryMode,
-} from '@/lib/chat/delivery-mode'
 import { NextResponse } from 'next/server'
 import { ensureChatRequestAdmission, resolveRegenerationTargetTurnId } from './chat-admission'
+import { resolveChatDeliveryModeAdmission } from './delivery-mode-admission'
 import { parseChatRequest } from './request-contract'
 import { extractClientIdentifier, parseDeclaredContentLength } from './request-metadata'
 import { createErrorResponse } from './responses'
@@ -132,22 +126,18 @@ export async function POST(req: Request) {
     }
 
     const { provider, modelName } = resolvedConfig.config
-    const deliveryMode = isChatDeliveryMode(rawDeliveryMode)
-      ? rawDeliveryMode
-      : CHAT_DELIVERY_MODE_STREAMING
+    const deliveryModeResult = resolveChatDeliveryModeAdmission({
+      rawDeliveryMode,
+      provider,
+      modelName,
+    })
 
-    if (deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH) {
-      if (!isAnthropicBatchChatEnabled()) {
-        return createErrorResponse('Claude Batch mode is disabled for this deployment', 400)
-      }
-
-      if (!isAnthropicBatchChatSupported({ provider, modelName })) {
-        return createErrorResponse(
-          'Claude Batch mode is only supported for Anthropic Opus 4.5/4.6',
-          400,
-        )
-      }
+    if (deliveryModeResult.status === 'error') {
+      return deliveryModeResult.response
     }
+
+    const { deliveryMode } = deliveryModeResult
+
     const submissionResult = await submitChatGenerationRequest({
       supabase,
       requestId,

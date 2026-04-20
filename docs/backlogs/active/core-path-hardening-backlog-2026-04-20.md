@@ -161,6 +161,12 @@ Current progress:
 - `src/app/api/internal/chat-job-runner/post-generation-pipeline.ts` is down to
   `142` lines after extracting `assistant-finalization.ts`,
   `post-generation-metadata.ts`, and `post-generation-followups.ts`
+- `src/app/api/chat/route.ts` is down to `178` lines after extracting
+  `delivery-mode-admission.ts`, so the experimental Claude Batch branch no
+  longer sits inline with the core request path
+- `src/app/api/chat/submit-chat-job.ts` now dispatches experimental post-submit
+  translation work through `post-submit-effects.ts` instead of keeping that
+  branch inside the enqueue path
 - assistant message finalization, regeneration rollback, stale `debug_info`
   cleanup, `api_keys.last_used_at`, and `chat_usage_events` writes now live
   behind narrower runner boundaries before touching experimental follow-ups

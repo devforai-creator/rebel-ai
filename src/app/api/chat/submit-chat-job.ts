@@ -1,14 +1,13 @@
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import { CHAT_JOB_PAYLOAD_VERSION, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
-import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
 import {
   ACTIVE_CHAT_JOB_CONFLICT_MESSAGE,
   buildActiveChatJobLimitMessage,
 } from '@/lib/queue/admission'
-import { dispatchNonBlockingSupportEffect, SUPPORT_TIER_FEATURES } from '@/lib/support-tier'
 import { createClient } from '@/lib/supabase/server'
 import { scheduleChatJobRunnerTrigger } from './background-trigger'
 import { enqueueChatGenerationJob, persistUserTurn } from './job-persistence'
+import { dispatchPostSubmitChatEffects } from './post-submit-effects'
 import { createErrorResponse } from './responses'
 
 type RouteSupabaseClient = Awaited<ReturnType<typeof createClient>>
@@ -152,19 +151,12 @@ export async function submitChatGenerationRequest({
 
   const jobId = enqueueResult.jobId
 
-  if (insertedUserMessageId) {
-    dispatchNonBlockingSupportEffect({
-      feature: SUPPORT_TIER_FEATURES.MESSAGE_TRANSLATION_TRIGGER,
-      execute: () => triggerMessageTranslation(insertedUserMessageId, userId),
-      context: {
-        chatId,
-        jobId,
-        messageId: insertedUserMessageId,
-        userId,
-      },
-      logPrefix: '[Chat API]',
-    })
-  }
+  dispatchPostSubmitChatEffects({
+    chatId,
+    jobId,
+    userId,
+    insertedUserMessageId,
+  })
 
   scheduleChatJobRunnerTrigger({
     chatId,

@@ -1,7 +1,7 @@
 # Core Path Hardening Backlog
 
 Updated: 2026-04-20
-Status: Active
+Status: Archived on 2026-04-20
 
 This document is the current execution backlog for hardening work that should
 increase future delivery speed without increasing day-to-day operating surface
@@ -16,8 +16,8 @@ It is not:
 Use this backlog when there is no new feature pressure and the goal is to buy
 down complexity in the first-class chat path.
 
-See [OPERATING_PLAN.md](../../OPERATING_PLAN.md) for the current operating
-contract and [PROJECT_SCALING_HARDENING.md](../../PROJECT_SCALING_HARDENING.md)
+See [OPERATING_PLAN.md](../../../OPERATING_PLAN.md) for the current operating
+contract and [PROJECT_SCALING_HARDENING.md](../../../PROJECT_SCALING_HARDENING.md)
 for the design direction behind this queue.
 
 ## Hard Rules
@@ -60,11 +60,11 @@ Why first:
 
 Primary scope:
 
-- [package.json](../../../package.json)
+- [package.json](../../../../package.json)
 - targeted route, runner, and boundary tests under
   [src/app/api/chat](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat) and
   [src/app/api/internal/chat-job-runner](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner)
-- [FIRST_CLASS_SMOKE_CHECKS.md](../../FIRST_CLASS_SMOKE_CHECKS.md) if the docs
+- [FIRST_CLASS_SMOKE_CHECKS.md](../../../FIRST_CLASS_SMOKE_CHECKS.md) if the docs
   need to distinguish local verification from post-deploy smoke checks more
   explicitly
 
@@ -82,7 +82,7 @@ Completion notes:
 - `package.json` now exposes `test:core-path` and `verify:core`
 - `verify:core` runs the browser/client boundary check, targeted first-class
   route and runner tests, and repo typecheck
-- [FIRST_CLASS_SMOKE_CHECKS.md](../../FIRST_CLASS_SMOKE_CHECKS.md) now states
+- [FIRST_CLASS_SMOKE_CHECKS.md](../../../FIRST_CLASS_SMOKE_CHECKS.md) now states
   `verify:core` as the default pre-deploy check for first-class chat-path work
 
 ### P0-2. Split `src/app/api/chat/route.ts` by Responsibility
@@ -204,10 +204,10 @@ Done when:
 
 Completion notes:
 
-- [FIRST_CLASS_PATH_MAP.md](../../FIRST_CLASS_PATH_MAP.md) now names the
+- [FIRST_CLASS_PATH_MAP.md](../../../FIRST_CLASS_PATH_MAP.md) now names the
   maintained request acceptance, queue, runner, durable-write, and best-effort
   follow-up boundaries in one compact map
-- [docs/README.md](../../README.md) now links the path map alongside the active
+- [docs/README.md](../../../README.md) now links the path map alongside the active
   runbooks
 
 ## Explicitly Parked

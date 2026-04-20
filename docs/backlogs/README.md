@@ -9,12 +9,14 @@ Use it to answer two questions quickly:
 
 ## Structure
 
-- [active/](./active): current execution backlogs
+- [active/](./active): current execution backlogs, if any
 - [archive/2026/](./archive/2026): completed, parked, or superseded backlog snapshots from 2026
 
 ## Current Entry Point
 
-- [core-path-hardening-backlog-2026-04-20.md](./active/core-path-hardening-backlog-2026-04-20.md): current active backlog
+- There is no active backlog right now.
+- [core-path-hardening-backlog-2026-04-20.md](./archive/2026/core-path-hardening-backlog-2026-04-20.md):
+  most recently completed backlog
 
 ## Working Rules
 

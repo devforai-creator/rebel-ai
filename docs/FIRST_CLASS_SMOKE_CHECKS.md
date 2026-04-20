@@ -209,4 +209,4 @@ For first-class chat-path edits, the usual order is:
 - [HOSTING_PROFILES.md](./HOSTING_PROFILES.md)
 - [GETTING_STARTED.md](./GETTING_STARTED.md)
 - [OPERATING_PLAN.md](./OPERATING_PLAN.md)
-- [core-path-hardening-backlog-2026-04-20.md](./backlogs/active/core-path-hardening-backlog-2026-04-20.md)
+- [core-path-hardening-backlog-2026-04-20.md](./backlogs/archive/2026/core-path-hardening-backlog-2026-04-20.md)

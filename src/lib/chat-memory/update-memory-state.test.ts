@@ -1,37 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ChatModelConfig } from '@/lib/chat/model-config'
-import {
-  DEFAULT_CHUNK_SUMMARY_PROMPT,
-  DEFAULT_FACT_EXTRACTION_PROMPT,
-  DEFAULT_META_SUMMARY_PROMPT,
-  SUMMARY_LEVEL_CHUNK,
-} from '@/lib/chat-summaries/config'
+import { SUMMARY_LEVEL_META } from '@/lib/chat-summaries/config'
 import type { ChatSummariesSupabaseClient } from '@/lib/chat-summaries/types'
 import { createSupabaseMock } from '@/tests/mocks/supabase'
 
 const hoistedMocks = vi.hoisted(() => ({
   buildContextMock: vi.fn(),
-  createChunkFactsMock: vi.fn(),
-  createChunkSummaryMock: vi.fn(),
   filterRedundantChunksMock: vi.fn(),
   formatFactsMock: vi.fn(),
   formatSummarySegmentsMock: vi.fn(),
   getLastSummaryEndMock: vi.fn(),
   getMessageCountMock: vi.fn(),
   loadProjectedConversationMessagesMock: vi.fn(),
-  processMetaSummariesMock: vi.fn(),
-  processRegenerationRequestsMock: vi.fn(),
+  updateCanonicalSealedMemoryArtifactsMock: vi.fn(),
   updateSummariesMock: vi.fn(),
 }))
 
 vi.mock('@/lib/chat-summaries', () => ({
   buildContext: (...args: unknown[]) => hoistedMocks.buildContextMock(...args),
-}))
-
-vi.mock('@/lib/chat-summaries/chunk-summarizer', () => ({
-  createChunkFacts: (...args: unknown[]) => hoistedMocks.createChunkFactsMock(...args),
-  createChunkSummary: (...args: unknown[]) => hoistedMocks.createChunkSummaryMock(...args),
 }))
 
 vi.mock('@/lib/chat-summaries/context-builder', () => ({
@@ -73,13 +60,9 @@ vi.mock('@/lib/chat-summaries/index', () => ({
   updateSummaries: (...args: unknown[]) => hoistedMocks.updateSummariesMock(...args),
 }))
 
-vi.mock('@/lib/chat-summaries/meta-summarizer', () => ({
-  processMetaSummaries: (...args: unknown[]) => hoistedMocks.processMetaSummariesMock(...args),
-}))
-
-vi.mock('@/lib/chat-summaries/regeneration', () => ({
-  processRegenerationRequests: (...args: unknown[]) =>
-    hoistedMocks.processRegenerationRequestsMock(...args),
+vi.mock('@/lib/chat-summaries/sealed-memory-writer', () => ({
+  updateCanonicalSealedMemoryArtifacts: (...args: unknown[]) =>
+    hoistedMocks.updateCanonicalSealedMemoryArtifactsMock(...args),
 }))
 
 vi.mock('@/lib/chat/turns', () => ({
@@ -135,8 +118,6 @@ describe('chat memory orchestration', () => {
         results: [{ seq: '1', similarity: 0.91, preview: 'hello' }],
       },
     })
-    hoistedMocks.createChunkFactsMock.mockResolvedValue(undefined)
-    hoistedMocks.createChunkSummaryMock.mockResolvedValue(undefined)
     hoistedMocks.filterRedundantChunksMock.mockImplementation((rows) => rows)
     hoistedMocks.formatFactsMock.mockImplementation((facts) =>
       facts
@@ -153,8 +134,7 @@ describe('chat memory orchestration', () => {
     hoistedMocks.getLastSummaryEndMock.mockResolvedValue(0)
     hoistedMocks.getMessageCountMock.mockResolvedValue(0)
     hoistedMocks.loadProjectedConversationMessagesMock.mockResolvedValue([])
-    hoistedMocks.processMetaSummariesMock.mockResolvedValue(undefined)
-    hoistedMocks.processRegenerationRequestsMock.mockResolvedValue(undefined)
+    hoistedMocks.updateCanonicalSealedMemoryArtifactsMock.mockResolvedValue(undefined)
     hoistedMocks.updateSummariesMock.mockResolvedValue(undefined)
   })
 
@@ -216,31 +196,34 @@ describe('chat memory orchestration', () => {
   })
 
   it('builds prefix_live_blocks prompts with sealed summaries, facts, and extra context', async () => {
-    hoistedMocks.getLastSummaryEndMock.mockResolvedValue(4)
+    hoistedMocks.getLastSummaryEndMock.mockImplementation(async (_supabase, _chatId, level) =>
+      level === SUMMARY_LEVEL_META ? 100 : 0,
+    )
     hoistedMocks.loadProjectedConversationMessagesMock.mockResolvedValue([
-      { id: 'msg-1', role: 'user', content: 'sealed user 1' },
-      { id: 'msg-2', role: 'assistant', content: 'sealed assistant 1' },
-      { id: 'msg-3', role: 'user', content: 'sealed user 2' },
-      { id: 'msg-4', role: 'assistant', content: 'sealed assistant 2' },
-      { id: 'msg-5', role: 'user', content: 'recent user' },
-      { id: 'msg-6', role: 'assistant', content: 'recent assistant' },
+      ...Array.from({ length: 100 }, (_, index) => ({
+        id: `msg-${index + 1}`,
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `sealed-${index + 1}`,
+      })),
+      { id: 'msg-101', role: 'user', content: 'recent user' },
+      { id: 'msg-102', role: 'assistant', content: 'recent assistant' },
     ])
 
     const supabase = createMemorySupabaseStub({
       summaries: [
         {
           chat_id: 'chat-1',
-          level: SUMMARY_LEVEL_CHUNK,
+          level: SUMMARY_LEVEL_META,
           start_seq: 1,
-          end_seq: 4,
+          end_seq: 100,
           summary: 'Condensed recap',
         },
       ],
       facts: [
         {
           chat_id: 'chat-1',
-          start_seq: 1,
-          end_seq: 4,
+          start_seq: 91,
+          end_seq: 100,
           facts: 'Remember the promise',
         },
       ],
@@ -262,14 +245,14 @@ describe('chat memory orchestration', () => {
 
     expect(hoistedMocks.filterRedundantChunksMock).toHaveBeenCalled()
     expect(result.fallbackMessages).toEqual([
-      { role: 'user', content: 'recent user', messageId: 'msg-5' },
-      { role: 'assistant', content: 'recent assistant', messageId: 'msg-6' },
+      { role: 'user', content: 'recent user', messageId: 'msg-101' },
+      { role: 'assistant', content: 'recent assistant', messageId: 'msg-102' },
     ])
     expect(result.fallbackSystemPrompt).toBe(
-      'STATIC\n\n=== Previous Conversation Summary ===\n[Summary 1-4]\nCondensed recap\n\n=== Key Facts to Remember ===\n[1-4]\nRemember the promise\n\nLore block',
+      'STATIC\n\n=== Previous Conversation Summary ===\n[Summary 1-100]\nCondensed recap\n\n=== Key Facts to Remember ===\n[91-100]\nRemember the promise\n\nLore block',
     )
     expect(result.dynamicContext).toBe(
-      '=== Previous Conversation Summary ===\n[Summary 1-4]\nCondensed recap\n\n=== Key Facts to Remember ===\n[1-4]\nRemember the promise\n\nLore block',
+      '=== Previous Conversation Summary ===\n[Summary 1-100]\nCondensed recap\n\n=== Key Facts to Remember ===\n[91-100]\nRemember the promise\n\nLore block',
     )
     expect(result.promptBlocks).toEqual([
       {
@@ -280,13 +263,13 @@ describe('chat memory orchestration', () => {
       },
       {
         role: 'system',
-        content: '=== Previous Conversation Summary ===\n[Summary 1-4]\nCondensed recap',
+        content: '=== Previous Conversation Summary ===\n[Summary 1-100]\nCondensed recap',
         cachePreference: 'prefer-cache',
         stability: 'sealed',
       },
       {
         role: 'system',
-        content: '=== Key Facts to Remember ===\n[1-4]\nRemember the promise',
+        content: '=== Key Facts to Remember ===\n[91-100]\nRemember the promise',
         cachePreference: 'prefer-cache',
         stability: 'sealed',
       },
@@ -463,42 +446,23 @@ describe('chat memory orchestration', () => {
       },
     })
 
-    expect(hoistedMocks.processRegenerationRequestsMock).not.toHaveBeenCalled()
-    expect(hoistedMocks.processMetaSummariesMock).not.toHaveBeenCalled()
+    expect(hoistedMocks.updateCanonicalSealedMemoryArtifactsMock).not.toHaveBeenCalled()
   })
 
-  it('replays regeneration requests and creates only missing sealed prefix blocks', async () => {
-    hoistedMocks.getMessageCountMock.mockResolvedValue(10)
-    hoistedMocks.getLastSummaryEndMock.mockResolvedValue(0)
-    hoistedMocks.loadProjectedConversationMessagesMock.mockResolvedValue([
-      { role: 'user', content: 'u1' },
-      { role: 'assistant', content: 'a1' },
-      { role: 'user', content: 'u2' },
-      { role: 'assistant', content: 'a2' },
-    ])
-
-    const supabase = createMemorySupabaseStub({
-      profiles: [
-        {
-          id: 'user-1',
-          chunk_summary_prompt: 'CUSTOM CHUNK',
-          meta_summary_prompt: 'CUSTOM META',
-          fact_extraction_prompt: 'CUSTOM FACTS',
-        },
-      ],
-      summaries: [
-        {
-          chat_id: 'chat-1',
-          level: SUMMARY_LEVEL_CHUNK,
-          start_seq: 1,
-          end_seq: 4,
-          summary: 'existing chunk',
-        },
-      ],
-    })
+  it('delegates prefix_live_blocks updates to the canonical sealed-memory writer', async () => {
+    hoistedMocks.getMessageCountMock.mockResolvedValue(104)
 
     await updateMemoryState({
-      supabase,
+      supabase: createMemorySupabaseStub({
+        profiles: [
+          {
+            id: 'user-1',
+            chunk_summary_prompt: 'CUSTOM CHUNK',
+            meta_summary_prompt: 'CUSTOM META',
+            fact_extraction_prompt: 'CUSTOM FACTS',
+          },
+        ],
+      }),
       chatId: 'chat-1',
       userId: 'user-1',
       model: {} as never,
@@ -516,48 +480,20 @@ describe('chat memory orchestration', () => {
       },
     })
 
-    expect(hoistedMocks.processRegenerationRequestsMock).toHaveBeenCalledWith(
+    expect(hoistedMocks.updateCanonicalSealedMemoryArtifactsMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        chunkPrompt: 'CUSTOM CHUNK',
-        metaPrompt: 'CUSTOM META',
-        factPrompt: 'CUSTOM FACTS',
-        chunkSize: 4,
-      }),
-    )
-    expect(hoistedMocks.createChunkSummaryMock).toHaveBeenCalledTimes(1)
-    expect(hoistedMocks.createChunkSummaryMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        startSeq: 5,
-        endSeq: 8,
-        systemPrompt: 'CUSTOM CHUNK',
-        expectedMessageCount: 4,
-        transcriptMessages: [
-          { role: 'user', content: 'u1' },
-          { role: 'assistant', content: 'a1' },
-          { role: 'user', content: 'u2' },
-          { role: 'assistant', content: 'a2' },
-        ],
-      }),
-    )
-    expect(hoistedMocks.createChunkFactsMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        startSeq: 5,
-        endSeq: 8,
-        factPrompt: 'CUSTOM FACTS',
-      }),
-    )
-    expect(hoistedMocks.processMetaSummariesMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        metaPrompt: 'CUSTOM META',
+        sealedThroughSeq: 102,
+        regenerate: {
+          chunkRanges: [{ startSeq: 1, endSeq: 4 }],
+        },
       }),
     )
   })
 
-  it('skips duplicate prefix block creation errors and continues to meta summaries', async () => {
-    hoistedMocks.getMessageCountMock.mockResolvedValue(6)
-    hoistedMocks.createChunkSummaryMock.mockRejectedValue(
-      Object.assign(new Error('duplicate'), { code: '23505' }),
-    )
+  it('logs and aborts prefix updates when the canonical sealed-memory writer fails', async () => {
+    hoistedMocks.getMessageCountMock.mockResolvedValue(104)
+    hoistedMocks.updateCanonicalSealedMemoryArtifactsMock.mockRejectedValue(new Error('boom'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await updateMemoryState({
       supabase: createMemorySupabaseStub(),
@@ -575,74 +511,9 @@ describe('chat memory orchestration', () => {
       },
     })
 
-    expect(hoistedMocks.createChunkFactsMock).not.toHaveBeenCalled()
-    expect(hoistedMocks.processMetaSummariesMock).toHaveBeenCalled()
-  })
-
-  it('logs and aborts prefix block creation on non-duplicate errors', async () => {
-    hoistedMocks.getMessageCountMock.mockResolvedValue(6)
-    hoistedMocks.createChunkSummaryMock.mockRejectedValue(new Error('llm failure'))
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await updateMemoryState({
-      supabase: createMemorySupabaseStub({
-        profiles: [
-          {
-            id: 'user-1',
-          },
-        ],
-      }),
-      chatId: 'chat-1',
-      userId: 'user-1',
-      model: {} as never,
-      provider: 'openai',
-      modelName: 'gpt-4o-mini',
-      modelConfig: {
-        memory: {
-          mode: 'prefix_live_blocks',
-          sealEveryMessages: 6,
-          retainTailMessages: 2,
-        },
-      },
-    })
-
     expect(errorSpy).toHaveBeenCalledWith(
-      '[chat-memory] Failed to create prefix block summary:',
+      '[chat-memory] Failed to update canonical prefix memory artifacts:',
       expect.any(Error),
-    )
-    expect(hoistedMocks.processMetaSummariesMock).not.toHaveBeenCalled()
-  })
-
-  it('falls back to default summary prompts when profile overrides are missing', async () => {
-    hoistedMocks.getMessageCountMock.mockResolvedValue(6)
-
-    await updateMemoryState({
-      supabase: createMemorySupabaseStub({
-        profiles: [{ id: 'user-1' }],
-      }),
-      chatId: 'chat-1',
-      userId: 'user-1',
-      model: {} as never,
-      provider: 'openai',
-      modelName: 'gpt-4o-mini',
-      regenerate: {
-        regenerateAll: false,
-      },
-      modelConfig: {
-        memory: {
-          mode: 'prefix_live_blocks',
-          sealEveryMessages: 6,
-          retainTailMessages: 2,
-        },
-      },
-    })
-
-    expect(hoistedMocks.processRegenerationRequestsMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        chunkPrompt: DEFAULT_CHUNK_SUMMARY_PROMPT,
-        metaPrompt: DEFAULT_META_SUMMARY_PROMPT,
-        factPrompt: DEFAULT_FACT_EXTRACTION_PROMPT,
-      }),
     )
   })
 })

@@ -1,23 +1,20 @@
 import { resolveChatMemoryConfig } from '@/lib/chat/model-config'
 import {
-  DEFAULT_CHUNK_SUMMARY_PROMPT,
-  DEFAULT_FACT_EXTRACTION_PROMPT,
-  DEFAULT_META_SUMMARY_PROMPT,
+  CHUNK_SIZE,
   SUMMARY_GROUP_SIZE,
   SUMMARY_LEVEL_CHUNK,
   SUMMARY_LEVEL_META,
   SUMMARY_LEVEL_SUPER_META,
 } from '@/lib/chat-summaries/config'
-import { createChunkFacts, createChunkSummary } from '@/lib/chat-summaries/chunk-summarizer'
 import { filterRedundantChunks } from '@/lib/chat-summaries/context-builder'
 import { getLastSummaryEnd, getMessageCount } from '@/lib/chat-summaries/db-helpers'
 import {
   areChunksSequential,
+  calculateChunkBoundaries,
   formatFacts,
   formatSummarySegments,
 } from '@/lib/chat-summaries/formatters'
-import { processMetaSummaries } from '@/lib/chat-summaries/meta-summarizer'
-import { processRegenerationRequests } from '@/lib/chat-summaries/regeneration'
+import { updateCanonicalSealedMemoryArtifacts } from '@/lib/chat-summaries/sealed-memory-writer'
 import { loadProjectedConversationMessages } from '@/lib/chat/turns'
 import type { ChatSummary } from '@/types/database.types'
 import type {
@@ -27,12 +24,6 @@ import type {
   MemoryPromptBlock,
   UpdateMemoryStateOptions,
 } from './types'
-
-type SummaryPromptConfig = {
-  chunkPrompt: string
-  metaPrompt: string
-  factPrompt: string
-}
 
 type SummaryRow = Pick<ChatSummary, 'level' | 'start_seq' | 'end_seq' | 'summary'>
 type FactRow = {
@@ -51,30 +42,15 @@ const EMPTY_RAG_INFO = {
 export function calculatePrefixLiveBlockBoundaries(
   totalMessages: number,
   previousEnd: number,
-  sealedChunkSize: number,
+  _sealedChunkSize: number,
   retainTailMessages: number,
 ): Array<{ start: number; end: number }> {
-  if (sealedChunkSize < 1) {
+  const canonicalSealedThroughSeq = totalMessages - retainTailMessages
+  if (canonicalSealedThroughSeq < CHUNK_SIZE) {
     return []
   }
 
-  const latestSealableEnd = totalMessages - retainTailMessages
-  if (latestSealableEnd <= previousEnd) {
-    return []
-  }
-
-  const boundaries: Array<{ start: number; end: number }> = []
-  let nextEnd = previousEnd + sealedChunkSize
-
-  while (nextEnd <= latestSealableEnd) {
-    boundaries.push({
-      start: nextEnd - sealedChunkSize + 1,
-      end: nextEnd,
-    })
-    nextEnd += sealedChunkSize
-  }
-
-  return boundaries
+  return calculateChunkBoundaries(canonicalSealedThroughSeq + CHUNK_SIZE, previousEnd, CHUNK_SIZE)
 }
 
 export async function buildPrefixLiveBlocksMemoryPlan({
@@ -95,7 +71,7 @@ export async function buildPrefixLiveBlocksMemoryPlan({
   | 'transcriptCoverage'
   | 'transcriptStartOrdinal'
 >): Promise<MemoryPlan> {
-  const lastChunkEnd = (await getLastSummaryEnd(supabase, chatId, SUMMARY_LEVEL_CHUNK)) ?? 0
+  const visibleSummaryEnd = (await getLastSummaryEnd(supabase, chatId, SUMMARY_LEVEL_META)) ?? 0
   const staticSystemPrompt = baseSystemPrompt.trim()
   const promptBlocks: MemoryPromptBlock[] = []
   const dynamicBlocks: string[] = []
@@ -114,12 +90,12 @@ export async function buildPrefixLiveBlocksMemoryPlan({
     (part) => part && part.trim().length > 0,
   )
 
-  if (lastChunkEnd > 0) {
+  if (visibleSummaryEnd > 0) {
     const { data: summaries, error: summaryError } = await supabase
       .from('chat_summaries')
       .select<'level, start_seq, end_seq, summary'>('level, start_seq, end_seq, summary')
       .eq('chat_id', chatId)
-      .lte('end_seq', lastChunkEnd)
+      .lte('end_seq', visibleSummaryEnd)
       .order('level', { ascending: false })
       .order('start_seq', { ascending: true })
 
@@ -148,7 +124,7 @@ export async function buildPrefixLiveBlocksMemoryPlan({
       .from('chat_facts')
       .select<'start_seq, end_seq, facts'>('start_seq, end_seq, facts')
       .eq('chat_id', chatId)
-      .lte('end_seq', lastChunkEnd)
+      .lte('end_seq', visibleSummaryEnd)
       .order('start_seq', { ascending: true })
 
     if (factsError) {
@@ -178,7 +154,7 @@ export async function buildPrefixLiveBlocksMemoryPlan({
     })
   }
 
-  const liveStartOrdinal = Math.max(lastChunkEnd + 1, normalizedTranscriptStartOrdinal)
+  const liveStartOrdinal = Math.max(visibleSummaryEnd + 1, normalizedTranscriptStartOrdinal)
   const liveStartOffset = Math.max(0, liveStartOrdinal - normalizedTranscriptStartOrdinal)
   let fallbackMessages = sanitizedMessages.slice(liveStartOffset).map((message) => ({
     role: message.role,
@@ -198,7 +174,7 @@ export async function buildPrefixLiveBlocksMemoryPlan({
         chatId,
       })
 
-      fallbackMessages = conversationMessages.slice(lastChunkEnd).map((message) => ({
+      fallbackMessages = conversationMessages.slice(visibleSummaryEnd).map((message) => ({
         role: message.role,
         content: message.content,
         messageId: message.id,
@@ -261,104 +237,20 @@ export async function updatePrefixLiveBlocksMemoryState({
     return
   }
 
-  const prompts = await loadSummaryPromptConfig(supabase, userId)
-
-  if (regenerate) {
-    await processRegenerationRequests({
+  try {
+    await updateCanonicalSealedMemoryArtifacts({
       supabase,
       chatId,
       userId,
       model,
       provider,
       modelName,
-      chunkPrompt: prompts.chunkPrompt,
-      metaPrompt: prompts.metaPrompt,
-      factPrompt: prompts.factPrompt,
       regenerate,
-      chunkSize: sealedChunkSize,
+      sealedThroughSeq: totalMessages - memory.retainTailMessages,
     })
+  } catch (error) {
+    console.error('[chat-memory] Failed to update canonical prefix memory artifacts:', error)
   }
-
-  const lastProcessedChunkEnd = await getLastSummaryEnd(supabase, chatId, SUMMARY_LEVEL_CHUNK)
-  const boundaries = calculatePrefixLiveBlockBoundaries(
-    totalMessages,
-    lastProcessedChunkEnd ?? 0,
-    sealedChunkSize,
-    memory.retainTailMessages,
-  )
-
-  if (boundaries.length > 0) {
-    const transcriptMessages = (
-      await loadProjectedConversationMessages({
-        supabase,
-        chatId,
-      })
-    ).map((message) => ({
-      role: message.role,
-      content: message.content,
-    }))
-
-    const { data: existingChunks } = await supabase
-      .from('chat_summaries')
-      .select('start_seq, end_seq')
-      .eq('chat_id', chatId)
-      .eq('level', SUMMARY_LEVEL_CHUNK)
-      .in(
-        'start_seq',
-        boundaries.map((boundary) => boundary.start),
-      )
-
-    const existingStarts = new Set(existingChunks?.map((row) => row.start_seq) ?? [])
-    const toCreate = boundaries.filter((boundary) => !existingStarts.has(boundary.start))
-
-    for (const boundary of toCreate) {
-      try {
-        await createChunkSummary({
-          supabase,
-          chatId,
-          userId,
-          model,
-          provider,
-          modelName,
-          startSeq: boundary.start,
-          endSeq: boundary.end,
-          systemPrompt: prompts.chunkPrompt,
-          expectedMessageCount: sealedChunkSize,
-          transcriptMessages,
-        })
-
-        await createChunkFacts({
-          supabase,
-          chatId,
-          userId,
-          model,
-          provider,
-          modelName,
-          startSeq: boundary.start,
-          endSeq: boundary.end,
-          factPrompt: prompts.factPrompt,
-          transcriptMessages,
-        })
-      } catch (error) {
-        if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
-          continue
-        }
-
-        console.error('[chat-memory] Failed to create prefix block summary:', error)
-        return
-      }
-    }
-  }
-
-  await processMetaSummaries({
-    supabase,
-    chatId,
-    userId,
-    model,
-    provider,
-    modelName,
-    metaPrompt: prompts.metaPrompt,
-  })
 }
 
 export async function hasPrefixLiveBlocksUpdateWork({
@@ -391,23 +283,6 @@ export async function hasPrefixLiveBlocksUpdateWork({
   }
 
   return hasPendingMetaSummaryWork(supabase, chatId)
-}
-
-async function loadSummaryPromptConfig(
-  supabase: UpdateMemoryStateOptions['supabase'],
-  userId: string,
-): Promise<SummaryPromptConfig> {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt')
-    .eq('id', userId)
-    .single()
-
-  return {
-    chunkPrompt: profile?.chunk_summary_prompt || DEFAULT_CHUNK_SUMMARY_PROMPT,
-    metaPrompt: profile?.meta_summary_prompt || DEFAULT_META_SUMMARY_PROMPT,
-    factPrompt: profile?.fact_extraction_prompt || DEFAULT_FACT_EXTRACTION_PROMPT,
-  }
 }
 
 function hasRegenerationWork(regenerate?: HasMemoryUpdateWorkOptions['regenerate']): boolean {

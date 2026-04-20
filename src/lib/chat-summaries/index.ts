@@ -12,17 +12,9 @@
  */
 
 import type { UpdateSummariesOptions } from './types'
-import {
-  CHUNK_SIZE,
-  SUMMARY_LEVEL_CHUNK,
-  DEFAULT_CHUNK_SUMMARY_PROMPT,
-  DEFAULT_META_SUMMARY_PROMPT,
-  DEFAULT_FACT_EXTRACTION_PROMPT,
-} from './config'
-import { getMessageCount, getLastSummaryEnd } from './db-helpers'
-import { processChunkSummaries } from './chunk-summarizer'
-import { processMetaSummaries } from './meta-summarizer'
-import { processRegenerationRequests } from './regeneration'
+import { CHUNK_SIZE } from './config'
+import { getMessageCount } from './db-helpers'
+import { updateCanonicalSealedMemoryArtifacts } from './sealed-memory-writer'
 
 // Re-export types
 export type {
@@ -80,66 +72,16 @@ export async function updateSummaries({
       return
     }
 
-    // Load user's custom prompts
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt')
-      .eq('id', userId)
-      .single()
-
-    const chunkPrompt = profile?.chunk_summary_prompt || DEFAULT_CHUNK_SUMMARY_PROMPT
-    const metaPrompt = profile?.meta_summary_prompt || DEFAULT_META_SUMMARY_PROMPT
-    const factPrompt = profile?.fact_extraction_prompt || DEFAULT_FACT_EXTRACTION_PROMPT
-
-    if (regenerate) {
-      await processRegenerationRequests({
-        supabase,
-        chatId,
-        userId,
-        model,
-        provider,
-        modelName,
-        chunkPrompt,
-        metaPrompt,
-        factPrompt,
-        regenerate,
-      })
-    }
-
-    const lastProcessedChunkEnd = await getLastSummaryEnd(supabase, chatId, SUMMARY_LEVEL_CHUNK)
-
-    await processChunkSummaries({
+    await updateCanonicalSealedMemoryArtifacts({
       supabase,
       chatId,
       userId,
       model,
       provider,
       modelName,
-      totalMessages,
-      previousEnd: lastProcessedChunkEnd ?? 0,
-      chunkPrompt,
-      factPrompt,
+      regenerate,
+      sealedThroughSeq: totalMessages - CHUNK_SIZE,
     })
-
-    await processMetaSummaries({
-      supabase,
-      chatId,
-      userId,
-      model,
-      provider,
-      modelName,
-      metaPrompt,
-    })
-
-    // Disable super meta summary generation
-    // await processSuperMetaSummaries({
-    //   supabase,
-    //   chatId,
-    //   model,
-    //   provider,
-    //   modelName,
-    //   metaPrompt,
-    // })
   } catch (error) {
     console.error('Error updating chat summaries:', error)
   }

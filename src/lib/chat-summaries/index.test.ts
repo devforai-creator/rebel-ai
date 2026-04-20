@@ -5,44 +5,22 @@ import type { SupabaseClientType } from '@/tests/mocks/supabase'
 const mockModel = {} as LanguageModel
 
 const getMessageCountMock = vi.fn()
-const getLastSummaryEndMock = vi.fn()
-const processChunkSummariesMock = vi.fn()
-const processMetaSummariesMock = vi.fn()
-const processRegenerationRequestsMock = vi.fn()
+const updateCanonicalSealedMemoryArtifactsMock = vi.fn()
 
 vi.mock('./db-helpers', () => ({
   getMessageCount: (...args: unknown[]) => getMessageCountMock(...args),
-  getLastSummaryEnd: (...args: unknown[]) => getLastSummaryEndMock(...args),
 }))
 
-vi.mock('./chunk-summarizer', async () => {
-  const actual = await vi.importActual<typeof import('./chunk-summarizer')>('./chunk-summarizer')
-  return {
-    ...actual,
-    processChunkSummaries: (...args: unknown[]) => processChunkSummariesMock(...args),
-  }
-})
-
-vi.mock('./meta-summarizer', async () => {
-  const actual = await vi.importActual<typeof import('./meta-summarizer')>('./meta-summarizer')
-  return {
-    ...actual,
-    processMetaSummaries: (...args: unknown[]) => processMetaSummariesMock(...args),
-  }
-})
-
-vi.mock('./regeneration', () => ({
-  processRegenerationRequests: (...args: unknown[]) => processRegenerationRequestsMock(...args),
+vi.mock('./sealed-memory-writer', () => ({
+  updateCanonicalSealedMemoryArtifacts: (...args: unknown[]) =>
+    updateCanonicalSealedMemoryArtifactsMock(...args),
 }))
 
 describe('updateSummaries orchestrator', () => {
   beforeEach(() => {
     vi.resetModules()
     getMessageCountMock.mockReset()
-    getLastSummaryEndMock.mockReset()
-    processChunkSummariesMock.mockReset()
-    processMetaSummariesMock.mockReset()
-    processRegenerationRequestsMock.mockReset()
+    updateCanonicalSealedMemoryArtifactsMock.mockReset()
   })
 
   afterEach(() => {
@@ -64,21 +42,12 @@ describe('updateSummaries orchestrator', () => {
       regenerate: undefined,
     })
 
-    expect(processChunkSummariesMock).not.toHaveBeenCalled()
-    expect(processMetaSummariesMock).not.toHaveBeenCalled()
-    expect(processRegenerationRequestsMock).not.toHaveBeenCalled()
+    expect(updateCanonicalSealedMemoryArtifactsMock).not.toHaveBeenCalled()
   }, 10_000)
 
-  it('runs regeneration and chunk/meta processors with custom prompts', async () => {
+  it('delegates canonical sealed-memory generation with the summary-window cutoff', async () => {
     getMessageCountMock.mockResolvedValue(25)
-    getLastSummaryEndMock.mockResolvedValue(10)
-    const supabase = createSupabaseMock({
-      profilePrompts: {
-        chunk_summary_prompt: 'chunk-prompt',
-        meta_summary_prompt: 'meta-prompt',
-        fact_extraction_prompt: 'fact-prompt',
-      },
-    })
+    const supabase = createSupabaseMock({ profilePrompts: null })
     const { updateSummaries } = await import('./index')
 
     await updateSummaries({
@@ -91,26 +60,12 @@ describe('updateSummaries orchestrator', () => {
       regenerate: { regenerateAll: true },
     })
 
-    expect(processRegenerationRequestsMock).toHaveBeenCalledWith(
+    expect(updateCanonicalSealedMemoryArtifactsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         chatId: 'chat-1',
         userId: 'user-1',
-        chunkPrompt: 'chunk-prompt',
-        metaPrompt: 'meta-prompt',
-        factPrompt: 'fact-prompt',
+        sealedThroughSeq: 15,
         regenerate: { regenerateAll: true },
-      }),
-    )
-    expect(processChunkSummariesMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        previousEnd: 10,
-        chunkPrompt: 'chunk-prompt',
-        factPrompt: 'fact-prompt',
-      }),
-    )
-    expect(processMetaSummariesMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        metaPrompt: 'meta-prompt',
       }),
     )
   })

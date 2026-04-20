@@ -7,7 +7,8 @@ import {
 } from './prefix-live-blocks'
 
 function createPrefixModeSupabaseStub(options?: {
-  lastChunkEnd?: number | null
+  visibleSummaryEnd?: number | null
+  summaryLevel?: number
   liveMessages?: Array<{ role: 'user' | 'assistant'; content: string }>
 }): ChatSummariesSupabaseClient {
   const liveMessages = (options?.liveMessages ?? []).map((message, index) => ({
@@ -32,14 +33,14 @@ function createPrefixModeSupabaseStub(options?: {
     tables: {
       chat_summaries: {
         rows:
-          typeof options?.lastChunkEnd === 'number'
+          typeof options?.visibleSummaryEnd === 'number'
             ? [
                 {
                   id: 'summary-1',
                   chat_id: 'chat-1',
-                  level: 0,
+                  level: options?.summaryLevel ?? 1,
                   start_seq: 1,
-                  end_seq: options.lastChunkEnd,
+                  end_seq: options.visibleSummaryEnd,
                   summary: 'sealed',
                 },
               ]
@@ -59,10 +60,20 @@ function createPrefixModeSupabaseStub(options?: {
 }
 
 describe('calculatePrefixLiveBlockBoundaries', () => {
-  it('seals when total messages reaches threshold minus retained tail', () => {
-    expect(calculatePrefixLiveBlockBoundaries(100, 0, 96, 4)).toEqual([{ start: 1, end: 96 }])
-    expect(calculatePrefixLiveBlockBoundaries(195, 96, 96, 4)).toEqual([])
-    expect(calculatePrefixLiveBlockBoundaries(196, 96, 96, 4)).toEqual([{ start: 97, end: 192 }])
+  it('derives canonical 10-message chunk boundaries under the retained tail', () => {
+    expect(calculatePrefixLiveBlockBoundaries(100, 0, 96, 4)).toEqual([
+      { start: 1, end: 10 },
+      { start: 11, end: 20 },
+      { start: 21, end: 30 },
+      { start: 31, end: 40 },
+      { start: 41, end: 50 },
+      { start: 51, end: 60 },
+      { start: 61, end: 70 },
+      { start: 71, end: 80 },
+      { start: 81, end: 90 },
+    ])
+    expect(calculatePrefixLiveBlockBoundaries(103, 90, 96, 4)).toEqual([])
+    expect(calculatePrefixLiveBlockBoundaries(104, 90, 96, 4)).toEqual([{ start: 91, end: 100 }])
   })
 })
 
@@ -230,7 +241,7 @@ describe('buildPrefixLiveBlocksMemoryPlan', () => {
 
   it('does not fall back to DB when an explicit empty live window is provided', async () => {
     const supabase = createPrefixModeSupabaseStub({
-      lastChunkEnd: 4,
+      visibleSummaryEnd: 100,
       liveMessages: [
         { role: 'user', content: 'sealed user 1' },
         { role: 'assistant', content: 'sealed assistant 1' },
@@ -258,7 +269,7 @@ describe('buildPrefixLiveBlocksMemoryPlan', () => {
       },
       {
         role: 'system',
-        content: '=== Previous Conversation Summary ===\n[Summary 1-4]\nsealed',
+        content: '=== Previous Conversation Summary ===\n[Meta Summary 1-100]\nsealed',
         cachePreference: 'prefer-cache',
         stability: 'sealed',
       },

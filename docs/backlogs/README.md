@@ -14,9 +14,10 @@ Use it to answer two questions quickly:
 
 ## Current Entry Point
 
-- There is no active backlog right now.
-- [core-path-hardening-backlog-2026-04-20.md](./archive/2026/core-path-hardening-backlog-2026-04-20.md):
-  most recently completed backlog
+- Active backlog:
+  [experimental-agentic-transcript-recall-backlog-2026-04-20.md](./active/experimental-agentic-transcript-recall-backlog-2026-04-20.md)
+- Most recently archived backlog:
+  [core-path-hardening-backlog-2026-04-20.md](./archive/2026/core-path-hardening-backlog-2026-04-20.md)
 
 ## Working Rules
 

@@ -41,6 +41,7 @@ These are useful design notes and transition records, but they should not be tre
 - [realtime-boundary-checklist.md](./realtime-boundary-checklist.md)
 - [chat-regeneration-architecture.md](./chat-regeneration-architecture.md)
 - [claude-batch-chat-mode-plan.md](./claude-batch-chat-mode-plan.md)
+- [experimental-agentic-transcript-recall.md](./experimental-agentic-transcript-recall.md)
 - [lorebook-prefix-cache-plan.md](./lorebook-prefix-cache-plan.md)
 - [memory-modes-v1.md](./memory-modes-v1.md)
 - [suu-import-validation-plan.md](./suu-import-validation-plan.md)

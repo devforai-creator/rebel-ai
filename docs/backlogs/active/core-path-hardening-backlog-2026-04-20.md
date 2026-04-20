@@ -49,6 +49,8 @@ maintained path, not more supporting machinery around it.
 
 ### P0-1. Add `verify:core`
 
+Status: completed on 2026-04-20
+
 Why first:
 
 - `npm run verify` is broader than the day-to-day maintained path
@@ -75,7 +77,17 @@ Done when:
 - the repo docs state clearly when to use `verify:core`, `verify`, and
   `ops:smoke`
 
+Completion notes:
+
+- `package.json` now exposes `test:core-path` and `verify:core`
+- `verify:core` runs the browser/client boundary check, targeted first-class
+  route and runner tests, and repo typecheck
+- [FIRST_CLASS_SMOKE_CHECKS.md](../../FIRST_CLASS_SMOKE_CHECKS.md) now states
+  `verify:core` as the default pre-deploy check for first-class chat-path work
+
 ### P0-2. Split `src/app/api/chat/route.ts` by Responsibility
+
+Status: in progress as of 2026-04-20
 
 Why second:
 
@@ -107,6 +119,16 @@ Done when:
 - persistence and job-enqueue logic stop competing for attention with optional
   side effects
 - regression tests keep the request contract explicit
+
+Current progress:
+
+- request-body parsing and normalization now live in
+  `src/app/api/chat/request-contract.ts`
+- chat admission and regeneration-target validation now live in
+  `src/app/api/chat/chat-admission.ts`
+- shared route error responses now live in `src/app/api/chat/responses.ts`
+- `src/app/api/chat/route.ts` is down to `273` lines from the previous
+  `458`-line orchestration shell while preserving the existing test suite
 
 ### P1-1. Push Experimental Side Effects Further from the Core Sync Path
 

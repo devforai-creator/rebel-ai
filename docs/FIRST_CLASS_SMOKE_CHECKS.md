@@ -29,6 +29,8 @@ Those checks are exposed through one helper script and a short manual checklist.
 ## Gate Semantics
 
 - Pre-deploy checks belong in normal CI: lint, typecheck, unit/integration tests, migration validation, and production build.
+- For the maintained first-class chat path, use `npm run verify:core` as the default local pre-deploy check.
+- Use `npm run verify` when the change is broader than the first-class chat path or when you want the full repo gate before a PR or release.
 - Local smoke checks are rehearsal only. They help catch env and route-contract drift before deploy, but they do not prove that the deployed target is healthy.
 - Deployed smoke checks are post-deploy verification. Run them against the actual target origin before treating a high-risk rollout as closed.
 - If preview/staging exercises the same risk boundary, smoke there first. If the risk only exists on the real deployment shape, run the gate against production.
@@ -39,6 +41,12 @@ Passive, read-mostly smoke check:
 
 ```bash
 npm run ops:smoke
+```
+
+First-class local verification before deploy:
+
+```bash
+npm run verify:core
 ```
 
 Passive smoke check against the local dev server:
@@ -189,6 +197,12 @@ Run this after the change is deployed to the target environment whenever the bat
 - modifying runner, janitor, or internal auth behavior
 - modifying signed asset delivery or bucket privacy
 - rolling out a new low-cost host setup
+
+For first-class chat-path edits, the usual order is:
+
+1. `npm run verify:core`
+2. deploy
+3. `npm run ops:smoke` or `npm run ops:smoke:active` against the deployed target as needed
 
 ## Related Docs
 

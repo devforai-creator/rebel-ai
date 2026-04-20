@@ -1,13 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
-import type { SanitizedMessage } from '@/lib/chat-summaries'
 import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import { CHAT_JOB_PAYLOAD_VERSION, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { checkUserRateLimit, checkAnonRateLimit } from '@/lib/chat/rate-limiter'
 import { CHAT_REQUEST_LIMITS } from '@/lib/chat/runtime-limits'
 import {
   ACTIVE_CHAT_JOB_CONFLICT_MESSAGE,
-  ACTIVE_QUEUE_JOB_STATUSES,
-  MAX_ACTIVE_CHAT_JOBS_PER_USER,
   buildActiveChatJobLimitMessage,
 } from '@/lib/queue/admission'
 import {
@@ -20,10 +17,12 @@ import {
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
 import { dispatchNonBlockingSupportEffect, SUPPORT_TIER_FEATURES } from '@/lib/support-tier'
 import { NextResponse } from 'next/server'
-import { z } from 'zod'
+import { ensureChatRequestAdmission, resolveRegenerationTargetTurnId } from './chat-admission'
 import { scheduleChatJobRunnerTrigger } from './background-trigger'
 import { enqueueChatGenerationJob, persistUserTurn } from './job-persistence'
+import { parseChatRequest } from './request-contract'
 import { extractClientIdentifier, parseDeclaredContentLength } from './request-metadata'
+import { createErrorResponse } from './responses'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60 // 60 second timeout
@@ -35,41 +34,6 @@ function logChatApiDebug(...args: unknown[]): void {
     console.debug(...args)
   }
 }
-
-function createErrorResponse(
-  message: string,
-  status: number,
-  options?: {
-    retryAfter?: number | null
-    headers?: HeadersInit
-  },
-) {
-  const body: {
-    error: string
-    retryAfter?: number | null
-  } = { error: message }
-
-  if (options && 'retryAfter' in options) {
-    body.retryAfter = options.retryAfter ?? null
-  }
-
-  return NextResponse.json(body, {
-    status,
-    headers: options?.headers,
-  })
-}
-
-const chatRequestSchema = z
-  .object({
-    messages: z.array(z.unknown()).optional().nullable(),
-    userMessage: z.unknown().optional(),
-    chatId: z.unknown().optional(),
-    apiKeyId: z.unknown().optional(),
-    deliveryMode: z.unknown().optional(),
-    isRegeneration: z.unknown().optional(),
-    regenerateAssistantMessageId: z.unknown().optional(),
-  })
-  .passthrough()
 
 // Rate limiter utility is now imported from '@/lib/chat/rate-limiter'
 
@@ -117,109 +81,25 @@ export async function POST(req: Request) {
       })
     }
 
-    const parsed = chatRequestSchema.safeParse(await req.json().catch(() => null))
+    const parsedRequest = await parseChatRequest({
+      req,
+      requestId,
+    })
 
-    if (!parsed.success) {
-      return createErrorResponse('Invalid request body', 400)
+    if (parsedRequest.status === 'error') {
+      return parsedRequest.response
     }
 
     const {
-      messages,
-      userMessage: rawUserMessage,
       chatId,
       apiKeyId,
-      deliveryMode: rawDeliveryMode,
-      isRegeneration: rawIsRegeneration,
-      regenerateAssistantMessageId: rawRegenerateAssistantMessageId,
-    } = parsed.data
-
-    if (typeof chatId !== 'string' || !chatId) {
-      return createErrorResponse('Invalid chatId', 400)
-    }
-
-    if (typeof apiKeyId !== 'string' || !apiKeyId) {
-      return createErrorResponse('Invalid apiKeyId', 400)
-    }
-
-    const sanitizedMessagesFromRequest: SanitizedMessage[] = Array.isArray(messages)
-      ? messages
-          .filter((message): message is { role: string; content: string } => {
-            if (!message || typeof message !== 'object') {
-              return false
-            }
-            const candidate = message as Record<string, unknown>
-            return typeof candidate.role === 'string' && typeof candidate.content === 'string'
-          })
-          .filter((message) => message.role === 'user' || message.role === 'assistant')
-          .map((message) => {
-            const candidate = message as Record<string, unknown>
-            return {
-              role: message.role as 'user' | 'assistant',
-              content: message.content,
-              messageId: typeof candidate.messageId === 'string' ? candidate.messageId : null,
-            }
-          })
-      : []
-
-    const normalizedUserMessage = typeof rawUserMessage === 'string' ? rawUserMessage.trim() : ''
-
-    const regenerateAssistantMessageId =
-      typeof rawRegenerateAssistantMessageId === 'string' &&
-      rawRegenerateAssistantMessageId.trim().length > 0
-        ? rawRegenerateAssistantMessageId
-        : null
-
-    const isRegeneration = rawIsRegeneration === true || regenerateAssistantMessageId !== null
-    const textEncoder = new TextEncoder()
-    let messageToPersist: string | null = null
-    let payloadSanitizedMessages = sanitizedMessagesFromRequest
-
-    if (isRegeneration && !regenerateAssistantMessageId) {
-      return createErrorResponse('regenerateAssistantMessageId is required', 400)
-    }
-
-    if (!isRegeneration) {
-      if (normalizedUserMessage) {
-        const byteLength = textEncoder.encode(normalizedUserMessage).length
-        if (byteLength > CHAT_REQUEST_LIMITS.maxMessageBytes) {
-          return createErrorResponse('Message exceeds allowed size', 400)
-        }
-
-        messageToPersist = normalizedUserMessage
-        payloadSanitizedMessages = [
-          {
-            role: 'user',
-            content: normalizedUserMessage,
-            messageId: null,
-          },
-        ]
-      } else {
-        // Temporary compatibility path for legacy callers that still send a client-built
-        // transcript body. Remove this once /api/chat callers have fully migrated to the
-        // slim userMessage / regenerateAssistantMessageId request contract.
-        console.warn('[Chat API] Legacy transcript fallback used', {
-          requestId,
-          chatId,
-          messageCount: sanitizedMessagesFromRequest.length,
-        })
-
-        if (sanitizedMessagesFromRequest.length === 0) {
-          return createErrorResponse('Messages array required', 400)
-        }
-
-        const lastMessage = sanitizedMessagesFromRequest[sanitizedMessagesFromRequest.length - 1]
-        if (lastMessage.role !== 'user' || !lastMessage.content.trim()) {
-          return createErrorResponse('Last message must be a non-empty user message', 400)
-        }
-
-        const byteLength = textEncoder.encode(lastMessage.content).length
-        if (byteLength > CHAT_REQUEST_LIMITS.maxMessageBytes) {
-          return createErrorResponse('Message exceeds allowed size', 400)
-        }
-
-        messageToPersist = lastMessage.content
-      }
-    }
+      rawDeliveryMode,
+      isRegeneration,
+      regenerateAssistantMessageId,
+      normalizedUserMessage,
+      messageToPersist,
+    } = parsedRequest.value
+    let { payloadSanitizedMessages } = parsedRequest.value
 
     const resolvedConfig = await resolveActiveLlmConfigForUser({
       supabase,
@@ -231,94 +111,29 @@ export async function POST(req: Request) {
       return createErrorResponse('API key not found or inactive', 404)
     }
 
-    const { data: chat, error: chatError } = await supabase
-      .from('chats')
-      .select('id, user_id, character_id, persona_id, max_context_messages')
-      .eq('id', chatId)
-      .eq('user_id', user.id)
-      .single()
+    const admissionResult = await ensureChatRequestAdmission({
+      supabase,
+      chatId,
+      userId: user.id,
+      requestId,
+    })
 
-    if (chatError || !chat) {
-      return createErrorResponse('Chat not found', 404)
+    if (admissionResult.status === 'error') {
+      return admissionResult.response
     }
 
-    const [existingActiveJobResult, activeUserJobsResult] = await Promise.all([
-      supabase
-        .from('chat_generation_jobs')
-        .select('id, status')
-        .eq('chat_id', chatId)
-        .in('status', [...ACTIVE_QUEUE_JOB_STATUSES])
-        .limit(1),
-      supabase
-        .from('chat_generation_jobs')
-        .select('id')
-        .eq('user_id', user.id)
-        .in('status', [...ACTIVE_QUEUE_JOB_STATUSES]),
-    ])
+    const regenerationTarget = await resolveRegenerationTargetTurnId({
+      supabase,
+      chatId,
+      regenerateAssistantMessageId,
+      requestId,
+    })
 
-    if (existingActiveJobResult.error) {
-      console.error('[Chat API] Failed to check active chat job', {
-        chatId,
-        requestId,
-        error: existingActiveJobResult.error.message,
-      })
-      return createErrorResponse('Failed to inspect active chat jobs', 500)
+    if (regenerationTarget.status === 'error') {
+      return regenerationTarget.response
     }
 
-    if ((existingActiveJobResult.data?.length ?? 0) > 0) {
-      return createErrorResponse(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, 409)
-    }
-
-    if (activeUserJobsResult.error) {
-      console.error('[Chat API] Failed to count active user jobs', {
-        chatId,
-        requestId,
-        error: activeUserJobsResult.error.message,
-      })
-      return createErrorResponse('Failed to inspect active chat jobs', 500)
-    }
-
-    if ((activeUserJobsResult.data?.length ?? 0) >= MAX_ACTIVE_CHAT_JOBS_PER_USER) {
-      return createErrorResponse(buildActiveChatJobLimitMessage(), 429)
-    }
-
-    let targetTurnId: string | null = null
-
-    if (regenerateAssistantMessageId) {
-      const [
-        { data: targetTurn, error: targetTurnError },
-        { data: latestTurn, error: latestTurnError },
-      ] = await Promise.all([
-        supabase
-          .from('chat_turns')
-          .select('id, turn_index, active_assistant_message_id')
-          .eq('chat_id', chatId)
-          .eq('active_assistant_message_id', regenerateAssistantMessageId)
-          .single(),
-        supabase
-          .from('chat_turns')
-          .select('id, turn_index')
-          .eq('chat_id', chatId)
-          .order('turn_index', { ascending: false })
-          .limit(1)
-          .single(),
-      ])
-
-      if (targetTurnError || !targetTurn || latestTurnError || !latestTurn) {
-        console.warn('[Chat API] Invalid regeneration target', {
-          chatId,
-          requestId,
-          targetId: regenerateAssistantMessageId,
-        })
-        return createErrorResponse('Invalid regeneration target', 400)
-      }
-
-      if (latestTurn.id !== targetTurn.id) {
-        return createErrorResponse('Only the latest assistant message can be regenerated', 400)
-      }
-
-      targetTurnId = targetTurn.id
-    }
+    const targetTurnId = regenerationTarget.turnId
 
     if (resolvedConfig.status === 'unsupported_provider') {
       return createErrorResponse('Unsupported provider', 400)

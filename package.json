@@ -14,6 +14,8 @@
     "check:browser-supabase-client": "node scripts/check-browser-supabase-client.js",
     "lint": "eslint src tests scripts",
     "typecheck": "next typegen && tsc --noEmit",
+    "test:core-path": "vitest run src/lib/supabase/admin.test.ts src/lib/supabase/server.test.ts src/lib/chat/turns.test.ts src/lib/chat/job-queue.test.ts src/lib/chat/job-lifecycle-store.test.ts src/app/api/chat/route.test.ts src/app/api/chat/background-trigger.test.ts 'src/app/api/chat/jobs/[id]/route.test.ts' src/app/api/internal/chat-job-runner/route.test.ts src/app/api/internal/chat-job-runner/process-job-stage.test.ts src/app/api/internal/chat-job-runner/provider-request-stage.test.ts src/app/api/internal/chat-job-runner/streaming-response-stage.test.ts src/app/api/internal/chat-job-runner/post-processing-stage.test.ts src/app/api/internal/chat-job-runner/post-generation-pipeline.test.ts src/app/api/internal/chat-job-runner/service.test.ts",
+    "verify:core": "npm run check:browser-supabase-client && npm run test:core-path && npm run typecheck",
     "verify": "npm run format:check && npm run check:dependencies && npm run check:browser-supabase-client && npm run lint && npm run typecheck && npm run test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

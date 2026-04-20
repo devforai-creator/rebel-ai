@@ -91,6 +91,38 @@ describe('evaluateFetchSourceRangeRequest', () => {
     })
   })
 
+  it('blocks surfaced parent ranges that exceed the direct raw-fetch budget', () => {
+    expect(
+      evaluateFetchSourceRangeRequest({
+        runtimeConfig: enabledRuntimeConfig,
+        sourceHints: {
+          rawContextStartOrdinal: 101,
+          cutoffOrdinal: 100,
+          hints: [
+            {
+              kind: 'summary',
+              label: 'meta_summary',
+              startSeq: 1,
+              endSeq: 100,
+              preview: 'A large parent range.',
+            },
+          ],
+        },
+        budgetState: createAgenticTranscriptRecallBudgetState(),
+        request: {
+          startSeq: 1,
+          endSeq: 100,
+          reason: 'Need the exact final fight location.',
+        },
+      }),
+    ).toEqual({
+      status: 'blocked',
+      blockReason: 'parent_range_requires_expansion',
+      message:
+        'requested transcript range is a surfaced parent range and must be expanded into a smaller child range before raw fetch',
+    })
+  })
+
   it('blocks when the total message budget would be exceeded', () => {
     expect(
       evaluateFetchSourceRangeRequest({

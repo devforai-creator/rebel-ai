@@ -263,16 +263,28 @@ The first version should be intentionally narrow.
 
 ### Allowed Retrieval
 
-Only allow fetching source ranges that are already represented in summary/fact metadata for the same chat.
+Only allow raw transcript fetches that stay inside bounded source ranges already
+represented in summary/fact metadata for the same chat.
 
-For example:
+Phase 1 treated every surfaced range as both:
 
-- `[Summary 1-10]`
-- `[11-20]` fact range
+- a navigation hint
+- a raw-fetch target
 
-The model can request one of those ranges, but not arbitrary transcript search.
+That was too coarse once surfaced parent ranges became larger than the raw fetch
+budget.
 
-This keeps the experiment bounded and auditable.
+Phase 2 splits those roles:
+
+- small surfaced ranges such as `[Summary 1-10]` or `[11-20]` may remain direct
+  raw-fetch targets
+- large surfaced ranges such as `[Meta Summary 1-100]` are navigation-only
+  parent ranges
+- raw fetch must target a bounded child range derived from a surfaced parent,
+  not the large parent itself
+
+This keeps the experiment bounded and auditable without pretending every
+surfaced parent range is directly fetchable.
 
 ### Returned Data
 
@@ -399,8 +411,35 @@ Tool-side validation must enforce:
 - provider allowed
 - range belongs to this chat
 - range is in the allowed hint set
+- surfaced parent ranges that exceed raw fetch budgets are blocked with an
+  explicit "expand first" reason
 - range respects message-count limits
 - total request budget is not exceeded
+
+### Step 3A. Add A Navigation Tool For Large Parent Ranges
+
+Suggested tool:
+
+```ts
+expand_source_range({
+  parentStartSeq: number,
+  parentEndSeq: number,
+  reason: string,
+})
+```
+
+Tool-side validation must enforce:
+
+- feature enabled
+- provider allowed
+- parent range was surfaced in summary/fact metadata for this chat
+- parent range is eligible for expansion
+
+Tool results should return:
+
+- the surfaced parent range
+- bounded legal child ranges that may be raw-fetched next
+- only metadata needed to choose a child range, not raw transcript text
 
 ### Step 4. Add Experimental Request Orchestrator
 
@@ -408,7 +447,8 @@ This wrapper should:
 
 - use the normal prompt and recent messages
 - append a short experimental instruction block
-- expose the single recall tool
+- expose a bounded navigation step for large parent ranges and a bounded raw
+  fetch step for child ranges
 - stop after a very small number of steps
 - convert any orchestration failure into a clean fallback
 
@@ -474,6 +514,19 @@ Exit condition:
 Exit condition:
 
 - one provider can complete a chat turn with zero or one transcript recall call
+
+### Phase 2.5: Navigation vs Fetch Split
+
+- classify surfaced ranges as direct-fetch ranges or navigation-only parents
+- add `expand_source_range`
+- require large surfaced parents to expand into bounded child ranges before raw
+  fetch
+- keep the tool loop bounded to a small number of steps
+
+Exit condition:
+
+- one provider can complete a chat turn with zero tool calls, one expansion, or
+  one expansion followed by one raw fetch
 
 ### Phase 3: Evaluation And Triage
 

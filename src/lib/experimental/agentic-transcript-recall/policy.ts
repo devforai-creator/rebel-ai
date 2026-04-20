@@ -1,5 +1,6 @@
 import type { AgenticTranscriptRecallRuntimeConfig } from './config'
 import type { AgenticTranscriptRecallSourceHints } from './source-hints'
+import { classifyAgenticTranscriptRecallSurfacedRangeAccess } from './range-access'
 
 export type FetchSourceRangeRequest = {
   startSeq: number
@@ -18,6 +19,7 @@ export type AgenticTranscriptRecallFetchBlockedReason =
   | 'source_hints_unavailable'
   | 'invalid_range'
   | 'range_not_allowed'
+  | 'parent_range_requires_expansion'
   | 'max_tool_calls_exceeded'
   | 'max_messages_per_call_exceeded'
   | 'max_total_messages_exceeded'
@@ -62,12 +64,14 @@ function block(
   }
 }
 
-function hasExactAllowedRange(
+function findExactAllowedRange(
   sourceHints: AgenticTranscriptRecallSourceHints,
   startSeq: number,
   endSeq: number,
-): boolean {
-  return sourceHints.hints.some((hint) => hint.startSeq === startSeq && hint.endSeq === endSeq)
+): AgenticTranscriptRecallSourceHints['hints'][number] | null {
+  return (
+    sourceHints.hints.find((hint) => hint.startSeq === startSeq && hint.endSeq === endSeq) ?? null
+  )
 }
 
 export function evaluateFetchSourceRangeRequest({
@@ -109,10 +113,23 @@ export function evaluateFetchSourceRangeRequest({
     )
   }
 
-  if (!hasExactAllowedRange(sourceHints, startSeq, endSeq)) {
+  const exactAllowedRange = findExactAllowedRange(sourceHints, startSeq, endSeq)
+  if (!exactAllowedRange) {
     return block(
       'range_not_allowed',
       'requested transcript range must exactly match one of the surfaced summary or fact ranges',
+    )
+  }
+
+  if (
+    classifyAgenticTranscriptRecallSurfacedRangeAccess({
+      hint: exactAllowedRange,
+      runtimeConfig,
+    }) === 'navigation_parent'
+  ) {
+    return block(
+      'parent_range_requires_expansion',
+      'requested transcript range is a surfaced parent range and must be expanded into a smaller child range before raw fetch',
     )
   }
 

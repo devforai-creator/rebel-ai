@@ -184,6 +184,49 @@ describe('executeFetchSourceRange', () => {
     })
   })
 
+  it('blocks oversized surfaced parent ranges with an explicit expansion-required reason', async () => {
+    const result = await executeFetchSourceRange({
+      supabase: createTranscriptSupabase(),
+      chatId,
+      runtimeConfig: enabledRuntimeConfig,
+      sourceHints: {
+        rawContextStartOrdinal: 101,
+        cutoffOrdinal: 100,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'meta_summary',
+            startSeq: 1,
+            endSeq: 100,
+            preview: 'Large parent range.',
+          },
+        ],
+      },
+      budgetState: createAgenticTranscriptRecallBudgetState(),
+      input: {
+        startSeq: 1,
+        endSeq: 100,
+        reason: 'Need the exact ending location.',
+      },
+    })
+
+    expect(result).toEqual({
+      result: {
+        status: 'blocked',
+        blockReason: 'parent_range_requires_expansion',
+        message:
+          'requested transcript range is a surfaced parent range and must be expanded into a smaller child range before raw fetch',
+        startSeq: 1,
+        endSeq: 100,
+        reason: 'Need the exact ending location.',
+      },
+      budgetState: {
+        toolCallsUsed: 0,
+        totalMessagesFetched: 0,
+      },
+    })
+  })
+
   it('blocks inconsistent hinted ranges that cannot be resolved from the chat transcript', async () => {
     const result = await executeFetchSourceRange({
       supabase: createTranscriptSupabase(),

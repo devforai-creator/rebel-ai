@@ -219,13 +219,25 @@ describe('dashboard chats actions', () => {
     ).resolves.toEqual({ chatId: 'chat-1' })
 
     expect(getChatRows(supabase)).toEqual([
-      {
+      expect.objectContaining({
         id: 'chat-1',
         user_id: 'user-1',
         character_id: 'char-1',
         persona_id: 'persona-1',
         title: 'Guide와의 대화',
-      },
+        model_config: {
+          memory: {
+            mode: 'prefix_live_blocks',
+            sealEveryMessages: 100,
+            retainTailMessages: 4,
+          },
+          experimental: {
+            agenticTranscriptRecall: {
+              enabled: true,
+            },
+          },
+        },
+      }),
     ])
     expect(getTurnRows(supabase)).toHaveLength(1)
     expect(getMessageRows(supabase)).toEqual([
@@ -395,12 +407,24 @@ describe('dashboard chats actions', () => {
       messageCount: 2,
     })
     expect(getChatRows(supabase)).toEqual([
-      {
+      expect.objectContaining({
         id: 'chat-1',
         user_id: 'user-1',
         character_id: 'char-1',
         title: 'Imported from test',
-      },
+        model_config: {
+          memory: {
+            mode: 'prefix_live_blocks',
+            sealEveryMessages: 100,
+            retainTailMessages: 4,
+          },
+          experimental: {
+            agenticTranscriptRecall: {
+              enabled: true,
+            },
+          },
+        },
+      }),
     ])
     expect(getTurnRows(supabase)).toEqual([
       {

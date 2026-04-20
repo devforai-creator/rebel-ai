@@ -1,17 +1,17 @@
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { UsageCostBreakdown } from '@/lib/model-pricing'
-import type { ApiKeyUpdate, Json, LlmProvider, MessageUpdate } from '@/types/database.types'
+import type { Json, LlmProvider, MessageUpdate } from '@/types/database.types'
 import {
   resolveSummaryModelPreference,
   type SummaryModelConfig,
 } from '@/lib/chat/summary-model-preference'
 import { triggerSummaryGeneration, type TriggerResult } from '@/lib/chat/summary-trigger'
-import {
-  buildChatUsageEvent,
-  appendSummaryWarningToDebugInfo,
-  type UsageMetrics,
-} from './usage-debug'
+import { appendSummaryWarningToDebugInfo, type UsageMetrics } from './usage-debug'
 import { finalizeAssistantMessage } from './assistant-finalization'
+import {
+  clearStaleAssistantDebugInfo,
+  recordPostGenerationMetadata,
+} from './post-generation-metadata'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 
@@ -69,74 +69,6 @@ const CHAT_JOB_RUNNER_DEBUG_ENABLED = process.env.CHAT_JOB_RUNNER_DEBUG === 'tru
 function logPostGenerationDebug(...args: unknown[]): void {
   if (CHAT_JOB_RUNNER_DEBUG_ENABLED) {
     console.debug(...args)
-  }
-}
-
-function logPostGenerationPersistenceWarning({
-  action,
-  chatId,
-  userId,
-  apiKeyId,
-  requestId,
-  error,
-}: {
-  action: string
-  chatId: string
-  userId: string
-  apiKeyId: string
-  requestId: string
-  error: string
-}) {
-  console.warn(action, {
-    chatId,
-    userId,
-    apiKeyId,
-    requestId,
-    error,
-  })
-}
-
-function isUniqueViolation(error: { code?: string | null } | null | undefined): boolean {
-  return error?.code === '23505'
-}
-
-async function clearStaleAssistantDebugInfo({
-  supabase,
-  chatId,
-  userId,
-  apiKeyId,
-  requestId,
-  retainedAssistantMessageId,
-}: {
-  supabase: AdminSupabaseClient
-  chatId: string
-  userId: string
-  apiKeyId: string
-  requestId: string
-  retainedAssistantMessageId: string
-}): Promise<void> {
-  const clearDebugInfoUpdate: MessageUpdate = {
-    debug_info: null,
-  }
-
-  const { error } = await supabase
-    .from('messages')
-    .update(clearDebugInfoUpdate as never)
-    .eq('chat_id', chatId)
-    .eq('role', 'assistant')
-    .eq('user_id', userId)
-    .neq('id', retainedAssistantMessageId)
-    .not('debug_info', 'is', null)
-
-  if (error) {
-    logPostGenerationPersistenceWarning({
-      action: '[Chat Job Runner] Failed to clear stale assistant debug_info',
-      chatId,
-      userId,
-      apiKeyId,
-      requestId,
-      error: error.message,
-    })
   }
 }
 
@@ -305,58 +237,18 @@ export async function runPostGenerationPipeline({
     triggerMessageTranslationFn(finalAssistantMessageId, userId)
   }
 
-  const apiKeyUpdate: ApiKeyUpdate = { last_used_at: new Date().toISOString() }
-  const { error: apiKeyUpdateError } = await supabase
-    .from('api_keys')
-    .update(apiKeyUpdate as never)
-    .eq('id', apiKeyId)
-
-  if (apiKeyUpdateError) {
-    logPostGenerationPersistenceWarning({
-      action: '[Chat Job Runner] Failed to update api key last_used_at',
-      chatId,
-      userId,
-      apiKeyId,
-      requestId,
-      error: apiKeyUpdateError.message,
-    })
-  }
-
-  const usageEventInsertStart = now()
-  const usageEvent = buildChatUsageEvent({
-    userId,
+  const { usageEventInsertDurationMs } = await recordPostGenerationMetadata({
+    supabase,
     chatId,
+    userId,
     apiKeyId,
     provider,
     modelName,
+    requestId,
     usage,
     usageCost,
-    requestId,
+    now,
   })
-  const { error: usageEventInsertError } = await supabase
-    .from('chat_usage_events')
-    .insert(usageEvent as never)
-  const usageEventInsertDurationMs = now() - usageEventInsertStart
-
-  if (usageEventInsertError) {
-    if (isUniqueViolation(usageEventInsertError)) {
-      logPostGenerationDebug('[Chat Job Runner] Skipped duplicate chat usage event insert', {
-        chatId,
-        userId,
-        apiKeyId,
-        requestId,
-      })
-    } else {
-      logPostGenerationPersistenceWarning({
-        action: '[Chat Job Runner] Failed to insert chat usage event',
-        chatId,
-        userId,
-        apiKeyId,
-        requestId,
-        error: usageEventInsertError.message,
-      })
-    }
-  }
 
   // Summary generation is best-effort and should not block the chat worker.
   scheduleSummaryGeneration({

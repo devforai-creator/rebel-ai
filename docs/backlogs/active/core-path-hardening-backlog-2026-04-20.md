@@ -156,6 +156,15 @@ Done when:
 - experimental failures are easier to identify as best-effort behavior
 - the maintained path is easier to explain without caveats
 
+Current progress:
+
+- `src/app/api/internal/chat-job-runner/post-generation-pipeline.ts` is down to
+  `278` lines after extracting `assistant-finalization.ts` and
+  `post-generation-metadata.ts`
+- assistant message finalization, regeneration rollback, stale `debug_info`
+  cleanup, `api_keys.last_used_at`, and `chat_usage_events` writes now live
+  behind narrower runner boundaries before touching experimental follow-ups
+
 ### P1-2. Publish a Small First-Class Path Map
 
 Why last:

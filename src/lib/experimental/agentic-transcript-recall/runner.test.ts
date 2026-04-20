@@ -102,6 +102,20 @@ type TestFetchSourceRangeTool = {
   ) => Promise<unknown>
 }
 
+type TestExpandSourceRangeTool = {
+  execute: (
+    input: {
+      parentStartSeq: number
+      parentEndSeq: number
+      reason: string
+    },
+    options: {
+      toolCallId: string
+      messages: unknown[]
+    },
+  ) => Promise<unknown>
+}
+
 describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
   it('augments the system prompt and exposes a bounded recall tool', async () => {
     const debugMetrics: Record<string, string | number | boolean | null> = {}
@@ -122,6 +136,20 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
           },
         ],
       },
+      sourceMap: {
+        rawContextStartOrdinal: 5,
+        cutoffOrdinal: 4,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 2,
+            preview: 'First exchange',
+          },
+        ],
+        navigationParents: [],
+      },
       streamRequest: {
         system: 'FINAL',
         messages: [{ role: 'user', content: 'Hello' }],
@@ -135,6 +163,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
     expect(result.streamTextSettings?.stopWhen).toBeDefined()
     expect(debugMetrics).toMatchObject({
       experimental_agentic_transcript_recall_tool_available: true,
+      experimental_agentic_transcript_recall_expand_available: false,
       experimental_agentic_transcript_recall_tool_call_count: 0,
       experimental_agentic_transcript_recall_tool_fetch_count: 0,
       experimental_agentic_transcript_recall_tool_block_count: 0,
@@ -205,6 +234,20 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
           },
         ],
       },
+      sourceMap: {
+        rawContextStartOrdinal: 5,
+        cutoffOrdinal: 4,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 2,
+            preview: 'First exchange',
+          },
+        ],
+        navigationParents: [],
+      },
       streamRequest: {
         system: 'FINAL',
         messages: [{ role: 'user', content: 'Hello' }],
@@ -242,6 +285,115 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
       experimental_agentic_transcript_recall_tool_fetch_count: 0,
       experimental_agentic_transcript_recall_tool_block_count: 1,
       experimental_agentic_transcript_recall_tool_last_block_reason: 'range_not_allowed',
+    })
+  })
+
+  it('exposes a bounded parent expansion tool when navigation parents exist', async () => {
+    const debugMetrics: Record<string, string | number | boolean | null> = {}
+    const result = prepareExperimentalAgenticTranscriptRecallRequest({
+      supabase: createTranscriptSupabase(),
+      chatId,
+      runtimeConfig: buildRuntimeConfig(),
+      sourceHints: {
+        rawContextStartOrdinal: 5,
+        cutoffOrdinal: 4,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 2,
+            preview: 'First exchange',
+          },
+          {
+            kind: 'summary',
+            label: 'meta_summary',
+            startSeq: 1,
+            endSeq: 4,
+            preview: 'Parent summary',
+          },
+        ],
+      },
+      sourceMap: {
+        rawContextStartOrdinal: 5,
+        cutoffOrdinal: 4,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 2,
+            preview: 'First exchange',
+          },
+        ],
+        navigationParents: [
+          {
+            parentRange: {
+              kind: 'summary',
+              label: 'meta_summary',
+              startSeq: 1,
+              endSeq: 4,
+              preview: 'Parent summary',
+            },
+            childRanges: [
+              {
+                kind: 'summary',
+                label: 'summary',
+                startSeq: 1,
+                endSeq: 2,
+                preview: 'First exchange',
+              },
+            ],
+          },
+        ],
+      },
+      streamRequest: {
+        system: 'FINAL',
+        messages: [{ role: 'user', content: 'Hello' }],
+      },
+      debugMetrics,
+      logDebug: vi.fn(),
+    })
+
+    const expandTool = (
+      result.streamTextSettings?.tools as Record<string, TestExpandSourceRangeTool>
+    )['expand_source_range']
+    const toolResult = await expandTool.execute(
+      {
+        parentStartSeq: 1,
+        parentEndSeq: 4,
+        reason: 'Need smaller child ranges first.',
+      },
+      {
+        toolCallId: 'tool-3',
+        messages: [],
+      },
+    )
+
+    expect(toolResult).toEqual({
+      status: 'expanded',
+      parentStartSeq: 1,
+      parentEndSeq: 4,
+      reason: 'Need smaller child ranges first.',
+      childRangeCount: 1,
+      childRanges: [
+        {
+          kind: 'summary',
+          label: 'summary',
+          startSeq: 1,
+          endSeq: 2,
+          preview: 'First exchange',
+        },
+      ],
+    })
+    expect(debugMetrics).toMatchObject({
+      experimental_agentic_transcript_recall_expand_available: true,
+      experimental_agentic_transcript_recall_expand_call_count: 1,
+      experimental_agentic_transcript_recall_expand_last_parent_start_seq: 1,
+      experimental_agentic_transcript_recall_expand_last_parent_end_seq: 4,
+      experimental_agentic_transcript_recall_expand_last_reason: 'Need smaller child ranges first.',
+      experimental_agentic_transcript_recall_expand_last_block_reason: null,
+      experimental_agentic_transcript_recall_expand_last_child_range_count: 1,
     })
   })
 })

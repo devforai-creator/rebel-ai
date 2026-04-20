@@ -32,6 +32,7 @@ describe('range-access', () => {
           startSeq: 1,
           endSeq: 10,
         },
+        cutoffOrdinal: 12,
         runtimeConfig: {
           maxMessagesPerCall: 12,
           maxTotalMessages: 12,
@@ -45,6 +46,23 @@ describe('range-access', () => {
           startSeq: 1,
           endSeq: 100,
         },
+        cutoffOrdinal: 100,
+        runtimeConfig: {
+          maxMessagesPerCall: 12,
+          maxTotalMessages: 12,
+        },
+      }),
+    ).toBe('navigation_parent')
+  })
+
+  it('treats surfaced ranges that overlap the current raw context as navigation parents', () => {
+    expect(
+      classifyAgenticTranscriptRecallSurfacedRangeAccess({
+        hint: {
+          startSeq: 11,
+          endSeq: 22,
+        },
+        cutoffOrdinal: 20,
         runtimeConfig: {
           maxMessagesPerCall: 12,
           maxTotalMessages: 12,

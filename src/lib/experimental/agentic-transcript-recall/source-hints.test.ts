@@ -140,4 +140,41 @@ describe('deriveAgenticTranscriptRecallSourceHints', () => {
       ],
     })
   })
+
+  it('keeps surfaced parent ranges that begin before the raw context and excludes ranges fully inside it', () => {
+    expect(
+      deriveAgenticTranscriptRecallSourceHints({
+        promptBlocks: [
+          {
+            role: 'system',
+            content: [
+              '[Meta Summary 1-30]',
+              'Parent arc summary',
+              '',
+              '[Summary 21-30]',
+              'This chunk is already inside the raw context',
+              '',
+              '[31-40]',
+              'This fact range is fully inside the raw context too',
+            ].join('\n'),
+            cachePreference: 'avoid-cache',
+            stability: 'sealed',
+          },
+        ],
+        rawContextStartOrdinal: 21,
+      }),
+    ).toEqual({
+      rawContextStartOrdinal: 21,
+      cutoffOrdinal: 20,
+      hints: [
+        {
+          kind: 'summary',
+          label: 'meta_summary',
+          startSeq: 1,
+          endSeq: 30,
+          preview: 'Parent arc summary',
+        },
+      ],
+    })
+  })
 })

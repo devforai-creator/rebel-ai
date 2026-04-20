@@ -116,6 +116,7 @@ function buildContext(
       providerAllowlist: ['openai'],
     },
     agenticTranscriptRecallSourceHints: null,
+    agenticTranscriptRecallSourceMap: null,
     bilingualEnabled: false,
     anthropicConversationMessages: [{ role: 'user', content: 'Hello' }],
     anthropicPlaceholderAdded: false,
@@ -253,6 +254,7 @@ describe('requestProviderStage', () => {
     )
     expect(prepareExperimentalAgenticTranscriptRecallRequestMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        sourceMap: null,
         streamRequest: expect.objectContaining({
           system: 'FINAL',
           messages: [{ role: 'user', content: 'Hello' }],
@@ -345,6 +347,7 @@ describe('requestProviderStage', () => {
       },
       streamTextSettings: {
         tools: {
+          expand_source_range: {},
           fetch_source_range: {},
         },
       },
@@ -373,6 +376,7 @@ describe('requestProviderStage', () => {
       expect.objectContaining({
         system: 'FINAL\n\nExperimental',
         tools: {
+          expand_source_range: {},
           fetch_source_range: {},
         },
       }),

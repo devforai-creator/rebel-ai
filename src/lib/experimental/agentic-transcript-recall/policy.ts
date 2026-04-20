@@ -124,6 +124,7 @@ export function evaluateFetchSourceRangeRequest({
   if (
     classifyAgenticTranscriptRecallSurfacedRangeAccess({
       hint: exactAllowedRange,
+      cutoffOrdinal: sourceHints.cutoffOrdinal,
       runtimeConfig,
     }) === 'navigation_parent'
   ) {

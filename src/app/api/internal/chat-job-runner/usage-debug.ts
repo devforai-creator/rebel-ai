@@ -69,6 +69,13 @@ type AgenticTranscriptRecallDebugInfo = {
   wrapperUsed: boolean | null
   fallbackToStandard: boolean | null
   toolAvailable: boolean | null
+  expandAvailable: boolean | null
+  expandCallCount: number | null
+  expandLastParentStartSeq: number | null
+  expandLastParentEndSeq: number | null
+  expandLastReason: string | null
+  expandLastBlockReason: string | null
+  expandLastChildRangeCount: number | null
   toolCallCount: number | null
   toolFetchCount: number | null
   toolBlockCount: number | null
@@ -159,6 +166,34 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     debugMetrics,
     'experimental_agentic_transcript_recall_tool_available',
   )
+  const expandAvailable = readBooleanMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_expand_available',
+  )
+  const expandCallCount = readNumberMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_expand_call_count',
+  )
+  const expandLastParentStartSeq = readNumberMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_expand_last_parent_start_seq',
+  )
+  const expandLastParentEndSeq = readNumberMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_expand_last_parent_end_seq',
+  )
+  const expandLastReason = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_expand_last_reason',
+  )
+  const expandLastBlockReason = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_expand_last_block_reason',
+  )
+  const expandLastChildRangeCount = readNumberMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_expand_last_child_range_count',
+  )
   const toolCallCount = readNumberMetric(
     debugMetrics,
     'experimental_agentic_transcript_recall_tool_call_count',
@@ -207,6 +242,13 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     wrapperUsed,
     fallbackToStandard,
     toolAvailable,
+    expandAvailable,
+    expandCallCount,
+    expandLastParentStartSeq,
+    expandLastParentEndSeq,
+    expandLastReason,
+    expandLastBlockReason,
+    expandLastChildRangeCount,
     toolCallCount,
     toolFetchCount,
     toolBlockCount,
@@ -233,6 +275,13 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     wrapperUsed,
     fallbackToStandard,
     toolAvailable,
+    expandAvailable,
+    expandCallCount,
+    expandLastParentStartSeq,
+    expandLastParentEndSeq,
+    expandLastReason,
+    expandLastBlockReason,
+    expandLastChildRangeCount,
     toolCallCount,
     toolFetchCount,
     toolBlockCount,

@@ -233,22 +233,22 @@ describe('executeFetchSourceRange', () => {
       chatId,
       runtimeConfig: enabledRuntimeConfig,
       sourceHints: {
-        rawContextStartOrdinal: 5,
-        cutoffOrdinal: 4,
+        rawContextStartOrdinal: 10,
+        cutoffOrdinal: 9,
         hints: [
           {
             kind: 'fact',
             label: null,
-            startSeq: 3,
-            endSeq: 5,
+            startSeq: 5,
+            endSeq: 7,
             preview: 'This hint is inconsistent with the chat length.',
           },
         ],
       },
       budgetState: createAgenticTranscriptRecallBudgetState(),
       input: {
-        startSeq: 3,
-        endSeq: 5,
+        startSeq: 5,
+        endSeq: 7,
         reason: 'Test inconsistent range.',
       },
     })
@@ -259,8 +259,8 @@ describe('executeFetchSourceRange', () => {
         blockReason: 'range_not_in_chat',
         message:
           'requested transcript range could not be resolved from the current chat transcript',
-        startSeq: 3,
-        endSeq: 5,
+        startSeq: 5,
+        endSeq: 7,
         reason: 'Test inconsistent range.',
       },
       budgetState: {

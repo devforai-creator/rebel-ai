@@ -19,6 +19,10 @@ import {
   deriveAgenticTranscriptRecallSourceHints,
   type AgenticTranscriptRecallSourceHints,
 } from '@/lib/experimental/agentic-transcript-recall/source-hints'
+import {
+  deriveAgenticTranscriptRecallSourceMap,
+  type AgenticTranscriptRecallSourceMap,
+} from '@/lib/experimental/agentic-transcript-recall/source-map'
 import { getLastSummaryEnd } from '@/lib/chat-summaries/db-helpers'
 import { CONTEXT_WINDOW, SUMMARY_LEVEL_CHUNK } from '@/lib/chat-summaries/config'
 import {
@@ -75,6 +79,7 @@ export type LoadedChatJobExecutionContext = {
   ragInfo: MemoryPlanResult['ragInfo']
   agenticTranscriptRecall: AgenticTranscriptRecallRuntimeConfig
   agenticTranscriptRecallSourceHints: AgenticTranscriptRecallSourceHints | null
+  agenticTranscriptRecallSourceMap: AgenticTranscriptRecallSourceMap | null
   bilingualEnabled: boolean
   anthropicConversationMessages: MemoryPlanResult['fallbackMessages']
   anthropicPlaceholderAdded: boolean
@@ -668,6 +673,12 @@ export async function loadChatJobExecutionContext({
         rawContextStartOrdinal: rawRecentContextStartOrdinal,
       })
     : null
+  const agenticTranscriptRecallSourceMap = agenticTranscriptRecallSourceHints
+    ? deriveAgenticTranscriptRecallSourceMap({
+        sourceHints: agenticTranscriptRecallSourceHints,
+        runtimeConfig: agenticTranscriptRecall,
+      })
+    : null
   debugMetrics['experimental_agentic_transcript_recall_source_hint_count'] =
     agenticTranscriptRecallSourceHints?.hints.length ?? 0
   debugMetrics['experimental_agentic_transcript_recall_source_hint_raw_context_start_ordinal'] =
@@ -676,6 +687,14 @@ export async function loadChatJobExecutionContext({
     agenticTranscriptRecallSourceHints?.hints.filter((hint) => hint.kind === 'summary').length ?? 0
   debugMetrics['experimental_agentic_transcript_recall_source_hint_fact_count'] =
     agenticTranscriptRecallSourceHints?.hints.filter((hint) => hint.kind === 'fact').length ?? 0
+  debugMetrics['experimental_agentic_transcript_recall_direct_fetch_range_count'] =
+    agenticTranscriptRecallSourceMap?.directFetchRanges.length ?? 0
+  debugMetrics['experimental_agentic_transcript_recall_navigation_parent_count'] =
+    agenticTranscriptRecallSourceMap?.navigationParents.length ?? 0
+  debugMetrics['experimental_agentic_transcript_recall_navigation_parent_with_children_count'] =
+    agenticTranscriptRecallSourceMap?.navigationParents.filter(
+      (entry) => entry.childRanges.length > 0,
+    ).length ?? 0
 
   stepStart = performance.now()
   const bilingualEnabled = await isBilingualEnabled(supabase, userId)
@@ -743,6 +762,7 @@ export async function loadChatJobExecutionContext({
     ragInfo,
     agenticTranscriptRecall,
     agenticTranscriptRecallSourceHints,
+    agenticTranscriptRecallSourceMap,
     bilingualEnabled,
     anthropicConversationMessages,
     anthropicPlaceholderAdded,

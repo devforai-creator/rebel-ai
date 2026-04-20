@@ -24,9 +24,11 @@ export function getAgenticTranscriptRecallMaxDirectFetchMessages(
 
 export function classifyAgenticTranscriptRecallSurfacedRangeAccess({
   hint,
+  cutoffOrdinal,
   runtimeConfig,
 }: {
   hint: Pick<AgenticTranscriptRecallSourceHint, 'startSeq' | 'endSeq'>
+  cutoffOrdinal: number
   runtimeConfig: Pick<
     AgenticTranscriptRecallRuntimeConfig,
     'maxMessagesPerCall' | 'maxTotalMessages'
@@ -35,5 +37,7 @@ export function classifyAgenticTranscriptRecallSurfacedRangeAccess({
   const messageCount = getAgenticTranscriptRecallRangeMessageCount(hint)
   const maxDirectFetchMessages = getAgenticTranscriptRecallMaxDirectFetchMessages(runtimeConfig)
 
-  return messageCount <= maxDirectFetchMessages ? 'direct_fetch' : 'navigation_parent'
+  return hint.endSeq <= cutoffOrdinal && messageCount <= maxDirectFetchMessages
+    ? 'direct_fetch'
+    : 'navigation_parent'
 }

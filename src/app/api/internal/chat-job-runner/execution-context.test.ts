@@ -426,6 +426,9 @@ describe('loadChatJobExecutionContext', () => {
         '[Summary 1-10]',
         'Old summary',
         '',
+        '[Meta Summary 1-20]',
+        'Parent summary',
+        '',
         '=== Key Facts to Remember ===',
         '[11-20]',
         'Old fact',
@@ -445,6 +448,9 @@ describe('loadChatJobExecutionContext', () => {
             '=== Previous Conversation Summary ===',
             '[Summary 1-10]',
             'Old summary',
+            '',
+            '[Meta Summary 1-20]',
+            'Parent summary',
             '',
             '=== Key Facts to Remember ===',
             '[11-20]',
@@ -488,6 +494,13 @@ describe('loadChatJobExecutionContext', () => {
           preview: 'Old summary',
         },
         {
+          kind: 'summary',
+          label: 'meta_summary',
+          startSeq: 1,
+          endSeq: 20,
+          preview: 'Parent summary',
+        },
+        {
           kind: 'fact',
           label: null,
           startSeq: 11,
@@ -496,12 +509,62 @@ describe('loadChatJobExecutionContext', () => {
         },
       ],
     })
+    expect(result.agenticTranscriptRecallSourceMap).toEqual({
+      rawContextStartOrdinal: 21,
+      cutoffOrdinal: 20,
+      directFetchRanges: [
+        {
+          kind: 'summary',
+          label: 'summary',
+          startSeq: 1,
+          endSeq: 10,
+          preview: 'Old summary',
+        },
+        {
+          kind: 'fact',
+          label: null,
+          startSeq: 11,
+          endSeq: 20,
+          preview: 'Old fact',
+        },
+      ],
+      navigationParents: [
+        {
+          parentRange: {
+            kind: 'summary',
+            label: 'meta_summary',
+            startSeq: 1,
+            endSeq: 20,
+            preview: 'Parent summary',
+          },
+          childRanges: [
+            {
+              kind: 'summary',
+              label: 'summary',
+              startSeq: 1,
+              endSeq: 10,
+              preview: 'Old summary',
+            },
+            {
+              kind: 'fact',
+              label: null,
+              startSeq: 11,
+              endSeq: 20,
+              preview: 'Old fact',
+            },
+          ],
+        },
+      ],
+    })
     expect(result.debugMetrics).toEqual(
       expect.objectContaining({
-        experimental_agentic_transcript_recall_source_hint_count: 2,
+        experimental_agentic_transcript_recall_source_hint_count: 3,
         experimental_agentic_transcript_recall_source_hint_raw_context_start_ordinal: 21,
-        experimental_agentic_transcript_recall_source_hint_summary_count: 1,
+        experimental_agentic_transcript_recall_source_hint_summary_count: 2,
         experimental_agentic_transcript_recall_source_hint_fact_count: 1,
+        experimental_agentic_transcript_recall_direct_fetch_range_count: 2,
+        experimental_agentic_transcript_recall_navigation_parent_count: 1,
+        experimental_agentic_transcript_recall_navigation_parent_with_children_count: 1,
       }),
     )
   })

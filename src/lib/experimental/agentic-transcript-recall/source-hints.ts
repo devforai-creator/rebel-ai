@@ -48,7 +48,7 @@ function finalizeHint(
   cutoffOrdinal: number,
   dedupe: Map<string, AgenticTranscriptRecallSourceHint>,
 ): void {
-  if (!pending || pending.endSeq > cutoffOrdinal) {
+  if (!pending || pending.startSeq > cutoffOrdinal) {
     return
   }
 

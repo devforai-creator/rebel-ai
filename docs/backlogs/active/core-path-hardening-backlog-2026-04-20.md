@@ -87,7 +87,7 @@ Completion notes:
 
 ### P0-2. Split `src/app/api/chat/route.ts` by Responsibility
 
-Status: in progress as of 2026-04-20
+Status: completed on 2026-04-20
 
 Why second:
 
@@ -120,15 +120,17 @@ Done when:
   side effects
 - regression tests keep the request contract explicit
 
-Current progress:
+Completion notes:
 
 - request-body parsing and normalization now live in
   `src/app/api/chat/request-contract.ts`
 - chat admission and regeneration-target validation now live in
   `src/app/api/chat/chat-admission.ts`
 - shared route error responses now live in `src/app/api/chat/responses.ts`
-- `src/app/api/chat/route.ts` is down to `273` lines from the previous
-  `458`-line orchestration shell while preserving the existing test suite
+- persistence, enqueue, and best-effort side effects now live in
+  `src/app/api/chat/submit-chat-job.ts`
+- `src/app/api/chat/route.ts` is down to `188` lines from the previous
+  `458`-line orchestration shell while preserving `verify:core`
 
 ### P1-1. Push Experimental Side Effects Further from the Core Sync Path
 

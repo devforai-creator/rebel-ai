@@ -5,6 +5,7 @@ import type { PromptCacheDecision, AnthropicCacheDecision } from '@/lib/llm/prom
 import type { CreateGoogleCacheResult } from '@/lib/llm/google-cache'
 
 type ConversationMessage = { role: string; content: string }
+type DebugMetricValue = string | number | boolean | null
 
 export type ChatRunnerActualPayload = {
   provider: LlmProvider
@@ -54,6 +55,29 @@ type BuildChatDebugInfoArgs = {
   sanitizedMessageCount: number
   ragInfo: unknown
   actualPayload: ChatRunnerActualPayload | null
+  debugMetrics?: Record<string, DebugMetricValue>
+}
+
+type AgenticTranscriptRecallDebugInfo = {
+  configured: boolean | null
+  globallyEnabled: boolean | null
+  providerSupported: boolean | null
+  providerAllowed: boolean | null
+  enabled: boolean | null
+  skipReason: string | null
+  sourceHintCount: number | null
+  wrapperUsed: boolean | null
+  fallbackToStandard: boolean | null
+  toolAvailable: boolean | null
+  toolCallCount: number | null
+  toolFetchCount: number | null
+  toolBlockCount: number | null
+  toolTotalMessagesFetched: number | null
+  toolLastStartSeq: number | null
+  toolLastEndSeq: number | null
+  toolLastReason: string | null
+  toolLastBlockReason: string | null
+  stepCount: number | null
 }
 
 type BuildChatUsageEventArgs = {
@@ -65,6 +89,160 @@ type BuildChatUsageEventArgs = {
   usage: UsageMetrics
   usageCost: UsageCostBreakdown | null
   requestId: string
+}
+
+function readBooleanMetric(
+  metrics: Record<string, DebugMetricValue> | undefined,
+  key: string,
+): boolean | null {
+  const value = metrics?.[key]
+  return typeof value === 'boolean' ? value : null
+}
+
+function readNumberMetric(
+  metrics: Record<string, DebugMetricValue> | undefined,
+  key: string,
+): number | null {
+  const value = metrics?.[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function readStringMetric(
+  metrics: Record<string, DebugMetricValue> | undefined,
+  key: string,
+): string | null {
+  const value = metrics?.[key]
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function buildExperimentalAgenticTranscriptRecallDebugInfo(
+  debugMetrics: Record<string, DebugMetricValue> | undefined,
+): AgenticTranscriptRecallDebugInfo | null {
+  if (!debugMetrics) {
+    return null
+  }
+
+  const configured = readBooleanMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_configured',
+  )
+  const globallyEnabled = readBooleanMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_globally_enabled',
+  )
+  const providerSupported = readBooleanMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_provider_supported',
+  )
+  const providerAllowed = readBooleanMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_provider_allowed',
+  )
+  const enabled = readBooleanMetric(debugMetrics, 'experimental_agentic_transcript_recall_enabled')
+  const skipReason = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_skip_reason',
+  )
+  const sourceHintCount = readNumberMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_source_hint_count',
+  )
+  const wrapperUsed = readBooleanMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_wrapper_used',
+  )
+  const fallbackToStandard = readBooleanMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_fallback_to_standard',
+  )
+  const toolAvailable = readBooleanMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_available',
+  )
+  const toolCallCount = readNumberMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_call_count',
+  )
+  const toolFetchCount = readNumberMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_fetch_count',
+  )
+  const toolBlockCount = readNumberMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_block_count',
+  )
+  const toolTotalMessagesFetched = readNumberMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_total_messages_fetched',
+  )
+  const toolLastStartSeq = readNumberMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_last_start_seq',
+  )
+  const toolLastEndSeq = readNumberMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_last_end_seq',
+  )
+  const toolLastReason = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_last_reason',
+  )
+  const toolLastBlockReason = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_last_block_reason',
+  )
+  const stepCount = readNumberMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_step_count',
+  )
+
+  const hasAnyValue = [
+    configured,
+    globallyEnabled,
+    providerSupported,
+    providerAllowed,
+    enabled,
+    skipReason,
+    sourceHintCount,
+    wrapperUsed,
+    fallbackToStandard,
+    toolAvailable,
+    toolCallCount,
+    toolFetchCount,
+    toolBlockCount,
+    toolTotalMessagesFetched,
+    toolLastStartSeq,
+    toolLastEndSeq,
+    toolLastReason,
+    toolLastBlockReason,
+    stepCount,
+  ].some((value) => value !== null)
+
+  if (!hasAnyValue) {
+    return null
+  }
+
+  return {
+    configured,
+    globallyEnabled,
+    providerSupported,
+    providerAllowed,
+    enabled,
+    skipReason,
+    sourceHintCount,
+    wrapperUsed,
+    fallbackToStandard,
+    toolAvailable,
+    toolCallCount,
+    toolFetchCount,
+    toolBlockCount,
+    toolTotalMessagesFetched,
+    toolLastStartSeq,
+    toolLastEndSeq,
+    toolLastReason,
+    toolLastBlockReason,
+    stepCount,
+  }
 }
 
 export function buildChatDebugInfo(args: BuildChatDebugInfoArgs): Record<string, unknown> {
@@ -95,7 +273,11 @@ export function buildChatDebugInfo(args: BuildChatDebugInfoArgs): Record<string,
     sanitizedMessageCount,
     ragInfo,
     actualPayload,
+    debugMetrics,
   } = args
+
+  const experimentalAgenticTranscriptRecall =
+    buildExperimentalAgenticTranscriptRecallDebugInfo(debugMetrics)
 
   return {
     requestId,
@@ -157,6 +339,12 @@ export function buildChatDebugInfo(args: BuildChatDebugInfoArgs): Record<string,
     sanitizedMessageCount,
     rag: ragInfo,
     actualPayload,
+    experimental:
+      experimentalAgenticTranscriptRecall === null
+        ? null
+        : {
+            agenticTranscriptRecall: experimentalAgenticTranscriptRecall,
+          },
   }
 }
 

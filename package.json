@@ -36,6 +36,7 @@
     "ops:smoke:active": "node scripts/first-class-smoke-check.js --active-runners",
     "ops:smoke:local:active": "node scripts/first-class-smoke-check.js --local --active-runners",
     "benchmark:rag:retrieval": "node scripts/run-rag-retrieval-benchmark.js",
+    "eval:transcript-recall": "node scripts/run-agentic-transcript-recall-eval.js",
     "cleanup:character-assets": "node scripts/cleanup-orphaned-character-assets.js",
     "cleanup:module-assets": "node scripts/cleanup-orphaned-module-assets.js",
     "backfill:facts": "node scripts/backfill-facts.js",

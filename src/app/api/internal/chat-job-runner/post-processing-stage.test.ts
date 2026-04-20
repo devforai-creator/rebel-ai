@@ -80,6 +80,7 @@ describe('runPostProcessingStage', () => {
         anthropicPlaceholderAdded: false,
         totalInputTokens: 99,
         staticPromptTokens: 80,
+        debugMetrics: {},
       },
       providerArtifacts: {
         promptCache: { key: 'chat:1', retention: '24h' },
@@ -171,6 +172,7 @@ describe('runPostProcessingStage', () => {
           anthropicPlaceholderAdded: false,
           totalInputTokens: 99,
           staticPromptTokens: 80,
+          debugMetrics: {},
         },
         providerArtifacts: {
           promptCache: null,
@@ -227,6 +229,7 @@ describe('runPostProcessingStage', () => {
           anthropicPlaceholderAdded: false,
           totalInputTokens: 99,
           staticPromptTokens: 80,
+          debugMetrics: {},
         },
         providerArtifacts: {
           promptCache: null,

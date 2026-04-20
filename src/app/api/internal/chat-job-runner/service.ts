@@ -251,6 +251,7 @@ async function executeJob({
         anthropicPlaceholderAdded,
         totalInputTokens,
         staticPromptTokens,
+        debugMetrics,
       },
       providerArtifacts: {
         promptCache,

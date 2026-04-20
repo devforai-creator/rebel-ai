@@ -29,6 +29,7 @@ type PostProcessingContext = Pick<
   | 'anthropicPlaceholderAdded'
   | 'totalInputTokens'
   | 'staticPromptTokens'
+  | 'debugMetrics'
 >
 
 type ProviderRequestArtifacts = Pick<
@@ -105,6 +106,7 @@ export async function runPostProcessingStage({
     anthropicPlaceholderAdded,
     totalInputTokens,
     staticPromptTokens,
+    debugMetrics,
   } = context
   const {
     promptCache,
@@ -158,6 +160,7 @@ export async function runPostProcessingStage({
     sanitizedMessageCount: generationTranscript.length,
     ragInfo,
     actualPayload,
+    debugMetrics,
   })
 
   try {

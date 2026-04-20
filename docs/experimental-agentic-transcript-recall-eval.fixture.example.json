@@ -1,0 +1,13 @@
+{
+  "title": "Experimental transcript recall sample eval",
+  "cases": [
+    {
+      "caseId": "promise-wording",
+      "focus": "Does the experimental reply preserve the exact promise wording better than the baseline reply?",
+      "baselineMessageId": "00000000-0000-0000-0000-000000000001",
+      "experimentalMessageId": "00000000-0000-0000-0000-000000000002",
+      "qualityWinner": "undecided",
+      "qualityNotes": ""
+    }
+  ]
+}

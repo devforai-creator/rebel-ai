@@ -67,4 +67,4 @@ for the current queue and the archive split.
 - [backlogs/README.md](./backlogs/README.md): backlog structure, current entry
   point, and archive policy
 - current active queue:
-  [backlogs/active/experimental-agentic-transcript-recall-phase-2-backlog-2026-04-20.md](./backlogs/active/experimental-agentic-transcript-recall-phase-2-backlog-2026-04-20.md)
+  [backlogs/active/shared-sealed-memory-hierarchy-backlog-2026-04-20.md](./backlogs/active/shared-sealed-memory-hierarchy-backlog-2026-04-20.md)

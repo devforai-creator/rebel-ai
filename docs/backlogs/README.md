@@ -15,9 +15,9 @@ Use it to answer two questions quickly:
 ## Current Entry Point
 
 - Active backlog:
-  [experimental-agentic-transcript-recall-phase-2-backlog-2026-04-20.md](./active/experimental-agentic-transcript-recall-phase-2-backlog-2026-04-20.md)
+  [shared-sealed-memory-hierarchy-backlog-2026-04-20.md](./active/shared-sealed-memory-hierarchy-backlog-2026-04-20.md)
 - Most recently archived backlog:
-  [experimental-agentic-transcript-recall-backlog-2026-04-20.md](./archive/2026/experimental-agentic-transcript-recall-backlog-2026-04-20.md)
+  [experimental-agentic-transcript-recall-phase-2-backlog-2026-04-20.md](./archive/2026/experimental-agentic-transcript-recall-phase-2-backlog-2026-04-20.md)
 
 ## Working Rules
 

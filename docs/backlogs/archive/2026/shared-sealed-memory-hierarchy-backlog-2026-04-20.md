@@ -1,7 +1,7 @@
 # Shared Sealed Memory Hierarchy Backlog
 
 Updated: 2026-04-20
-Status: Active
+Status: Archived
 
 This is the current execution backlog for unifying sealed-memory artifact
 generation across `summary_window` and `prefix_live_blocks`.

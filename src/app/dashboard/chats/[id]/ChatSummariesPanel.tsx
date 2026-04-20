@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useMemo, useState } from 'react'
 import Button from '@/app/dashboard/components/Button'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
@@ -103,10 +104,10 @@ export default function ChatSummariesPanel({
   })
 
   // Collapse states for each section
-  const [isSuperMetaCollapsed, setIsSuperMetaCollapsed] = useState(false)
-  const [isMetaCollapsed, setIsMetaCollapsed] = useState(false)
-  const [isChunkCollapsed, setIsChunkCollapsed] = useState(false)
-  const [isFactsCollapsed, setIsFactsCollapsed] = useState(false)
+  const [isSuperMetaCollapsed, setIsSuperMetaCollapsed] = useState(true)
+  const [isMetaCollapsed, setIsMetaCollapsed] = useState(true)
+  const [isChunkCollapsed, setIsChunkCollapsed] = useState(true)
+  const [isFactsCollapsed, setIsFactsCollapsed] = useState(true)
   const [pendingDeleteSummaryId, setPendingDeleteSummaryId] = useState<string | null>(null)
 
   const chunkSummaries = useMemo(

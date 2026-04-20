@@ -1,6 +1,9 @@
 import type { AgenticTranscriptRecallRuntimeConfig } from './config'
-import type { AgenticTranscriptRecallSourceHints } from './source-hints'
-import { classifyAgenticTranscriptRecallSurfacedRangeAccess } from './range-access'
+import type { AgenticTranscriptRecallSourceMap } from './source-map'
+import {
+  findAgenticTranscriptRecallDirectFetchRange,
+  findAgenticTranscriptRecallNavigationParentEntry,
+} from './source-map'
 
 export type FetchSourceRangeRequest = {
   startSeq: number
@@ -16,7 +19,7 @@ export type AgenticTranscriptRecallBudgetState = {
 export type AgenticTranscriptRecallFetchBlockedReason =
   | 'feature_disabled'
   | 'provider_not_allowed'
-  | 'source_hints_unavailable'
+  | 'source_map_unavailable'
   | 'invalid_range'
   | 'range_not_allowed'
   | 'parent_range_requires_expansion'
@@ -65,23 +68,21 @@ function block(
 }
 
 function findExactAllowedRange(
-  sourceHints: AgenticTranscriptRecallSourceHints,
+  sourceMap: AgenticTranscriptRecallSourceMap,
   startSeq: number,
   endSeq: number,
-): AgenticTranscriptRecallSourceHints['hints'][number] | null {
-  return (
-    sourceHints.hints.find((hint) => hint.startSeq === startSeq && hint.endSeq === endSeq) ?? null
-  )
+): AgenticTranscriptRecallSourceMap['directFetchRanges'][number] | null {
+  return findAgenticTranscriptRecallDirectFetchRange(sourceMap, startSeq, endSeq)
 }
 
 export function evaluateFetchSourceRangeRequest({
   runtimeConfig,
-  sourceHints,
+  sourceMap,
   budgetState,
   request,
 }: {
   runtimeConfig: AgenticTranscriptRecallRuntimeConfig
-  sourceHints: AgenticTranscriptRecallSourceHints | null
+  sourceMap: AgenticTranscriptRecallSourceMap | null
   budgetState: AgenticTranscriptRecallBudgetState
   request: FetchSourceRangeRequest
 }): AgenticTranscriptRecallFetchPolicyResult {
@@ -93,9 +94,9 @@ export function evaluateFetchSourceRangeRequest({
     return block('provider_not_allowed', 'transcript recall is not allowed for this provider')
   }
 
-  if (!sourceHints) {
+  if (!sourceMap) {
     return block(
-      'source_hints_unavailable',
+      'source_map_unavailable',
       'no bounded transcript source ranges are available for recall',
     )
   }
@@ -113,24 +114,18 @@ export function evaluateFetchSourceRangeRequest({
     )
   }
 
-  const exactAllowedRange = findExactAllowedRange(sourceHints, startSeq, endSeq)
+  const exactAllowedRange = findExactAllowedRange(sourceMap, startSeq, endSeq)
   if (!exactAllowedRange) {
+    if (findAgenticTranscriptRecallNavigationParentEntry(sourceMap, startSeq, endSeq)) {
+      return block(
+        'parent_range_requires_expansion',
+        'requested transcript range is a surfaced parent range and must be expanded into a smaller child range before raw fetch',
+      )
+    }
+
     return block(
       'range_not_allowed',
-      'requested transcript range must exactly match one of the surfaced summary or fact ranges',
-    )
-  }
-
-  if (
-    classifyAgenticTranscriptRecallSurfacedRangeAccess({
-      hint: exactAllowedRange,
-      cutoffOrdinal: sourceHints.cutoffOrdinal,
-      runtimeConfig,
-    }) === 'navigation_parent'
-  ) {
-    return block(
-      'parent_range_requires_expansion',
-      'requested transcript range is a surfaced parent range and must be expanded into a smaller child range before raw fetch',
+      'requested transcript range must exactly match one directly fetchable surfaced range or one expanded child range',
     )
   }
 

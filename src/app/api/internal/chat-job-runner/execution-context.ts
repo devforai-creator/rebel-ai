@@ -20,7 +20,7 @@ import {
   type AgenticTranscriptRecallSourceHints,
 } from '@/lib/experimental/agentic-transcript-recall/source-hints'
 import {
-  deriveAgenticTranscriptRecallSourceMap,
+  loadAgenticTranscriptRecallSourceMap,
   type AgenticTranscriptRecallSourceMap,
 } from '@/lib/experimental/agentic-transcript-recall/source-map'
 import { getLastSummaryEnd } from '@/lib/chat-summaries/db-helpers'
@@ -673,12 +673,22 @@ export async function loadChatJobExecutionContext({
         rawContextStartOrdinal: rawRecentContextStartOrdinal,
       })
     : null
-  const agenticTranscriptRecallSourceMap = agenticTranscriptRecallSourceHints
-    ? deriveAgenticTranscriptRecallSourceMap({
+  let agenticTranscriptRecallSourceMap: AgenticTranscriptRecallSourceMap | null = null
+  if (agenticTranscriptRecallSourceHints) {
+    try {
+      agenticTranscriptRecallSourceMap = await loadAgenticTranscriptRecallSourceMap({
+        supabase,
+        chatId,
         sourceHints: agenticTranscriptRecallSourceHints,
         runtimeConfig: agenticTranscriptRecall,
       })
-    : null
+    } catch (error) {
+      console.error(
+        '[Agentic Transcript Recall] Failed to load source map:',
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+  }
   debugMetrics['experimental_agentic_transcript_recall_source_hint_count'] =
     agenticTranscriptRecallSourceHints?.hints.length ?? 0
   debugMetrics['experimental_agentic_transcript_recall_source_hint_raw_context_start_ordinal'] =

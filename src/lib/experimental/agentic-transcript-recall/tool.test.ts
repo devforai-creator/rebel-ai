@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createSupabaseMock, type SupabaseClientType } from '@/tests/mocks/supabase'
 import { MESSAGE_STATUS_COMPLETED } from '@/lib/chat/message-status'
 import { createAgenticTranscriptRecallBudgetState } from './policy'
+import type { AgenticTranscriptRecallSourceMap } from './source-map'
 import { executeFetchSourceRange } from './tool'
 import type { AgenticTranscriptRecallRuntimeConfig } from './config'
 
@@ -87,16 +88,26 @@ function createTranscriptSupabase() {
   }) as unknown as SupabaseClientType
 }
 
+function buildSourceMap(
+  overrides: Partial<AgenticTranscriptRecallSourceMap> = {},
+): AgenticTranscriptRecallSourceMap {
+  return {
+    rawContextStartOrdinal: 5,
+    cutoffOrdinal: 4,
+    directFetchRanges: [],
+    navigationParents: [],
+    ...overrides,
+  }
+}
+
 describe('executeFetchSourceRange', () => {
   it('returns a bounded projected transcript slice and advances budget state on success', async () => {
     const result = await executeFetchSourceRange({
       supabase: createTranscriptSupabase(),
       chatId,
       runtimeConfig: enabledRuntimeConfig,
-      sourceHints: {
-        rawContextStartOrdinal: 5,
-        cutoffOrdinal: 4,
-        hints: [
+      sourceMap: buildSourceMap({
+        directFetchRanges: [
           {
             kind: 'summary',
             label: 'summary',
@@ -105,7 +116,7 @@ describe('executeFetchSourceRange', () => {
             preview: 'The first exchange.',
           },
         ],
-      },
+      }),
       budgetState: createAgenticTranscriptRecallBudgetState(),
       input: {
         startSeq: 1,
@@ -146,10 +157,8 @@ describe('executeFetchSourceRange', () => {
       supabase: createTranscriptSupabase(),
       chatId,
       runtimeConfig: enabledRuntimeConfig,
-      sourceHints: {
-        rawContextStartOrdinal: 5,
-        cutoffOrdinal: 4,
-        hints: [
+      sourceMap: buildSourceMap({
+        directFetchRanges: [
           {
             kind: 'summary',
             label: 'summary',
@@ -158,7 +167,7 @@ describe('executeFetchSourceRange', () => {
             preview: 'The first exchange.',
           },
         ],
-      },
+      }),
       budgetState: createAgenticTranscriptRecallBudgetState(),
       input: {
         startSeq: 2,
@@ -172,7 +181,7 @@ describe('executeFetchSourceRange', () => {
         status: 'blocked',
         blockReason: 'range_not_allowed',
         message:
-          'requested transcript range must exactly match one of the surfaced summary or fact ranges',
+          'requested transcript range must exactly match one directly fetchable surfaced range or one expanded child range',
         startSeq: 2,
         endSeq: 3,
         reason: 'Try a non-surfaced range.',
@@ -189,19 +198,22 @@ describe('executeFetchSourceRange', () => {
       supabase: createTranscriptSupabase(),
       chatId,
       runtimeConfig: enabledRuntimeConfig,
-      sourceHints: {
+      sourceMap: buildSourceMap({
         rawContextStartOrdinal: 101,
         cutoffOrdinal: 100,
-        hints: [
+        navigationParents: [
           {
-            kind: 'summary',
-            label: 'meta_summary',
-            startSeq: 1,
-            endSeq: 100,
-            preview: 'Large parent range.',
+            parentRange: {
+              kind: 'summary',
+              label: 'meta_summary',
+              startSeq: 1,
+              endSeq: 100,
+              preview: 'Large parent range.',
+            },
+            childRanges: [],
           },
         ],
-      },
+      }),
       budgetState: createAgenticTranscriptRecallBudgetState(),
       input: {
         startSeq: 1,
@@ -232,10 +244,10 @@ describe('executeFetchSourceRange', () => {
       supabase: createTranscriptSupabase(),
       chatId,
       runtimeConfig: enabledRuntimeConfig,
-      sourceHints: {
+      sourceMap: buildSourceMap({
         rawContextStartOrdinal: 10,
         cutoffOrdinal: 9,
-        hints: [
+        directFetchRanges: [
           {
             kind: 'fact',
             label: null,
@@ -244,7 +256,7 @@ describe('executeFetchSourceRange', () => {
             preview: 'This hint is inconsistent with the chat length.',
           },
         ],
-      },
+      }),
       budgetState: createAgenticTranscriptRecallBudgetState(),
       input: {
         startSeq: 5,

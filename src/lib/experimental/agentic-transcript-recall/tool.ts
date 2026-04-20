@@ -8,7 +8,7 @@ import {
   type AgenticTranscriptRecallBudgetState,
   type AgenticTranscriptRecallFetchBlockedReason,
 } from './policy'
-import type { AgenticTranscriptRecallSourceHints } from './source-hints'
+import type { AgenticTranscriptRecallSourceMap } from './source-map'
 
 export const FETCH_SOURCE_RANGE_TOOL_NAME = 'fetch_source_range'
 export const fetchSourceRangeToolInputSchema = z
@@ -80,14 +80,14 @@ export async function executeFetchSourceRange({
   supabase,
   chatId,
   runtimeConfig,
-  sourceHints,
+  sourceMap,
   budgetState,
   input,
 }: {
   supabase: TurnClient
   chatId: string
   runtimeConfig: AgenticTranscriptRecallRuntimeConfig
-  sourceHints: AgenticTranscriptRecallSourceHints | null
+  sourceMap: AgenticTranscriptRecallSourceMap | null
   budgetState: AgenticTranscriptRecallBudgetState
   input: unknown
 }): Promise<ExecuteFetchSourceRangeResult> {
@@ -115,7 +115,7 @@ export async function executeFetchSourceRange({
   const request = parsedInput.data
   const policyResult = evaluateFetchSourceRangeRequest({
     runtimeConfig,
-    sourceHints,
+    sourceMap,
     budgetState,
     request,
   })

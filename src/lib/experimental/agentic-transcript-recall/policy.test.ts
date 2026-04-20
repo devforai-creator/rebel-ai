@@ -6,6 +6,7 @@ import {
   validateFetchedSourceRange,
 } from './policy'
 import type { AgenticTranscriptRecallRuntimeConfig } from './config'
+import type { AgenticTranscriptRecallSourceMap } from './source-map'
 
 const enabledRuntimeConfig: AgenticTranscriptRecallRuntimeConfig = {
   configured: true,
@@ -21,14 +22,22 @@ const enabledRuntimeConfig: AgenticTranscriptRecallRuntimeConfig = {
 }
 
 describe('evaluateFetchSourceRangeRequest', () => {
+  const buildSourceMap = (
+    overrides: Partial<AgenticTranscriptRecallSourceMap> = {},
+  ): AgenticTranscriptRecallSourceMap => ({
+    rawContextStartOrdinal: 21,
+    cutoffOrdinal: 20,
+    directFetchRanges: [],
+    navigationParents: [],
+    ...overrides,
+  })
+
   it('allows an exact surfaced range and advances the budget state', () => {
     expect(
       evaluateFetchSourceRangeRequest({
         runtimeConfig: enabledRuntimeConfig,
-        sourceHints: {
-          rawContextStartOrdinal: 21,
-          cutoffOrdinal: 20,
-          hints: [
+        sourceMap: buildSourceMap({
+          directFetchRanges: [
             {
               kind: 'summary',
               label: 'summary',
@@ -37,7 +46,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
               preview: 'Older context',
             },
           ],
-        },
+        }),
         budgetState: createAgenticTranscriptRecallBudgetState(),
         request: {
           startSeq: 1,
@@ -63,10 +72,8 @@ describe('evaluateFetchSourceRangeRequest', () => {
     expect(
       evaluateFetchSourceRangeRequest({
         runtimeConfig: enabledRuntimeConfig,
-        sourceHints: {
-          rawContextStartOrdinal: 21,
-          cutoffOrdinal: 20,
-          hints: [
+        sourceMap: buildSourceMap({
+          directFetchRanges: [
             {
               kind: 'summary',
               label: 'summary',
@@ -75,7 +82,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
               preview: 'Older context',
             },
           ],
-        },
+        }),
         budgetState: createAgenticTranscriptRecallBudgetState(),
         request: {
           startSeq: 2,
@@ -87,7 +94,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
       status: 'blocked',
       blockReason: 'range_not_allowed',
       message:
-        'requested transcript range must exactly match one of the surfaced summary or fact ranges',
+        'requested transcript range must exactly match one directly fetchable surfaced range or one expanded child range',
     })
   })
 
@@ -95,19 +102,22 @@ describe('evaluateFetchSourceRangeRequest', () => {
     expect(
       evaluateFetchSourceRangeRequest({
         runtimeConfig: enabledRuntimeConfig,
-        sourceHints: {
+        sourceMap: buildSourceMap({
           rawContextStartOrdinal: 101,
           cutoffOrdinal: 100,
-          hints: [
+          navigationParents: [
             {
-              kind: 'summary',
-              label: 'meta_summary',
-              startSeq: 1,
-              endSeq: 100,
-              preview: 'A large parent range.',
+              parentRange: {
+                kind: 'summary',
+                label: 'meta_summary',
+                startSeq: 1,
+                endSeq: 100,
+                preview: 'A large parent range.',
+              },
+              childRanges: [],
             },
           ],
-        },
+        }),
         budgetState: createAgenticTranscriptRecallBudgetState(),
         request: {
           startSeq: 1,
@@ -130,10 +140,8 @@ describe('evaluateFetchSourceRangeRequest', () => {
           ...enabledRuntimeConfig,
           maxTotalMessages: 12,
         },
-        sourceHints: {
-          rawContextStartOrdinal: 21,
-          cutoffOrdinal: 20,
-          hints: [
+        sourceMap: buildSourceMap({
+          directFetchRanges: [
             {
               kind: 'fact',
               label: null,
@@ -142,7 +150,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
               preview: 'Promise reminder',
             },
           ],
-        },
+        }),
         budgetState: {
           toolCallsUsed: 0,
           totalMessagesFetched: 8,
@@ -164,10 +172,8 @@ describe('evaluateFetchSourceRangeRequest', () => {
     expect(
       evaluateFetchSourceRangeRequest({
         runtimeConfig: enabledRuntimeConfig,
-        sourceHints: {
-          rawContextStartOrdinal: 21,
-          cutoffOrdinal: 20,
-          hints: [
+        sourceMap: buildSourceMap({
+          directFetchRanges: [
             {
               kind: 'fact',
               label: null,
@@ -176,7 +182,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
               preview: 'Two-message recall',
             },
           ],
-        },
+        }),
         budgetState: {
           toolCallsUsed: 1,
           totalMessagesFetched: 2,

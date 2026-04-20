@@ -707,6 +707,8 @@ type ChatJobRunnerOptions = {
   initialJobs?: Array<Record<string, unknown>>
   initialMessages?: Array<Record<string, unknown>>
   initialTurns?: Array<Record<string, unknown>>
+  initialChatSummaries?: Array<Record<string, unknown>>
+  initialChatFacts?: Array<Record<string, unknown>>
 }
 
 export function createChatJobRunnerSupabaseMock(
@@ -752,6 +754,8 @@ export function createChatJobRunnerSupabaseMock(
     initialJobs = [],
     initialMessages = [],
     initialTurns = [],
+    initialChatSummaries = [],
+    initialChatFacts = [],
   } = options
 
   const supabase = createSupabaseMock({
@@ -791,6 +795,13 @@ export function createChatJobRunnerSupabaseMock(
       chat_turns: {
         rows: [...initialTurns],
         primaryKeys: ['id'],
+      },
+      chat_summaries: {
+        rows: [...initialChatSummaries],
+        primaryKeys: ['chat_id', 'level', 'start_seq', 'end_seq'],
+      },
+      chat_facts: {
+        rows: [...initialChatFacts],
       },
       chat_usage_events: {
         rows: [],

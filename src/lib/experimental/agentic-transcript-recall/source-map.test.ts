@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { createSupabaseMock, type SupabaseClientType } from '@/tests/mocks/supabase'
 
 import { deriveAgenticTranscriptRecallSourceHints } from './source-hints'
-import { deriveAgenticTranscriptRecallSourceMap } from './source-map'
+import {
+  deriveAgenticTranscriptRecallSourceMap,
+  loadAgenticTranscriptRecallSourceMap,
+} from './source-map'
 
 describe('deriveAgenticTranscriptRecallSourceMap', () => {
   const runtimeConfig = {
@@ -276,6 +280,136 @@ describe('deriveAgenticTranscriptRecallSourceMap', () => {
             preview: 'Large parent',
           },
           childRanges: [],
+        },
+      ],
+    })
+  })
+})
+
+describe('loadAgenticTranscriptRecallSourceMap', () => {
+  const runtimeConfig = {
+    maxMessagesPerCall: 12,
+    maxTotalMessages: 12,
+  } as const
+
+  it('discovers bounded child ranges from persisted summaries and facts even when only a parent range is surfaced', async () => {
+    const supabase = createSupabaseMock({
+      tables: {
+        chat_summaries: {
+          rows: [
+            {
+              chat_id: 'chat-1',
+              level: 0,
+              start_seq: 201,
+              end_seq: 210,
+              summary: 'Chunk 201-210',
+            },
+            {
+              chat_id: 'chat-1',
+              level: 0,
+              start_seq: 211,
+              end_seq: 220,
+              summary: 'Chunk 211-220',
+            },
+            {
+              chat_id: 'chat-1',
+              level: 1,
+              start_seq: 201,
+              end_seq: 300,
+              summary: 'Meta 201-300',
+            },
+          ],
+        },
+        chat_facts: {
+          rows: [
+            {
+              chat_id: 'chat-1',
+              start_seq: 221,
+              end_seq: 222,
+              facts: 'Small fact range',
+            },
+          ],
+        },
+      },
+    }) as unknown as SupabaseClientType
+
+    const sourceMap = await loadAgenticTranscriptRecallSourceMap({
+      supabase,
+      chatId: 'chat-1',
+      sourceHints: {
+        rawContextStartOrdinal: 301,
+        cutoffOrdinal: 300,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'meta_summary',
+            startSeq: 201,
+            endSeq: 300,
+            preview: 'Meta 201-300',
+          },
+        ],
+      },
+      runtimeConfig,
+    })
+
+    expect(sourceMap).toEqual({
+      rawContextStartOrdinal: 301,
+      cutoffOrdinal: 300,
+      directFetchRanges: [
+        {
+          kind: 'summary',
+          label: 'summary',
+          startSeq: 201,
+          endSeq: 210,
+          preview: 'Chunk 201-210',
+        },
+        {
+          kind: 'summary',
+          label: 'summary',
+          startSeq: 211,
+          endSeq: 220,
+          preview: 'Chunk 211-220',
+        },
+        {
+          kind: 'fact',
+          label: null,
+          startSeq: 221,
+          endSeq: 222,
+          preview: 'Small fact range',
+        },
+      ],
+      navigationParents: [
+        {
+          parentRange: {
+            kind: 'summary',
+            label: 'meta_summary',
+            startSeq: 201,
+            endSeq: 300,
+            preview: 'Meta 201-300',
+          },
+          childRanges: [
+            {
+              kind: 'summary',
+              label: 'summary',
+              startSeq: 201,
+              endSeq: 210,
+              preview: 'Chunk 201-210',
+            },
+            {
+              kind: 'summary',
+              label: 'summary',
+              startSeq: 211,
+              endSeq: 220,
+              preview: 'Chunk 211-220',
+            },
+            {
+              kind: 'fact',
+              label: null,
+              startSeq: 221,
+              endSeq: 222,
+              preview: 'Small fact range',
+            },
+          ],
         },
       ],
     })

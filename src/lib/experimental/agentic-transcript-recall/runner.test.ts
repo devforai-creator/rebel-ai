@@ -275,7 +275,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
       status: 'blocked',
       blockReason: 'range_not_allowed',
       message:
-        'requested transcript range must exactly match one of the surfaced summary or fact ranges',
+        'requested transcript range must exactly match one directly fetchable surfaced range or one expanded child range',
       startSeq: 2,
       endSeq: 3,
       reason: 'Try an unsupported range.',

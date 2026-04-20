@@ -86,9 +86,9 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
   debugMetrics['experimental_agentic_transcript_recall_step_count'] = 0
 
   if (
-    (!sourceHints || sourceHints.hints.length === 0) &&
     (!sourceMap ||
-      (sourceMap.directFetchRanges.length === 0 && sourceMap.navigationParents.length === 0))
+      (sourceMap.directFetchRanges.length === 0 && sourceMap.navigationParents.length === 0)) &&
+    (!sourceHints || sourceHints.hints.length === 0)
   ) {
     return {
       streamRequest,
@@ -160,7 +160,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
     })
   }
 
-  if (sourceHints && sourceHints.hints.length > 0) {
+  if (sourceMap && sourceMap.directFetchRanges.length > 0) {
     tools[FETCH_SOURCE_RANGE_TOOL_NAME] = tool({
       description:
         'Fetch the raw transcript messages for one older summary or fact range when exact wording matters for the current reply.',
@@ -178,7 +178,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
             supabase,
             chatId,
             runtimeConfig,
-            sourceHints,
+            sourceMap,
             budgetState,
             input,
           })

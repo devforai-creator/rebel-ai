@@ -267,6 +267,82 @@ describe('requestProviderStage', () => {
     })
   })
 
+  it('passes google streaming requests through the experimental wrapper seam with tools intact', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const payload = buildPayload({
+      provider: 'google',
+      modelName: 'gemini-2.5-flash',
+    })
+    const context = buildContext({
+      agenticTranscriptRecall: {
+        configured: true,
+        globallyEnabled: true,
+        providerSupported: true,
+        providerAllowed: true,
+        enabled: true,
+        skipReason: null,
+        maxToolCalls: 2,
+        maxMessagesPerCall: 12,
+        maxTotalMessages: 12,
+        providerAllowlist: ['google'],
+      },
+      debugMetrics: {},
+    })
+
+    prepareExperimentalAgenticTranscriptRecallRequestMock.mockReturnValueOnce({
+      streamRequest: {
+        system: 'FINAL\n\nExperimental',
+        messages: [{ role: 'user', content: 'Hello' }],
+      },
+      streamTextSettings: {
+        tools: {
+          expand_source_range: {},
+          fetch_source_range: {},
+        },
+      },
+    })
+
+    await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-google-tools',
+      payload,
+      context,
+      timings: {},
+    })
+
+    expect(buildLanguageModelMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'google',
+        modelName: 'gemini-2.5-flash',
+        apiKey: 'sk-test',
+      }),
+    )
+    expect(prepareExperimentalAgenticTranscriptRecallRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtimeConfig: expect.objectContaining({
+          enabled: true,
+          providerAllowlist: ['google'],
+        }),
+      }),
+    )
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: { kind: 'model' },
+        temperature: 0.7,
+        system: 'FINAL\n\nExperimental',
+        messages: [{ role: 'user', content: 'Hello' }],
+        tools: {
+          expand_source_range: {},
+          fetch_source_range: {},
+        },
+      }),
+    )
+    expect(context.debugMetrics).toMatchObject({
+      experimental_agentic_transcript_recall_wrapper_used: true,
+      experimental_agentic_transcript_recall_fallback_to_standard: false,
+    })
+  })
+
   it('falls back to the standard stream request when the experimental wrapper fails', async () => {
     const { requestProviderStage } = await import('./provider-request-stage')
     const payload = buildPayload()

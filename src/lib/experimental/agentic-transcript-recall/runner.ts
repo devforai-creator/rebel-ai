@@ -33,15 +33,103 @@ type ExperimentalAgenticTranscriptRecallWrapperResult<TStreamRequest> = {
   streamTextSettings?: ExperimentalAgenticTranscriptRecallStreamSettings
 }
 
-function buildExperimentalInstruction({ maxToolCalls }: { maxToolCalls: number }): string {
-  return [
+const EXACT_DETAIL_RECALL_QUERY_PATTERNS = [
+  /\b(first|last|final|beginning|start|exact|specific|original|verbatim|quote|where|location|who|order|before|after)\b/i,
+  /(마지막|처음|시작|끝|정확|구체|원문|그대로|어디|위치|장소|누가|누구|순서|먼저|직전|직후|뭐라고|무슨 말)/,
+] as const
+
+function extractTextFromMessageContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content
+  }
+
+  if (!Array.isArray(content)) {
+    return ''
+  }
+
+  return content
+    .map((part) => {
+      if (typeof part === 'string') {
+        return part
+      }
+
+      if (!part || typeof part !== 'object') {
+        return ''
+      }
+
+      const candidate = part as { type?: unknown; text?: unknown }
+      if (candidate.type === 'text' && typeof candidate.text === 'string') {
+        return candidate.text
+      }
+
+      return typeof candidate.text === 'string' ? candidate.text : ''
+    })
+    .filter((text) => text.length > 0)
+    .join('\n')
+}
+
+function getLatestUserMessageText(messages: unknown[]): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (!message || typeof message !== 'object') {
+      continue
+    }
+
+    const candidate = message as { role?: unknown; content?: unknown }
+    if (candidate.role !== 'user') {
+      continue
+    }
+
+    const text = extractTextFromMessageContent(candidate.content).trim()
+    if (text.length > 0) {
+      return text
+    }
+  }
+
+  return null
+}
+
+function isExactDetailRecallQuery(text: string | null): boolean {
+  if (!text) {
+    return false
+  }
+
+  return EXACT_DETAIL_RECALL_QUERY_PATTERNS.some((pattern) => pattern.test(text))
+}
+
+function buildExperimentalInstruction({
+  maxToolCalls,
+  latestUserMessage,
+}: {
+  maxToolCalls: number
+  latestUserMessage: string | null
+}): string {
+  const instructions = [
     '=== Experimental Transcript Recall ===',
-    'You may optionally call `expand_source_range` when a surfaced parent range such as `[Meta Summary 1-100]` is too large for direct raw fetch.',
-    'After expansion, you may optionally call `fetch_source_range` if the exact wording of one smaller child range is necessary for your next reply.',
+    'You may call `expand_source_range` when a surfaced parent range such as `[Meta Summary 1-100]` is too large for direct raw fetch.',
+    'After expansion, call `fetch_source_range` if one smaller child range is needed to verify your next reply.',
     'Only call `fetch_source_range` for a directly surfaced small range such as `[1-10]`, or for a bounded child range returned by `expand_source_range`.',
     'Do not use this tool for recent raw messages that are already visible in the conversation context.',
+    'Do not treat `expand_source_range` output as raw evidence. Expansion only narrows the search space; fetched transcript lines are the raw evidence.',
+    'Do not merge sibling child ranges into a larger fetch. If expansion returns `281-290` and `291-300`, you must fetch one exact child range at a time.',
     `You may call \`expand_source_range\` at most 1 time and \`fetch_source_range\` at most ${maxToolCalls} time for this reply. If the summaries and facts are sufficient, answer without calling either tool.`,
-  ].join('\n')
+  ]
+
+  if (isExactDetailRecallQuery(latestUserMessage)) {
+    instructions.push(
+      '=== Recall Priority For This User Message ===',
+      'The latest user message appears to ask for an exact older detail such as a first/last event, location, order, speaker, or exact wording.',
+      'Do not answer that kind of question from summaries alone when transcript recall tools are available for the relevant older range.',
+      'If the likely evidence sits inside a surfaced parent range, expand first.',
+      'If the user asks about the last/final/end of an older event, inspect the latest relevant child range first.',
+      'If the user asks about the first/start/beginning of an older event, inspect the earliest relevant child range first.',
+      maxToolCalls > 1
+        ? 'If one fetched child range is still insufficient and budget remains, fetch one adjacent child range before answering.'
+        : 'If one fetched child range is still insufficient and no fetch budget remains, say that you could not fully verify the raw transcript.',
+    )
+  }
+
+  return instructions.join('\n')
 }
 
 export function prepareExperimentalAgenticTranscriptRecallRequest<
@@ -97,7 +185,14 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
 
   let budgetState = createAgenticTranscriptRecallBudgetState()
   let expandBudgetState = createAgenticTranscriptRecallExpandBudgetState()
-  const augmentedSystem = [streamRequest.system, buildExperimentalInstruction(runtimeConfig)]
+  const latestUserMessage = getLatestUserMessageText(streamRequest.messages)
+  const augmentedSystem = [
+    streamRequest.system,
+    buildExperimentalInstruction({
+      maxToolCalls: runtimeConfig.maxToolCalls,
+      latestUserMessage,
+    }),
+  ]
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .join('\n\n')
 

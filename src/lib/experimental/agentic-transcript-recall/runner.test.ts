@@ -215,6 +215,79 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
     })
   })
 
+  it('adds a stronger recall-priority instruction for exact-detail older-memory questions', () => {
+    const result = prepareExperimentalAgenticTranscriptRecallRequest({
+      supabase: createTranscriptSupabase(),
+      chatId,
+      runtimeConfig: buildRuntimeConfig(),
+      sourceHints: {
+        rawContextStartOrdinal: 301,
+        cutoffOrdinal: 300,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'meta_summary',
+            startSeq: 201,
+            endSeq: 300,
+            preview: 'Older parent range',
+          },
+        ],
+      },
+      sourceMap: {
+        rawContextStartOrdinal: 301,
+        cutoffOrdinal: 300,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 291,
+            endSeq: 300,
+            preview: 'Last child range',
+          },
+        ],
+        navigationParents: [
+          {
+            parentRange: {
+              kind: 'summary',
+              label: 'meta_summary',
+              startSeq: 201,
+              endSeq: 300,
+              preview: 'Older parent range',
+            },
+            childRanges: [
+              {
+                kind: 'summary',
+                label: 'summary',
+                startSeq: 291,
+                endSeq: 300,
+                preview: 'Last child range',
+              },
+            ],
+          },
+        ],
+      },
+      streamRequest: {
+        system: 'FINAL',
+        messages: [
+          {
+            role: 'user',
+            content: '설지야 우리 마지막으로 하연이와 헌쇼 했을 때, 마지막으로 싸운 곳이 어디더라?',
+          },
+        ],
+      },
+      debugMetrics: {},
+      logDebug: vi.fn(),
+    })
+
+    expect(result.streamRequest.system).toContain('=== Recall Priority For This User Message ===')
+    expect(result.streamRequest.system).toContain(
+      'Do not answer that kind of question from summaries alone when transcript recall tools are available for the relevant older range.',
+    )
+    expect(result.streamRequest.system).toContain(
+      'If the user asks about the last/final/end of an older event, inspect the latest relevant child range first.',
+    )
+  })
+
   it('returns blocked tool results for invalid recall requests without failing the wrapper', async () => {
     const debugMetrics: Record<string, string | number | boolean | null> = {}
     const result = prepareExperimentalAgenticTranscriptRecallRequest({

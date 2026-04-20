@@ -115,6 +115,7 @@ function buildContext(
       maxTotalMessages: 12,
       providerAllowlist: ['openai'],
     },
+    agenticTranscriptRecallSourceHints: null,
     bilingualEnabled: false,
     anthropicConversationMessages: [{ role: 'user', content: 'Hello' }],
     anthropicPlaceholderAdded: false,

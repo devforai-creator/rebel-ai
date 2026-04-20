@@ -394,6 +394,118 @@ describe('loadChatJobExecutionContext', () => {
     )
   })
 
+  it('derives bounded source hints from sealed prompt blocks for configured experimental chats', async () => {
+    const { loadChatJobExecutionContext } = await import('./execution-context')
+    const supabase = createChatJobRunnerSupabaseMock({
+      chat: {
+        id: 'chat-1',
+        user_id: 'user-1',
+        character_id: 'char-1',
+        persona_id: null,
+        custom_system_prompt: null,
+        model_config: {
+          experimental: {
+            agenticTranscriptRecall: {
+              enabled: true,
+            },
+          },
+        },
+      },
+    })
+    const payload = buildValidPayload({
+      sanitizedMessages: Array.from({ length: 21 }, (_, index) => ({
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `payload-${index + 1}`,
+      })),
+    })
+
+    buildMemoryPlanMock.mockResolvedValueOnce({
+      mode: 'summary_window',
+      dynamicContext: [
+        '=== Previous Conversation Summary ===',
+        '[Summary 1-10]',
+        'Old summary',
+        '',
+        '=== Key Facts to Remember ===',
+        '[11-20]',
+        'Old fact',
+      ].join('\n'),
+      fallbackMessages: [{ role: 'assistant', content: 'payload-21' }],
+      fallbackSystemPrompt: 'FINAL',
+      promptBlocks: [
+        {
+          role: 'system',
+          content: 'STATIC',
+          cachePreference: 'prefer-cache',
+          stability: 'static',
+        },
+        {
+          role: 'system',
+          content: [
+            '=== Previous Conversation Summary ===',
+            '[Summary 1-10]',
+            'Old summary',
+            '',
+            '=== Key Facts to Remember ===',
+            '[11-20]',
+            'Old fact',
+          ].join('\n'),
+          cachePreference: 'avoid-cache',
+          stability: 'sealed',
+        },
+      ],
+      staticSystemPrompt: 'STATIC',
+      ragInfo: null,
+    })
+    resolveAgenticTranscriptRecallRuntimeConfigMock.mockReturnValueOnce({
+      configured: true,
+      globallyEnabled: false,
+      providerSupported: true,
+      providerAllowed: true,
+      enabled: false,
+      skipReason: 'disabled_by_global_flag',
+      maxToolCalls: 1,
+      maxMessagesPerCall: 12,
+      maxTotalMessages: 12,
+      providerAllowlist: ['openai'],
+    })
+
+    const result = await loadChatJobExecutionContext({
+      supabase: supabase as never,
+      payload,
+      timings: {},
+    })
+
+    expect(result.agenticTranscriptRecallSourceHints).toEqual({
+      rawContextStartOrdinal: 21,
+      cutoffOrdinal: 20,
+      hints: [
+        {
+          kind: 'summary',
+          label: 'summary',
+          startSeq: 1,
+          endSeq: 10,
+          preview: 'Old summary',
+        },
+        {
+          kind: 'fact',
+          label: null,
+          startSeq: 11,
+          endSeq: 20,
+          preview: 'Old fact',
+        },
+      ],
+    })
+    expect(result.debugMetrics).toEqual(
+      expect.objectContaining({
+        experimental_agentic_transcript_recall_source_hint_count: 2,
+        experimental_agentic_transcript_recall_source_hint_raw_context_start_ordinal: 21,
+        experimental_agentic_transcript_recall_source_hint_summary_count: 1,
+        experimental_agentic_transcript_recall_source_hint_fact_count: 1,
+      }),
+    )
+  })
+
   it('fails in loading_context before provider execution when the token budget is too large', async () => {
     const { loadChatJobExecutionContext } = await import('./execution-context')
     const supabase = createChatJobRunnerSupabaseMock()

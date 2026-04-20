@@ -14,10 +14,29 @@ export type ChatMemoryConfig = {
   retainTailMessages?: number
 }
 
+export const AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS = ['openai', 'anthropic'] as const
+export type AgenticTranscriptRecallConfigProvider =
+  (typeof AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS)[number]
+
+export type ExperimentalAgenticTranscriptRecallConfig = {
+  enabled: boolean
+  maxToolCalls?: number
+  maxMessagesPerCall?: number
+  maxTotalMessages?: number
+  providerAllowlist?: AgenticTranscriptRecallConfigProvider[]
+}
+
+export type ChatExperimentalConfig = {
+  agenticTranscriptRecall?: ExperimentalAgenticTranscriptRecallConfig | null
+}
+
 export const DEFAULT_CHAT_MEMORY_MODE: ChatMemoryMode = 'summary_window'
 export const OPERATOR_DEFAULT_CHAT_MEMORY_MODE: ChatMemoryMode = 'prefix_live_blocks'
 export const DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES = 100
 export const DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES = 4
+export const DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS = 1
+export const DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_MESSAGES_PER_CALL = 12
+export const DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOTAL_MESSAGES = 12
 export const CHAT_MEMORY_MODE_SUPPORT_TIERS: Record<ChatMemoryMode, SupportTier> = {
   summary_window: SUPPORT_TIER_FEATURES.SUMMARY_WINDOW_MEMORY.tier,
   prefix_live_blocks: SUPPORT_TIER_FEATURES.PREFIX_LIVE_BLOCKS_MEMORY.tier,
@@ -26,6 +45,35 @@ export const CHAT_MEMORY_MODE_SUPPORT_TIERS: Record<ChatMemoryMode, SupportTier>
 export type ChatModelConfig = {
   alternateModels?: AlternateModelsConfig | null
   memory?: ChatMemoryConfig | null
+  experimental?: ChatExperimentalConfig | null
+}
+
+function normalizePositiveInteger(value: unknown, minimum = 1): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= minimum
+    ? Math.trunc(value)
+    : undefined
+}
+
+function normalizeAgenticTranscriptRecallProviderAllowlist(
+  value: unknown,
+): AgenticTranscriptRecallConfigProvider[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+
+  const filtered = value.filter(
+    (entry): entry is AgenticTranscriptRecallConfigProvider =>
+      typeof entry === 'string' &&
+      AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS.includes(
+        entry as AgenticTranscriptRecallConfigProvider,
+      ),
+  )
+
+  if (filtered.length === 0) {
+    return undefined
+  }
+
+  return Array.from(new Set(filtered))
 }
 
 export function normalizeChatModelConfig(input: unknown): ChatModelConfig {
@@ -36,6 +84,7 @@ export function normalizeChatModelConfig(input: unknown): ChatModelConfig {
   const candidate = input as {
     alternateModels?: unknown
     memory?: unknown
+    experimental?: unknown
   }
 
   const normalized: ChatModelConfig = {}
@@ -83,6 +132,39 @@ export function normalizeChatModelConfig(input: unknown): ChatModelConfig {
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(candidate, 'experimental')) {
+    if (candidate.experimental === null) {
+      normalized.experimental = null
+    } else if (candidate.experimental && typeof candidate.experimental === 'object') {
+      const rawExperimental = candidate.experimental as Record<string, unknown>
+      const nextExperimental: ChatExperimentalConfig = {}
+
+      if (Object.prototype.hasOwnProperty.call(rawExperimental, 'agenticTranscriptRecall')) {
+        const rawRecall = rawExperimental.agenticTranscriptRecall
+
+        if (rawRecall === null) {
+          nextExperimental.agenticTranscriptRecall = null
+        } else if (rawRecall && typeof rawRecall === 'object') {
+          const raw = rawRecall as Record<string, unknown>
+
+          nextExperimental.agenticTranscriptRecall = {
+            enabled: raw.enabled === true,
+            maxToolCalls: normalizePositiveInteger(raw.maxToolCalls),
+            maxMessagesPerCall: normalizePositiveInteger(raw.maxMessagesPerCall),
+            maxTotalMessages: normalizePositiveInteger(raw.maxTotalMessages),
+            providerAllowlist: normalizeAgenticTranscriptRecallProviderAllowlist(
+              raw.providerAllowlist,
+            ),
+          }
+        }
+      }
+
+      if (Object.keys(nextExperimental).length > 0) {
+        normalized.experimental = nextExperimental
+      }
+    }
+  }
+
   return normalized
 }
 
@@ -127,6 +209,22 @@ export function hasPersistableChatModelConfig(config: ChatModelConfig): boolean 
     memory.mode !== DEFAULT_CHAT_MEMORY_MODE ||
     memory.sealEveryMessages !== DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES ||
     memory.retainTailMessages !== DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES
+  const agenticTranscriptRecall = config.experimental?.agenticTranscriptRecall
+  const hasCustomAgenticTranscriptRecallBudget =
+    (agenticTranscriptRecall?.maxToolCalls !== undefined &&
+      agenticTranscriptRecall.maxToolCalls !== DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS) ||
+    (agenticTranscriptRecall?.maxMessagesPerCall !== undefined &&
+      agenticTranscriptRecall.maxMessagesPerCall !==
+        DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_MESSAGES_PER_CALL) ||
+    (agenticTranscriptRecall?.maxTotalMessages !== undefined &&
+      agenticTranscriptRecall.maxTotalMessages !==
+        DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOTAL_MESSAGES)
+  const hasExperimentalAgenticTranscriptRecall =
+    agenticTranscriptRecall !== null &&
+    agenticTranscriptRecall !== undefined &&
+    (agenticTranscriptRecall.enabled ||
+      hasCustomAgenticTranscriptRecallBudget ||
+      (agenticTranscriptRecall.providerAllowlist?.length ?? 0) > 0)
 
-  return hasAlternate || hasNonDefaultMemory
+  return hasAlternate || hasNonDefaultMemory || hasExperimentalAgenticTranscriptRecall
 }

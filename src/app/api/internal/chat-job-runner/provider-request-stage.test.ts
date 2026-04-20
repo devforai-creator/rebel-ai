@@ -20,6 +20,7 @@ const normalizeProviderErrorMock = vi.fn()
 const buildLanguageModelMock = vi.fn()
 const buildStreamPayloadPlanMock = vi.fn()
 const submitAnthropicBatchJobMock = vi.fn()
+const prepareExperimentalAgenticTranscriptRecallRequestMock = vi.fn()
 
 vi.mock('ai', () => ({
   streamText: (...args: unknown[]) => streamTextMock(...args),
@@ -61,6 +62,11 @@ vi.mock('./anthropic-batch-orchestrator', () => ({
   submitAnthropicBatchJob: (...args: unknown[]) => submitAnthropicBatchJobMock(...args),
 }))
 
+vi.mock('@/lib/experimental/agentic-transcript-recall/runner', () => ({
+  prepareExperimentalAgenticTranscriptRecallRequest: (...args: unknown[]) =>
+    prepareExperimentalAgenticTranscriptRecallRequestMock(...args),
+}))
+
 function buildPayload(overrides: Partial<ChatGenerationJobPayload> = {}): ChatGenerationJobPayload {
   return {
     version: CHAT_JOB_PAYLOAD_VERSION,
@@ -97,6 +103,18 @@ function buildContext(
     promptBlocks: [],
     recentMessages: [{ role: 'user', content: 'Hello' }],
     ragInfo: undefined,
+    agenticTranscriptRecall: {
+      configured: false,
+      globallyEnabled: false,
+      providerSupported: true,
+      providerAllowed: true,
+      enabled: false,
+      skipReason: 'disabled_by_global_flag',
+      maxToolCalls: 1,
+      maxMessagesPerCall: 12,
+      maxTotalMessages: 12,
+      providerAllowlist: ['openai'],
+    },
     bilingualEnabled: false,
     anthropicConversationMessages: [{ role: 'user', content: 'Hello' }],
     anthropicPlaceholderAdded: false,
@@ -121,6 +139,7 @@ describe('requestProviderStage', () => {
     buildLanguageModelMock.mockReset()
     buildStreamPayloadPlanMock.mockReset()
     submitAnthropicBatchJobMock.mockReset()
+    prepareExperimentalAgenticTranscriptRecallRequestMock.mockReset()
 
     resolvePromptCacheDecisionMock.mockReturnValue(null)
     resolveAnthropicCacheDecisionMock.mockReturnValue(null)
@@ -149,6 +168,11 @@ describe('requestProviderStage', () => {
       providerMetadata: Promise.resolve({}),
       usage: Promise.resolve(null),
     })
+    prepareExperimentalAgenticTranscriptRecallRequestMock.mockImplementation(
+      ({ streamRequest }) => ({
+        streamRequest,
+      }),
+    )
   })
 
   it('returns a streaming request with request-stage artifacts', async () => {
@@ -189,6 +213,100 @@ describe('requestProviderStage', () => {
         strategy: 'default',
       }),
     })
+  })
+
+  it('routes enabled chats through the experimental wrapper seam before streaming', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const payload = buildPayload()
+    const context = buildContext({
+      agenticTranscriptRecall: {
+        configured: true,
+        globallyEnabled: true,
+        providerSupported: true,
+        providerAllowed: true,
+        enabled: true,
+        skipReason: null,
+        maxToolCalls: 1,
+        maxMessagesPerCall: 12,
+        maxTotalMessages: 12,
+        providerAllowlist: ['openai'],
+      },
+      debugMetrics: {},
+    })
+
+    await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-1',
+      payload,
+      context,
+      timings: {},
+    })
+
+    expect(prepareExperimentalAgenticTranscriptRecallRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        streamRequest: expect.objectContaining({
+          system: 'FINAL',
+          messages: [{ role: 'user', content: 'Hello' }],
+        }),
+      }),
+    )
+    expect(context.debugMetrics).toMatchObject({
+      experimental_agentic_transcript_recall_wrapper_used: true,
+      experimental_agentic_transcript_recall_fallback_to_standard: false,
+    })
+  })
+
+  it('falls back to the standard stream request when the experimental wrapper fails', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const payload = buildPayload()
+    const context = buildContext({
+      agenticTranscriptRecall: {
+        configured: true,
+        globallyEnabled: true,
+        providerSupported: true,
+        providerAllowed: true,
+        enabled: true,
+        skipReason: null,
+        maxToolCalls: 1,
+        maxMessagesPerCall: 12,
+        maxTotalMessages: 12,
+        providerAllowlist: ['openai'],
+      },
+      debugMetrics: {},
+    })
+    const logDebug = vi.fn()
+
+    prepareExperimentalAgenticTranscriptRecallRequestMock.mockImplementationOnce(() => {
+      throw new Error('wrapper exploded')
+    })
+
+    await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-1',
+      payload,
+      context,
+      timings: {},
+      logDebug,
+    })
+
+    expect(streamTextMock).toHaveBeenCalledWith({
+      model: { kind: 'model' },
+      temperature: 0.7,
+      system: 'FINAL',
+      messages: [{ role: 'user', content: 'Hello' }],
+    })
+    expect(context.debugMetrics).toMatchObject({
+      experimental_agentic_transcript_recall_wrapper_used: true,
+      experimental_agentic_transcript_recall_fallback_to_standard: true,
+    })
+    expect(logDebug).toHaveBeenCalledWith(
+      '[Agentic Transcript Recall] Experimental wrapper failed; falling back',
+      expect.objectContaining({
+        error: 'wrapper exploded',
+        provider: 'openai',
+        modelName: 'gpt-4o-mini',
+      }),
+    )
   })
 
   it('creates a google explicit cache before building the request plan', async () => {

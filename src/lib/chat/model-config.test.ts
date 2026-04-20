@@ -2,9 +2,13 @@ import { describe, it, expect } from 'vitest'
 import {
   CHAT_MEMORY_MODE_SUPPORT_TIERS,
   buildOperatorDefaultChatModelConfig,
+  DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_MESSAGES_PER_CALL,
+  DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS,
+  DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOTAL_MESSAGES,
   DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
   DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
   OPERATOR_DEFAULT_CHAT_MEMORY_MODE,
+  hasPersistableChatModelConfig,
   normalizeChatModelConfig,
   resolveChatMemoryConfig,
 } from './model-config'
@@ -95,6 +99,32 @@ describe('normalizeChatModelConfig', () => {
       },
     })
   })
+
+  it('normalizes experimental agentic transcript recall config values', () => {
+    const result = normalizeChatModelConfig({
+      experimental: {
+        agenticTranscriptRecall: {
+          enabled: true,
+          maxToolCalls: 1.9,
+          maxMessagesPerCall: 12.2,
+          maxTotalMessages: 18.7,
+          providerAllowlist: ['openai', 'anthropic', 'bad-provider', 'openai'],
+        },
+      },
+    })
+
+    expect(result).toEqual({
+      experimental: {
+        agenticTranscriptRecall: {
+          enabled: true,
+          maxToolCalls: 1,
+          maxMessagesPerCall: 12,
+          maxTotalMessages: 18,
+          providerAllowlist: ['openai', 'anthropic'],
+        },
+      },
+    })
+  })
 })
 
 describe('resolveChatMemoryConfig', () => {
@@ -160,5 +190,38 @@ describe('buildOperatorDefaultChatModelConfig', () => {
         retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
       },
     })
+  })
+})
+
+describe('hasPersistableChatModelConfig', () => {
+  it('treats enabled experimental agentic transcript recall config as persistable', () => {
+    expect(
+      hasPersistableChatModelConfig(
+        normalizeChatModelConfig({
+          experimental: {
+            agenticTranscriptRecall: {
+              enabled: true,
+            },
+          },
+        }),
+      ),
+    ).toBe(true)
+  })
+
+  it('does not persist default-disabled experimental agentic transcript recall config', () => {
+    expect(
+      hasPersistableChatModelConfig(
+        normalizeChatModelConfig({
+          experimental: {
+            agenticTranscriptRecall: {
+              enabled: false,
+              maxToolCalls: DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS,
+              maxMessagesPerCall: DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_MESSAGES_PER_CALL,
+              maxTotalMessages: DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOTAL_MESSAGES,
+            },
+          },
+        }),
+      ),
+    ).toBe(false)
   })
 })

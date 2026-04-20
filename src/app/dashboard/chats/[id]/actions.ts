@@ -4,6 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { hasPersistableChatModelConfig, normalizeChatModelConfig } from '@/lib/chat/model-config'
 
+function hasOwnModelConfigKey(input: unknown, key: string): boolean {
+  return !!input && typeof input === 'object' && Object.prototype.hasOwnProperty.call(input, key)
+}
+
 export async function updateChatPersona(chatId: string, personaId: string) {
   const supabase = await createClient()
 
@@ -66,16 +70,23 @@ export async function updateChatModelConfig(chatId: string, modelConfig: unknown
 
   const { data: chat, error: chatError } = await supabase
     .from('chats')
-    .select('id')
+    .select('id, model_config')
     .eq('id', chatId)
     .eq('user_id', user.id)
-    .single()
+    .single<{ id: string; model_config: unknown }>()
 
   if (chatError || !chat) {
     return { error: 'Chat not found or access denied' }
   }
 
-  const normalized = normalizeChatModelConfig(modelConfig)
+  const normalizedInput = normalizeChatModelConfig(modelConfig)
+  const existingNormalized = normalizeChatModelConfig(chat.model_config)
+  const normalized = hasOwnModelConfigKey(modelConfig, 'experimental')
+    ? normalizedInput
+    : {
+        ...normalizedInput,
+        experimental: existingNormalized.experimental ?? undefined,
+      }
   const hasConfig = hasPersistableChatModelConfig(normalized)
 
   const { error: updateError } = await supabase

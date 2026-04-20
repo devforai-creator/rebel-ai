@@ -17,6 +17,7 @@ import {
   type AnthropicCacheDecision,
   type PromptCacheDecision,
 } from '@/lib/llm/prompt-cache'
+import { prepareExperimentalAgenticTranscriptRecallRequest } from '@/lib/experimental/agentic-transcript-recall/runner'
 import { submitAnthropicBatchJob } from './anthropic-batch-orchestrator'
 import type { LoadedChatJobExecutionContext } from './execution-context'
 import { buildLanguageModel } from './model-factory'
@@ -71,11 +72,13 @@ export async function requestProviderStage({
     promptBlocks,
     recentMessages,
     ragInfo,
+    agenticTranscriptRecall,
     bilingualEnabled,
     anthropicConversationMessages,
     anthropicPlaceholderAdded,
     totalInputTokens,
     staticPromptTokens,
+    debugMetrics,
   } = context
 
   const chatCacheKeyOverride = provider === 'openai' ? `chat:${payload.chatId}` : undefined
@@ -252,10 +255,34 @@ export async function requestProviderStage({
       }
     }
 
+    debugMetrics['experimental_agentic_transcript_recall_wrapper_used'] = false
+    debugMetrics['experimental_agentic_transcript_recall_fallback_to_standard'] = false
+
+    let finalStreamRequest = streamPayloadPlan.streamRequest
+
+    if (agenticTranscriptRecall.enabled) {
+      debugMetrics['experimental_agentic_transcript_recall_wrapper_used'] = true
+
+      try {
+        const experimentalResult = prepareExperimentalAgenticTranscriptRecallRequest({
+          streamRequest: streamPayloadPlan.streamRequest,
+          logDebug,
+        })
+        finalStreamRequest = experimentalResult.streamRequest
+      } catch (error) {
+        debugMetrics['experimental_agentic_transcript_recall_fallback_to_standard'] = true
+        logDebug('[Agentic Transcript Recall] Experimental wrapper failed; falling back', {
+          error: error instanceof Error ? error.message : String(error),
+          provider,
+          modelName,
+        })
+      }
+    }
+
     const stream = await streamText({
       model,
       ...samplingOptions,
-      ...streamPayloadPlan.streamRequest,
+      ...finalStreamRequest,
     })
 
     return {

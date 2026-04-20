@@ -18,6 +18,7 @@ const lorebookNeedsChatHistoryMock = vi.fn()
 const renderActiveLorebookBlockMock = vi.fn()
 const buildSystemPromptMock = vi.fn()
 const decryptSecretMock = vi.fn()
+const resolveAgenticTranscriptRecallRuntimeConfigMock = vi.fn()
 
 vi.mock('@/lib/chat/anthropic-user-first', () => ({
   ensureUserFirstForAnthropic: (...args: unknown[]) => ensureUserFirstForAnthropicMock(...args),
@@ -43,6 +44,11 @@ vi.mock('@/lib/chat/model-config', () => ({
     sealEveryMessages: 100,
     retainTailMessages: 4,
   })),
+}))
+
+vi.mock('@/lib/experimental/agentic-transcript-recall/config', () => ({
+  resolveAgenticTranscriptRecallRuntimeConfig: (...args: unknown[]) =>
+    resolveAgenticTranscriptRecallRuntimeConfigMock(...args),
 }))
 
 vi.mock('@/lib/lorebook/runtime', () => ({
@@ -183,6 +189,7 @@ describe('loadChatJobExecutionContext', () => {
     renderActiveLorebookBlockMock.mockReset()
     buildSystemPromptMock.mockReset()
     decryptSecretMock.mockReset()
+    resolveAgenticTranscriptRecallRuntimeConfigMock.mockReset()
 
     buildMemoryPlanMock.mockResolvedValue({
       mode: 'summary_window',
@@ -218,6 +225,18 @@ describe('loadChatJobExecutionContext', () => {
     renderActiveLorebookBlockMock.mockReturnValue('LORE')
     buildSystemPromptMock.mockResolvedValue('SYSTEM')
     decryptSecretMock.mockResolvedValue('sk-test')
+    resolveAgenticTranscriptRecallRuntimeConfigMock.mockReturnValue({
+      configured: false,
+      globallyEnabled: false,
+      providerSupported: true,
+      providerAllowed: true,
+      enabled: false,
+      skipReason: 'disabled_by_global_flag',
+      maxToolCalls: 1,
+      maxMessagesPerCall: 12,
+      maxTotalMessages: 12,
+      providerAllowlist: ['openai'],
+    })
   })
 
   it('loads the current execution context before requesting the provider', async () => {
@@ -245,6 +264,18 @@ describe('loadChatJobExecutionContext', () => {
       ],
       recentMessages: [{ role: 'user', content: 'Hello' }],
       generationTranscript: payload.sanitizedMessages,
+      agenticTranscriptRecall: {
+        configured: false,
+        globallyEnabled: false,
+        providerSupported: true,
+        providerAllowed: true,
+        enabled: false,
+        skipReason: 'disabled_by_global_flag',
+        maxToolCalls: 1,
+        maxMessagesPerCall: 12,
+        maxTotalMessages: 12,
+        providerAllowlist: ['openai'],
+      },
       bilingualEnabled: false,
       anthropicPlaceholderAdded: false,
     })
@@ -264,6 +295,8 @@ describe('loadChatJobExecutionContext', () => {
         memory_mode: 'summary_window',
         memory_recent_message_count: 1,
         memory_prompt_block_count: 1,
+        experimental_agentic_transcript_recall_enabled: false,
+        experimental_agentic_transcript_recall_skip_reason: 'disabled_by_global_flag',
         bilingual_enabled: false,
         bilingual_query_executed: false,
       }),
@@ -283,6 +316,10 @@ describe('loadChatJobExecutionContext', () => {
         extraDynamicContext: ['LORE'],
       }),
     )
+    expect(resolveAgenticTranscriptRecallRuntimeConfigMock).toHaveBeenCalledWith({
+      modelConfig: {},
+      provider: 'openai',
+    })
     expect(timings).toEqual(
       expect.objectContaining({
         '1_api_key_query': expect.any(Number),

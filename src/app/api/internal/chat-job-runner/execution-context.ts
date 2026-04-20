@@ -11,6 +11,10 @@ import {
   resolveChatMemoryConfig,
   type ChatMemoryMode,
 } from '@/lib/chat/model-config'
+import {
+  resolveAgenticTranscriptRecallRuntimeConfig,
+  type AgenticTranscriptRecallRuntimeConfig,
+} from '@/lib/experimental/agentic-transcript-recall/config'
 import { getLastSummaryEnd } from '@/lib/chat-summaries/db-helpers'
 import { CONTEXT_WINDOW, SUMMARY_LEVEL_CHUNK } from '@/lib/chat-summaries/config'
 import {
@@ -65,6 +69,7 @@ export type LoadedChatJobExecutionContext = {
   promptBlocks: MemoryPlanResult['promptBlocks']
   recentMessages: MemoryPlanResult['fallbackMessages']
   ragInfo: MemoryPlanResult['ragInfo']
+  agenticTranscriptRecall: AgenticTranscriptRecallRuntimeConfig
   bilingualEnabled: boolean
   anthropicConversationMessages: MemoryPlanResult['fallbackMessages']
   anthropicPlaceholderAdded: boolean
@@ -373,6 +378,27 @@ export async function loadChatJobExecutionContext({
   const defaultSystemPrompt = getGlobalSystemPrompt()
   const normalizedModelConfig = normalizeChatModelConfig(chat.model_config)
   const memoryConfig = resolveChatMemoryConfig(normalizedModelConfig)
+  const agenticTranscriptRecall = resolveAgenticTranscriptRecallRuntimeConfig({
+    modelConfig: normalizedModelConfig,
+    provider,
+  })
+  debugMetrics['experimental_agentic_transcript_recall_configured'] =
+    agenticTranscriptRecall.configured
+  debugMetrics['experimental_agentic_transcript_recall_globally_enabled'] =
+    agenticTranscriptRecall.globallyEnabled
+  debugMetrics['experimental_agentic_transcript_recall_provider_supported'] =
+    agenticTranscriptRecall.providerSupported
+  debugMetrics['experimental_agentic_transcript_recall_provider_allowed'] =
+    agenticTranscriptRecall.providerAllowed
+  debugMetrics['experimental_agentic_transcript_recall_enabled'] = agenticTranscriptRecall.enabled
+  debugMetrics['experimental_agentic_transcript_recall_skip_reason'] =
+    agenticTranscriptRecall.skipReason
+  debugMetrics['experimental_agentic_transcript_recall_max_tool_calls'] =
+    agenticTranscriptRecall.maxToolCalls
+  debugMetrics['experimental_agentic_transcript_recall_max_messages_per_call'] =
+    agenticTranscriptRecall.maxMessagesPerCall
+  debugMetrics['experimental_agentic_transcript_recall_max_total_messages'] =
+    agenticTranscriptRecall.maxTotalMessages
   const { transcript: payloadTranscript, excludedAssistant: payloadExcludedAssistant } =
     buildPayloadGenerationTranscript(payload)
 
@@ -678,6 +704,7 @@ export async function loadChatJobExecutionContext({
     promptBlocks,
     recentMessages,
     ragInfo,
+    agenticTranscriptRecall,
     bilingualEnabled,
     anthropicConversationMessages,
     anthropicPlaceholderAdded,

@@ -154,4 +154,51 @@ describe('chat actions', () => {
       },
     })
   })
+
+  it('preserves existing experimental config when callers update other model settings', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      chats: [
+        {
+          id: 'chat-1',
+          user_id: 'user-1',
+          model_config: {
+            experimental: {
+              agenticTranscriptRecall: {
+                enabled: true,
+                maxToolCalls: 1,
+              },
+            },
+          },
+        },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { updateChatModelConfig } = await import('./actions')
+
+    await expect(
+      updateChatModelConfig('chat-1', {
+        memory: {
+          mode: 'prefix_live_blocks',
+        },
+      }),
+    ).resolves.toEqual({ success: true })
+
+    expect(getChatRows(supabase)[0]).toMatchObject({
+      id: 'chat-1',
+      model_config: {
+        memory: {
+          mode: 'prefix_live_blocks',
+          sealEveryMessages: undefined,
+          retainTailMessages: undefined,
+        },
+        experimental: {
+          agenticTranscriptRecall: {
+            enabled: true,
+            maxToolCalls: 1,
+          },
+        },
+      },
+    })
+  })
 })

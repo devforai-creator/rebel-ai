@@ -20,7 +20,7 @@ The current operating direction is:
 
 - `prefix_live_blocks` for the operator-default chat memory mode
 - summary-backed sealed memory as the durable long-term substrate
-- ATR as the preferred path for recovering exact older detail when needed
+- ATR (Agentic Transcript Recall) as the preferred path for recovering exact older detail when summaries are not specific enough
 - episodic RAG as a secondary, lower-priority path that stays available but is not treated as the main answer
 
 In practical terms:

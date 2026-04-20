@@ -4,6 +4,7 @@ Updated: 2026-04-20
 
 This document is an experimental feature contract, not the top-level long-term memory doctrine.
 For the current strategy and support stance, use [LONG_TERM_MEMORY_STRATEGY.md](./LONG_TERM_MEMORY_STRATEGY.md).
+ATR stands for Agentic Transcript Recall.
 
 This document defines the contract and pre-backlog plan for an experimental feature that lets the model selectively re-open older raw chat messages when summaries or facts are not specific enough.
 

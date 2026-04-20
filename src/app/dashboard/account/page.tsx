@@ -89,8 +89,9 @@ export default async function AccountPage() {
                 Episodic Memory RAG
               </h2>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Connect your own Voyage API key to include only the most relevant facts in context,
-                even in long conversations.
+                Connect your own Voyage API key to retrieve relevant episodic facts into context.
+                When disabled, new episodic facts are not generated and stored facts are not
+                injected into generation context.
               </p>
               <div className="mt-6">
                 <RagSettingsForm

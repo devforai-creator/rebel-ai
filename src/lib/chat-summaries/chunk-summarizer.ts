@@ -475,6 +475,7 @@ export async function processChunkSummaries({
   previousEnd,
   chunkPrompt,
   factPrompt,
+  enableFactGeneration = true,
 }: ProcessChunkOptions): Promise<void> {
   const boundaries = calculateChunkBoundaries(totalMessages, previousEnd, CHUNK_SIZE)
 
@@ -521,19 +522,21 @@ export async function processChunkSummaries({
         transcriptMessages,
       })
 
-      // Extract facts (episodic memory)
-      await createChunkFacts({
-        supabase,
-        chatId,
-        userId,
-        model,
-        provider,
-        modelName,
-        startSeq: boundary.start,
-        endSeq: boundary.end,
-        factPrompt,
-        transcriptMessages,
-      })
+      if (enableFactGeneration) {
+        // Extract facts (episodic memory)
+        await createChunkFacts({
+          supabase,
+          chatId,
+          userId,
+          model,
+          provider,
+          modelName,
+          startSeq: boundary.start,
+          endSeq: boundary.end,
+          factPrompt,
+          transcriptMessages,
+        })
+      }
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
         continue

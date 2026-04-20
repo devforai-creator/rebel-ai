@@ -54,6 +54,7 @@ describe('updateCanonicalSealedMemoryArtifacts', () => {
         meta_summary_prompt: 'meta-prompt',
         fact_extraction_prompt: 'fact-prompt',
       },
+      enableRag: true,
     })
     const { updateCanonicalSealedMemoryArtifacts } = await import('./sealed-memory-writer')
 
@@ -73,6 +74,7 @@ describe('updateCanonicalSealedMemoryArtifacts', () => {
         chunkPrompt: 'chunk-prompt',
         metaPrompt: 'meta-prompt',
         factPrompt: 'fact-prompt',
+        enableFactGeneration: true,
         chunkSize: 10,
       }),
     )
@@ -82,6 +84,7 @@ describe('updateCanonicalSealedMemoryArtifacts', () => {
         previousEnd: 10,
         chunkPrompt: 'chunk-prompt',
         factPrompt: 'fact-prompt',
+        enableFactGeneration: true,
       }),
     )
     expect(processMetaSummariesMock).toHaveBeenCalledWith(
@@ -92,7 +95,7 @@ describe('updateCanonicalSealedMemoryArtifacts', () => {
   })
 
   it('returns after regeneration when there is not yet a full canonical chunk to seal', async () => {
-    const supabase = createSupabaseMock({ profilePrompts: null })
+    const supabase = createSupabaseMock({ profilePrompts: null, enableRag: false })
     const { updateCanonicalSealedMemoryArtifacts } = await import('./sealed-memory-writer')
 
     await updateCanonicalSealedMemoryArtifacts({
@@ -106,13 +109,23 @@ describe('updateCanonicalSealedMemoryArtifacts', () => {
       sealedThroughSeq: 9,
     })
 
-    expect(processRegenerationRequestsMock).toHaveBeenCalled()
+    expect(processRegenerationRequestsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enableFactGeneration: false,
+      }),
+    )
     expect(processChunkSummariesMock).not.toHaveBeenCalled()
     expect(processMetaSummariesMock).not.toHaveBeenCalled()
   })
 })
 
-function createSupabaseMock({ profilePrompts }: { profilePrompts: Record<string, string> | null }) {
+function createSupabaseMock({
+  profilePrompts,
+  enableRag,
+}: {
+  profilePrompts: Record<string, string> | null
+  enableRag: boolean
+}) {
   return {
     from(table: string) {
       if (table !== 'profiles') {
@@ -122,7 +135,16 @@ function createSupabaseMock({ profilePrompts }: { profilePrompts: Record<string,
         select: () => ({
           eq: () => ({
             single: async () => ({
-              data: profilePrompts,
+              data: profilePrompts
+                ? {
+                    ...profilePrompts,
+                    enable_episodic_rag: enableRag,
+                    voyage_embedding_api_key_id: enableRag ? 'voyage-key-1' : null,
+                  }
+                : {
+                    enable_episodic_rag: enableRag,
+                    voyage_embedding_api_key_id: enableRag ? 'voyage-key-1' : null,
+                  },
               error: null,
             }),
           }),

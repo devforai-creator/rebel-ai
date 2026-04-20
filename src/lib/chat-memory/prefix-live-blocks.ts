@@ -14,6 +14,7 @@ import {
   formatFacts,
   formatSummarySegments,
 } from '@/lib/chat-summaries/formatters'
+import { loadChatEpisodicMemorySettings } from '@/lib/chat-summaries/episodic-memory'
 import { updateCanonicalSealedMemoryArtifacts } from '@/lib/chat-summaries/sealed-memory-writer'
 import { loadProjectedConversationMessages } from '@/lib/chat/turns'
 import type { ChatSummary } from '@/types/database.types'
@@ -120,26 +121,33 @@ export async function buildPrefixLiveBlocksMemoryPlan({
       }
     }
 
-    const { data: facts, error: factsError } = await supabase
-      .from('chat_facts')
-      .select<'start_seq, end_seq, facts'>('start_seq, end_seq, facts')
-      .eq('chat_id', chatId)
-      .lte('end_seq', visibleSummaryEnd)
-      .order('start_seq', { ascending: true })
+    const episodicMemorySettings = await loadChatEpisodicMemorySettings({
+      supabase,
+      chatId,
+    })
 
-    if (factsError) {
-      console.error('[chat-memory] Failed to load prefix facts:', factsError.message)
-    } else {
-      const factRows = (facts ?? []) as FactRow[]
-      if (factRows.length > 0) {
-        const factsBlock = `=== Key Facts to Remember ===\n${formatFacts(factRows)}`
-        dynamicBlocks.push(factsBlock)
-        promptBlocks.push({
-          role: 'system',
-          content: factsBlock,
-          cachePreference: 'prefer-cache',
-          stability: 'sealed',
-        })
+    if (episodicMemorySettings.enabled) {
+      const { data: facts, error: factsError } = await supabase
+        .from('chat_facts')
+        .select<'start_seq, end_seq, facts'>('start_seq, end_seq, facts')
+        .eq('chat_id', chatId)
+        .lte('end_seq', visibleSummaryEnd)
+        .order('start_seq', { ascending: true })
+
+      if (factsError) {
+        console.error('[chat-memory] Failed to load prefix facts:', factsError.message)
+      } else {
+        const factRows = (facts ?? []) as FactRow[]
+        if (factRows.length > 0) {
+          const factsBlock = `=== Key Facts to Remember ===\n${formatFacts(factRows)}`
+          dynamicBlocks.push(factsBlock)
+          promptBlocks.push({
+            role: 'system',
+            content: factsBlock,
+            cachePreference: 'prefer-cache',
+            stability: 'sealed',
+          })
+        }
       }
     }
   }

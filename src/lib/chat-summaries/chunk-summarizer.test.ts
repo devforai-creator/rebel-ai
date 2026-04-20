@@ -608,6 +608,41 @@ describe('chunk-summarizer', () => {
     expect(generateTextMock).not.toHaveBeenCalled()
   })
 
+  it('skips fact extraction during chunk processing when fact generation is disabled', async () => {
+    generateTextMock.mockResolvedValue({
+      text: 'summary',
+      usage: { outputTokens: 1 },
+      finishReason: 'stop',
+    })
+    const supabase = createChatSummariesSupabaseMock({
+      messages: Array.from({ length: 20 }, (_, idx) => ({
+        role: 'user',
+        content: `m-${idx}`,
+        sequence: idx + 1,
+        chat_id: 'chat-1',
+      })),
+    })
+    const chunkModule = await import('./chunk-summarizer')
+
+    await chunkModule.processChunkSummaries({
+      supabase: supabase as unknown as SupabaseClientType,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      model: mockModel,
+      provider: 'google',
+      modelName: 'gemini',
+      totalMessages: 20,
+      previousEnd: 0,
+      chunkPrompt: 'SYS',
+      factPrompt: 'FACT',
+      enableFactGeneration: false,
+    })
+
+    expect(generateTextMock).toHaveBeenCalledTimes(1)
+    const chatFacts = supabase.state.chatFacts as Array<Record<string, unknown>>
+    expect(chatFacts).toHaveLength(0)
+  })
+
   it('continues processChunkSummaries on duplicate-key style errors (code 23505)', async () => {
     generateTextMock.mockResolvedValue({
       text: 'summary',

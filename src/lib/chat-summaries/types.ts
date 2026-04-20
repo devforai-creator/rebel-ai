@@ -105,6 +105,7 @@ export interface ProcessChunkOptions {
   previousEnd: number
   chunkPrompt: string
   factPrompt: string
+  enableFactGeneration?: boolean
 }
 
 // Meta processing options
@@ -174,6 +175,7 @@ export interface RegenerationProcessOptions {
   chunkPrompt: string
   metaPrompt: string
   factPrompt: string
+  enableFactGeneration?: boolean
   regenerate: RegenerateConfig
   chunkSize?: number
 }

@@ -460,7 +460,7 @@ describe('buildContext', () => {
     expect(result.systemPrompt).toContain('Chunk 21-30')
   })
 
-  it('includes fallback episodic facts when RAG is disabled', async () => {
+  it('keeps stored episodic facts out of context when RAG is disabled', async () => {
     const messages = makeMessages(30)
     const supabase = createSupabaseStub({
       summaries: [],
@@ -476,8 +476,8 @@ describe('buildContext', () => {
       baseSystemPrompt: 'BASE PROMPT',
     })
 
-    expect(result.systemPrompt).toContain('=== Key Facts to Remember ===')
-    expect(result.systemPrompt).toContain('User likes spicy food')
+    expect(result.systemPrompt).not.toContain('=== Key Facts to Remember ===')
+    expect(result.systemPrompt).not.toContain('User likes spicy food')
   })
 
   it('prefers semantic search facts when embeddings are available', async () => {

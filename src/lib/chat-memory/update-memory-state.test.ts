@@ -78,7 +78,10 @@ function createMemorySupabaseStub(options?: {
     chunk_summary_prompt?: string | null
     meta_summary_prompt?: string | null
     fact_extraction_prompt?: string | null
+    enable_episodic_rag?: boolean
+    voyage_embedding_api_key_id?: string | null
   }>
+  chats?: Array<{ id: string; user_id: string }>
   summaries?: Array<{
     chat_id: string
     level: number
@@ -92,6 +95,9 @@ function createMemorySupabaseStub(options?: {
     tables: {
       profiles: {
         rows: options?.profiles ?? [],
+      },
+      chats: {
+        rows: options?.chats ?? [],
       },
       chat_summaries: {
         rows: options?.summaries ?? [],
@@ -210,6 +216,19 @@ describe('chat memory orchestration', () => {
     ])
 
     const supabase = createMemorySupabaseStub({
+      chats: [
+        {
+          id: 'chat-1',
+          user_id: 'user-1',
+        },
+      ],
+      profiles: [
+        {
+          id: 'user-1',
+          enable_episodic_rag: true,
+          voyage_embedding_api_key_id: 'voyage-key-1',
+        },
+      ],
       summaries: [
         {
           chat_id: 'chat-1',

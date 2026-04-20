@@ -1,5 +1,5 @@
 import type { ChatSummary } from '@/types/database.types'
-import { generateFactEmbedding, type FactEmbeddingProfileSettings } from '@/lib/embeddings'
+import { generateFactEmbedding } from '@/lib/embeddings'
 import type {
   SummaryRow,
   FactRow,
@@ -10,6 +10,7 @@ import type {
   RagResultInfo,
   RagDiagnosticsInfo,
 } from './types'
+import { loadChatEpisodicMemorySettings } from './episodic-memory'
 import {
   CONTEXT_WINDOW,
   SUMMARY_LEVEL_SUPER_META,
@@ -310,73 +311,56 @@ export async function buildContext({
   const summarySegments =
     filteredSummaries.length > 0 ? formatSummarySegments(filteredSummaries) : []
 
-  // Load episodic memory (chat_facts) - fallback to existing behavior
-  const fallbackFactsQueryStart = performance.now()
-  const { data: fallbackFacts, error: factsError } = await supabase
-    .from('chat_facts')
-    .select<'start_seq, end_seq, facts'>('start_seq, end_seq, facts')
-    .eq('chat_id', chatId)
-    .lte('end_seq', summaryCutoff)
-    .order('start_seq', { ascending: true })
-  ragInfo.diagnostics = {
-    ...ragInfo.diagnostics,
-    fallbackFactsQueryMs: roundMetricDuration(performance.now() - fallbackFactsQueryStart),
-    fallbackFactsLoadedCount: (fallbackFacts ?? []).length,
-  }
-
-  if (factsError) {
-    console.error('Failed to load chat facts:', factsError.message)
-  }
-
+  const episodicMemorySettings = await loadChatEpisodicMemorySettings({
+    supabase,
+    chatId,
+  })
   let ragUsed = false
-  let factRows = (fallbackFacts ?? []) as FactRow[]
+  let factRows: FactRow[] = []
 
-  const { data: chatOwner, error: chatOwnerError } = await supabase
-    .from('chats')
-    .select('user_id')
-    .eq('id', chatId)
-    .single()
-
-  if (chatOwnerError) {
-    console.error('Failed to load chat owner for RAG facts:', chatOwnerError.message)
-  }
-
-  if (chatOwner?.user_id) {
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('enable_episodic_rag, voyage_embedding_api_key_id')
-      .eq('id', chatOwner.user_id)
-      .single<FactEmbeddingProfileSettings>()
-
-    if (profileError) {
-      console.error('Failed to load profile RAG flag:', profileError.message)
+  if (episodicMemorySettings.enabled && episodicMemorySettings.userId) {
+    const fallbackFactsQueryStart = performance.now()
+    const { data: fallbackFacts, error: factsError } = await supabase
+      .from('chat_facts')
+      .select<'start_seq, end_seq, facts'>('start_seq, end_seq, facts')
+      .eq('chat_id', chatId)
+      .lte('end_seq', summaryCutoff)
+      .order('start_seq', { ascending: true })
+    ragInfo.diagnostics = {
+      ...ragInfo.diagnostics,
+      fallbackFactsQueryMs: roundMetricDuration(performance.now() - fallbackFactsQueryStart),
+      fallbackFactsLoadedCount: (fallbackFacts ?? []).length,
     }
 
-    if (profile?.enable_episodic_rag) {
-      ragInfo.enabled = true
-      const { facts: ragFacts, diagnostics } = await searchRelevantFacts({
-        supabase,
-        chatId,
-        userId: chatOwner.user_id,
-        recentMessages: trimmedMessages,
-        profileSettings: profile,
-      })
-      ragInfo.diagnostics = {
-        ...ragInfo.diagnostics,
-        ...diagnostics,
-      }
+    if (factsError) {
+      console.error('Failed to load chat facts:', factsError.message)
+    }
 
-      // Store RAG results for debug_info
-      ragInfo.results = ragFacts.map((r) => ({
-        seq: `${r.start_seq}-${r.end_seq}`,
-        similarity: r.similarity ?? 0,
-        preview: r.facts.slice(0, 80) + (r.facts.length > 80 ? '...' : ''),
-      }))
+    ragInfo.enabled = true
+    const { facts: ragFacts, diagnostics } = await searchRelevantFacts({
+      supabase,
+      chatId,
+      userId: episodicMemorySettings.userId,
+      recentMessages: trimmedMessages,
+      profileSettings: episodicMemorySettings.profileSettings,
+    })
+    ragInfo.diagnostics = {
+      ...ragInfo.diagnostics,
+      ...diagnostics,
+    }
 
-      // When RAG is enabled, only use RAG results (no fallback to all facts)
-      // This reduces noise by excluding low-relevance facts
-      factRows = ragFacts
-      ragUsed = ragFacts.length > 0
+    ragInfo.results = ragFacts.map((r) => ({
+      seq: `${r.start_seq}-${r.end_seq}`,
+      similarity: r.similarity ?? 0,
+      preview: r.facts.slice(0, 80) + (r.facts.length > 80 ? '...' : ''),
+    }))
+
+    factRows = ragFacts
+    ragUsed = ragFacts.length > 0
+  } else {
+    ragInfo.diagnostics = {
+      ...ragInfo.diagnostics,
+      skippedReason: 'disabled',
     }
   }
 

@@ -380,6 +380,37 @@ describe('buildContext branches', () => {
     expect(result.systemPrompt).toBe('BASE')
   })
 
+  it('does not inject stored facts when episodic memory RAG is disabled', async () => {
+    const supabase = createSupabaseStub({
+      latestSequence: CONTEXT_WINDOW + 20,
+      summariesData: [
+        {
+          level: 1,
+          start_seq: 1,
+          end_seq: 10,
+          summary: 'Persisted summary',
+        },
+      ],
+      factsData: [{ start_seq: 1, end_seq: 2, facts: 'stored fact that should stay out' }],
+      chatOwnerId: 'user-1',
+      profileEnableRag: false,
+    })
+
+    const result = await buildContext({
+      supabase,
+      chatId: 'chat-1',
+      sanitizedMessages: makeMessages(CONTEXT_WINDOW + 5),
+      baseSystemPrompt: 'BASE',
+    })
+
+    expect(result.systemPrompt).toContain('Persisted summary')
+    expect(result.systemPrompt).not.toContain('stored fact that should stay out')
+    expect(result.systemPrompt).not.toContain('=== Key Facts to Remember ===')
+    expect(result.ragInfo?.enabled).toBe(false)
+    expect(result.ragInfo?.diagnostics?.skippedReason).toBe('disabled')
+    expect(generateFactEmbeddingMock).not.toHaveBeenCalled()
+  })
+
   it('keeps summaries when facts query fails', async () => {
     const supabase = createSupabaseStub({
       latestSequence: CONTEXT_WINDOW + 20,

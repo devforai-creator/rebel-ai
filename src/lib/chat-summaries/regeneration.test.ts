@@ -193,6 +193,54 @@ describe('regeneration helpers', () => {
     )
   })
 
+  it('skips fact regeneration work entirely when fact generation is disabled', async () => {
+    const supabase = createChatSummariesSupabaseMock({
+      chatSummaries: [
+        {
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          level: SUMMARY_LEVEL_CHUNK,
+          start_seq: 1,
+          end_seq: 10,
+          summary: 'old',
+        },
+      ],
+      chatFacts: [
+        {
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          start_seq: 1,
+          end_seq: 10,
+          facts: 'old fact',
+        },
+      ],
+    })
+    const { processRegenerationRequests } = await import('./regeneration')
+
+    await processRegenerationRequests({
+      supabase: supabase as unknown as SupabaseClientType,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      model: mockModel,
+      provider: 'openai',
+      modelName: 'gpt-4o',
+      chunkPrompt: 'CHUNK',
+      metaPrompt: 'META',
+      factPrompt: 'FACT',
+      enableFactGeneration: false,
+      regenerate: {
+        chunkRanges: [{ startSeq: 1, endSeq: 10 }],
+        factRanges: [{ startSeq: 11, endSeq: 20 }],
+      },
+    })
+
+    expect(createChunkSummaryMock).toHaveBeenCalledTimes(1)
+    expect(createChunkSummaryMock).toHaveBeenCalledWith(
+      expect.objectContaining({ startSeq: 1, endSeq: 10 }),
+    )
+    expect(createChunkFactsMock).not.toHaveBeenCalled()
+  })
+
   it('regenerates specific ranges and skips invalid/duplicates', async () => {
     const supabase = createChatSummariesSupabaseMock({
       chatSummaries: [

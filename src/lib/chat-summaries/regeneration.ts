@@ -68,6 +68,7 @@ async function regenerateChunkRanges({
   modelName,
   chunkPrompt,
   factPrompt,
+  enableFactGeneration,
   ranges,
   chunkSize,
 }: {
@@ -79,6 +80,7 @@ async function regenerateChunkRanges({
   modelName: string
   chunkPrompt: string
   factPrompt: string
+  enableFactGeneration: boolean
   ranges: SummaryRange[]
   chunkSize: number
 }): Promise<void> {
@@ -109,16 +111,20 @@ async function regenerateChunkRanges({
       )
     }
 
-    const { error: deleteFactsError } = await supabase
-      .from('chat_facts')
-      .delete()
-      .eq('chat_id', chatId)
-      .eq('user_id', userId)
-      .eq('start_seq', range.startSeq)
-      .eq('end_seq', range.endSeq)
+    if (enableFactGeneration) {
+      const { error: deleteFactsError } = await supabase
+        .from('chat_facts')
+        .delete()
+        .eq('chat_id', chatId)
+        .eq('user_id', userId)
+        .eq('start_seq', range.startSeq)
+        .eq('end_seq', range.endSeq)
 
-    if (deleteFactsError) {
-      throw new Error(`Failed to delete chunk facts for regeneration: ${deleteFactsError.message}`)
+      if (deleteFactsError) {
+        throw new Error(
+          `Failed to delete chunk facts for regeneration: ${deleteFactsError.message}`,
+        )
+      }
     }
 
     await createChunkSummary({
@@ -134,17 +140,19 @@ async function regenerateChunkRanges({
       expectedMessageCount: chunkSize,
     })
 
-    await createChunkFacts({
-      supabase,
-      chatId,
-      userId,
-      model,
-      provider,
-      modelName,
-      startSeq: range.startSeq,
-      endSeq: range.endSeq,
-      factPrompt,
-    })
+    if (enableFactGeneration) {
+      await createChunkFacts({
+        supabase,
+        chatId,
+        userId,
+        model,
+        provider,
+        modelName,
+        startSeq: range.startSeq,
+        endSeq: range.endSeq,
+        factPrompt,
+      })
+    }
   }
 }
 
@@ -159,6 +167,7 @@ async function regenerateFactRanges({
   provider,
   modelName,
   factPrompt,
+  enableFactGeneration,
   ranges,
 }: {
   supabase: ServerSupabaseClient
@@ -168,8 +177,18 @@ async function regenerateFactRanges({
   provider: LlmProvider
   modelName: string
   factPrompt: string
+  enableFactGeneration: boolean
   ranges: SummaryRange[]
 }): Promise<void> {
+  if (!enableFactGeneration) {
+    logRegenerationDebug('[Regeneration] Fact generation disabled - skipping fact ranges', {
+      chatId,
+      userId,
+      rangeCount: ranges.length,
+    })
+    return
+  }
+
   logRegenerationDebug('[Regeneration] Starting fact ranges regeneration', {
     chatId,
     userId,
@@ -480,6 +499,7 @@ export async function processRegenerationRequests({
   chunkPrompt,
   metaPrompt,
   factPrompt,
+  enableFactGeneration = true,
   regenerate,
   chunkSize = CHUNK_SIZE,
 }: RegenerationProcessOptions): Promise<void> {
@@ -519,6 +539,7 @@ export async function processRegenerationRequests({
       modelName,
       chunkPrompt,
       factPrompt,
+      enableFactGeneration,
       ranges: chunkRanges,
       chunkSize,
     })
@@ -533,6 +554,7 @@ export async function processRegenerationRequests({
       provider,
       modelName,
       factPrompt,
+      enableFactGeneration,
       ranges: factRanges,
     })
   }

@@ -6,6 +6,7 @@ import {
   SUMMARY_LEVEL_CHUNK,
 } from './config'
 import { getLastSummaryEnd } from './db-helpers'
+import { loadUserEpisodicMemorySettings } from './episodic-memory'
 import { processChunkSummaries } from './chunk-summarizer'
 import { processMetaSummaries } from './meta-summarizer'
 import { processRegenerationRequests } from './regeneration'
@@ -50,6 +51,10 @@ export async function updateCanonicalSealedMemoryArtifacts({
 }: UpdateCanonicalSealedMemoryArtifactsOptions): Promise<void> {
   const normalizedSealedThroughSeq = Math.max(0, Math.trunc(sealedThroughSeq))
   const prompts = await loadSummaryPromptConfig(supabase, userId)
+  const episodicMemorySettings = await loadUserEpisodicMemorySettings({
+    supabase,
+    userId,
+  })
 
   if (regenerate) {
     await processRegenerationRequests({
@@ -62,6 +67,7 @@ export async function updateCanonicalSealedMemoryArtifacts({
       chunkPrompt: prompts.chunkPrompt,
       metaPrompt: prompts.metaPrompt,
       factPrompt: prompts.factPrompt,
+      enableFactGeneration: episodicMemorySettings.enabled,
       regenerate,
       chunkSize: CHUNK_SIZE,
     })
@@ -84,6 +90,7 @@ export async function updateCanonicalSealedMemoryArtifacts({
     previousEnd: lastProcessedChunkEnd ?? 0,
     chunkPrompt: prompts.chunkPrompt,
     factPrompt: prompts.factPrompt,
+    enableFactGeneration: episodicMemorySettings.enabled,
   })
 
   await processMetaSummaries({

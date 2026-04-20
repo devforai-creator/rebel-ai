@@ -63,8 +63,8 @@ export default function RagSettingsForm({
             Episodic Memory RAG
           </h3>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Retrieve facts extracted from past conversations via embedding search to reduce token
-            usage and improve relevance.
+            Retrieve facts extracted from past conversations via embedding search. When disabled,
+            new episodic facts are not generated and stored facts are not sent in prompt context.
           </p>
         </div>
         <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">

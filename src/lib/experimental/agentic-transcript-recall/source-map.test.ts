@@ -284,6 +284,94 @@ describe('deriveAgenticTranscriptRecallSourceMap', () => {
       ],
     })
   })
+
+  it('prefers summary previews over fact previews for the same direct-fetch child range', () => {
+    expect(
+      deriveAgenticTranscriptRecallSourceMap({
+        sourceHints: {
+          rawContextStartOrdinal: 21,
+          cutoffOrdinal: 20,
+          hints: [
+            {
+              kind: 'fact',
+              label: null,
+              startSeq: 1,
+              endSeq: 10,
+              preview: 'Fact preview',
+            },
+            {
+              kind: 'summary',
+              label: 'summary',
+              startSeq: 1,
+              endSeq: 10,
+              preview: 'Summary preview',
+            },
+            {
+              kind: 'summary',
+              label: 'meta_summary',
+              startSeq: 1,
+              endSeq: 20,
+              preview: 'Meta parent',
+            },
+            {
+              kind: 'fact',
+              label: null,
+              startSeq: 11,
+              endSeq: 20,
+              preview: 'Fact child 2',
+            },
+          ],
+        },
+        runtimeConfig,
+      }),
+    ).toEqual({
+      rawContextStartOrdinal: 21,
+      cutoffOrdinal: 20,
+      directFetchRanges: [
+        {
+          kind: 'summary',
+          label: 'summary',
+          startSeq: 1,
+          endSeq: 10,
+          preview: 'Summary preview',
+        },
+        {
+          kind: 'fact',
+          label: null,
+          startSeq: 11,
+          endSeq: 20,
+          preview: 'Fact child 2',
+        },
+      ],
+      navigationParents: [
+        {
+          parentRange: {
+            kind: 'summary',
+            label: 'meta_summary',
+            startSeq: 1,
+            endSeq: 20,
+            preview: 'Meta parent',
+          },
+          childRanges: [
+            {
+              kind: 'summary',
+              label: 'summary',
+              startSeq: 1,
+              endSeq: 10,
+              preview: 'Summary preview',
+            },
+            {
+              kind: 'fact',
+              label: null,
+              startSeq: 11,
+              endSeq: 20,
+              preview: 'Fact child 2',
+            },
+          ],
+        },
+      ],
+    })
+  })
 })
 
 describe('loadAgenticTranscriptRecallSourceMap', () => {

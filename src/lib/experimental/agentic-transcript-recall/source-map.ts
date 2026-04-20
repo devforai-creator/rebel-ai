@@ -54,11 +54,11 @@ export function findAgenticTranscriptRecallNavigationParentEntry(
 }
 
 function getHintSortOrder(hint: AgenticTranscriptRecallSourceHint): number {
-  if (hint.kind === 'fact') {
+  if (hint.kind === 'summary' && hint.label === 'summary') {
     return 0
   }
 
-  if (hint.label === 'summary') {
+  if (hint.kind === 'fact') {
     return 1
   }
 

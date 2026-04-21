@@ -111,20 +111,16 @@ async function regenerateChunkRanges({
       )
     }
 
-    if (enableFactGeneration) {
-      const { error: deleteFactsError } = await supabase
-        .from('chat_facts')
-        .delete()
-        .eq('chat_id', chatId)
-        .eq('user_id', userId)
-        .eq('start_seq', range.startSeq)
-        .eq('end_seq', range.endSeq)
+    const { error: deleteFactsError } = await supabase
+      .from('chat_facts')
+      .delete()
+      .eq('chat_id', chatId)
+      .eq('user_id', userId)
+      .eq('start_seq', range.startSeq)
+      .eq('end_seq', range.endSeq)
 
-      if (deleteFactsError) {
-        throw new Error(
-          `Failed to delete chunk facts for regeneration: ${deleteFactsError.message}`,
-        )
-      }
+    if (deleteFactsError) {
+      throw new Error(`Failed to delete chunk facts for regeneration: ${deleteFactsError.message}`)
     }
 
     await createChunkSummary({

@@ -92,11 +92,35 @@ describe('backfill-canonical-memory helpers', () => {
           mode: 'prefix_live_blocks',
         },
       }),
+      episodicMemoryEnabled: true,
     })
 
     expect(analysis.needsRebuild).toBe(true)
     expect(analysis.issues).toEqual(['missing_fact_ranges', 'missing_meta_ranges'])
     expect(analysis.missingFactRanges).toHaveLength(10)
+    expect(analysis.missingMetaRanges).toEqual([{ start_seq: 1, end_seq: 100 }])
+  })
+
+  it('does not flag missing facts for episodic-RAG-off chats', () => {
+    const analysis = analyzeChatMemoryRows({
+      summaryRows: Array.from({ length: 10 }, (_, index) => ({
+        level: 0,
+        start_seq: index * 10 + 1,
+        end_seq: index * 10 + 10,
+      })),
+      factRows: [],
+      totalMessages: 104,
+      memoryConfig: resolveChatMemoryConfig({
+        memory: {
+          mode: 'prefix_live_blocks',
+        },
+      }),
+      episodicMemoryEnabled: false,
+    })
+
+    expect(analysis.needsRebuild).toBe(true)
+    expect(analysis.issues).toEqual(['missing_meta_ranges'])
+    expect(analysis.missingFactRanges).toEqual([])
     expect(analysis.missingMetaRanges).toEqual([{ start_seq: 1, end_seq: 100 }])
   })
 
@@ -166,6 +190,17 @@ describe('backfill-canonical-memory helpers', () => {
               select: () => ({
                 eq: () => ({
                   order: () => createOrderedQuery([]),
+                }),
+              }),
+            }
+          case 'profiles':
+            return {
+              select: () => ({
+                eq: () => ({
+                  maybeSingle: async () => ({
+                    data: { enable_episodic_rag: false },
+                    error: null,
+                  }),
                 }),
               }),
             }

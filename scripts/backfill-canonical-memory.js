@@ -286,11 +286,13 @@ function analyzeChatMemoryRows({
   factRows = [],
   totalMessages = 0,
   memoryConfig,
+  episodicMemoryEnabled = true,
 }) {
   const chunkRows = summaryRows.filter((row) => row.level === 0)
   const metaRows = summaryRows.filter((row) => row.level === 1)
   const superMetaRows = summaryRows.filter((row) => row.level >= 2)
   const expectedChunkRanges = buildExpectedCanonicalChunkRanges(totalMessages, memoryConfig)
+  const expectsFactRows = episodicMemoryEnabled === true
 
   const malformedChunkRanges = chunkRows.filter(
     (row) => !isCanonicalChunkRange(row.start_seq, row.end_seq),
@@ -313,9 +315,9 @@ function analyzeChatMemoryRows({
   const missingChunkRanges = expectedChunkRanges.filter(
     (row) => !canonicalChunkKeys.has(keyForRange(row)),
   )
-  const missingFactRanges = expectedChunkRanges.filter(
-    (row) => !canonicalFactKeys.has(keyForRange(row)),
-  )
+  const missingFactRanges = expectsFactRows
+    ? expectedChunkRanges.filter((row) => !canonicalFactKeys.has(keyForRange(row)))
+    : []
   const orphanFactRanges = canonicalFactRows.filter(
     (row) => !expectedChunkRanges.some((expected) => keyForRange(expected) === keyForRange(row)),
   )
@@ -421,12 +423,25 @@ async function fetchChatMemoryState(supabase, chatId) {
     throw new Error(`Failed to load turns for ${chatId}: ${turnError.message}`)
   }
 
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('enable_episodic_rag')
+    .eq('id', chat.user_id)
+    .maybeSingle()
+
+  if (profileError && profileError.code !== 'PGRST116') {
+    throw new Error(
+      `Failed to load episodic memory setting for ${chat.user_id}: ${profileError.message}`,
+    )
+  }
+
   const memoryConfig = resolveChatMemoryConfig(chat.model_config)
   const totalMessages = countProjectedConversationMessages(turnRows ?? [])
 
   return {
     chat,
     memoryConfig,
+    episodicMemoryEnabled: profile?.enable_episodic_rag === true,
     totalMessages,
     summaryRows: summaryRows ?? [],
     factRows: factRows ?? [],
@@ -613,6 +628,7 @@ async function main(argv = process.argv.slice(2), options = {}) {
       factRows: state.factRows,
       totalMessages: state.totalMessages,
       memoryConfig: state.memoryConfig,
+      episodicMemoryEnabled: state.episodicMemoryEnabled,
     })
 
     consoleImpl.log(renderAnalysisReport(chatId, state.memoryConfig, analysis))

@@ -193,7 +193,7 @@ describe('regeneration helpers', () => {
     )
   })
 
-  it('skips fact regeneration work entirely when fact generation is disabled', async () => {
+  it('deletes stale chunk facts but skips fact regeneration when fact generation is disabled', async () => {
     const supabase = createChatSummariesSupabaseMock({
       chatSummaries: [
         {
@@ -239,6 +239,7 @@ describe('regeneration helpers', () => {
       expect.objectContaining({ startSeq: 1, endSeq: 10 }),
     )
     expect(createChunkFactsMock).not.toHaveBeenCalled()
+    expect(supabase.state.chatFacts).toEqual([])
   })
 
   it('regenerates specific ranges and skips invalid/duplicates', async () => {

@@ -13,7 +13,7 @@ const chatRequestSchema = z
     isRegeneration: z.unknown().optional(),
     regenerateAssistantMessageId: z.unknown().optional(),
   })
-  .passthrough()
+  .strict()
 
 export interface ParsedChatRequest {
   chatId: string
@@ -37,7 +37,12 @@ type ParseChatRequestResult =
     }
 
 export async function parseChatRequest({ req }: { req: Request }): Promise<ParseChatRequestResult> {
-  const parsed = chatRequestSchema.safeParse(await req.json().catch(() => null))
+  const rawBodyResult = await readChatRequestBody(req)
+  if (rawBodyResult.status === 'error') {
+    return rawBodyResult
+  }
+
+  const parsed = chatRequestSchema.safeParse(rawBodyResult.value)
 
   if (!parsed.success) {
     return {
@@ -143,6 +148,75 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
         },
       ],
     },
+  }
+}
+
+type ReadChatRequestBodyResult =
+  | {
+      status: 'success'
+      value: unknown
+    }
+  | {
+      status: 'error'
+      response: Response
+    }
+
+async function readChatRequestBody(req: Request): Promise<ReadChatRequestBodyResult> {
+  const reader = req.body?.getReader()
+  if (!reader) {
+    return {
+      status: 'error',
+      response: createErrorResponse('Invalid request body', 400),
+    }
+  }
+
+  const decoder = new TextDecoder()
+  let bodyText = ''
+  let totalBytes = 0
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+
+      if (!value) {
+        continue
+      }
+
+      totalBytes += value.byteLength
+      if (totalBytes > CHAT_REQUEST_LIMITS.maxRequestBodyBytes) {
+        await reader.cancel().catch(() => undefined)
+        return {
+          status: 'error',
+          response: createErrorResponse('Request body exceeds allowed size', 413),
+        }
+      }
+
+      bodyText += decoder.decode(value, { stream: true })
+    }
+
+    bodyText += decoder.decode()
+  } catch {
+    return {
+      status: 'error',
+      response: createErrorResponse('Invalid request body', 400),
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  try {
+    return {
+      status: 'success',
+      value: JSON.parse(bodyText),
+    }
+  } catch {
+    return {
+      status: 'error',
+      response: createErrorResponse('Invalid request body', 400),
+    }
   }
 }
 

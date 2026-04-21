@@ -879,6 +879,34 @@ async function flushMicrotasks() {
   await Promise.resolve()
 }
 
+function createStreamingJsonRequest({
+  chunks,
+  headers = {},
+}: {
+  chunks: string[]
+  headers?: Record<string, string>
+}) {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk))
+      }
+      controller.close()
+    },
+  })
+
+  return new Request('http://localhost/api/chat', {
+    method: 'POST',
+    body: stream,
+    duplex: 'half',
+    headers: {
+      'content-type': 'application/json',
+      ...headers,
+    },
+  } as RequestInit)
+}
+
 function buildDefaultAuthenticatedFixture(
   overrides: Partial<SupabaseFixture> = {},
 ): SupabaseFixture {
@@ -998,6 +1026,24 @@ describe('POST /api/chat', () => {
     const response = await POST(request)
 
     await expectJsonError(response, 400, 'messages transcript payload is no longer supported')
+  })
+
+  it('returns 400 when unexpected request fields are provided', async () => {
+    createSupabaseMock(buildDefaultAuthenticatedFixture())
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        userMessage: 'hello',
+        debugTranscript: ['nope'],
+      }),
+    })
+
+    const response = await POST(request)
+
+    await expectJsonError(response, 400, 'Invalid request body')
   })
 
   it('returns 400 when userMessage exceeds the byte-size limit', async () => {
@@ -1301,6 +1347,26 @@ describe('POST /api/chat', () => {
 
     await expectJsonError(response, 413, 'Request body exceeds allowed size')
     expect(createClientMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects oversized streamed request bodies even when content-length stays under the limit', async () => {
+    createSupabaseMock(buildDefaultAuthenticatedFixture())
+
+    const prefix = '{"chatId":"chat-1","apiKeyId":"api-key-1","userMessage":"hello","padding":"'
+    const suffix = '"}'
+    const paddingBytes =
+      CHAT_REQUEST_LIMITS.maxRequestBodyBytes - new TextEncoder().encode(prefix + suffix).length + 1
+
+    const request = createStreamingJsonRequest({
+      chunks: [prefix, 'x'.repeat(paddingBytes), suffix],
+      headers: {
+        'content-length': '64',
+      },
+    })
+
+    const response = await POST(request)
+
+    await expectJsonError(response, 413, 'Request body exceeds allowed size')
   })
 
   it('returns 500 when anonymous rate limiter RPC fails', async () => {

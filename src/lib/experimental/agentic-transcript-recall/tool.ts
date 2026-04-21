@@ -12,10 +12,11 @@ import type { AgenticTranscriptRecallSourceMap } from './source-map'
 
 export const FETCH_SOURCE_RANGE_TOOL_NAME = 'fetch_source_range'
 export const FETCH_SOURCE_RANGE_TOOL_DESCRIPTION = [
-  'Fetch the raw transcript messages for one older summary range, fact range, or expanded child range when exact wording or exact sequencing matters for the current reply.',
+  'Fetch the raw transcript messages for one older summary range, fact range, or expanded child range when the next reply depends on older source detail that summaries may have compressed away.',
+  'This is most useful for exact wording, exact sequence, promises or agreements, plans or boundaries, relationship-turning moments, contradiction checks, or a specific older scene that would materially change the reply if remembered incorrectly.',
   'Use this only after you already know the exact bounded range you want to inspect. That range must exactly match either a directly fetchable surfaced range such as `[1-10]` or one child range returned by `expand_source_range`.',
   'Do not guess or invent new subranges, and do not merge adjacent child ranges into a larger fetch. For example, if expansion returned `281-290` and `291-300`, you must fetch only one of those exact child ranges at a time.',
-  'Use fetched transcript lines as the raw evidence for your answer. If you still cannot verify the detail after one fetch, either fetch one adjacent child range if budget remains or say that you could not fully verify the transcript.',
+  'Prefer summaries when broad continuity is enough. Use fetched transcript lines as the raw evidence for your answer. If you still cannot verify the detail after one fetch, either fetch one adjacent child range if budget remains or say that you could not fully verify the transcript.',
 ].join(' ')
 export const fetchSourceRangeToolInputSchema = z
   .object({

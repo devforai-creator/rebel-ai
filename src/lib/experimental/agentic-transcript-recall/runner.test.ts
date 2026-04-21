@@ -202,6 +202,9 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
 
     expect(result.streamRequest.system).toContain('FINAL')
     expect(result.streamRequest.system).toContain('Experimental Transcript Recall')
+    expect(result.streamRequest.system).toContain(
+      'Use summaries and recent raw context by default.',
+    )
     expect(result.streamRequest.system).toContain('fetch_source_range')
     expect(result.streamRequest.system).not.toContain('expand_source_range')
     expect(result.streamTextSettings?.stopWhen).toBeDefined()
@@ -378,19 +381,19 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
 
     expect(result.streamRequest.system).toContain('=== Recall Priority ===')
     expect(result.streamRequest.system).toContain(
-      'When the user asks about an exact older detail such as a first or last event, a location, an order of actions, a speaker, or exact wording, do not answer from summaries alone when `fetch_source_range` is available for the relevant older range.',
+      'Use transcript recall when the next reply likely depends on older conversation detail that is not already visible, summaries may not be specific enough, and getting that detail wrong would materially change the reply.',
     )
     expect(result.streamRequest.system).toContain(
-      'During RP or scene-writing, if your next reply depends on a concrete older scene detail such as what someone was doing, feeling, touching, wearing, saying, or remembering, use `fetch_source_range` instead of inventing specifics from summaries alone when the relevant older range is available.',
+      'Think in terms of three checks: oldness, exactness, and materiality.',
     )
     expect(result.streamRequest.system).toContain(
-      'If the user asks a character to remember, describe, relive, or explain a specific older moment, treat that as a strong recall trigger whenever the needed detail is not already visible in the current raw context.',
+      'Common recall-friendly cases include first or last occurrence, exact wording or exact sequence, promises or agreements, plans or boundaries, relationship-changing moments, contradiction checks against earlier dialogue, and vague references to a specific older scene or incident.',
     )
     expect(result.streamRequest.system).toContain(
-      'Do not treat `expand_source_range` output as raw evidence. Expansion only narrows the search space; fetched transcript lines are the raw evidence.',
+      'Use `fetch_source_range` when exact older source detail matters more than broad continuity, especially for wording, sequence, promises, boundaries, turning points, or contradiction checks.',
     )
     expect(result.streamRequest.system).toContain(
-      'If the user asks about the last or final part of an older event, inspect the latest relevant child range first.',
+      'If the likely evidence sits inside a surfaced parent range and the best child range is unclear, expand first.',
     )
   })
 

@@ -11,9 +11,9 @@ const MAX_EXPAND_SOURCE_RANGE_CALLS = 1
 export const EXPAND_SOURCE_RANGE_TOOL_NAME = 'expand_source_range'
 export const EXPAND_SOURCE_RANGE_TOOL_DESCRIPTION = [
   'Expand one surfaced navigation parent range into smaller child ranges that are legal raw transcript fetch targets for this reply.',
-  'Use this when the relevant evidence is likely inside a large older range such as `[Meta Summary 201-300]` and you need help choosing a smaller raw transcript span to inspect next.',
+  'Use this when the answer likely depends on an older scene, turning point, promise, or other specific historical detail, but you do not yet know which bounded child range should be fetched as raw evidence.',
   'Call this only with the exact start and end sequence numbers of one surfaced navigation parent range. Do not call it for recent raw context, directly fetchable small ranges, or invented subranges such as `210-220` unless those exact child ranges were already returned by this tool.',
-  'The result is a list of bounded child ranges. Expansion narrows the search space, but it is not raw evidence by itself. After expansion, fetch at most one exact child range at a time with `fetch_source_range`.',
+  'The result is a list of bounded child ranges. Expansion narrows the search space, but it is not raw evidence by itself. If exact older detail still matters after expansion, fetch at most one exact child range at a time with `fetch_source_range`.',
 ].join(' ')
 export const expandSourceRangeToolInputSchema = z
   .object({

@@ -46,7 +46,7 @@ export type PostGenerationPipelineResult = {
   assistantMessageId: string
   messageInsertDuration: number | null
   usageEventInsertDurationMs: number
-  summaryTriggerDurationMs: number
+  summaryTriggerDurationMs: number | null
 }
 
 export async function runPostGenerationPipeline({
@@ -137,6 +137,6 @@ export async function runPostGenerationPipeline({
     assistantMessageId: finalAssistantMessageId,
     messageInsertDuration: finalMessageInsertDuration,
     usageEventInsertDurationMs,
-    summaryTriggerDurationMs: 0,
+    summaryTriggerDurationMs: null,
   }
 }

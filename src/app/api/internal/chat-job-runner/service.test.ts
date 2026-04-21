@@ -1806,14 +1806,39 @@ describe('processChatJobs', () => {
     expect(systemMessage).toBeUndefined()
   })
 
-  it('supports regeneration by removing old assistant message and updating debug_info on summary failure', async () => {
+  it('supports turn-based regeneration and updates debug_info on summary failure', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
+      initialTurns: [
+        {
+          id: 'turn-1',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          turn_index: 1,
+          user_message_id: 'user-1-msg',
+          active_assistant_message_id: 'assistant-1',
+        },
+      ],
       initialMessages: [
+        {
+          id: 'user-1-msg',
+          chat_id: 'chat-1',
+          role: 'user',
+          content: 'old question',
+          turn_id: 'turn-1',
+          model_used: null,
+          prompt_tokens: null,
+          completion_tokens: null,
+          debug_info: null,
+          user_id: 'user-1',
+        },
         {
           id: 'assistant-1',
           chat_id: 'chat-1',
           role: 'assistant',
           content: 'old reply',
+          turn_id: 'turn-1',
+          variant_index: 1,
+          message_status: 'completed',
           model_used: null,
           prompt_tokens: null,
           completion_tokens: null,
@@ -1831,18 +1856,18 @@ describe('processChatJobs', () => {
       error: 'summary failed',
       attempts: 2,
     })
-    parseChatJobPayloadMock.mockReturnValue({
-      version: 1,
-      requestId: 'req-3',
-      chatId: 'chat-1',
-      userId: 'user-1',
-      apiKeyId: 'key-1',
-      provider: 'openai',
-      modelName: 'gpt-4o-mini',
-      sanitizedMessages: [{ role: 'user', content: 'new question' }],
-      isRegeneration: true,
-      regenerateAssistantMessageId: 'assistant-1',
-    })
+    parseChatJobPayloadMock.mockReturnValue(
+      buildValidPayload({
+        requestId: 'req-3',
+        turnId: 'turn-1',
+        sanitizedMessages: [
+          { role: 'user', content: 'old question' },
+          { role: 'assistant', content: 'old reply' },
+        ],
+        isRegeneration: true,
+        regenerateAssistantMessageId: 'assistant-1',
+      }),
+    )
     streamTextMock.mockResolvedValue({
       textStream: ['new answer'],
       finishReason: Promise.resolve('stop'),
@@ -1859,9 +1884,16 @@ describe('processChatJobs', () => {
     const result = await processChatJobs(1)
 
     expect(result.results[0]).toMatchObject({ status: 'success', jobId: 'job-3' })
-    expect(supabase.messages.find((msg) => msg.id === 'assistant-1')).toBeUndefined()
+    expect(supabase.messages.find((msg) => msg.id === 'assistant-1')).toMatchObject({
+      message_status: 'superseded',
+    })
     await vi.waitFor(() => {
       const latest = supabase.messages[supabase.messages.length - 1]
+      expect(latest).toMatchObject({
+        content: 'new answer',
+        turn_id: 'turn-1',
+        supersedes_message_id: 'assistant-1',
+      })
       expect(latest.debug_info).toMatchObject({
         summaryWarning: expect.objectContaining({
           error: 'summary failed',

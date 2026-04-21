@@ -271,7 +271,9 @@ async function executeJob({
       timings['9_message_insert'] = postGenerationResult.messageInsertDuration
     }
     timings['10_usage_event_insert'] = postGenerationResult.usageEventInsertDurationMs
-    timings['11_summary_trigger'] = postGenerationResult.summaryTriggerDurationMs
+    if (postGenerationResult.summaryTriggerDurationMs !== null) {
+      timings['11_summary_trigger'] = postGenerationResult.summaryTriggerDurationMs
+    }
 
     const totalTime = performance.now() - startTime
     timings['00_total'] = totalTime

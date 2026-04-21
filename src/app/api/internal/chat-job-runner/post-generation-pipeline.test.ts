@@ -244,7 +244,7 @@ describe('runPostGenerationPipeline', () => {
       assistantMessageId: 'assistant-1',
       messageInsertDuration: 9,
       usageEventInsertDurationMs: 30,
-      summaryTriggerDurationMs: 0,
+      summaryTriggerDurationMs: null,
     })
 
     expect(resolveSummaryModelPreferenceFn).toHaveBeenCalledWith({
@@ -361,7 +361,7 @@ describe('runPostGenerationPipeline', () => {
       expect(result).toMatchObject({
         assistantMessageId: 'assistant-1',
         messageInsertDuration: 9,
-        summaryTriggerDurationMs: 0,
+        summaryTriggerDurationMs: null,
       })
       expect(supabase.usageEvents).toHaveLength(0)
       await flushSummaryBackgroundTask()
@@ -450,7 +450,7 @@ describe('runPostGenerationPipeline', () => {
       expect(result).toMatchObject({
         assistantMessageId: 'assistant-1',
         messageInsertDuration: 9,
-        summaryTriggerDurationMs: 0,
+        summaryTriggerDurationMs: null,
       })
       expect(supabase.usageEvents).toHaveLength(0)
       expect(warnSpy).not.toHaveBeenCalledWith(
@@ -682,7 +682,7 @@ describe('runPostGenerationPipeline', () => {
 
     expect(result.messageInsertDuration).toBe(10)
     expect(result.usageEventInsertDurationMs).toBe(12)
-    expect(result.summaryTriggerDurationMs).toBe(0)
+    expect(result.summaryTriggerDurationMs).toBeNull()
     expect(supabase.usageEvents).toHaveLength(1)
 
     await flushSummaryBackgroundTask()
@@ -788,7 +788,7 @@ describe('runPostGenerationPipeline', () => {
       assistantMessageId: 'assistant-1',
       messageInsertDuration: 9,
       usageEventInsertDurationMs: 0,
-      summaryTriggerDurationMs: 0,
+      summaryTriggerDurationMs: null,
     })
     expect(triggerMessageTranslationFn).toHaveBeenCalledWith('assistant-1', 'user-1')
     expect(supabase.usageEvents).toHaveLength(1)

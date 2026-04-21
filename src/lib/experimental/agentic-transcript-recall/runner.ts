@@ -35,28 +35,61 @@ type ExperimentalAgenticTranscriptRecallWrapperResult<TStreamRequest> = {
   streamTextSettings?: ExperimentalAgenticTranscriptRecallStreamSettings
 }
 
-function buildExperimentalInstruction({ maxToolCalls }: { maxToolCalls: number }): string {
-  const instructions = [
-    '=== Experimental Transcript Recall ===',
-    'You may call `expand_source_range` when a surfaced parent range such as `[Meta Summary 1-100]` is too large for direct raw fetch.',
-    'After expansion, call `fetch_source_range` if one smaller child range is needed to verify your next reply.',
-    'Only call `fetch_source_range` for a directly surfaced small range such as `[1-10]`, or for a bounded child range returned by `expand_source_range`.',
-    'Do not use this tool for recent raw messages that are already visible in the conversation context.',
-    'Do not treat `expand_source_range` output as raw evidence. Expansion only narrows the search space; fetched transcript lines are the raw evidence.',
-    'Do not merge sibling child ranges into a larger fetch. If expansion returns `281-290` and `291-300`, you must fetch one exact child range at a time.',
-    `You may call \`expand_source_range\` at most 1 time and \`fetch_source_range\` at most ${maxToolCalls} time for this reply. If the summaries and facts are sufficient, answer without calling either tool.`,
-    '=== Recall Priority ===',
-    'When the user asks about an exact older detail such as a first or last event, a location, an order of actions, a speaker, or exact wording, do not answer from summaries alone when transcript recall tools are available for the relevant older range.',
-    'During RP or scene-writing, if your next reply depends on a concrete older scene detail such as what someone was doing, feeling, touching, wearing, saying, or remembering, use transcript recall instead of inventing specifics from summaries alone when the relevant older range is available.',
-    'If the user asks a character to remember, describe, relive, or explain a specific older moment, treat that as a strong recall trigger whenever the needed detail is not already visible in the current raw context.',
-    'If you used `expand_source_range` because exact older scene detail is needed, normally fetch one exact child range before narrating specific actions, sensations, wording, or sequence. Do not treat expansion previews as enough for those specifics.',
-    'If the likely evidence sits inside a surfaced parent range, expand first.',
-    'If the user asks about the last or final part of an older event, inspect the latest relevant child range first.',
-    'If the user asks about the first or beginning of an older event, inspect the earliest relevant child range first.',
-    maxToolCalls > 1
-      ? 'If one fetched child range is still insufficient and budget remains, fetch one adjacent child range before answering.'
-      : 'If one fetched child range is still insufficient and no fetch budget remains, say that you could not fully verify the raw transcript.',
-  ]
+function buildExperimentalInstruction({
+  maxToolCalls,
+  fetchAvailable,
+  expandAvailable,
+}: {
+  maxToolCalls: number
+  fetchAvailable: boolean
+  expandAvailable: boolean
+}): string {
+  const instructions = ['=== Experimental Transcript Recall ===', '=== Recall Priority ===']
+
+  if (expandAvailable) {
+    instructions.push(
+      'You may call `expand_source_range` when a surfaced parent range such as `[Meta Summary 1-100]` is too large for direct raw fetch.',
+    )
+  }
+
+  if (fetchAvailable && expandAvailable) {
+    instructions.push(
+      'After expansion, call `fetch_source_range` if one smaller child range is needed to verify your next reply.',
+    )
+  }
+
+  if (fetchAvailable) {
+    instructions.push(
+      expandAvailable
+        ? 'Only call `fetch_source_range` for a directly surfaced small range such as `[1-10]`, or for a bounded child range returned by `expand_source_range`.'
+        : 'Only call `fetch_source_range` for a directly surfaced small range such as `[1-10]` that is available for this reply.',
+      'Do not use this tool for recent raw messages that are already visible in the conversation context.',
+      'Do not treat fetched transcript lines as optional. Use them as the raw evidence for exact wording, exact sequencing, and concrete older scene detail.',
+      maxToolCalls > 1
+        ? `You may call \`fetch_source_range\` at most ${maxToolCalls} time for this reply. If one fetched child range is still insufficient and budget remains, fetch one adjacent child range before answering.`
+        : 'You may call `fetch_source_range` at most 1 time for this reply. If one fetched child range is still insufficient, say that you could not fully verify the raw transcript.',
+      'When the user asks about an exact older detail such as a first or last event, a location, an order of actions, a speaker, or exact wording, do not answer from summaries alone when `fetch_source_range` is available for the relevant older range.',
+      'During RP or scene-writing, if your next reply depends on a concrete older scene detail such as what someone was doing, feeling, touching, wearing, saying, or remembering, use `fetch_source_range` instead of inventing specifics from summaries alone when the relevant older range is available.',
+      'If the user asks a character to remember, describe, relive, or explain a specific older moment, treat that as a strong recall trigger whenever the needed detail is not already visible in the current raw context.',
+    )
+  } else {
+    instructions.push(
+      'No `fetch_source_range` tool is available for this reply. Do not claim exact wording, exact sequence, or other unverified specifics from summaries or expansion previews alone.',
+    )
+  }
+
+  if (expandAvailable) {
+    instructions.push(
+      'Do not treat `expand_source_range` output as raw evidence. Expansion only narrows the search space; fetched transcript lines are the raw evidence.',
+      'Do not merge sibling child ranges into a larger fetch. If expansion returns `281-290` and `291-300`, you must fetch one exact child range at a time.',
+      fetchAvailable
+        ? `You may call \`expand_source_range\` at most 1 time and \`fetch_source_range\` at most ${maxToolCalls} time for this reply. If the summaries and facts are sufficient, answer without calling either tool.`
+        : 'You may call `expand_source_range` at most 1 time for this reply. Use it only to narrow the search space, not as raw evidence.',
+      'If the likely evidence sits inside a surfaced parent range, expand first.',
+      'If the user asks about the last or final part of an older event, inspect the latest relevant child range first.',
+      'If the user asks about the first or beginning of an older event, inspect the earliest relevant child range first.',
+    )
+  }
 
   return instructions.join('\n')
 }
@@ -256,7 +289,17 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
     }
   }
 
-  const augmentedSystem = [streamRequest.system, buildExperimentalInstruction(runtimeConfig)]
+  const fetchAvailable = FETCH_SOURCE_RANGE_TOOL_NAME in tools
+  const expandAvailable = EXPAND_SOURCE_RANGE_TOOL_NAME in tools
+
+  const augmentedSystem = [
+    streamRequest.system,
+    buildExperimentalInstruction({
+      maxToolCalls: runtimeConfig.maxToolCalls,
+      fetchAvailable,
+      expandAvailable,
+    }),
+  ]
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .join('\n\n')
 

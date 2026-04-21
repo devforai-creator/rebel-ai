@@ -202,6 +202,8 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
 
     expect(result.streamRequest.system).toContain('FINAL')
     expect(result.streamRequest.system).toContain('Experimental Transcript Recall')
+    expect(result.streamRequest.system).toContain('fetch_source_range')
+    expect(result.streamRequest.system).not.toContain('expand_source_range')
     expect(result.streamTextSettings?.stopWhen).toBeDefined()
     expect(debugMetrics).toMatchObject({
       experimental_agentic_transcript_recall_tool_available: true,
@@ -255,6 +257,59 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
       experimental_agentic_transcript_recall_tool_last_reason: 'Need the original wording.',
       experimental_agentic_transcript_recall_tool_last_block_reason: null,
     })
+  })
+
+  it('does not advertise raw fetch when only parent expansion is available', () => {
+    const result = prepareExperimentalAgenticTranscriptRecallRequest({
+      supabase: createTranscriptSupabase(),
+      chatId,
+      runtimeConfig: buildRuntimeConfig(),
+      sourceHints: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'meta_summary',
+            startSeq: 1,
+            endSeq: 40,
+            preview: 'Large parent range',
+          },
+        ],
+      },
+      sourceMap: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        directFetchRanges: [],
+        navigationParents: [
+          {
+            parentRange: {
+              kind: 'summary',
+              label: 'meta_summary',
+              startSeq: 1,
+              endSeq: 40,
+              preview: 'Large parent range',
+            },
+            childRanges: [],
+          },
+        ],
+      },
+      streamRequest: {
+        system: 'FINAL',
+        messages: [{ role: 'user', content: 'Hello' }],
+      },
+      debugMetrics: {},
+      logDebug: vi.fn(),
+    })
+
+    expect(result.streamRequest.system).toContain('expand_source_range')
+    expect(result.streamRequest.system).toContain(
+      'No `fetch_source_range` tool is available for this reply.',
+    )
+    expect(result.streamTextSettings?.tools).toMatchObject({
+      expand_source_range: expect.any(Object),
+    })
+    expect(result.streamTextSettings?.tools).not.toHaveProperty('fetch_source_range')
   })
 
   it('always adds the stronger recall-priority instruction when transcript recall tools are available', () => {
@@ -323,16 +378,16 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
 
     expect(result.streamRequest.system).toContain('=== Recall Priority ===')
     expect(result.streamRequest.system).toContain(
-      'When the user asks about an exact older detail such as a first or last event, a location, an order of actions, a speaker, or exact wording, do not answer from summaries alone when transcript recall tools are available for the relevant older range.',
+      'When the user asks about an exact older detail such as a first or last event, a location, an order of actions, a speaker, or exact wording, do not answer from summaries alone when `fetch_source_range` is available for the relevant older range.',
     )
     expect(result.streamRequest.system).toContain(
-      'During RP or scene-writing, if your next reply depends on a concrete older scene detail such as what someone was doing, feeling, touching, wearing, saying, or remembering, use transcript recall instead of inventing specifics from summaries alone when the relevant older range is available.',
+      'During RP or scene-writing, if your next reply depends on a concrete older scene detail such as what someone was doing, feeling, touching, wearing, saying, or remembering, use `fetch_source_range` instead of inventing specifics from summaries alone when the relevant older range is available.',
     )
     expect(result.streamRequest.system).toContain(
       'If the user asks a character to remember, describe, relive, or explain a specific older moment, treat that as a strong recall trigger whenever the needed detail is not already visible in the current raw context.',
     )
     expect(result.streamRequest.system).toContain(
-      'If you used `expand_source_range` because exact older scene detail is needed, normally fetch one exact child range before narrating specific actions, sensations, wording, or sequence. Do not treat expansion previews as enough for those specifics.',
+      'Do not treat `expand_source_range` output as raw evidence. Expansion only narrows the search space; fetched transcript lines are the raw evidence.',
     )
     expect(result.streamRequest.system).toContain(
       'If the user asks about the last or final part of an older event, inspect the latest relevant child range first.',
@@ -409,6 +464,99 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
       experimental_agentic_transcript_recall_tool_fetch_count: 0,
       experimental_agentic_transcript_recall_tool_block_count: 1,
       experimental_agentic_transcript_recall_tool_last_block_reason: 'range_not_allowed',
+    })
+  })
+
+  it('treats stale hinted fetch failures as consuming the fetch-call budget', async () => {
+    const debugMetrics: Record<string, string | number | boolean | null> = {}
+    const result = prepareExperimentalAgenticTranscriptRecallRequest({
+      supabase: createTranscriptSupabase(),
+      chatId,
+      runtimeConfig: buildRuntimeConfig(),
+      sourceHints: {
+        rawContextStartOrdinal: 10,
+        cutoffOrdinal: 9,
+        hints: [
+          {
+            kind: 'fact',
+            label: null,
+            startSeq: 5,
+            endSeq: 7,
+            preview: 'Inconsistent stale range',
+          },
+        ],
+      },
+      sourceMap: {
+        rawContextStartOrdinal: 10,
+        cutoffOrdinal: 9,
+        directFetchRanges: [
+          {
+            kind: 'fact',
+            label: null,
+            startSeq: 5,
+            endSeq: 7,
+            preview: 'Inconsistent stale range',
+          },
+        ],
+        navigationParents: [],
+      },
+      streamRequest: {
+        system: 'FINAL',
+        messages: [{ role: 'user', content: 'Hello' }],
+      },
+      debugMetrics,
+      logDebug: vi.fn(),
+    })
+
+    const fetchTool = (
+      result.streamTextSettings?.tools as Record<string, TestFetchSourceRangeTool>
+    )['fetch_source_range']
+
+    const firstAttempt = await fetchTool.execute(
+      {
+        startSeq: 5,
+        endSeq: 7,
+        reason: 'Try the stale range once.',
+      },
+      {
+        toolCallId: 'tool-stale-1',
+        messages: [],
+      },
+    )
+
+    const secondAttempt = await fetchTool.execute(
+      {
+        startSeq: 5,
+        endSeq: 7,
+        reason: 'Try the stale range again.',
+      },
+      {
+        toolCallId: 'tool-stale-2',
+        messages: [],
+      },
+    )
+
+    expect(firstAttempt).toEqual({
+      status: 'blocked',
+      blockReason: 'range_not_in_chat',
+      message: 'requested transcript range could not be resolved from the current chat transcript',
+      startSeq: 5,
+      endSeq: 7,
+      reason: 'Try the stale range once.',
+    })
+    expect(secondAttempt).toEqual({
+      status: 'blocked',
+      blockReason: 'max_tool_calls_exceeded',
+      message: 'transcript recall tool-call budget has already been used',
+      startSeq: 5,
+      endSeq: 7,
+      reason: 'Try the stale range again.',
+    })
+    expect(debugMetrics).toMatchObject({
+      experimental_agentic_transcript_recall_tool_call_count: 2,
+      experimental_agentic_transcript_recall_tool_fetch_count: 0,
+      experimental_agentic_transcript_recall_tool_block_count: 2,
+      experimental_agentic_transcript_recall_tool_last_block_reason: 'max_tool_calls_exceeded',
     })
   })
 

@@ -278,7 +278,47 @@ describe('executeFetchSourceRange', () => {
         reason: 'Test inconsistent range.',
       },
       budgetState: {
-        toolCallsUsed: 0,
+        toolCallsUsed: 1,
+        totalMessagesFetched: 0,
+      },
+    })
+  })
+
+  it('consumes fetch call budget when transcript loading fails after policy approval', async () => {
+    const result = await executeFetchSourceRange({
+      supabase: null as never,
+      chatId,
+      runtimeConfig: enabledRuntimeConfig,
+      sourceMap: buildSourceMap({
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 2,
+            preview: 'The first exchange.',
+          },
+        ],
+      }),
+      budgetState: createAgenticTranscriptRecallBudgetState(),
+      input: {
+        startSeq: 1,
+        endSeq: 2,
+        reason: 'Need the exact exchange.',
+      },
+    })
+
+    expect(result).toEqual({
+      result: {
+        status: 'blocked',
+        blockReason: 'tool_execution_failed',
+        message: 'transcript recall tool execution failed and was blocked for this request',
+        startSeq: 1,
+        endSeq: 2,
+        reason: 'Need the exact exchange.',
+      },
+      budgetState: {
+        toolCallsUsed: 1,
         totalMessagesFetched: 0,
       },
     })

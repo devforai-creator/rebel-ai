@@ -159,12 +159,29 @@ export async function executeFetchSourceRange({
     }
   }
 
-  const projectedMessages = await loadProjectedConversationRange({
-    supabase,
-    chatId,
-    startOrdinal: policyResult.requestedRange.startSeq,
-    endOrdinal: policyResult.requestedRange.endSeq,
-  })
+  const toolCallConsumedBudgetState: AgenticTranscriptRecallBudgetState = {
+    toolCallsUsed: policyResult.nextBudgetState.toolCallsUsed,
+    totalMessagesFetched: budgetState.totalMessagesFetched,
+  }
+
+  let projectedMessages: Awaited<ReturnType<typeof loadProjectedConversationRange>>
+  try {
+    projectedMessages = await loadProjectedConversationRange({
+      supabase,
+      chatId,
+      startOrdinal: policyResult.requestedRange.startSeq,
+      endOrdinal: policyResult.requestedRange.endSeq,
+    })
+  } catch {
+    return {
+      result: toBlockedResult({
+        blockReason: 'tool_execution_failed',
+        message: 'transcript recall tool execution failed and was blocked for this request',
+        input: request,
+      }),
+      budgetState: toolCallConsumedBudgetState,
+    }
+  }
 
   const fetchedRangeValidation = validateFetchedSourceRange({
     requestedStartSeq: policyResult.requestedRange.startSeq,
@@ -179,7 +196,7 @@ export async function executeFetchSourceRange({
         message: fetchedRangeValidation.message,
         input: request,
       }),
-      budgetState,
+      budgetState: toolCallConsumedBudgetState,
     }
   }
 

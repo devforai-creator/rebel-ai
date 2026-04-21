@@ -4,6 +4,7 @@ import type {
   PersistedTurnRow,
   ProjectedConversationMessage,
   ProjectedTurnMessage,
+  TurnSequenceRow,
   TurnClient,
 } from './turn-types'
 import { PROJECTED_CHAT_MESSAGE_COLUMNS } from './turn-types'
@@ -167,17 +168,29 @@ export async function loadTurnsForChat({
   chatId,
   ascending,
   limit,
+  minTurnIndex,
+  maxTurnIndex,
 }: {
   supabase: TurnClient
   chatId: string
   ascending: boolean
   limit?: number
+  minTurnIndex?: number
+  maxTurnIndex?: number
 }): Promise<PersistedTurnRow[]> {
   let turnsQuery = supabase
     .from('chat_turns')
     .select('id, turn_index, user_message_id, active_assistant_message_id')
     .eq('chat_id', chatId)
     .order('turn_index', { ascending })
+
+  if (typeof minTurnIndex === 'number') {
+    turnsQuery = turnsQuery.gte('turn_index', minTurnIndex)
+  }
+
+  if (typeof maxTurnIndex === 'number') {
+    turnsQuery = turnsQuery.lte('turn_index', maxTurnIndex)
+  }
 
   if (typeof limit === 'number') {
     turnsQuery = turnsQuery.limit(limit)
@@ -196,16 +209,24 @@ async function countTurnsWithMessageField({
   supabase,
   chatId,
   field,
+  maxTurnIndex,
 }: {
   supabase: TurnClient
   chatId: string
   field: 'user_message_id' | 'active_assistant_message_id'
+  maxTurnIndex?: number
 }): Promise<number> {
-  const { count, error } = await supabase
+  let query = supabase
     .from('chat_turns')
     .select('id', { count: 'exact', head: true })
     .eq('chat_id', chatId)
     .not(field, 'is', null)
+
+  if (typeof maxTurnIndex === 'number') {
+    query = query.lte('turn_index', maxTurnIndex)
+  }
+
+  const { count, error } = await query
 
   if (error) {
     throw new Error(error.message)
@@ -217,29 +238,88 @@ async function countTurnsWithMessageField({
 export async function countTurnsWithUserMessage({
   supabase,
   chatId,
+  maxTurnIndex,
 }: {
   supabase: TurnClient
   chatId: string
+  maxTurnIndex?: number
 }): Promise<number> {
   return countTurnsWithMessageField({
     supabase,
     chatId,
     field: 'user_message_id',
+    maxTurnIndex,
   })
 }
 
 export async function countTurnsWithActiveAssistantMessage({
   supabase,
   chatId,
+  maxTurnIndex,
 }: {
   supabase: TurnClient
   chatId: string
+  maxTurnIndex?: number
 }): Promise<number> {
   return countTurnsWithMessageField({
     supabase,
     chatId,
     field: 'active_assistant_message_id',
+    maxTurnIndex,
   })
+}
+
+export async function countProjectedConversationMessagesUpToTurnIndex({
+  supabase,
+  chatId,
+  maxTurnIndex,
+}: {
+  supabase: TurnClient
+  chatId: string
+  maxTurnIndex: number
+}): Promise<number> {
+  if (maxTurnIndex < 1) {
+    return 0
+  }
+
+  const [userMessageCount, activeAssistantCount] = await Promise.all([
+    countTurnsWithUserMessage({
+      supabase,
+      chatId,
+      maxTurnIndex,
+    }),
+    countTurnsWithActiveAssistantMessage({
+      supabase,
+      chatId,
+      maxTurnIndex,
+    }),
+  ])
+
+  return userMessageCount + activeAssistantCount
+}
+
+export async function loadLatestTurnIndex({
+  supabase,
+  chatId,
+}: {
+  supabase: TurnClient
+  chatId: string
+}): Promise<number | null> {
+  const latestTurnResult = await readMaybeSingleQuery<TurnSequenceRow>(
+    supabase
+      .from('chat_turns')
+      .select('turn_index')
+      .eq('chat_id', chatId)
+      .order('turn_index', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  )
+
+  if (latestTurnResult.error && latestTurnResult.error.code !== 'PGRST116') {
+    throw new Error(`Failed to load latest chat turn: ${latestTurnResult.error.message}`)
+  }
+
+  return latestTurnResult.data?.turn_index ?? null
 }
 
 export async function loadLatestActiveAssistantMessageId({

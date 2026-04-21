@@ -4,10 +4,12 @@ import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from './message-
 import {
   buildProjectedConversationMessages,
   countTurnsWithActiveAssistantMessage,
+  countProjectedConversationMessagesUpToTurnIndex,
   countTurnsWithUserMessage,
   getLowerSequenceBound,
   getTurnMessageIds,
   loadLatestActiveAssistantMessageId,
+  loadLatestTurnIndex,
   loadMessageRowsByIds,
   loadProjectedMessagesByIds,
   loadStandaloneSystemMessages,
@@ -27,6 +29,36 @@ export type GenerationTranscriptMetrics = {
   fetchedMessageCount: number
   transcriptMessageCount: number
   excludedAssistant: boolean
+}
+
+async function findTurnIndexForConversationOrdinal({
+  ordinal,
+  low,
+  high,
+  getConversationCountAtTurnIndex,
+}: {
+  ordinal: number
+  low: number
+  high: number
+  getConversationCountAtTurnIndex: (turnIndex: number) => Promise<number>
+}): Promise<number | null> {
+  let left = low
+  let right = high
+  let resolvedTurnIndex: number | null = null
+
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2)
+    const messageCount = await getConversationCountAtTurnIndex(mid)
+
+    if (messageCount >= ordinal) {
+      resolvedTurnIndex = mid
+      right = mid - 1
+    } else {
+      left = mid + 1
+    }
+  }
+
+  return resolvedTurnIndex
 }
 
 export async function loadGenerationTranscript({
@@ -345,12 +377,92 @@ export async function loadProjectedConversationRange({
   startOrdinal: number
   endOrdinal: number
 }): Promise<ProjectedConversationMessage[]> {
-  const messages = await loadProjectedConversationMessages({
+  const normalizedStartOrdinal = Math.max(1, Math.trunc(startOrdinal))
+  const normalizedEndOrdinal = Math.max(0, Math.trunc(endOrdinal))
+
+  if (normalizedEndOrdinal < normalizedStartOrdinal) {
+    return []
+  }
+
+  const latestTurnIndex = await loadLatestTurnIndex({
     supabase,
     chatId,
   })
 
-  return messages.slice(Math.max(0, startOrdinal - 1), Math.max(0, endOrdinal))
+  if (latestTurnIndex === null) {
+    return []
+  }
+
+  const conversationCountCache = new Map<number, Promise<number>>()
+  const getConversationCountAtTurnIndex = (turnIndex: number) => {
+    if (turnIndex < 1) {
+      return Promise.resolve(0)
+    }
+
+    const cachedCount = conversationCountCache.get(turnIndex)
+    if (cachedCount) {
+      return cachedCount
+    }
+
+    const nextCount = countProjectedConversationMessagesUpToTurnIndex({
+      supabase,
+      chatId,
+      maxTurnIndex: turnIndex,
+    })
+    conversationCountCache.set(turnIndex, nextCount)
+    return nextCount
+  }
+
+  const totalMessageCount = await getConversationCountAtTurnIndex(latestTurnIndex)
+  if (totalMessageCount === 0) {
+    return []
+  }
+
+  const boundedEndOrdinal = Math.min(normalizedEndOrdinal, totalMessageCount)
+  if (normalizedStartOrdinal > boundedEndOrdinal) {
+    return []
+  }
+
+  const startTurnIndex = await findTurnIndexForConversationOrdinal({
+    ordinal: normalizedStartOrdinal,
+    low: 1,
+    high: latestTurnIndex,
+    getConversationCountAtTurnIndex,
+  })
+  const endTurnIndex = await findTurnIndexForConversationOrdinal({
+    ordinal: boundedEndOrdinal,
+    low: startTurnIndex ?? 1,
+    high: latestTurnIndex,
+    getConversationCountAtTurnIndex,
+  })
+
+  if (startTurnIndex === null || endTurnIndex === null) {
+    return []
+  }
+
+  const turns = await loadTurnsForChat({
+    supabase,
+    chatId,
+    ascending: true,
+    minTurnIndex: startTurnIndex,
+    maxTurnIndex: endTurnIndex,
+  })
+
+  const messageMap = await loadProjectedMessagesByIds({
+    supabase,
+    messageIds: turns.flatMap((turn) => getTurnMessageIds(turn)),
+  })
+
+  const projectedMessages = buildProjectedConversationMessages({
+    turns,
+    messageMap,
+  })
+  const conversationCountBeforeStartTurn =
+    startTurnIndex > 1 ? await getConversationCountAtTurnIndex(startTurnIndex - 1) : 0
+  const sliceStart = normalizedStartOrdinal - conversationCountBeforeStartTurn - 1
+  const sliceEnd = sliceStart + (boundedEndOrdinal - normalizedStartOrdinal + 1)
+
+  return projectedMessages.slice(sliceStart, sliceEnd)
 }
 
 export async function loadLatestProjectedMessage({

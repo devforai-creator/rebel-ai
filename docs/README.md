@@ -70,6 +70,6 @@ for the current queue and the archive split.
 - [backlogs/README.md](./backlogs/README.md): backlog structure, current entry
   point, and archive policy
 - current active queue:
-  none right now
+  [april-20-feature-review-backlog-2026-04-21.md](./backlogs/active/april-20-feature-review-backlog-2026-04-21.md)
 - most recently archived queue:
   [review-followup-backlog-2026-04-21.md](./backlogs/archive/2026/review-followup-backlog-2026-04-21.md)

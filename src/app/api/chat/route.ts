@@ -67,10 +67,7 @@ export async function POST(req: Request) {
       })
     }
 
-    const parsedRequest = await parseChatRequest({
-      req,
-      requestId,
-    })
+    const parsedRequest = await parseChatRequest({ req })
 
     if (parsedRequest.status === 'error') {
       return parsedRequest.response

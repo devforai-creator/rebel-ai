@@ -957,7 +957,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 123,
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'hello' }],
+        userMessage: 'hello',
       }),
     })
 
@@ -974,7 +974,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: '',
-        messages: [{ role: 'user', content: 'hello' }],
+        userMessage: 'hello',
       }),
     })
 
@@ -983,7 +983,7 @@ describe('POST /api/chat', () => {
     await expectJsonError(response, 400, 'Invalid apiKeyId')
   })
 
-  it('returns 400 when no valid chat messages are provided', async () => {
+  it('returns 400 when a legacy transcript payload is provided', async () => {
     createSupabaseMock(buildDefaultAuthenticatedFixture())
 
     const request = new Request('http://localhost/api/chat', {
@@ -991,20 +991,16 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [
-          { role: 'system', content: 'ignored' },
-          { role: 'user', content: 123 },
-          { role: 10, content: 'bad role' },
-        ],
+        messages: [{ role: 'user', content: 'legacy hello' }],
       }),
     })
 
     const response = await POST(request)
 
-    await expectJsonError(response, 400, 'Messages array required')
+    await expectJsonError(response, 400, 'messages transcript payload is no longer supported')
   })
 
-  it('returns 400 when a message exceeds the byte-size limit', async () => {
+  it('returns 400 when userMessage exceeds the byte-size limit', async () => {
     createSupabaseMock(buildDefaultAuthenticatedFixture())
 
     const request = new Request('http://localhost/api/chat', {
@@ -1012,7 +1008,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'a'.repeat(CHAT_REQUEST_LIMITS.maxMessageBytes + 1) }],
+        userMessage: 'a'.repeat(CHAT_REQUEST_LIMITS.maxMessageBytes + 1),
       }),
     })
 
@@ -1021,7 +1017,7 @@ describe('POST /api/chat', () => {
     await expectJsonError(response, 400, 'Message exceeds allowed size')
   })
 
-  it('returns 400 when the last message is not a non-empty user message', async () => {
+  it('returns 400 when userMessage is missing for non-regeneration requests', async () => {
     createSupabaseMock(buildDefaultAuthenticatedFixture())
 
     const request = new Request('http://localhost/api/chat', {
@@ -1029,16 +1025,12 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [
-          { role: 'user', content: 'hello' },
-          { role: 'assistant', content: 'response' },
-        ],
       }),
     })
 
     const response = await POST(request)
 
-    await expectJsonError(response, 400, 'Last message must be a non-empty user message')
+    await expectJsonError(response, 400, 'userMessage is required')
   })
 
   it('accepts the slim userMessage request path without requiring transcript messages', async () => {
@@ -1092,7 +1084,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-anon',
         apiKeyId: 'anon-key',
-        messages: [{ role: 'user', content: 'hello' }],
+        userMessage: 'hello',
       }),
     })
 
@@ -1139,7 +1131,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-anon',
         apiKeyId: 'anon-key',
-        messages: [{ role: 'user', content: 'hello' }],
+        userMessage: 'hello',
       }),
       headers: {
         'x-vercel-ip': '203.0.113.10',
@@ -1174,7 +1166,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-anon',
         apiKeyId: 'anon-key',
-        messages: [{ role: 'user', content: 'hello' }],
+        userMessage: 'hello',
       }),
       headers: {
         'x-real-ip': '10.0.0.8',
@@ -1213,7 +1205,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-anon',
         apiKeyId: 'anon-key',
-        messages: [{ role: 'user', content: 'hello' }],
+        userMessage: 'hello',
       }),
       headers: {
         'x-real-ip': '10.0.0.8',
@@ -1246,7 +1238,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-anon',
         apiKeyId: 'anon-key',
-        messages: [{ role: 'user', content: 'hello' }],
+        userMessage: 'hello',
       }),
       headers: {
         'x-real-ip': '   ',
@@ -1284,7 +1276,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-anon',
         apiKeyId: 'anon-key',
-        messages: [{ role: 'user', content: 'hello' }],
+        userMessage: 'hello',
       }),
     })
 
@@ -1328,7 +1320,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-anon',
         apiKeyId: 'anon-key',
-        messages: [{ role: 'user', content: 'hello' }],
+        userMessage: 'hello',
       }),
     })
 
@@ -1370,7 +1362,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: '안녕' }],
+        userMessage: '안녕',
       }),
     })
 
@@ -1390,7 +1382,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'missing-key',
-        messages: [{ role: 'user', content: 'hello' }],
+        userMessage: 'hello',
       }),
     })
 
@@ -1432,7 +1424,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: '안녕' }],
+        userMessage: '안녕',
       }),
     })
 
@@ -1479,11 +1471,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [
-          { role: 'system', content: 'ignored' },
-          { role: 'assistant', content: 'previous answer' },
-          { role: 'user', content: '최신 질문' },
-        ],
+        userMessage: '최신 질문',
       }),
     })
 
@@ -1544,7 +1532,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'trigger the runner' }],
+        userMessage: 'trigger the runner',
       }),
     })
 
@@ -1579,7 +1567,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'keep chat acceptance stable' }],
+        userMessage: 'keep chat acceptance stable',
       }),
     })
 
@@ -1615,7 +1603,7 @@ describe('POST /api/chat', () => {
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
         deliveryMode: 'anthropic_batch',
-        messages: [{ role: 'user', content: 'batch please' }],
+        userMessage: 'batch please',
       }),
     })
 
@@ -1655,7 +1643,7 @@ describe('POST /api/chat', () => {
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
         deliveryMode: 'anthropic_batch',
-        messages: [{ role: 'user', content: 'batch please' }],
+        userMessage: 'batch please',
       }),
     })
 
@@ -1675,7 +1663,7 @@ describe('POST /api/chat', () => {
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
         deliveryMode: 'anthropic_batch',
-        messages: [{ role: 'user', content: 'batch please' }],
+        userMessage: 'batch please',
       }),
     })
 
@@ -1709,7 +1697,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'blocked' }],
+        userMessage: 'blocked',
       }),
     })
 
@@ -1735,7 +1723,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'blocked' }],
+        userMessage: 'blocked',
       }),
     })
 
@@ -1759,7 +1747,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'blocked' }],
+        userMessage: 'blocked',
       }),
     })
 
@@ -1784,7 +1772,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'too many queues' }],
+        userMessage: 'too many queues',
       }),
     })
 
@@ -1815,7 +1803,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'race me' }],
+        userMessage: 'race me',
       }),
     })
 
@@ -1846,7 +1834,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'rollback race me' }],
+        userMessage: 'rollback race me',
       }),
     })
 
@@ -1873,7 +1861,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'race me too' }],
+        userMessage: 'race me too',
       }),
     })
 
@@ -1909,7 +1897,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'use default model' }],
+        userMessage: 'use default model',
       }),
     })
 
@@ -1958,7 +1946,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'rate limit me' }],
+        userMessage: 'rate limit me',
       }),
     })
 
@@ -2009,7 +1997,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'rate limit me' }],
+        userMessage: 'rate limit me',
       }),
     })
 
@@ -2058,7 +2046,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'hello' }],
+        userMessage: 'hello',
       }),
     })
 
@@ -2123,10 +2111,6 @@ describe('POST /api/chat', () => {
         apiKeyId: 'api-key-1',
         isRegeneration: true,
         regenerateAssistantMessageId: 'assistant-1',
-        messages: [
-          { role: 'assistant', content: 'old reply' },
-          { role: 'user', content: 'retry please' },
-        ],
       }),
     })
 
@@ -2213,6 +2197,25 @@ describe('POST /api/chat', () => {
     })
   })
 
+  it('rejects regeneration requests that still include a userMessage payload', async () => {
+    createSupabaseMock(buildDefaultAuthenticatedFixture())
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        isRegeneration: true,
+        regenerateAssistantMessageId: 'assistant-1',
+        userMessage: 'retry please',
+      }),
+    })
+
+    const response = await POST(request)
+
+    await expectJsonError(response, 400, 'userMessage is not allowed for regeneration')
+  })
+
   it('returns 400 when regeneration targets a non-latest assistant turn', async () => {
     createSupabaseMock({
       user: { id: 'user-1' },
@@ -2267,10 +2270,6 @@ describe('POST /api/chat', () => {
         apiKeyId: 'api-key-1',
         isRegeneration: true,
         regenerateAssistantMessageId: 'assistant-1',
-        messages: [
-          { role: 'assistant', content: 'older reply' },
-          { role: 'user', content: 'retry please' },
-        ],
       }),
     })
 
@@ -2294,7 +2293,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'create turn please' }],
+        userMessage: 'create turn please',
       }),
     })
 
@@ -2321,7 +2320,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'collide please' }],
+        userMessage: 'collide please',
       }),
     })
 
@@ -2347,7 +2346,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'persist me' }],
+        userMessage: 'persist me',
       }),
     })
 
@@ -2377,7 +2376,7 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        messages: [{ role: 'user', content: 'persist me badly' }],
+        userMessage: 'persist me badly',
       }),
     })
 
@@ -2410,10 +2409,6 @@ describe('POST /api/chat', () => {
         apiKeyId: 'api-key-1',
         isRegeneration: true,
         regenerateAssistantMessageId: 'user-msg-1',
-        messages: [
-          { role: 'assistant', content: 'old reply' },
-          { role: 'user', content: 'retry please' },
-        ],
       }),
     })
 

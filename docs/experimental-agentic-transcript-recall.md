@@ -100,6 +100,31 @@ The experiment should be able to break on its own without forcing repairs in sum
 - Guaranteeing better answers on every long chat.
 - Guaranteeing identical tool-use behavior across every provider or model.
 
+## Current Deferred Follow-Up: Carryover
+
+ATR currently behaves as a turn-local recall mechanism.
+If the model fetches an older raw transcript range for one reply, that fetched range is not automatically carried into later turns.
+
+This is deferred on purpose for now.
+
+Reasons:
+
+- piggybacking on `debug_info` would be too fragile and too coupled to a diagnostic surface
+- `expand_source_range` and `fetch_source_range` do not mean the same thing, so a naive "recent ATR state" would be semantically muddy
+- the current experimental contract should avoid quietly introducing a second memory layer without explicit ownership
+
+If this is revisited later, the implementation direction should be:
+
+- use explicit runtime state, not `debug_info`
+- only carry over ranges that were actually fetched as raw transcript
+- keep the first version minimal:
+  - one fetched range
+  - one-turn TTL
+  - no generated summary/note/fact artifact
+  - no special persistence piggybacked onto unrelated fields
+
+Until that explicit state exists, ATR should remain turn-local.
+
 ## Experimental Contract
 
 These rules are mandatory for the first implementation.

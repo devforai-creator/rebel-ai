@@ -42,6 +42,7 @@ function createSupabaseStub(options?: {
   }> | null
   ragCandidateCount?: number | null
   ragError?: StubError | null
+  factsSelectCalls?: Array<{ count?: string; head?: boolean }>
 }): ChatSummariesSupabaseClient {
   const latestSequence = options?.latestSequence
   const latestSequenceError = options?.latestSequenceError ?? null
@@ -114,8 +115,15 @@ function createSupabaseStub(options?: {
   }
 
   const factsQuery = {
-    select: (_columns?: string, queryOptions?: { count?: string; head?: boolean }) =>
-      queryOptions?.count === 'exact' && queryOptions?.head ? factsCountQuery : factsRowsQuery,
+    select: (_columns?: string, queryOptions?: { count?: string; head?: boolean }) => {
+      options?.factsSelectCalls?.push({
+        count: queryOptions?.count,
+        head: queryOptions?.head,
+      })
+      return queryOptions?.count === 'exact' && queryOptions?.head
+        ? factsCountQuery
+        : factsRowsQuery
+    },
   }
 
   const chatsQuery = {
@@ -363,11 +371,10 @@ describe('buildContext branches', () => {
     expect(result.systemPrompt).toBe('BASE')
   })
 
-  it('handles null summaries/facts payloads from Supabase', async () => {
+  it('handles null summaries payloads from Supabase', async () => {
     const supabase = createSupabaseStub({
       latestSequence: CONTEXT_WINDOW + 20,
       summariesData: null,
-      factsData: null,
     })
 
     const result = await buildContext({
@@ -411,7 +418,7 @@ describe('buildContext branches', () => {
     expect(generateFactEmbeddingMock).not.toHaveBeenCalled()
   })
 
-  it('keeps summaries when facts query fails', async () => {
+  it('keeps summaries when RAG search fails', async () => {
     const supabase = createSupabaseStub({
       latestSequence: CONTEXT_WINDOW + 20,
       summariesData: [
@@ -422,7 +429,9 @@ describe('buildContext branches', () => {
           summary: 'Persisted summary',
         },
       ],
-      factsError: { message: 'facts query failed' },
+      chatOwnerId: 'user-1',
+      profileEnableRag: true,
+      ragError: { message: 'rag rpc failed' },
     })
 
     const result = await buildContext({
@@ -482,11 +491,11 @@ describe('buildContext branches', () => {
   })
 
   it('uses RAG results with relevance heading and preview truncation', async () => {
+    const factsSelectCalls: Array<{ count?: string; head?: boolean }> = []
     const supabase = createSupabaseStub({
       latestSequence: CONTEXT_WINDOW + 30,
       chatOwnerId: 'user-1',
       profileEnableRag: true,
-      factsData: [{ start_seq: 1, end_seq: 2, facts: 'fallback fact should be ignored' }],
       ragFactsData: [
         {
           start_seq: 90,
@@ -501,6 +510,7 @@ describe('buildContext branches', () => {
           similarity: 0.5,
         },
       ],
+      factsSelectCalls,
     })
     generateFactEmbeddingMock.mockResolvedValueOnce([0.42])
 
@@ -513,15 +523,14 @@ describe('buildContext branches', () => {
 
     expect(result.systemPrompt).toContain('=== Key Facts to Remember (by relevance) ===')
     expect(result.systemPrompt).toContain('short rag fact')
-    expect(result.systemPrompt).not.toContain('fallback fact should be ignored')
     expect(result.ragInfo?.enabled).toBe(true)
     expect(result.ragInfo?.results[0]?.preview.endsWith('...')).toBe(true)
     expect(result.ragInfo?.results[1]?.preview.endsWith('...')).toBe(false)
-    expect(result.ragInfo?.diagnostics?.fallbackFactsLoadedCount).toBe(1)
     expect(result.ragInfo?.diagnostics?.queryMessagesCount).toBeGreaterThan(0)
     expect(result.ragInfo?.diagnostics?.resultCount).toBe(2)
     expect(result.ragInfo?.diagnostics?.usedResultCount).toBe(2)
     expect(result.ragInfo?.diagnostics?.totalRetrievalMs).not.toBeNull()
+    expect(factsSelectCalls).toEqual([])
     expect(generateFactEmbeddingMock).toHaveBeenCalledWith(
       expect.any(String),
       'user-1',

@@ -51,8 +51,6 @@ export interface RagDiagnosticsInfo {
   recentMessagesCount?: number
   queryMessagesCount?: number
   queryTextChars?: number
-  fallbackFactsQueryMs?: number
-  fallbackFactsLoadedCount?: number
   embeddingMs?: number | null
   matchRpcMs?: number | null
   totalRetrievalMs?: number | null

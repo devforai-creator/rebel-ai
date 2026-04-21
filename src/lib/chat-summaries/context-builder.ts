@@ -315,27 +315,9 @@ export async function buildContext({
     supabase,
     chatId,
   })
-  let ragUsed = false
   let factRows: FactRow[] = []
 
   if (episodicMemorySettings.enabled && episodicMemorySettings.userId) {
-    const fallbackFactsQueryStart = performance.now()
-    const { data: fallbackFacts, error: factsError } = await supabase
-      .from('chat_facts')
-      .select<'start_seq, end_seq, facts'>('start_seq, end_seq, facts')
-      .eq('chat_id', chatId)
-      .lte('end_seq', summaryCutoff)
-      .order('start_seq', { ascending: true })
-    ragInfo.diagnostics = {
-      ...ragInfo.diagnostics,
-      fallbackFactsQueryMs: roundMetricDuration(performance.now() - fallbackFactsQueryStart),
-      fallbackFactsLoadedCount: (fallbackFacts ?? []).length,
-    }
-
-    if (factsError) {
-      console.error('Failed to load chat facts:', factsError.message)
-    }
-
     ragInfo.enabled = true
     const { facts: ragFacts, diagnostics } = await searchRelevantFacts({
       supabase,
@@ -356,7 +338,6 @@ export async function buildContext({
     }))
 
     factRows = ragFacts
-    ragUsed = ragFacts.length > 0
   } else {
     ragInfo.diagnostics = {
       ...ragInfo.diagnostics,
@@ -378,10 +359,7 @@ export async function buildContext({
   }
 
   if (factRows.length > 0) {
-    const heading = ragUsed
-      ? '=== Key Facts to Remember (by relevance) ==='
-      : '=== Key Facts to Remember ==='
-    dynamicParts.push(`${heading}\n` + formatFacts(factRows))
+    dynamicParts.push(`=== Key Facts to Remember (by relevance) ===\n` + formatFacts(factRows))
   }
 
   dynamicParts.push(...extraDynamicParts)

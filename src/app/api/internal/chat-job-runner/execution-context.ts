@@ -694,8 +694,6 @@ export async function loadChatJobExecutionContext({
   debugMetrics['rag_recent_messages'] = ragInfo?.diagnostics?.recentMessagesCount ?? null
   debugMetrics['rag_query_messages'] = ragInfo?.diagnostics?.queryMessagesCount ?? null
   debugMetrics['rag_query_text_chars'] = ragInfo?.diagnostics?.queryTextChars ?? null
-  debugMetrics['rag_fallback_query_ms'] = ragInfo?.diagnostics?.fallbackFactsQueryMs ?? null
-  debugMetrics['rag_fallback_fact_rows'] = ragInfo?.diagnostics?.fallbackFactsLoadedCount ?? null
   debugMetrics['rag_embedding_ms'] = ragInfo?.diagnostics?.embeddingMs ?? null
   debugMetrics['rag_rpc_ms'] = ragInfo?.diagnostics?.matchRpcMs ?? null
   debugMetrics['rag_total_ms'] = ragInfo?.diagnostics?.totalRetrievalMs ?? null

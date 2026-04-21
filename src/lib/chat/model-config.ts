@@ -33,6 +33,8 @@ export type ExperimentalAgenticTranscriptRecallConfig = {
   providerAllowlist?: AgenticTranscriptRecallConfigProvider[]
 }
 
+export type AgenticTranscriptRecallOverrideMode = 'inherit' | 'enabled' | 'disabled'
+
 export type ChatExperimentalConfig = {
   agenticTranscriptRecall?: ExperimentalAgenticTranscriptRecallConfig | null
 }
@@ -210,21 +212,20 @@ export function buildOperatorDefaultChatModelConfig(input: unknown): ChatModelCo
 }
 
 export function buildOperatorDefaultPersistedChatModelConfig(input: unknown): ChatModelConfig {
-  const normalized = buildOperatorDefaultChatModelConfig(input)
-  const existingRecall = normalized.experimental?.agenticTranscriptRecall
+  return buildOperatorDefaultChatModelConfig(input)
+}
 
-  return {
-    ...normalized,
-    experimental: {
-      ...(normalized.experimental ?? {}),
-      agenticTranscriptRecall:
-        existingRecall === undefined || existingRecall === null
-          ? {
-              enabled: true,
-            }
-          : existingRecall,
-    },
+export function resolveAgenticTranscriptRecallOverrideMode(
+  input: ChatModelConfig | unknown,
+): AgenticTranscriptRecallOverrideMode {
+  const normalized = normalizeChatModelConfig(input)
+  const agenticTranscriptRecall = normalized.experimental?.agenticTranscriptRecall
+
+  if (agenticTranscriptRecall === null || agenticTranscriptRecall === undefined) {
+    return 'inherit'
   }
+
+  return agenticTranscriptRecall.enabled ? 'enabled' : 'disabled'
 }
 
 export function hasPersistableChatModelConfig(config: ChatModelConfig): boolean {
@@ -247,7 +248,8 @@ export function hasPersistableChatModelConfig(config: ChatModelConfig): boolean 
   const hasExperimentalAgenticTranscriptRecall =
     agenticTranscriptRecall !== null &&
     agenticTranscriptRecall !== undefined &&
-    (agenticTranscriptRecall.enabled ||
+    (agenticTranscriptRecall.enabled === true ||
+      agenticTranscriptRecall.enabled === false ||
       hasCustomAgenticTranscriptRecallBudget ||
       (agenticTranscriptRecall.providerAllowlist?.length ?? 0) > 0)
 

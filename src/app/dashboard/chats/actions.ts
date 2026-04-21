@@ -7,7 +7,7 @@ import { MESSAGE_STATUS_COMPLETED } from '@/lib/chat/message-status'
 import { buildTurnGraphForMessages } from '@/lib/chat/turns'
 import { createChatTurn } from '@/lib/chat/turns'
 import { parseRisuChatJson, fromRisuFormat, getMessageCount } from '@/lib/chat/risu-converter'
-import { buildOperatorDefaultPersistedChatModelConfig } from '@/lib/chat/model-config'
+import { buildOperatorDefaultChatModelConfig } from '@/lib/chat/model-config'
 import type { ChatImportResult } from '@/types/risu-chat'
 import { getCharacterGreetingOptions } from './new/greeting-options'
 
@@ -82,7 +82,7 @@ export async function createChat({
       character_id: character.id,
       persona_id: persona?.id ?? null,
       title: `${character.name}와의 대화`,
-      model_config: buildOperatorDefaultPersistedChatModelConfig({}),
+      model_config: buildOperatorDefaultChatModelConfig({}),
     })
     .select('id')
     .single()
@@ -231,7 +231,7 @@ export async function importChat(
       user_id: user.id,
       character_id: characterId,
       title: chatTitle || `Imported Chat (${messageCount} messages)`,
-      model_config: buildOperatorDefaultPersistedChatModelConfig({}),
+      model_config: buildOperatorDefaultChatModelConfig({}),
     })
     .select('id')
     .single()

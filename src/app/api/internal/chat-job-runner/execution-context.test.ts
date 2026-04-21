@@ -248,6 +248,8 @@ describe('loadChatJobExecutionContext', () => {
     decryptSecretMock.mockResolvedValue('sk-test')
     resolveAgenticTranscriptRecallRuntimeConfigMock.mockReturnValue({
       configured: false,
+      accountDefaultEnabled: false,
+      preferenceSource: 'account_default',
       globallyEnabled: false,
       providerSupported: true,
       providerAllowed: true,
@@ -287,6 +289,8 @@ describe('loadChatJobExecutionContext', () => {
       generationTranscript: payload.sanitizedMessages,
       agenticTranscriptRecall: {
         configured: false,
+        accountDefaultEnabled: false,
+        preferenceSource: 'account_default',
         globallyEnabled: false,
         providerSupported: true,
         providerAllowed: true,
@@ -339,6 +343,7 @@ describe('loadChatJobExecutionContext', () => {
     )
     expect(resolveAgenticTranscriptRecallRuntimeConfigMock).toHaveBeenCalledWith({
       modelConfig: {},
+      accountDefaultEnabled: false,
       provider: 'openai',
       deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
     })
@@ -487,11 +492,13 @@ describe('loadChatJobExecutionContext', () => {
     })
     resolveAgenticTranscriptRecallRuntimeConfigMock.mockReturnValueOnce({
       configured: true,
-      globallyEnabled: false,
+      accountDefaultEnabled: false,
+      preferenceSource: 'chat_override',
+      globallyEnabled: true,
       providerSupported: true,
       providerAllowed: true,
-      enabled: false,
-      skipReason: 'disabled_by_global_flag',
+      enabled: true,
+      skipReason: null,
       maxToolCalls: 1,
       maxMessagesPerCall: 12,
       maxTotalMessages: 12,

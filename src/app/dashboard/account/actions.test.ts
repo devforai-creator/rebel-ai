@@ -443,6 +443,30 @@ describe('account actions', () => {
     ])
   })
 
+  it('updates ATR default settings as a simple profile toggle', async () => {
+    const supabase = buildSupabase()
+    createClientMock.mockResolvedValue(supabase)
+    const { updateAgenticTranscriptRecallDefaultSettings } = await import('./actions')
+
+    const result = await updateAgenticTranscriptRecallDefaultSettings(
+      { error: null, success: false },
+      buildFormData({
+        enable_agentic_transcript_recall_default: 'true',
+      }),
+    )
+
+    expect(result).toEqual({ error: null, success: true })
+    expect(supabase.state.profileUpdateCalls).toEqual([
+      {
+        table: 'profiles',
+        payload: {
+          enable_agentic_transcript_recall_default: true,
+        },
+        filters: [['id', 'user-1']],
+      },
+    ])
+  })
+
   it('normalizes blank summary model selection to null', async () => {
     const supabase = buildSupabase()
     createClientMock.mockResolvedValue(supabase)

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS,
+  resolveAgenticTranscriptRecallOverrideMode,
   buildOperatorDefaultPersistedChatModelConfig,
   CHAT_MEMORY_MODE_SUPPORT_TIERS,
   buildOperatorDefaultChatModelConfig,
@@ -204,17 +205,12 @@ describe('buildOperatorDefaultChatModelConfig', () => {
 })
 
 describe('buildOperatorDefaultPersistedChatModelConfig', () => {
-  it('enables transcript recall by default for newly persisted operator chats', () => {
+  it('keeps operator persisted chat defaults limited to memory defaults', () => {
     expect(buildOperatorDefaultPersistedChatModelConfig({})).toEqual({
       memory: {
         mode: 'prefix_live_blocks',
         sealEveryMessages: DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
         retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
-      },
-      experimental: {
-        agenticTranscriptRecall: {
-          enabled: true,
-        },
       },
     })
   })
@@ -248,6 +244,41 @@ describe('buildOperatorDefaultPersistedChatModelConfig', () => {
   })
 })
 
+describe('resolveAgenticTranscriptRecallOverrideMode', () => {
+  it('treats missing ATR config as inherit', () => {
+    expect(resolveAgenticTranscriptRecallOverrideMode({})).toBe('inherit')
+    expect(
+      resolveAgenticTranscriptRecallOverrideMode({
+        experimental: null,
+      }),
+    ).toBe('inherit')
+  })
+
+  it('treats enabled ATR config as explicit on', () => {
+    expect(
+      resolveAgenticTranscriptRecallOverrideMode({
+        experimental: {
+          agenticTranscriptRecall: {
+            enabled: true,
+          },
+        },
+      }),
+    ).toBe('enabled')
+  })
+
+  it('treats disabled ATR config as explicit off', () => {
+    expect(
+      resolveAgenticTranscriptRecallOverrideMode({
+        experimental: {
+          agenticTranscriptRecall: {
+            enabled: false,
+          },
+        },
+      }),
+    ).toBe('disabled')
+  })
+})
+
 describe('hasPersistableChatModelConfig', () => {
   it('treats enabled experimental agentic transcript recall config as persistable', () => {
     expect(
@@ -263,7 +294,7 @@ describe('hasPersistableChatModelConfig', () => {
     ).toBe(true)
   })
 
-  it('does not persist default-disabled experimental agentic transcript recall config', () => {
+  it('persists explicit off experimental agentic transcript recall config', () => {
     expect(
       hasPersistableChatModelConfig(
         normalizeChatModelConfig({
@@ -277,6 +308,6 @@ describe('hasPersistableChatModelConfig', () => {
           },
         }),
       ),
-    ).toBe(false)
+    ).toBe(true)
   })
 })

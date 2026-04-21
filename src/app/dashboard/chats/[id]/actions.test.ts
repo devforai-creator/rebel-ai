@@ -201,4 +201,77 @@ describe('chat actions', () => {
       },
     })
   })
+
+  it('persists an explicit ATR off override when callers set it directly', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      chats: [{ id: 'chat-1', user_id: 'user-1', model_config: null }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { updateChatModelConfig } = await import('./actions')
+
+    await expect(
+      updateChatModelConfig('chat-1', {
+        experimental: {
+          agenticTranscriptRecall: {
+            enabled: false,
+          },
+        },
+      }),
+    ).resolves.toEqual({ success: true })
+
+    expect(getChatRows(supabase)[0]).toMatchObject({
+      id: 'chat-1',
+      model_config: {
+        experimental: {
+          agenticTranscriptRecall: {
+            enabled: false,
+          },
+        },
+      },
+    })
+  })
+
+  it('drops an existing ATR override when callers explicitly reset experimental config to inherit', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      chats: [
+        {
+          id: 'chat-1',
+          user_id: 'user-1',
+          model_config: {
+            memory: {
+              mode: 'prefix_live_blocks',
+            },
+            experimental: {
+              agenticTranscriptRecall: {
+                enabled: true,
+              },
+            },
+          },
+        },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { updateChatModelConfig } = await import('./actions')
+
+    await expect(
+      updateChatModelConfig('chat-1', {
+        memory: {
+          mode: 'prefix_live_blocks',
+        },
+        experimental: {},
+      }),
+    ).resolves.toEqual({ success: true })
+
+    expect(getChatRows(supabase)[0]).toMatchObject({
+      id: 'chat-1',
+      model_config: {
+        memory: {
+          mode: 'prefix_live_blocks',
+        },
+      },
+    })
+    expect(getChatRows(supabase)[0]).not.toHaveProperty('model_config.experimental')
+  })
 })

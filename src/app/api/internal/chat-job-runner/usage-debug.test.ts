@@ -219,6 +219,8 @@ describe('usage-debug helpers', () => {
         actualPayload: null,
         debugMetrics: {
           experimental_agentic_transcript_recall_configured: true,
+          experimental_agentic_transcript_recall_account_default_enabled: false,
+          experimental_agentic_transcript_recall_preference_source: 'chat_override',
           experimental_agentic_transcript_recall_globally_enabled: true,
           experimental_agentic_transcript_recall_provider_supported: true,
           experimental_agentic_transcript_recall_provider_allowed: true,
@@ -252,6 +254,8 @@ describe('usage-debug helpers', () => {
         experimental: {
           agenticTranscriptRecall: {
             configured: true,
+            accountDefaultEnabled: false,
+            preferenceSource: 'chat_override',
             globallyEnabled: true,
             providerSupported: true,
             providerAllowed: true,

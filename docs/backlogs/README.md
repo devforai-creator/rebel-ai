@@ -14,9 +14,9 @@ Use it to answer two questions quickly:
 
 ## Current Entry Point
 
-- Active backlog: none currently
+- Active backlog: none right now
 - Most recently archived backlog:
-  [shared-sealed-memory-hierarchy-backlog-2026-04-20.md](./archive/2026/shared-sealed-memory-hierarchy-backlog-2026-04-20.md)
+  [agentic-transcript-recall-config-resolution-backlog-2026-04-21.md](./archive/2026/agentic-transcript-recall-config-resolution-backlog-2026-04-21.md)
 
 ## Working Rules
 

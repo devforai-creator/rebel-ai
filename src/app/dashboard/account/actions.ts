@@ -5,12 +5,14 @@ import {
   deleteAccount as deleteAccountImpl,
 } from './account-security-actions'
 import {
+  updateAgenticTranscriptRecallDefaultSettings as updateAgenticTranscriptRecallDefaultSettingsImpl,
   updateChatUsageSettings as updateChatUsageSettingsImpl,
   updateRagSettings as updateRagSettingsImpl,
   updateReprocessSettings as updateReprocessSettingsImpl,
   updateSummaryModelPreference as updateSummaryModelPreferenceImpl,
   updateSummaryPrompts as updateSummaryPromptsImpl,
   updateTranslationModelPreference as updateTranslationModelPreferenceImpl,
+  type AgenticTranscriptRecallDefaultSettingsState,
   type ChatUsageSettingsState,
   type RagSettingsState,
   type ReprocessSettingsState,
@@ -19,6 +21,7 @@ import {
 } from './account-settings-actions'
 
 export type {
+  AgenticTranscriptRecallDefaultSettingsState,
   ChatUsageSettingsState,
   RagSettingsState,
   ReprocessSettingsState,
@@ -43,6 +46,13 @@ export async function updateChatUsageSettings(
   formData: FormData,
 ) {
   return updateChatUsageSettingsImpl(prevState, formData)
+}
+
+export async function updateAgenticTranscriptRecallDefaultSettings(
+  prevState: AgenticTranscriptRecallDefaultSettingsState,
+  formData: FormData,
+) {
+  return updateAgenticTranscriptRecallDefaultSettingsImpl(prevState, formData)
 }
 
 export async function updateSummaryModelPreference(

@@ -1,6 +1,6 @@
 # Experimental Agentic Transcript Recall
 
-Updated: 2026-04-20
+Updated: 2026-04-21
 
 This document is an experimental feature contract, not the top-level long-term memory doctrine.
 For the current strategy and support stance, use [LONG_TERM_MEMORY_STRATEGY.md](./LONG_TERM_MEMORY_STRATEGY.md).
@@ -68,6 +68,38 @@ It is now:
 - make it usable without SQL-only operator rituals forever
 - allow broader experimental provider coverage without pretending it is part of the supported core
 - rely on request-level debug telemetry and smoke testing for day-to-day operation
+
+## Current Queued Follow-Up: Config Resolution
+
+The next ATR queue is not "more tool power."
+It is configuration cleanup.
+
+The current MVP still blurs three different questions:
+
+- can the operator allow ATR at all
+- should this account prefer ATR by default
+- did this chat explicitly opt in or out
+
+The next queue should separate those concerns:
+
+- keep the env flag as an operator kill switch only
+- add an account-level ATR default for chats
+- make per-chat ATR behave as `inherit / on / off`
+- represent `inherit` by absent per-chat ATR config rather than hidden auto-write
+- resolve effective ATR enablement from operator gate, then chat override, then
+  account default
+
+This is the next priority because ATR cannot honestly remain "explicit opt-in"
+while new or imported chats can become silently opted in as a side effect of
+creation-time defaults.
+
+For the first pass after that cleanup:
+
+- operator env remains the kill switch
+- account default applies only to chats with no explicit ATR override
+- existing explicit ATR chat rows, including legacy hidden auto-on rows, are
+  left unchanged until a future explicit reset path or narrowly scoped
+  migration exists
 
 ## Primary Decision
 

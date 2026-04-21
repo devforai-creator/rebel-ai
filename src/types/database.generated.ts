@@ -1178,6 +1178,7 @@ export type Database = {
           chunk_summary_prompt: string | null
           created_at: string
           display_name: string | null
+          enable_agentic_transcript_recall_default: boolean
           enable_chat_usage_stats: boolean
           enable_episodic_rag: boolean
           fact_extraction_prompt: string | null
@@ -1197,6 +1198,7 @@ export type Database = {
           chunk_summary_prompt?: string | null
           created_at?: string
           display_name?: string | null
+          enable_agentic_transcript_recall_default?: boolean
           enable_chat_usage_stats?: boolean
           enable_episodic_rag?: boolean
           fact_extraction_prompt?: string | null
@@ -1216,6 +1218,7 @@ export type Database = {
           chunk_summary_prompt?: string | null
           created_at?: string
           display_name?: string | null
+          enable_agentic_transcript_recall_default?: boolean
           enable_chat_usage_stats?: boolean
           enable_episodic_rag?: boolean
           fact_extraction_prompt?: string | null

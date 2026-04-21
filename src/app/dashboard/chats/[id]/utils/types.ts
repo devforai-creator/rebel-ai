@@ -1,6 +1,6 @@
 import type { CharacterAsset } from '@/lib/asset-resolver'
 import type { Message } from '@/types/database.types'
-import type { ChatModelConfig } from '@/lib/chat/model-config'
+import type { AgenticTranscriptRecallOverrideMode, ChatModelConfig } from '@/lib/chat/model-config'
 import type { ChatDeliveryMode } from '@/lib/chat/delivery-mode'
 import type { ChatRuntimeApiKeyOption } from '../../api-key-options'
 
@@ -195,6 +195,7 @@ export interface ChatInterfaceProps {
   apiKeys: ApiKeyOption[]
   preselectedApiKeyId?: string
   initialModelConfig?: ChatModelConfig | null
+  accountAgenticTranscriptRecallDefaultEnabled: boolean
   initialUsageStats: LatestMessageTokenStats | null
   usageStatsEnabled: boolean
   character: ChatCharacter
@@ -202,6 +203,8 @@ export interface ChatInterfaceProps {
   hasMoreHistory: boolean
   isDeveloper?: boolean
 }
+
+export type ChatAgenticTranscriptRecallMode = AgenticTranscriptRecallOverrideMode
 
 /**
  * Map a database Message to DisplayMessage

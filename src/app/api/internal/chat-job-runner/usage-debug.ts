@@ -60,6 +60,8 @@ type BuildChatDebugInfoArgs = {
 
 type AgenticTranscriptRecallDebugInfo = {
   configured: boolean | null
+  accountDefaultEnabled: boolean | null
+  preferenceSource: string | null
   globallyEnabled: boolean | null
   providerSupported: boolean | null
   providerAllowed: boolean | null
@@ -144,6 +146,14 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
   const configured = readBooleanMetric(
     debugMetrics,
     'experimental_agentic_transcript_recall_configured',
+  )
+  const accountDefaultEnabled = readBooleanMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_account_default_enabled',
+  )
+  const preferenceSource = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_preference_source',
   )
   const globallyEnabled = readBooleanMetric(
     debugMetrics,
@@ -245,6 +255,8 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
 
   const hasAnyValue = [
     configured,
+    accountDefaultEnabled,
+    preferenceSource,
     globallyEnabled,
     providerSupported,
     providerAllowed,
@@ -278,6 +290,8 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
 
   return {
     configured,
+    accountDefaultEnabled,
+    preferenceSource,
     globallyEnabled,
     providerSupported,
     providerAllowed,

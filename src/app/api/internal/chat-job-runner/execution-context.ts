@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { ApiKey, Chat, Character, Persona } from '@/types/database.types'
+import type { ApiKey, Chat, Character, Persona, Profile } from '@/types/database.types'
 import { ensureUserFirstForAnthropic } from '@/lib/chat/anthropic-user-first'
 import { buildMemoryPlan } from '@/lib/chat-memory'
 import { CHAT_RUNNER_LIMITS } from '@/lib/chat/runtime-limits'
@@ -46,6 +46,7 @@ import { decryptSecret } from './vault'
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type DebugMetricValue = string | number | boolean | null
 type RunnerApiKeyRow = Pick<ApiKey, 'vault_secret_name' | 'service_tier' | 'reasoning_effort'>
+type RunnerProfileRow = Pick<Profile, 'enable_agentic_transcript_recall_default'>
 type RunnerChatRow = Pick<
   Chat,
   'id' | 'user_id' | 'character_id' | 'persona_id' | 'custom_system_prompt' | 'model_config'
@@ -336,8 +337,22 @@ export async function loadChatJobExecutionContext({
       return result
     })
 
-  const [{ data: apiKeyData, error: apiKeyError }, { data: chat, error: chatError }] =
-    await Promise.all([apiKeyQueryPromise, chatQueryPromise])
+  const profileQueryStart = performance.now()
+  const profileQueryPromise = supabase
+    .from('profiles')
+    .select<'enable_agentic_transcript_recall_default'>('enable_agentic_transcript_recall_default')
+    .eq('id', userId)
+    .maybeSingle<RunnerProfileRow>()
+    .then((result) => {
+      timings['2b_profile_query'] = performance.now() - profileQueryStart
+      return result
+    })
+
+  const [
+    { data: apiKeyData, error: apiKeyError },
+    { data: chat, error: chatError },
+    { data: profile, error: profileError },
+  ] = await Promise.all([apiKeyQueryPromise, chatQueryPromise, profileQueryPromise])
 
   if (apiKeyError || !apiKeyData) {
     throw new Error('API key not found or inactive')
@@ -345,6 +360,12 @@ export async function loadChatJobExecutionContext({
   if (chatError || !chat) {
     throw new Error('Chat not found')
   }
+  if (profileError) {
+    console.error('[Chat Job Runner] Failed to load ATR account default:', profileError.message)
+  }
+
+  const accountAgenticTranscriptRecallDefaultEnabled =
+    profile?.enable_agentic_transcript_recall_default ?? false
 
   const apiKeyDecryptStart = performance.now()
   const apiKeyDecryptPromise = decryptSecret({
@@ -406,11 +427,16 @@ export async function loadChatJobExecutionContext({
   const memoryConfig = resolveChatMemoryConfig(normalizedModelConfig)
   const agenticTranscriptRecall = resolveAgenticTranscriptRecallRuntimeConfig({
     modelConfig: normalizedModelConfig,
+    accountDefaultEnabled: accountAgenticTranscriptRecallDefaultEnabled,
     provider,
     deliveryMode: payload.deliveryMode,
   })
   debugMetrics['experimental_agentic_transcript_recall_configured'] =
     agenticTranscriptRecall.configured
+  debugMetrics['experimental_agentic_transcript_recall_account_default_enabled'] =
+    agenticTranscriptRecall.accountDefaultEnabled
+  debugMetrics['experimental_agentic_transcript_recall_preference_source'] =
+    agenticTranscriptRecall.preferenceSource
   debugMetrics['experimental_agentic_transcript_recall_globally_enabled'] =
     agenticTranscriptRecall.globallyEnabled
   debugMetrics['experimental_agentic_transcript_recall_provider_supported'] =
@@ -681,7 +707,7 @@ export async function loadChatJobExecutionContext({
     transcriptLength: generationTranscript.length,
     suffixLength: rawRecentMessages.length,
   })
-  const agenticTranscriptRecallSourceHints = agenticTranscriptRecall.configured
+  const agenticTranscriptRecallSourceHints = agenticTranscriptRecall.enabled
     ? deriveAgenticTranscriptRecallSourceHints({
         promptBlocks,
         rawContextStartOrdinal: rawRecentContextStartOrdinal,

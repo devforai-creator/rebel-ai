@@ -103,11 +103,14 @@ export default async function ChatPage({ params, searchParams }: Props) {
     return persona
   })()
 
-  const usageSettingsPromise = supabase
+  const profileSettingsPromise = supabase
     .from('profiles')
-    .select('enable_chat_usage_stats')
+    .select('enable_chat_usage_stats, enable_agentic_transcript_recall_default')
     .eq('id', user.id)
-    .maybeSingle<{ enable_chat_usage_stats: boolean }>()
+    .maybeSingle<{
+      enable_chat_usage_stats: boolean
+      enable_agentic_transcript_recall_default: boolean
+    }>()
 
   const availablePersonasPromise = supabase
     .from('personas')
@@ -118,7 +121,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
   const [
     { data: apiKeys },
     persona,
-    { data: usageSettings },
+    { data: profileSettings },
     { data: availablePersonas },
     initialWindow,
   ] = await Promise.all([
@@ -129,7 +132,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
       .eq('is_active', true)
       .order('key_name', { ascending: true }),
     personaPromise,
-    usageSettingsPromise,
+    profileSettingsPromise,
     availablePersonasPromise,
     loadProjectedChatWindow({
       supabase,
@@ -182,7 +185,10 @@ export default async function ChatPage({ params, searchParams }: Props) {
               preselectedApiKeyId={preselectedApiKeyId}
               initialModelConfig={normalizeChatModelConfig(chat.model_config)}
               initialUsageStats={null}
-              usageStatsEnabled={usageSettings?.enable_chat_usage_stats ?? false}
+              usageStatsEnabled={profileSettings?.enable_chat_usage_stats ?? false}
+              accountAgenticTranscriptRecallDefaultEnabled={
+                profileSettings?.enable_agentic_transcript_recall_default ?? false
+              }
               character={{
                 name: character?.name || 'AI',
                 avatar_url: characterAvatarUrl,

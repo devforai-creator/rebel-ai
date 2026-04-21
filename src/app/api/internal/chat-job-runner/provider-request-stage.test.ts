@@ -106,6 +106,8 @@ function buildContext(
     ragInfo: undefined,
     agenticTranscriptRecall: {
       configured: false,
+      accountDefaultEnabled: false,
+      preferenceSource: 'account_default',
       globallyEnabled: false,
       providerSupported: true,
       providerAllowed: true,
@@ -261,6 +263,8 @@ describe('requestProviderStage', () => {
     const context = buildContext({
       agenticTranscriptRecall: {
         configured: true,
+        accountDefaultEnabled: false,
+        preferenceSource: 'chat_override',
         globallyEnabled: true,
         providerSupported: true,
         providerAllowed: true,
@@ -314,6 +318,8 @@ describe('requestProviderStage', () => {
     const context = buildContext({
       agenticTranscriptRecall: {
         configured: true,
+        accountDefaultEnabled: false,
+        preferenceSource: 'chat_override',
         globallyEnabled: true,
         providerSupported: true,
         providerAllowed: true,
@@ -387,6 +393,8 @@ describe('requestProviderStage', () => {
     const context = buildContext({
       agenticTranscriptRecall: {
         configured: true,
+        accountDefaultEnabled: false,
+        preferenceSource: 'chat_override',
         globallyEnabled: true,
         providerSupported: true,
         providerAllowed: true,
@@ -440,6 +448,8 @@ describe('requestProviderStage', () => {
     const context = buildContext({
       agenticTranscriptRecall: {
         configured: true,
+        accountDefaultEnabled: false,
+        preferenceSource: 'chat_override',
         globallyEnabled: true,
         providerSupported: true,
         providerAllowed: true,

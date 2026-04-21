@@ -7616,3 +7616,13 @@ create trigger enforce_non_overlapping_chat_fact_ranges_trigger
   on public.chat_facts
   for each row execute function public.enforce_non_overlapping_chat_fact_ranges();
 
+
+
+-- >>> 88_add_atr_default_to_profiles.sql
+
+alter table public.profiles
+  add column if not exists enable_agentic_transcript_recall_default boolean not null default false;
+
+comment on column public.profiles.enable_agentic_transcript_recall_default is
+  'Account-level default for experimental agentic transcript recall on chats that inherit the account setting.';
+

@@ -3,7 +3,7 @@
 import React, { memo } from 'react'
 import Button from '@/app/dashboard/components/Button'
 import { formatChatApiKeyOptionLabel } from '../../api-key-options'
-import type { ChatMemoryMode } from '@/lib/chat/model-config'
+import type { AgenticTranscriptRecallOverrideMode, ChatMemoryMode } from '@/lib/chat/model-config'
 import {
   LatestMessageTokenStats,
   ApiKeyOption,
@@ -18,12 +18,15 @@ interface TokenStatsPanelProps {
   secondaryApiKeyId: string
   alternateModelsEnabled: boolean
   memoryMode: ChatMemoryMode
+  agenticTranscriptRecallMode: AgenticTranscriptRecallOverrideMode
+  accountAgenticTranscriptRecallDefaultEnabled: boolean
   anthropicBatchModeEnabled: boolean
   anthropicBatchModeAvailable: boolean
   onSelectApiKey: (id: string) => void
   onSelectSecondaryApiKey: (id: string) => void
   onToggleAlternateModels: () => void
   onSelectMemoryMode: (mode: ChatMemoryMode) => void
+  onSelectAgenticTranscriptRecallMode: (mode: AgenticTranscriptRecallOverrideMode) => void
   onToggleAnthropicBatchMode: () => void
   latestUsage: LatestMessageTokenStats | null
   usageStatsEnabled: boolean
@@ -42,12 +45,15 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
   secondaryApiKeyId,
   alternateModelsEnabled,
   memoryMode,
+  agenticTranscriptRecallMode,
+  accountAgenticTranscriptRecallDefaultEnabled,
   anthropicBatchModeEnabled,
   anthropicBatchModeAvailable,
   onSelectApiKey,
   onSelectSecondaryApiKey,
   onToggleAlternateModels,
   onSelectMemoryMode,
+  onSelectAgenticTranscriptRecallMode,
   onToggleAnthropicBatchMode,
   latestUsage,
   usageStatsEnabled,
@@ -166,6 +172,21 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
             </option>
           </select>
           <select
+            value={agenticTranscriptRecallMode}
+            onChange={(e) =>
+              onSelectAgenticTranscriptRecallMode(
+                e.target.value as AgenticTranscriptRecallOverrideMode,
+              )
+            }
+            className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          >
+            <option value="inherit">
+              ATR: 계정 기본값 ({accountAgenticTranscriptRecallDefaultEnabled ? '켜짐' : '꺼짐'})
+            </option>
+            <option value="enabled">ATR: 이 채팅에서 켜기</option>
+            <option value="disabled">ATR: 이 채팅에서 끄기</option>
+          </select>
+          <select
             value={secondaryApiKeyId}
             onChange={(e) => onSelectSecondaryApiKey(e.target.value)}
             className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -239,6 +260,23 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                   <option value="prefix_live_blocks">
                     {isDeveloper ? '운영 기본 메모리' : 'Prefix 메모리'}
                   </option>
+                </select>
+                <select
+                  value={agenticTranscriptRecallMode}
+                  onChange={(e) =>
+                    onSelectAgenticTranscriptRecallMode(
+                      e.target.value as AgenticTranscriptRecallOverrideMode,
+                    )
+                  }
+                  className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white max-w-[220px]"
+                  title="Experimental transcript recall setting for this chat."
+                >
+                  <option value="inherit">
+                    ATR: 계정 기본값 (
+                    {accountAgenticTranscriptRecallDefaultEnabled ? '켜짐' : '꺼짐'})
+                  </option>
+                  <option value="enabled">ATR: 이 채팅에서 켜기</option>
+                  <option value="disabled">ATR: 이 채팅에서 끄기</option>
                 </select>
                 <select
                   value={secondaryApiKeyId}

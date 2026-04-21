@@ -37,11 +37,14 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
             },
           },
         },
+        accountDefaultEnabled: false,
         provider: 'openai',
         deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
       }),
     ).toMatchObject({
       configured: true,
+      accountDefaultEnabled: false,
+      preferenceSource: 'chat_override',
       globallyEnabled: false,
       providerSupported: true,
       providerAllowed: true,
@@ -69,11 +72,14 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
             },
           },
         },
+        accountDefaultEnabled: false,
         provider: 'openai',
         deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
       }),
     ).toMatchObject({
       configured: true,
+      accountDefaultEnabled: false,
+      preferenceSource: 'chat_override',
       globallyEnabled: true,
       providerSupported: true,
       providerAllowed: true,
@@ -98,11 +104,14 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
             },
           },
         },
+        accountDefaultEnabled: false,
         provider: 'google',
         deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
       }),
     ).toMatchObject({
       configured: true,
+      accountDefaultEnabled: false,
+      preferenceSource: 'chat_override',
       globallyEnabled: true,
       providerSupported: false,
       providerAllowed: false,
@@ -126,11 +135,14 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
             },
           },
         },
+        accountDefaultEnabled: false,
         provider: 'anthropic',
         deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
       }),
     ).toMatchObject({
       configured: true,
+      accountDefaultEnabled: false,
+      preferenceSource: 'chat_override',
       globallyEnabled: true,
       providerSupported: true,
       providerAllowed: true,
@@ -153,16 +165,90 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
             },
           },
         },
+        accountDefaultEnabled: false,
         provider: 'anthropic',
         deliveryMode: CHAT_DELIVERY_MODE_ANTHROPIC_BATCH,
       }),
     ).toMatchObject({
       configured: true,
+      accountDefaultEnabled: false,
+      preferenceSource: 'chat_override',
       globallyEnabled: true,
       providerSupported: true,
       providerAllowed: true,
       enabled: false,
       skipReason: 'delivery_mode_not_supported',
+    })
+  })
+
+  it('enables recall for inherited chats when the account default is on', () => {
+    process.env[EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV] = 'true'
+
+    expect(
+      resolveAgenticTranscriptRecallRuntimeConfig({
+        modelConfig: {},
+        accountDefaultEnabled: true,
+        provider: 'openai',
+        deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
+      }),
+    ).toMatchObject({
+      configured: false,
+      accountDefaultEnabled: true,
+      preferenceSource: 'account_default',
+      globallyEnabled: true,
+      providerSupported: true,
+      providerAllowed: true,
+      enabled: true,
+      skipReason: null,
+      providerAllowlist: [...AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS],
+    })
+  })
+
+  it('keeps inherited chats disabled when the account default is off', () => {
+    process.env[EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV] = 'true'
+
+    expect(
+      resolveAgenticTranscriptRecallRuntimeConfig({
+        modelConfig: {},
+        accountDefaultEnabled: false,
+        provider: 'openai',
+        deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
+      }),
+    ).toMatchObject({
+      configured: false,
+      accountDefaultEnabled: false,
+      preferenceSource: 'account_default',
+      globallyEnabled: true,
+      providerSupported: true,
+      providerAllowed: true,
+      enabled: false,
+      skipReason: 'disabled_by_account_default',
+      providerAllowlist: [...AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS],
+    })
+  })
+
+  it('lets an explicit chat off override beat an enabled account default', () => {
+    process.env[EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV] = 'true'
+
+    expect(
+      resolveAgenticTranscriptRecallRuntimeConfig({
+        modelConfig: {
+          experimental: {
+            agenticTranscriptRecall: {
+              enabled: false,
+            },
+          },
+        },
+        accountDefaultEnabled: true,
+        provider: 'openai',
+        deliveryMode: CHAT_DELIVERY_MODE_STREAMING,
+      }),
+    ).toMatchObject({
+      configured: true,
+      accountDefaultEnabled: true,
+      preferenceSource: 'chat_override',
+      enabled: false,
+      skipReason: 'disabled_by_chat_override',
     })
   })
 })

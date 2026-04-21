@@ -699,6 +699,7 @@ type ChatJobRunnerOptions = {
   modules?: Array<Record<string, unknown>>
   globalVariables?: GlobalVariableRow[]
   metadata?: Record<string, unknown>
+  profile?: Record<string, unknown>
   apiKey?: Record<string, unknown>
   chat?: Record<string, unknown>
   character?: Record<string, unknown>
@@ -719,6 +720,7 @@ export function createChatJobRunnerSupabaseMock(
     modules = [],
     globalVariables = [],
     metadata = {},
+    profile: providedProfile,
     apiKey = {
       id: 'key-1',
       user_id: 'user-1',
@@ -728,28 +730,9 @@ export function createChatJobRunnerSupabaseMock(
       vault_secret_name: 'vault-key',
       service_tier: 'standard',
     },
-    chat = {
-      id: 'chat-1',
-      user_id: 'user-1',
-      character_id: 'char-1',
-      persona_id: null,
-      max_context_messages: 20,
-      custom_system_prompt: null,
-    },
-    character = {
-      id: 'char-1',
-      name: 'Hero',
-      system_prompt: 'CHAR PROMPT',
-      metadata,
-    },
-    personas = [
-      {
-        id: 'persona-1',
-        user_id: (chat as Record<string, unknown>).user_id ?? 'user-1',
-        name: 'Persona',
-        description: null,
-      },
-    ],
+    chat: providedChat,
+    character: providedCharacter,
+    personas: providedPersonas,
     rpc = {},
     initialJobs = [],
     initialMessages = [],
@@ -757,6 +740,33 @@ export function createChatJobRunnerSupabaseMock(
     initialChatSummaries = [],
     initialChatFacts = [],
   } = options
+
+  const chat = providedChat ?? {
+    id: 'chat-1',
+    user_id: 'user-1',
+    character_id: 'char-1',
+    persona_id: null,
+    max_context_messages: 20,
+    custom_system_prompt: null,
+  }
+  const profile = providedProfile ?? {
+    id: (chat as Record<string, unknown>).user_id ?? 'user-1',
+    enable_agentic_transcript_recall_default: false,
+  }
+  const character = providedCharacter ?? {
+    id: 'char-1',
+    name: 'Hero',
+    system_prompt: 'CHAR PROMPT',
+    metadata,
+  }
+  const personas = providedPersonas ?? [
+    {
+      id: 'persona-1',
+      user_id: (chat as Record<string, unknown>).user_id ?? 'user-1',
+      name: 'Persona',
+      description: null,
+    },
+  ]
 
   const supabase = createSupabaseMock({
     state: {
@@ -778,6 +788,10 @@ export function createChatJobRunnerSupabaseMock(
       },
       chats: {
         rows: [chat],
+        primaryKeys: ['id'],
+      },
+      profiles: {
+        rows: [profile],
         primaryKeys: ['id'],
       },
       characters: {

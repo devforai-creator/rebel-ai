@@ -76,6 +76,8 @@ function createTranscriptSupabase() {
 function buildRuntimeConfig(): AgenticTranscriptRecallRuntimeConfig {
   return {
     configured: true,
+    accountDefaultEnabled: false,
+    preferenceSource: 'chat_override',
     globallyEnabled: true,
     providerSupported: true,
     providerAllowed: true,

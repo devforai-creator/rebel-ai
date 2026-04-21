@@ -5,6 +5,7 @@ import DeleteAccountButton from './DeleteAccountButton'
 import SummaryPromptsEditor from './SummaryPromptsEditor'
 import SummaryModelSettingsForm from './SummaryModelSettingsForm'
 import RagSettingsForm from './RagSettingsForm'
+import AtrSettingsForm from './AtrSettingsForm'
 import ChatUsageSettingsForm from './ChatUsageSettingsForm'
 import ChangePasswordForm from './ChangePasswordForm'
 import ReprocessSettingsForm from './ReprocessSettingsForm'
@@ -26,7 +27,7 @@ export default async function AccountPage() {
   const { data: profile } = await supabase
     .from('profiles')
     .select(
-      'display_name, chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt, enable_episodic_rag, enable_chat_usage_stats, voyage_embedding_api_key_id, summary_api_key_id, reprocess_prompt, reprocess_api_key_id, translation_api_key_id',
+      'display_name, chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt, enable_episodic_rag, enable_agentic_transcript_recall_default, enable_chat_usage_stats, voyage_embedding_api_key_id, summary_api_key_id, reprocess_prompt, reprocess_api_key_id, translation_api_key_id',
     )
     .eq('id', user.id)
     .single()
@@ -134,6 +135,27 @@ export default async function AccountPage() {
               </p>
               <div className="mt-6">
                 <ChatUsageSettingsForm initialEnabled={profile?.enable_chat_usage_stats ?? false} />
+              </div>
+            </section>
+
+            <section className="border-t border-gray-200 dark:border-gray-700 pt-8">
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Agentic Transcript Recall
+                </h2>
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                  Experimental
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                Sets the default ATR behavior for chats that inherit the account setting. The
+                operator runtime flag can still disable ATR globally, and any chat can explicitly
+                override this default.
+              </p>
+              <div className="mt-6">
+                <AtrSettingsForm
+                  initialEnabled={profile?.enable_agentic_transcript_recall_default ?? false}
+                />
               </div>
             </section>
 

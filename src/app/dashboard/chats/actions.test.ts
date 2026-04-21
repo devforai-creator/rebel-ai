@@ -231,11 +231,6 @@ describe('dashboard chats actions', () => {
             sealEveryMessages: 100,
             retainTailMessages: 4,
           },
-          experimental: {
-            agenticTranscriptRecall: {
-              enabled: true,
-            },
-          },
         },
       }),
     ])
@@ -417,11 +412,6 @@ describe('dashboard chats actions', () => {
             mode: 'prefix_live_blocks',
             sealEveryMessages: 100,
             retainTailMessages: 4,
-          },
-          experimental: {
-            agenticTranscriptRecall: {
-              enabled: true,
-            },
           },
         },
       }),

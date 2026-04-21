@@ -18,13 +18,17 @@ export type AgenticTranscriptRecallSupportedProvider =
   (typeof AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS)[number]
 export type AgenticTranscriptRecallSkipReason =
   | 'disabled_by_global_flag'
-  | 'disabled_in_chat_config'
+  | 'disabled_by_chat_override'
+  | 'disabled_by_account_default'
   | 'provider_not_supported'
   | 'provider_not_allowed'
   | 'delivery_mode_not_supported'
+export type AgenticTranscriptRecallPreferenceSource = 'chat_override' | 'account_default'
 
 export type AgenticTranscriptRecallRuntimeConfig = {
   configured: boolean
+  accountDefaultEnabled: boolean
+  preferenceSource: AgenticTranscriptRecallPreferenceSource
   globallyEnabled: boolean
   providerSupported: boolean
   providerAllowed: boolean
@@ -51,16 +55,21 @@ export function isExperimentalAgenticTranscriptRecallGloballyEnabled(): boolean 
 
 export function resolveAgenticTranscriptRecallRuntimeConfig({
   modelConfig,
+  accountDefaultEnabled,
   provider,
   deliveryMode,
 }: {
   modelConfig: ChatModelConfig | unknown
+  accountDefaultEnabled: boolean
   provider: LlmProvider
   deliveryMode: ChatDeliveryMode
 }): AgenticTranscriptRecallRuntimeConfig {
   const normalizedModelConfig = normalizeChatModelConfig(modelConfig)
   const chatConfig = normalizedModelConfig.experimental?.agenticTranscriptRecall ?? null
   const configured = chatConfig !== null && chatConfig !== undefined
+  const preferenceSource: AgenticTranscriptRecallPreferenceSource = configured
+    ? 'chat_override'
+    : 'account_default'
   const globallyEnabled = isExperimentalAgenticTranscriptRecallGloballyEnabled()
   const providerSupported = AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS.includes(
     provider as AgenticTranscriptRecallSupportedProvider,
@@ -72,7 +81,7 @@ export function resolveAgenticTranscriptRecallRuntimeConfig({
   const providerAllowed = providerAllowlist.includes(
     provider as AgenticTranscriptRecallConfigProvider,
   )
-  const chatEnabled = chatConfig?.enabled === true
+  const effectiveChatEnabled = configured ? chatConfig?.enabled === true : accountDefaultEnabled
   const deliveryModeSupported = !(
     provider === 'anthropic' && deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
   )
@@ -80,8 +89,10 @@ export function resolveAgenticTranscriptRecallRuntimeConfig({
   let skipReason: AgenticTranscriptRecallSkipReason | null = null
   if (!globallyEnabled) {
     skipReason = 'disabled_by_global_flag'
-  } else if (!chatEnabled) {
-    skipReason = 'disabled_in_chat_config'
+  } else if (configured && chatConfig?.enabled !== true) {
+    skipReason = 'disabled_by_chat_override'
+  } else if (!configured && !effectiveChatEnabled) {
+    skipReason = 'disabled_by_account_default'
   } else if (!providerSupported) {
     skipReason = 'provider_not_supported'
   } else if (!providerAllowed) {
@@ -92,6 +103,8 @@ export function resolveAgenticTranscriptRecallRuntimeConfig({
 
   return {
     configured,
+    accountDefaultEnabled,
+    preferenceSource,
     globallyEnabled,
     providerSupported,
     providerAllowed,

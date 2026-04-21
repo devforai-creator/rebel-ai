@@ -29,6 +29,14 @@ const chatUsageSettingsFormSchema = z.object({
     .transform((value) => value === 'true'),
 })
 
+const agenticTranscriptRecallDefaultSettingsFormSchema = z.object({
+  enable_agentic_transcript_recall_default: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((value) => value === 'true'),
+})
+
 const summaryModelPreferenceFormSchema = z.object({
   summary_key_id: optionalTrimmedStringSchema,
 })
@@ -79,6 +87,11 @@ export type RagSettingsState = {
 }
 
 export type ChatUsageSettingsState = {
+  error: string | null
+  success: boolean
+}
+
+export type AgenticTranscriptRecallDefaultSettingsState = {
   error: string | null
   success: boolean
 }
@@ -180,6 +193,48 @@ export async function updateChatUsageSettings(
       enable_chat_usage_stats: parsedForm.data.enable_chat_usage_stats,
     },
     logLabel: '[Account] Failed to update chat usage settings:',
+  })
+
+  if (error) {
+    return { error: 'An error occurred while saving settings.', success: false }
+  }
+
+  revalidateAccountSettingsPage()
+  return { error: null, success: true }
+}
+
+export async function updateAgenticTranscriptRecallDefaultSettings(
+  _prevState: AgenticTranscriptRecallDefaultSettingsState,
+  formData: FormData,
+): Promise<AgenticTranscriptRecallDefaultSettingsState> {
+  const context = await createAuthenticatedAccountContext({
+    error: 'Login required.',
+    success: false,
+  })
+
+  if ('error' in context) {
+    return context
+  }
+
+  const { supabase, userId } = context
+  const parsedForm = parseAccountFormData(
+    formData,
+    agenticTranscriptRecallDefaultSettingsFormSchema,
+    'Please check your transcript recall default input.',
+  )
+
+  if ('error' in parsedForm) {
+    return parsedForm
+  }
+
+  const error = await updateProfileForUser({
+    supabase,
+    userId,
+    updates: {
+      enable_agentic_transcript_recall_default:
+        parsedForm.data.enable_agentic_transcript_recall_default,
+    },
+    logLabel: '[Account] Failed to update transcript recall default:',
   })
 
   if (error) {

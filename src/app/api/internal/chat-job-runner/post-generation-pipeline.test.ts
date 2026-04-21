@@ -796,115 +796,38 @@ describe('runPostGenerationPipeline', () => {
     errorSpy.mockRestore()
   })
 
-  it('removes the old assistant message for legacy regeneration without turn state', async () => {
-    const supabase = createChatJobRunnerSupabaseMock({
-      initialMessages: [
-        {
-          id: 'assistant-old',
-          chat_id: 'chat-1',
-          role: 'assistant',
-          content: 'old answer',
-          model_used: null,
-          prompt_tokens: null,
-          completion_tokens: null,
-          debug_info: null,
-          user_id: 'user-1',
-        },
-      ],
-    })
-
-    const result = await runPostGenerationPipeline({
-      supabase: supabase as unknown as SupabaseClientType,
-      chatId: 'chat-1',
-      userId: 'user-1',
-      apiKeyId: 'key-1',
-      provider: 'openai',
-      modelName: 'gpt-4o-mini',
-      origin: 'https://internal.example.com',
-      requestId: 'req-legacy-regen',
-      assistantText: 'replacement answer',
-      assistantMessageId: null,
-      turnId: null,
-      regenerateAssistantMessageId: 'assistant-old',
-      promptTokens: 3,
-      completionTokens: 4,
-      debugInfo: { requestId: 'req-legacy-regen' },
-      bilingualEnabled: false,
-      messageInsertDuration: null,
-      usage: buildUsageMetrics({
-        promptTokens: 3,
-        completionTokens: 4,
-        totalTokens: 7,
-      }),
-      usageCost: null,
-      triggerMessageTranslationFn: vi.fn(),
-      resolveSummaryModelPreferenceFn: vi.fn(async () => null),
-      triggerSummaryGenerationFn: vi.fn(async () => ({ success: true, attempts: 1 })),
-      now: () => 0,
-    })
-
-    expect(supabase.messages.find((row) => row.id === 'assistant-old')).toBeUndefined()
-    expect(supabase.messages.find((row) => row.id === result.assistantMessageId)).toMatchObject({
-      content: 'replacement answer',
-      message_status: 'completed',
-      turn_id: null,
-    })
-  })
-
-  it('throws when legacy regeneration cannot remove the old assistant message', async () => {
-    const supabase = withFromOverride(createChatJobRunnerSupabaseMock(), (table, handler) => {
-      if (table !== 'messages') {
-        return null
-      }
-
-      return {
-        ...handler,
-        delete: () =>
-          wrapMutationBuilder(
-            (
-              handler.delete as () => {
-                eq: (field: string, value: unknown) => unknown
-                then: (...args: unknown[]) => Promise<unknown>
-              }
-            )(),
-            (filters) =>
-              matchesFilters(filters, [
-                { field: 'id', value: 'assistant-old' },
-                { field: 'chat_id', value: 'chat-1' },
-                { field: 'user_id', value: 'user-1' },
-              ]),
-            { message: 'delete failed', code: 'XX001' },
-          ),
-      }
-    })
-
+  it('throws when regeneration is requested without turn state', async () => {
     await expect(
       runPostGenerationPipeline({
-        supabase: supabase as unknown as SupabaseClientType,
+        supabase: createChatJobRunnerSupabaseMock() as unknown as SupabaseClientType,
         chatId: 'chat-1',
         userId: 'user-1',
         apiKeyId: 'key-1',
         provider: 'openai',
         modelName: 'gpt-4o-mini',
         origin: 'https://internal.example.com',
-        requestId: 'req-delete-fail',
+        requestId: 'req-legacy-regen',
         assistantText: 'replacement answer',
         assistantMessageId: null,
         turnId: null,
         regenerateAssistantMessageId: 'assistant-old',
-        promptTokens: 1,
-        completionTokens: 1,
-        debugInfo: { requestId: 'req-delete-fail' },
+        promptTokens: 3,
+        completionTokens: 4,
+        debugInfo: { requestId: 'req-legacy-regen' },
         bilingualEnabled: false,
         messageInsertDuration: null,
-        usage: buildUsageMetrics(),
+        usage: buildUsageMetrics({
+          promptTokens: 3,
+          completionTokens: 4,
+          totalTokens: 7,
+        }),
         usageCost: null,
         triggerMessageTranslationFn: vi.fn(),
         resolveSummaryModelPreferenceFn: vi.fn(async () => null),
         triggerSummaryGenerationFn: vi.fn(async () => ({ success: true, attempts: 1 })),
         now: () => 0,
       }),
-    ).rejects.toThrow('Failed to remove assistant message for regeneration')
+    ).rejects.toThrow('Regeneration without turn state is no longer supported')
   })
 
   it('throws when the chat turn cannot be loaded for assistant finalization', async () => {
@@ -1258,6 +1181,162 @@ describe('runPostGenerationPipeline', () => {
     })
     expect(supabase.messages.find((row) => row.content === 'new answer')).toBeUndefined()
     expect(supabase.messages.find((row) => row.id === 'assistant-old')).toMatchObject({
+      message_status: 'completed',
+    })
+  })
+
+  it('surfaces rollback failures when assistant finalization cannot restore state cleanly', async () => {
+    const supabase = withFromOverride(
+      createChatJobRunnerSupabaseMock({
+        initialTurns: [
+          {
+            id: 'turn-1',
+            chat_id: 'chat-1',
+            user_id: 'user-1',
+            turn_index: 1,
+            user_message_id: 'user-1-msg',
+            active_assistant_message_id: 'assistant-old',
+          },
+        ],
+        initialMessages: [
+          {
+            id: 'user-1-msg',
+            chat_id: 'chat-1',
+            role: 'user',
+            content: 'hello',
+            turn_id: 'turn-1',
+            variant_index: null,
+            supersedes_message_id: null,
+            message_status: 'completed',
+            model_used: null,
+            prompt_tokens: null,
+            completion_tokens: null,
+            debug_info: null,
+            user_id: 'user-1',
+          },
+          {
+            id: 'assistant-old',
+            chat_id: 'chat-1',
+            role: 'assistant',
+            content: 'old answer',
+            turn_id: 'turn-1',
+            variant_index: 1,
+            supersedes_message_id: null,
+            message_status: 'completed',
+            model_used: null,
+            prompt_tokens: null,
+            completion_tokens: null,
+            debug_info: null,
+            user_id: 'user-1',
+          },
+        ],
+      }),
+      (table, handler) => {
+        if (table === 'messages') {
+          return {
+            ...handler,
+            update: (payload: Record<string, unknown>) =>
+              wrapMutationBuilder(
+                (
+                  handler.update as (payload: Record<string, unknown>) => {
+                    eq: (field: string, value: unknown) => unknown
+                    then: (...args: unknown[]) => Promise<unknown>
+                  }
+                )(payload),
+                (filters) =>
+                  payload.message_status === 'superseded' &&
+                  matchesFilters(filters, [
+                    { field: 'id', value: 'assistant-old' },
+                    { field: 'chat_id', value: 'chat-1' },
+                  ]),
+                { message: 'supersede failed', code: 'XX001' },
+              ),
+            delete: () =>
+              wrapMutationBuilder(
+                (
+                  handler.delete as () => {
+                    eq: (field: string, value: unknown) => unknown
+                    then: (...args: unknown[]) => Promise<unknown>
+                  }
+                )(),
+                (filters) =>
+                  matchesFilters(filters, [
+                    { field: 'id', value: 'msg-3' },
+                    { field: 'chat_id', value: 'chat-1' },
+                  ]),
+                { message: 'delete inserted assistant failed', code: 'XX002' },
+              ),
+          }
+        }
+
+        if (table === 'chat_turns') {
+          return {
+            ...handler,
+            update: (payload: Record<string, unknown>) =>
+              wrapMutationBuilder(
+                (
+                  handler.update as (payload: Record<string, unknown>) => {
+                    eq: (field: string, value: unknown) => unknown
+                    then: (...args: unknown[]) => Promise<unknown>
+                  }
+                )(payload),
+                (filters) =>
+                  payload.active_assistant_message_id === 'assistant-old' &&
+                  matchesFilters(filters, [
+                    { field: 'id', value: 'turn-1' },
+                    { field: 'chat_id', value: 'chat-1' },
+                  ]),
+                { message: 'restore turn pointer failed', code: 'XX003' },
+              ),
+          }
+        }
+
+        return null
+      },
+    )
+
+    const rollbackError = await runPostGenerationPipeline({
+      supabase: supabase as unknown as SupabaseClientType,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      apiKeyId: 'key-1',
+      provider: 'openai',
+      modelName: 'gpt-4o-mini',
+      origin: 'https://internal.example.com',
+      requestId: 'req-rollback-fail',
+      assistantText: 'new answer',
+      assistantMessageId: null,
+      turnId: 'turn-1',
+      regenerateAssistantMessageId: null,
+      promptTokens: 2,
+      completionTokens: 2,
+      debugInfo: { requestId: 'req-rollback-fail' },
+      bilingualEnabled: false,
+      messageInsertDuration: null,
+      usage: buildUsageMetrics(),
+      usageCost: null,
+      triggerMessageTranslationFn: vi.fn(),
+      resolveSummaryModelPreferenceFn: vi.fn(async () => null),
+      triggerSummaryGenerationFn: vi.fn(async () => ({ success: true, attempts: 1 })),
+      now: () => 0,
+    }).catch((error: unknown) => error)
+
+    expect(rollbackError).toBeInstanceOf(Error)
+    expect((rollbackError as Error).message).toContain(
+      'Assistant finalization rollback incomplete after "Failed to supersede previous assistant variant"',
+    )
+    expect((rollbackError as Error).message).toContain(
+      'Failed to restore active assistant pointer: restore turn pointer failed',
+    )
+    expect((rollbackError as Error).message).toContain(
+      'Failed to delete inserted assistant variant: delete inserted assistant failed',
+    )
+
+    expect((supabase.state.chatTurns as Array<Record<string, unknown>>)[0]).toMatchObject({
+      active_assistant_message_id: 'msg-3',
+    })
+    expect(supabase.messages.find((row) => row.id === 'msg-3')).toMatchObject({
+      content: 'new answer',
       message_status: 'completed',
     })
   })

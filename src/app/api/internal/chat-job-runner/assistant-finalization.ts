@@ -54,16 +54,7 @@ export async function finalizeAssistantMessage({
   now,
 }: FinalizeAssistantMessageArgs): Promise<FinalizeAssistantMessageResult> {
   if (regenerateAssistantMessageId && !turnId) {
-    const { error: regenerationDeleteError } = await supabase
-      .from('messages')
-      .delete()
-      .eq('id', regenerateAssistantMessageId)
-      .eq('chat_id', chatId)
-      .eq('user_id', userId)
-
-    if (regenerationDeleteError) {
-      throw new Error('Failed to remove assistant message for regeneration')
-    }
+    throw new Error('Regeneration without turn state is no longer supported')
   }
 
   let finalAssistantMessageId = assistantMessageId
@@ -197,28 +188,55 @@ export async function finalizeAssistantMessage({
       }
     }
   } catch (error) {
+    const originalMessage = error instanceof Error ? error.message : String(error)
+    const rollbackFailures: string[] = []
+
     if (turnId && activeAssistantPointerUpdated) {
-      await supabase
+      const { error: restorePointerError } = await supabase
         .from('chat_turns')
         .update({ active_assistant_message_id: previousActiveAssistantId } as never)
         .eq('id', turnId)
         .eq('chat_id', chatId)
+
+      if (restorePointerError) {
+        rollbackFailures.push(
+          `Failed to restore active assistant pointer: ${restorePointerError.message}`,
+        )
+      }
     }
 
     if (previousAssistantSuperseded && previousActiveAssistantId) {
-      await supabase
+      const { error: restoreAssistantError } = await supabase
         .from('messages')
         .update({ message_status: MESSAGE_STATUS_COMPLETED } as never)
         .eq('id', previousActiveAssistantId)
         .eq('chat_id', chatId)
+
+      if (restoreAssistantError) {
+        rollbackFailures.push(
+          `Failed to restore previous assistant variant: ${restoreAssistantError.message}`,
+        )
+      }
     }
 
     if (insertedAssistantInPipeline) {
-      await supabase
+      const { error: deleteInsertedAssistantError } = await supabase
         .from('messages')
         .delete()
         .eq('id', finalAssistantMessageId)
         .eq('chat_id', chatId)
+
+      if (deleteInsertedAssistantError) {
+        rollbackFailures.push(
+          `Failed to delete inserted assistant variant: ${deleteInsertedAssistantError.message}`,
+        )
+      }
+    }
+
+    if (rollbackFailures.length > 0) {
+      throw new Error(
+        `Assistant finalization rollback incomplete after "${originalMessage}": ${rollbackFailures.join('; ')}`,
+      )
     }
 
     throw error

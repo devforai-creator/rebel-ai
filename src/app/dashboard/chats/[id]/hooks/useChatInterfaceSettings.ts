@@ -6,6 +6,7 @@ import type {
   ChatMemoryMode,
 } from '@/lib/chat/model-config'
 import {
+  buildAgenticTranscriptRecallOverrideModelConfigPatch,
   buildOperatorDefaultChatModelConfig,
   normalizeChatModelConfig,
   resolveAgenticTranscriptRecallOverrideMode,
@@ -91,7 +92,6 @@ type UseChatInterfaceSettingsReturn = {
   selectedApiKey: ApiKeyOption | null
   alternateModelsEnabled: boolean
   memoryMode: ChatMemoryMode
-  agenticTranscriptRecallMode: AgenticTranscriptRecallOverrideMode
   anthropicBatchModeEnabled: boolean
   anthropicBatchModeAvailable: boolean
   deliveryMode: ChatDeliveryMode
@@ -100,7 +100,6 @@ type UseChatInterfaceSettingsReturn = {
   handleSelectPrimaryApiKey: (nextId: string) => void
   handleSelectSecondaryApiKey: (nextId: string) => void
   handleSelectMemoryMode: (nextMode: ChatMemoryMode) => void
-  handleSelectAgenticTranscriptRecallMode: (nextMode: AgenticTranscriptRecallOverrideMode) => void
   handleToggleAnthropicBatchMode: () => void
   toggleDeveloperMode: () => void
 }
@@ -127,10 +126,6 @@ export function useChatInterfaceSettings({
     () => resolveAgenticTranscriptRecallOverrideMode(normalizedModelConfig),
     [normalizedModelConfig],
   )
-  const agenticTranscriptRecallTemplate = useMemo(
-    () => normalizedModelConfig.experimental?.agenticTranscriptRecall ?? null,
-    [normalizedModelConfig],
-  )
   const didPersistOperatorDefaultMemoryRef = useRef(false)
   const initialSettings = useMemo(
     () =>
@@ -150,8 +145,7 @@ export function useChatInterfaceSettings({
     initialSettings.alternateModelsEnabled,
   )
   const [memoryMode, setMemoryMode] = useState<ChatMemoryMode>(initialResolvedMemoryConfig.mode)
-  const [agenticTranscriptRecallMode, setAgenticTranscriptRecallMode] =
-    useState<AgenticTranscriptRecallOverrideMode>(initialAgenticTranscriptRecallMode)
+  const agenticTranscriptRecallMode = initialAgenticTranscriptRecallMode
   const [memorySettings] = useState(() => ({
     sealEveryMessages: initialResolvedMemoryConfig.sealEveryMessages,
     retainTailMessages: initialResolvedMemoryConfig.retainTailMessages,
@@ -206,15 +200,10 @@ export function useChatInterfaceSettings({
                 retainTailMessages: memorySettings.retainTailMessages,
               }
             : null,
-        experimental:
-          nextAgenticTranscriptRecallMode === 'inherit'
-            ? {}
-            : {
-                agenticTranscriptRecall: {
-                  ...(agenticTranscriptRecallTemplate ?? {}),
-                  enabled: nextAgenticTranscriptRecallMode === 'enabled',
-                },
-              },
+        ...buildAgenticTranscriptRecallOverrideModelConfigPatch(
+          normalizedModelConfig,
+          nextAgenticTranscriptRecallMode,
+        ),
       }
 
       const result = await updateChatModelConfig(chatId, config)
@@ -223,10 +212,10 @@ export function useChatInterfaceSettings({
       }
     },
     [
-      agenticTranscriptRecallTemplate,
       chatId,
       memorySettings.retainTailMessages,
       memorySettings.sealEveryMessages,
+      normalizedModelConfig,
     ],
   )
 
@@ -355,20 +344,6 @@ export function useChatInterfaceSettings({
     ],
   )
 
-  const handleSelectAgenticTranscriptRecallMode = useCallback(
-    (nextMode: AgenticTranscriptRecallOverrideMode) => {
-      setAgenticTranscriptRecallMode(nextMode)
-      void persistModelConfig(
-        alternateModelsEnabled,
-        selectedApiKeyId,
-        secondaryApiKeyId,
-        memoryMode,
-        nextMode,
-      )
-    },
-    [alternateModelsEnabled, memoryMode, persistModelConfig, secondaryApiKeyId, selectedApiKeyId],
-  )
-
   const handleToggleAnthropicBatchMode = useCallback(() => {
     if (!anthropicBatchModeAvailable && !anthropicBatchModeEnabled) {
       if (!anthropicBatchChatEnabled) {
@@ -394,7 +369,6 @@ export function useChatInterfaceSettings({
     selectedApiKey,
     alternateModelsEnabled,
     memoryMode,
-    agenticTranscriptRecallMode,
     anthropicBatchModeEnabled,
     anthropicBatchModeAvailable,
     deliveryMode,
@@ -403,7 +377,6 @@ export function useChatInterfaceSettings({
     handleSelectPrimaryApiKey,
     handleSelectSecondaryApiKey,
     handleSelectMemoryMode,
-    handleSelectAgenticTranscriptRecallMode,
     handleToggleAnthropicBatchMode,
     toggleDeveloperMode,
   }

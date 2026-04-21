@@ -10,6 +10,7 @@ import LorebookPanelLoader from './LorebookPanelLoader'
 import ChatSummariesPanelLoader from './ChatSummariesPanelLoader'
 import ChatSummariesToggle from './ChatSummariesToggle'
 import ChatHeader from './ChatHeader'
+import ChatSettingsButton from './ChatSettingsButton'
 import { CHAT_MESSAGE_PAGE_SIZE } from '@/lib/chat/constants'
 import SystemPromptEditorButton from './SystemPromptEditorButton'
 import ChatPersonaWidget from './ChatPersonaWidget'
@@ -143,6 +144,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
 
   const initialMessages = initialWindow.messages
   const historyCursor = initialWindow.nextCursor
+  const normalizedModelConfig = normalizeChatModelConfig(chat.model_config)
 
   // Filter to only include LLM providers (exclude embedding-only providers)
   const apiKeyList = (apiKeys || []).filter((key) => isLLMProvider(key.provider))
@@ -156,6 +158,13 @@ export default async function ChatPage({ params, searchParams }: Props) {
         characterName={character?.name || 'AI'}
         chatTitle={chat.title}
       >
+        <ChatSettingsButton
+          chatId={id}
+          initialModelConfig={normalizedModelConfig}
+          accountAgenticTranscriptRecallDefaultEnabled={
+            profileSettings?.enable_agentic_transcript_recall_default ?? false
+          }
+        />
         <ChatPersonaWidget
           chatId={id}
           personaId={chat.persona_id}
@@ -183,12 +192,9 @@ export default async function ChatPage({ params, searchParams }: Props) {
               initialMessages={initialMessages}
               apiKeys={apiKeyList}
               preselectedApiKeyId={preselectedApiKeyId}
-              initialModelConfig={normalizeChatModelConfig(chat.model_config)}
+              initialModelConfig={normalizedModelConfig}
               initialUsageStats={null}
               usageStatsEnabled={profileSettings?.enable_chat_usage_stats ?? false}
-              accountAgenticTranscriptRecallDefaultEnabled={
-                profileSettings?.enable_agentic_transcript_recall_default ?? false
-              }
               character={{
                 name: character?.name || 'AI',
                 avatar_url: characterAvatarUrl,

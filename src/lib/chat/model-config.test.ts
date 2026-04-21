@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   AGENTIC_TRANSCRIPT_RECALL_CONFIG_PROVIDERS,
+  buildAgenticTranscriptRecallOverrideModelConfigPatch,
   resolveAgenticTranscriptRecallOverrideMode,
   buildOperatorDefaultPersistedChatModelConfig,
   CHAT_MEMORY_MODE_SUPPORT_TIERS,
@@ -276,6 +277,53 @@ describe('resolveAgenticTranscriptRecallOverrideMode', () => {
         },
       }),
     ).toBe('disabled')
+  })
+})
+
+describe('buildAgenticTranscriptRecallOverrideModelConfigPatch', () => {
+  it('returns an empty experimental patch for inherit', () => {
+    expect(
+      buildAgenticTranscriptRecallOverrideModelConfigPatch(
+        {
+          experimental: {
+            agenticTranscriptRecall: {
+              enabled: true,
+              maxToolCalls: 4,
+            },
+          },
+        },
+        'inherit',
+      ),
+    ).toEqual({
+      experimental: {},
+    })
+  })
+
+  it('preserves ATR budgets while switching the override on', () => {
+    expect(
+      buildAgenticTranscriptRecallOverrideModelConfigPatch(
+        {
+          experimental: {
+            agenticTranscriptRecall: {
+              enabled: false,
+              maxToolCalls: 4,
+              maxMessagesPerCall: 16,
+            },
+          },
+        },
+        'enabled',
+      ),
+    ).toEqual({
+      experimental: {
+        agenticTranscriptRecall: {
+          enabled: true,
+          maxToolCalls: 4,
+          maxMessagesPerCall: 16,
+          maxTotalMessages: undefined,
+          providerAllowlist: undefined,
+        },
+      },
+    })
   })
 })
 

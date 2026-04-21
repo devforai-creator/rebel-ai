@@ -228,6 +228,26 @@ export function resolveAgenticTranscriptRecallOverrideMode(
   return agenticTranscriptRecall.enabled ? 'enabled' : 'disabled'
 }
 
+export function buildAgenticTranscriptRecallOverrideModelConfigPatch(
+  input: ChatModelConfig | unknown,
+  overrideMode: AgenticTranscriptRecallOverrideMode,
+): Pick<ChatModelConfig, 'experimental'> {
+  const normalized = normalizeChatModelConfig(input)
+  const nextExperimental = { ...(normalized.experimental ?? {}) }
+
+  if (overrideMode === 'inherit') {
+    delete nextExperimental.agenticTranscriptRecall
+    return { experimental: nextExperimental }
+  }
+
+  nextExperimental.agenticTranscriptRecall = {
+    ...(normalized.experimental?.agenticTranscriptRecall ?? {}),
+    enabled: overrideMode === 'enabled',
+  }
+
+  return { experimental: nextExperimental }
+}
+
 export function hasPersistableChatModelConfig(config: ChatModelConfig): boolean {
   const hasAlternate = !!config.alternateModels
   const memory = resolveChatMemoryConfig(config)

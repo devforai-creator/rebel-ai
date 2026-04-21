@@ -21,7 +21,6 @@ export default function ChatInterface({
   apiKeys,
   preselectedApiKeyId,
   initialModelConfig,
-  accountAgenticTranscriptRecallDefaultEnabled,
   initialUsageStats,
   usageStatsEnabled,
   character,
@@ -40,7 +39,6 @@ export default function ChatInterface({
     secondaryApiKeyId,
     alternateModelsEnabled,
     memoryMode,
-    agenticTranscriptRecallMode,
     anthropicBatchModeEnabled,
     anthropicBatchModeAvailable,
     deliveryMode,
@@ -49,7 +47,6 @@ export default function ChatInterface({
     handleSelectPrimaryApiKey,
     handleSelectSecondaryApiKey,
     handleSelectMemoryMode,
-    handleSelectAgenticTranscriptRecallMode,
     handleToggleAnthropicBatchMode,
     toggleDeveloperMode,
   } = useChatInterfaceSettings({
@@ -117,15 +114,12 @@ export default function ChatInterface({
         secondaryApiKeyId={secondaryApiKeyId}
         alternateModelsEnabled={alternateModelsEnabled}
         memoryMode={memoryMode}
-        agenticTranscriptRecallMode={agenticTranscriptRecallMode}
-        accountAgenticTranscriptRecallDefaultEnabled={accountAgenticTranscriptRecallDefaultEnabled}
         anthropicBatchModeEnabled={anthropicBatchModeEnabled && anthropicBatchModeAvailable}
         anthropicBatchModeAvailable={anthropicBatchModeAvailable}
         onSelectApiKey={handleSelectPrimaryApiKey}
         onSelectSecondaryApiKey={handleSelectSecondaryApiKey}
         onToggleAlternateModels={handleToggleAlternateModels}
         onSelectMemoryMode={handleSelectMemoryMode}
-        onSelectAgenticTranscriptRecallMode={handleSelectAgenticTranscriptRecallMode}
         onToggleAnthropicBatchMode={handleToggleAnthropicBatchMode}
         latestUsage={latestUsage}
         usageStatsEnabled={usageStatsEnabled}

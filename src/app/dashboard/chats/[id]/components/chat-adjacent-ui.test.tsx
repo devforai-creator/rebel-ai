@@ -1,6 +1,7 @@
 import React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import ChatSettingsButton from '../ChatSettingsButton'
 import DeleteChatButton from '../DeleteChatButton'
 import SystemPromptEditorButton from '../SystemPromptEditorButton'
 import { ChatComposer, shouldSubmitChatComposerOnEnter } from './ChatComposer'
@@ -22,6 +23,21 @@ describe('DeleteChatButton', () => {
 
     expect(html).toContain('Delete Chat')
     expect(html).toContain('menuitem')
+  })
+})
+
+describe('ChatSettingsButton', () => {
+  it('summarizes inherited ATR state on the trigger button', () => {
+    const html = renderToStaticMarkup(
+      <ChatSettingsButton
+        chatId="chat-1"
+        initialModelConfig={null}
+        accountAgenticTranscriptRecallDefaultEnabled
+      />,
+    )
+
+    expect(html).toContain('Settings')
+    expect(html).toContain('ATR Default On')
   })
 })
 

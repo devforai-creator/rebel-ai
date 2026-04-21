@@ -19,6 +19,31 @@ import {
 import { getLastSummaryEnd } from './db-helpers'
 import { generateSummaryWithFallback } from './chunk-summarizer'
 
+async function persistHigherLevelSummary(
+  supabase: CreateHigherLevelSummaryOptions['supabase'],
+  row: ChatSummaryInsert,
+): Promise<void> {
+  const summariesTable = supabase.from('chat_summaries')
+
+  if ('upsert' in summariesTable && typeof summariesTable.upsert === 'function') {
+    const { error } = await summariesTable.upsert(row, {
+      onConflict: 'chat_id,level,start_seq',
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return
+  }
+
+  const { error } = await summariesTable.insert<ChatSummaryInsert>(row)
+
+  if (error) {
+    throw error
+  }
+}
+
 /**
  * Create a higher-level summary (meta or super-meta) from segments
  */
@@ -71,7 +96,7 @@ export async function createHigherLevelSummary({
     promptCache,
   })
 
-  await supabase.from('chat_summaries').insert<ChatSummaryInsert>({
+  await persistHigherLevelSummary(supabase, {
     chat_id: chatId,
     user_id: userId,
     level: targetLevel,

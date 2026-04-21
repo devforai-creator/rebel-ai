@@ -96,33 +96,6 @@ async function regenerateChunkRanges({
       continue
     }
 
-    const { error: deleteSummaryError } = await supabase
-      .from('chat_summaries')
-      .delete()
-      .eq('chat_id', chatId)
-      .eq('user_id', userId)
-      .eq('level', SUMMARY_LEVEL_CHUNK)
-      .eq('start_seq', range.startSeq)
-      .eq('end_seq', range.endSeq)
-
-    if (deleteSummaryError) {
-      throw new Error(
-        `Failed to delete chunk summary for regeneration: ${deleteSummaryError.message}`,
-      )
-    }
-
-    const { error: deleteFactsError } = await supabase
-      .from('chat_facts')
-      .delete()
-      .eq('chat_id', chatId)
-      .eq('user_id', userId)
-      .eq('start_seq', range.startSeq)
-      .eq('end_seq', range.endSeq)
-
-    if (deleteFactsError) {
-      throw new Error(`Failed to delete chunk facts for regeneration: ${deleteFactsError.message}`)
-    }
-
     await createChunkSummary({
       supabase,
       chatId,
@@ -135,6 +108,18 @@ async function regenerateChunkRanges({
       systemPrompt: chunkPrompt,
       expectedMessageCount: chunkSize,
     })
+
+    const { error: deleteFactsError } = await supabase
+      .from('chat_facts')
+      .delete()
+      .eq('chat_id', chatId)
+      .eq('user_id', userId)
+      .eq('start_seq', range.startSeq)
+      .eq('end_seq', range.endSeq)
+
+    if (deleteFactsError) {
+      throw new Error(`Failed to delete chunk facts for regeneration: ${deleteFactsError.message}`)
+    }
 
     if (enableFactGeneration) {
       await createChunkFacts({
@@ -351,19 +336,6 @@ async function regenerateMetaRanges({
   const superMetaRefreshMap = new Map<string, { startSeq: number; endSeq: number }>()
 
   for (const range of ranges) {
-    const { error: deleteMetaError } = await supabase
-      .from('chat_summaries')
-      .delete()
-      .eq('chat_id', chatId)
-      .eq('user_id', userId)
-      .eq('level', SUMMARY_LEVEL_META)
-      .eq('start_seq', range.startSeq)
-      .eq('end_seq', range.endSeq)
-
-    if (deleteMetaError) {
-      throw new Error(`Failed to delete meta summary for regeneration: ${deleteMetaError.message}`)
-    }
-
     const { data: overlappingSuperMetas, error: superMetaQueryError } = await supabase
       .from('chat_summaries')
       .select<'start_seq, end_seq'>('start_seq, end_seq')
@@ -388,20 +360,6 @@ async function regenerateMetaRanges({
           startSeq: superMeta.start_seq,
           endSeq: superMeta.end_seq,
         })
-
-        const { error: deleteSuperMetaError } = await supabase
-          .from('chat_summaries')
-          .delete()
-          .eq('chat_id', chatId)
-          .eq('level', SUMMARY_LEVEL_SUPER_META)
-          .eq('start_seq', superMeta.start_seq)
-          .eq('end_seq', superMeta.end_seq)
-
-        if (deleteSuperMetaError) {
-          throw new Error(
-            `Failed to delete super meta summary for regeneration: ${deleteSuperMetaError.message}`,
-          )
-        }
       }
     }
 

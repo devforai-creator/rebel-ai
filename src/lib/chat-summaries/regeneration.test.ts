@@ -289,17 +289,29 @@ describe('regeneration helpers', () => {
     expect(createChunkFactsMock).toHaveBeenCalledTimes(2)
   })
 
-  it('throws when deleting chunk summary for regeneration fails', async () => {
-    const supabase = {
-      from: (table: string) => {
-        if (table === 'chat_summaries') {
-          return {
-            delete: () => createDeleteResultBuilder({ message: 'delete summary failed' }),
-          }
-        }
-        throw new Error(`Unexpected table: ${table}`)
-      },
-    }
+  it('preserves the existing chunk summary when chunk regeneration fails', async () => {
+    createChunkSummaryMock.mockRejectedValue(new Error('summary regeneration failed'))
+    const supabase = createChatSummariesSupabaseMock({
+      chatSummaries: [
+        {
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          level: SUMMARY_LEVEL_CHUNK,
+          start_seq: 1,
+          end_seq: 10,
+          summary: 'old chunk summary',
+        },
+      ],
+      chatFacts: [
+        {
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          start_seq: 1,
+          end_seq: 10,
+          facts: 'old fact',
+        },
+      ],
+    })
     const { processRegenerationRequests } = await import('./regeneration')
 
     await expect(
@@ -317,7 +329,25 @@ describe('regeneration helpers', () => {
           chunkRanges: [{ startSeq: 1, endSeq: 10 }],
         },
       }),
-    ).rejects.toThrow('Failed to delete chunk summary for regeneration: delete summary failed')
+    ).rejects.toThrow('summary regeneration failed')
+
+    expect(supabase.state.chatSummaries).toEqual([
+      expect.objectContaining({
+        chat_id: 'chat-1',
+        level: SUMMARY_LEVEL_CHUNK,
+        start_seq: 1,
+        end_seq: 10,
+        summary: 'old chunk summary',
+      }),
+    ])
+    expect(supabase.state.chatFacts).toEqual([
+      expect.objectContaining({
+        chat_id: 'chat-1',
+        start_seq: 1,
+        end_seq: 10,
+        facts: 'old fact',
+      }),
+    ])
   })
 
   it('throws when deleting episodic facts for fact-only regeneration fails', async () => {
@@ -521,14 +551,30 @@ describe('regeneration helpers', () => {
     createHigherLevelSummaryMock.mockImplementation(
       async ({ supabase: sb, startSeq, endSeq, targetLevel }) => {
         const summaries = sb.state.chatSummaries as Array<Record<string, unknown>>
-        summaries.push({
+        const nextRow = {
           chat_id: 'chat-1',
           user_id: 'user-1',
           level: targetLevel,
           start_seq: startSeq,
           end_seq: endSeq,
           summary: `new-${startSeq}-${endSeq}`,
-        })
+        }
+        const existingIndex = summaries.findIndex(
+          (row) =>
+            row.chat_id === nextRow.chat_id &&
+            row.level === nextRow.level &&
+            row.start_seq === nextRow.start_seq,
+        )
+
+        if (existingIndex >= 0) {
+          summaries[existingIndex] = {
+            ...summaries[existingIndex],
+            ...nextRow,
+          }
+          return
+        }
+
+        summaries.push(nextRow)
       },
     )
 
@@ -560,5 +606,74 @@ describe('regeneration helpers', () => {
       (row) => row.level === SUMMARY_LEVEL_META && row.start_seq === 21,
     )
     expect(remainingMeta).toHaveLength(1)
+  })
+
+  it('preserves existing meta and super-meta summaries when meta regeneration fails', async () => {
+    createHigherLevelSummaryMock.mockRejectedValue(new Error('meta regeneration failed'))
+    const supabase = createChatSummariesSupabaseMock({
+      chatSummaries: [
+        {
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          level: SUMMARY_LEVEL_CHUNK,
+          start_seq: 1,
+          end_seq: 10,
+          summary: 'chunk-1',
+        },
+        {
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          level: SUMMARY_LEVEL_META,
+          start_seq: 1,
+          end_seq: 10,
+          summary: 'existing meta',
+        },
+        {
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          level: SUMMARY_LEVEL_SUPER_META,
+          start_seq: 1,
+          end_seq: 10,
+          summary: 'existing super meta',
+        },
+      ],
+    })
+    const { processRegenerationRequests } = await import('./regeneration')
+
+    await expect(
+      processRegenerationRequests({
+        supabase: supabase as unknown as SupabaseClientType,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        model: mockModel,
+        provider: 'openai',
+        modelName: 'gpt-4o',
+        chunkPrompt: 'CHUNK',
+        metaPrompt: 'META',
+        factPrompt: 'FACT',
+        regenerate: {
+          metaRanges: [{ startSeq: 1, endSeq: 10 }],
+        },
+      }),
+    ).rejects.toThrow('meta regeneration failed')
+
+    expect(supabase.state.chatSummaries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          chat_id: 'chat-1',
+          level: SUMMARY_LEVEL_META,
+          start_seq: 1,
+          end_seq: 10,
+          summary: 'existing meta',
+        }),
+        expect.objectContaining({
+          chat_id: 'chat-1',
+          level: SUMMARY_LEVEL_SUPER_META,
+          start_seq: 1,
+          end_seq: 10,
+          summary: 'existing super meta',
+        }),
+      ]),
+    )
   })
 })

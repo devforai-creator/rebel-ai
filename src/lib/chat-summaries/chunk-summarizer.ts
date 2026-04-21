@@ -34,6 +34,31 @@ function logFactsExtractionDebug(...args: unknown[]): void {
   }
 }
 
+async function persistChunkSummary(
+  supabase: CreateChunkSummaryOptions['supabase'],
+  row: ChatSummaryInsert,
+): Promise<void> {
+  const summariesTable = supabase.from('chat_summaries')
+
+  if ('upsert' in summariesTable && typeof summariesTable.upsert === 'function') {
+    const { error } = await summariesTable.upsert(row, {
+      onConflict: 'chat_id,level,start_seq',
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return
+  }
+
+  const { error } = await summariesTable.insert<ChatSummaryInsert>(row)
+
+  if (error) {
+    throw error
+  }
+}
+
 /**
  * Generate summary with fallback on error
  */
@@ -231,7 +256,7 @@ export async function createChunkSummary({
     promptCache,
   })
 
-  await supabase.from('chat_summaries').insert<ChatSummaryInsert>({
+  await persistChunkSummary(supabase, {
     chat_id: chatId,
     user_id: userId,
     level: SUMMARY_LEVEL_CHUNK,

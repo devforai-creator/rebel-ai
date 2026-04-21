@@ -92,7 +92,7 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
     })
   })
 
-  it('keeps google disabled even when a chat opts in', () => {
+  it('enables recall for opted-in google chats when the global flag is on', () => {
     process.env[EXPERIMENTAL_AGENTIC_TRANSCRIPT_RECALL_ENABLED_ENV] = 'true'
 
     expect(
@@ -113,10 +113,10 @@ describe('resolveAgenticTranscriptRecallRuntimeConfig', () => {
       accountDefaultEnabled: false,
       preferenceSource: 'chat_override',
       globallyEnabled: true,
-      providerSupported: false,
-      providerAllowed: false,
-      enabled: false,
-      skipReason: 'provider_not_supported',
+      providerSupported: true,
+      providerAllowed: true,
+      enabled: true,
+      skipReason: null,
       maxToolCalls: DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS,
       providerAllowlist: [...AGENTIC_TRANSCRIPT_RECALL_SUPPORTED_PROVIDERS],
     })

@@ -119,6 +119,46 @@ type TestExpandSourceRangeTool = {
 }
 
 describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
+  it('fails closed when surfaced hints exist but no tool-capable source map is available', () => {
+    const debugMetrics: Record<string, string | number | boolean | null> = {}
+    const streamRequest = {
+      system: 'FINAL',
+      messages: [{ role: 'user', content: 'Hello' }],
+    }
+    const result = prepareExperimentalAgenticTranscriptRecallRequest({
+      supabase: createTranscriptSupabase(),
+      chatId,
+      runtimeConfig: buildRuntimeConfig(),
+      sourceHints: {
+        rawContextStartOrdinal: 5,
+        cutoffOrdinal: 4,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 2,
+            preview: 'First exchange',
+          },
+        ],
+      },
+      sourceMap: null,
+      streamRequest,
+      debugMetrics,
+      logDebug: vi.fn(),
+    })
+
+    expect(result).toEqual({
+      streamRequest,
+    })
+    expect(debugMetrics).toMatchObject({
+      experimental_agentic_transcript_recall_tool_available: false,
+      experimental_agentic_transcript_recall_expand_available: false,
+      experimental_agentic_transcript_recall_tool_call_count: 0,
+      experimental_agentic_transcript_recall_expand_call_count: 0,
+    })
+  })
+
   it('augments the system prompt and exposes a bounded recall tool', async () => {
     const debugMetrics: Record<string, string | number | boolean | null> = {}
     const result = prepareExperimentalAgenticTranscriptRecallRequest({

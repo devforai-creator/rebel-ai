@@ -19,6 +19,7 @@ const renderActiveLorebookBlockMock = vi.fn()
 const buildSystemPromptMock = vi.fn()
 const decryptSecretMock = vi.fn()
 const resolveAgenticTranscriptRecallRuntimeConfigMock = vi.fn()
+const loadAgenticTranscriptRecallSourceMapMock = vi.fn()
 
 vi.mock('@/lib/chat/anthropic-user-first', () => ({
   ensureUserFirstForAnthropic: (...args: unknown[]) => ensureUserFirstForAnthropicMock(...args),
@@ -50,6 +51,18 @@ vi.mock('@/lib/experimental/agentic-transcript-recall/config', () => ({
   resolveAgenticTranscriptRecallRuntimeConfig: (...args: unknown[]) =>
     resolveAgenticTranscriptRecallRuntimeConfigMock(...args),
 }))
+
+vi.mock('@/lib/experimental/agentic-transcript-recall/source-map', async () => {
+  const actual = await vi.importActual<
+    typeof import('@/lib/experimental/agentic-transcript-recall/source-map')
+  >('@/lib/experimental/agentic-transcript-recall/source-map')
+
+  return {
+    ...actual,
+    loadAgenticTranscriptRecallSourceMap: (...args: unknown[]) =>
+      loadAgenticTranscriptRecallSourceMapMock(...args),
+  }
+})
 
 vi.mock('@/lib/lorebook/runtime', () => ({
   loadChatLorebookState: (...args: unknown[]) => loadChatLorebookStateMock(...args),
@@ -196,7 +209,7 @@ describe('resolveLorebookHistoryPlan', () => {
 })
 
 describe('loadChatJobExecutionContext', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     buildMemoryPlanMock.mockReset()
     loadGenerationTranscriptMock.mockReset()
     countProjectedConversationMessagesMock.mockReset()
@@ -211,6 +224,14 @@ describe('loadChatJobExecutionContext', () => {
     buildSystemPromptMock.mockReset()
     decryptSecretMock.mockReset()
     resolveAgenticTranscriptRecallRuntimeConfigMock.mockReset()
+    loadAgenticTranscriptRecallSourceMapMock.mockReset()
+
+    const actualSourceMap = await vi.importActual<
+      typeof import('@/lib/experimental/agentic-transcript-recall/source-map')
+    >('@/lib/experimental/agentic-transcript-recall/source-map')
+    loadAgenticTranscriptRecallSourceMapMock.mockImplementation(
+      actualSourceMap.loadAgenticTranscriptRecallSourceMap,
+    )
 
     buildMemoryPlanMock.mockResolvedValue({
       mode: 'summary_window',
@@ -594,6 +615,92 @@ describe('loadChatJobExecutionContext', () => {
         experimental_agentic_transcript_recall_direct_fetch_range_count: 2,
         experimental_agentic_transcript_recall_navigation_parent_count: 1,
         experimental_agentic_transcript_recall_navigation_parent_with_children_count: 1,
+      }),
+    )
+  })
+
+  it('fails closed when ATR source-map loading throws', async () => {
+    const { loadChatJobExecutionContext } = await import('./execution-context')
+    const supabase = createChatJobRunnerSupabaseMock({
+      chat: {
+        id: 'chat-1',
+        user_id: 'user-1',
+        character_id: 'char-1',
+        persona_id: null,
+        custom_system_prompt: null,
+        model_config: {
+          experimental: {
+            agenticTranscriptRecall: {
+              enabled: true,
+            },
+          },
+        },
+      },
+    })
+
+    buildMemoryPlanMock.mockResolvedValueOnce({
+      mode: 'summary_window',
+      dynamicContext: [
+        '=== Previous Conversation Summary ===',
+        '[Summary 1-10]',
+        'Old summary',
+      ].join('\n'),
+      fallbackMessages: [{ role: 'assistant', content: 'payload-11' }],
+      fallbackSystemPrompt: 'FINAL',
+      promptBlocks: [
+        {
+          role: 'system',
+          content: 'STATIC',
+          cachePreference: 'prefer-cache',
+          stability: 'static',
+        },
+        {
+          role: 'system',
+          content: ['=== Previous Conversation Summary ===', '[Summary 1-10]', 'Old summary'].join(
+            '\n',
+          ),
+          cachePreference: 'avoid-cache',
+          stability: 'sealed',
+        },
+      ],
+      staticSystemPrompt: 'STATIC',
+      ragInfo: null,
+    })
+    resolveAgenticTranscriptRecallRuntimeConfigMock.mockReturnValueOnce({
+      configured: true,
+      accountDefaultEnabled: false,
+      preferenceSource: 'chat_override',
+      globallyEnabled: true,
+      providerSupported: true,
+      providerAllowed: true,
+      enabled: true,
+      skipReason: null,
+      maxToolCalls: 1,
+      maxMessagesPerCall: 12,
+      maxTotalMessages: 12,
+      providerAllowlist: ['openai'],
+    })
+    loadAgenticTranscriptRecallSourceMapMock.mockRejectedValueOnce(new Error('source map exploded'))
+
+    const result = await loadChatJobExecutionContext({
+      supabase: supabase as never,
+      payload: buildValidPayload({
+        sanitizedMessages: Array.from({ length: 11 }, (_, index) => ({
+          role: index % 2 === 0 ? 'user' : 'assistant',
+          content: `payload-${index + 1}`,
+        })),
+      }),
+      timings: {},
+    })
+
+    expect(result.agenticTranscriptRecallSourceHints).toBeNull()
+    expect(result.agenticTranscriptRecallSourceMap).toBeNull()
+    expect(result.debugMetrics).toEqual(
+      expect.objectContaining({
+        experimental_agentic_transcript_recall_source_hint_count: 0,
+        experimental_agentic_transcript_recall_direct_fetch_range_count: 0,
+        experimental_agentic_transcript_recall_navigation_parent_count: 0,
+        experimental_agentic_transcript_recall_navigation_parent_with_children_count: 0,
       }),
     )
   })

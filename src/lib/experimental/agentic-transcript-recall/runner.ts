@@ -114,15 +114,6 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
 
   let budgetState = createAgenticTranscriptRecallBudgetState()
   let expandBudgetState = createAgenticTranscriptRecallExpandBudgetState()
-  const augmentedSystem = [streamRequest.system, buildExperimentalInstruction(runtimeConfig)]
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)
-    .join('\n\n')
-
-  const wrappedStreamRequest: TStreamRequest = {
-    ...streamRequest,
-    system: augmentedSystem,
-  }
-
   const tools: NonNullable<ExperimentalAgenticTranscriptRecallStreamSettings['tools']> = {}
 
   if (sourceMap && sourceMap.navigationParents.length > 0) {
@@ -257,6 +248,21 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
         }
       },
     })
+  }
+
+  if (Object.keys(tools).length === 0) {
+    return {
+      streamRequest,
+    }
+  }
+
+  const augmentedSystem = [streamRequest.system, buildExperimentalInstruction(runtimeConfig)]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join('\n\n')
+
+  const wrappedStreamRequest: TStreamRequest = {
+    ...streamRequest,
+    system: augmentedSystem,
   }
 
   const streamTextSettings: ExperimentalAgenticTranscriptRecallStreamSettings = {

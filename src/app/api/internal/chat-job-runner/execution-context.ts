@@ -707,7 +707,7 @@ export async function loadChatJobExecutionContext({
     transcriptLength: generationTranscript.length,
     suffixLength: rawRecentMessages.length,
   })
-  const agenticTranscriptRecallSourceHints = agenticTranscriptRecall.enabled
+  let agenticTranscriptRecallSourceHints = agenticTranscriptRecall.enabled
     ? deriveAgenticTranscriptRecallSourceHints({
         promptBlocks,
         rawContextStartOrdinal: rawRecentContextStartOrdinal,
@@ -727,6 +727,8 @@ export async function loadChatJobExecutionContext({
         '[Agentic Transcript Recall] Failed to load source map:',
         error instanceof Error ? error.message : String(error),
       )
+      agenticTranscriptRecallSourceHints = null
+      agenticTranscriptRecallSourceMap = null
     }
   }
   debugMetrics['experimental_agentic_transcript_recall_source_hint_count'] =

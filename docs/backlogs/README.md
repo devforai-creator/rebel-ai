@@ -14,7 +14,8 @@ Use it to answer two questions quickly:
 
 ## Current Entry Point
 
-- Active backlog: none right now
+- Active backlog:
+  [review-followup-backlog-2026-04-21.md](./active/review-followup-backlog-2026-04-21.md)
 - Most recently archived backlog:
   [agentic-transcript-recall-config-resolution-backlog-2026-04-21.md](./archive/2026/agentic-transcript-recall-config-resolution-backlog-2026-04-21.md)
 

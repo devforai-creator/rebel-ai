@@ -10,7 +10,6 @@ import {
   DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS,
   DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOTAL_MESSAGES,
   DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
-  DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
   OPERATOR_DEFAULT_CHAT_MEMORY_MODE,
   hasPersistableChatModelConfig,
   normalizeChatModelConfig,
@@ -64,6 +63,22 @@ describe('normalizeChatModelConfig', () => {
     const result = normalizeChatModelConfig({
       memory: {
         mode: 'prefix_live_blocks',
+        retainTailMessages: 6,
+      },
+    })
+
+    expect(result).toEqual({
+      memory: {
+        mode: 'prefix_live_blocks',
+        retainTailMessages: 6,
+      },
+    })
+  })
+
+  it('ignores legacy sealEveryMessages input while preserving supported memory fields', () => {
+    const result = normalizeChatModelConfig({
+      memory: {
+        mode: 'prefix_live_blocks',
         sealEveryMessages: 120,
         retainTailMessages: 6,
       },
@@ -72,7 +87,6 @@ describe('normalizeChatModelConfig', () => {
     expect(result).toEqual({
       memory: {
         mode: 'prefix_live_blocks',
-        sealEveryMessages: 120,
         retainTailMessages: 6,
       },
     })
@@ -98,7 +112,6 @@ describe('normalizeChatModelConfig', () => {
       },
       memory: {
         mode: 'prefix_live_blocks',
-        sealEveryMessages: undefined,
         retainTailMessages: undefined,
       },
     })
@@ -143,7 +156,6 @@ describe('resolveChatMemoryConfig', () => {
   it('returns defaults when memory config is missing', () => {
     expect(resolveChatMemoryConfig({})).toEqual({
       mode: 'summary_window',
-      sealEveryMessages: DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
       retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
     })
   })
@@ -157,7 +169,6 @@ describe('resolveChatMemoryConfig', () => {
       }),
     ).toEqual({
       mode: 'prefix_live_blocks',
-      sealEveryMessages: DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
       retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
     })
   })
@@ -166,7 +177,6 @@ describe('resolveChatMemoryConfig', () => {
     expect(resolveChatMemoryConfig({}, { defaultMode: OPERATOR_DEFAULT_CHAT_MEMORY_MODE })).toEqual(
       {
         mode: 'prefix_live_blocks',
-        sealEveryMessages: DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
         retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
       },
     )
@@ -198,7 +208,6 @@ describe('buildOperatorDefaultChatModelConfig', () => {
       },
       memory: {
         mode: 'prefix_live_blocks',
-        sealEveryMessages: DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
         retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
       },
     })
@@ -210,7 +219,6 @@ describe('buildOperatorDefaultPersistedChatModelConfig', () => {
     expect(buildOperatorDefaultPersistedChatModelConfig({})).toEqual({
       memory: {
         mode: 'prefix_live_blocks',
-        sealEveryMessages: DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
         retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
       },
     })
@@ -229,7 +237,6 @@ describe('buildOperatorDefaultPersistedChatModelConfig', () => {
     ).toEqual({
       memory: {
         mode: 'prefix_live_blocks',
-        sealEveryMessages: DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES,
         retainTailMessages: DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
       },
       experimental: {

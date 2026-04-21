@@ -73,7 +73,7 @@ function createPrefixModeSupabaseStub(options?: {
 
 describe('calculatePrefixLiveBlockBoundaries', () => {
   it('derives canonical 10-message chunk boundaries under the retained tail', () => {
-    expect(calculatePrefixLiveBlockBoundaries(100, 0, 96, 4)).toEqual([
+    expect(calculatePrefixLiveBlockBoundaries(100, 0, 4)).toEqual([
       { start: 1, end: 10 },
       { start: 11, end: 20 },
       { start: 21, end: 30 },
@@ -84,8 +84,8 @@ describe('calculatePrefixLiveBlockBoundaries', () => {
       { start: 71, end: 80 },
       { start: 81, end: 90 },
     ])
-    expect(calculatePrefixLiveBlockBoundaries(103, 90, 96, 4)).toEqual([])
-    expect(calculatePrefixLiveBlockBoundaries(104, 90, 96, 4)).toEqual([{ start: 91, end: 100 }])
+    expect(calculatePrefixLiveBlockBoundaries(103, 90, 4)).toEqual([])
+    expect(calculatePrefixLiveBlockBoundaries(104, 90, 4)).toEqual([{ start: 91, end: 100 }])
   })
 })
 

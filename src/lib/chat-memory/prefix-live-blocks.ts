@@ -43,7 +43,6 @@ const EMPTY_RAG_INFO = {
 export function calculatePrefixLiveBlockBoundaries(
   totalMessages: number,
   previousEnd: number,
-  _sealedChunkSize: number,
   retainTailMessages: number,
 ): Array<{ start: number; end: number }> {
   const canonicalSealedThroughSeq = totalMessages - retainTailMessages
@@ -228,17 +227,6 @@ export async function updatePrefixLiveBlocksMemoryState({
   modelConfig,
 }: UpdateMemoryStateOptions): Promise<void> {
   const memory = resolveChatMemoryConfig(modelConfig)
-  const sealedChunkSize = memory.sealEveryMessages - memory.retainTailMessages
-
-  if (sealedChunkSize < 1) {
-    console.warn('[chat-memory] Invalid prefix_live_blocks config', {
-      chatId,
-      userId,
-      sealEveryMessages: memory.sealEveryMessages,
-      retainTailMessages: memory.retainTailMessages,
-    })
-    return
-  }
 
   const totalMessages = await getMessageCount(supabase, chatId)
   if (totalMessages === null) {
@@ -282,7 +270,6 @@ export async function hasPrefixLiveBlocksUpdateWork({
     calculatePrefixLiveBlockBoundaries(
       totalMessages,
       lastProcessedChunkEnd ?? 0,
-      memory.sealEveryMessages - memory.retainTailMessages,
       memory.retainTailMessages,
     ).length > 0
 

@@ -138,6 +138,8 @@ describe('chat actions', () => {
     }
 
     await expect(updateChatModelConfig('chat-1', input)).resolves.toEqual({ success: true })
+    const persistedModelConfig = getChatRows(supabase)[0].model_config as Record<string, unknown>
+
     expect(getChatRows(supabase)[0]).toMatchObject({
       id: 'chat-1',
       model_config: {
@@ -148,11 +150,13 @@ describe('chat actions', () => {
         },
         memory: {
           mode: 'prefix_live_blocks',
-          sealEveryMessages: 12,
           retainTailMessages: 5,
         },
       },
     })
+    expect((persistedModelConfig.memory as Record<string, unknown>) ?? {}).not.toHaveProperty(
+      'sealEveryMessages',
+    )
   })
 
   it('preserves existing experimental config when callers update other model settings', async () => {
@@ -184,13 +188,13 @@ describe('chat actions', () => {
       }),
     ).resolves.toEqual({ success: true })
 
+    const persistedModelConfig = getChatRows(supabase)[0].model_config as Record<string, unknown>
+
     expect(getChatRows(supabase)[0]).toMatchObject({
       id: 'chat-1',
       model_config: {
         memory: {
           mode: 'prefix_live_blocks',
-          sealEveryMessages: undefined,
-          retainTailMessages: undefined,
         },
         experimental: {
           agenticTranscriptRecall: {
@@ -200,6 +204,9 @@ describe('chat actions', () => {
         },
       },
     })
+    expect((persistedModelConfig.memory as Record<string, unknown>) ?? {}).not.toHaveProperty(
+      'sealEveryMessages',
+    )
   })
 
   it('persists an explicit ATR off override when callers set it directly', async () => {

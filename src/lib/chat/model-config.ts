@@ -11,7 +11,6 @@ export type ChatMemoryMode = 'summary_window' | 'prefix_live_blocks'
 
 export type ChatMemoryConfig = {
   mode: ChatMemoryMode
-  sealEveryMessages?: number
   retainTailMessages?: number
 }
 
@@ -41,7 +40,6 @@ export type ChatExperimentalConfig = {
 
 export const DEFAULT_CHAT_MEMORY_MODE: ChatMemoryMode = 'summary_window'
 export const OPERATOR_DEFAULT_CHAT_MEMORY_MODE: ChatMemoryMode = 'prefix_live_blocks'
-export const DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES = 100
 export const DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES = 4
 export const DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_TOOL_CALLS = 2
 export const DEFAULT_AGENTIC_TRANSCRIPT_RECALL_MAX_MESSAGES_PER_CALL = 12
@@ -121,12 +119,6 @@ export function normalizeChatModelConfig(input: unknown): ChatModelConfig {
       raw.mode === 'prefix_live_blocks' || raw.mode === 'summary_window'
         ? raw.mode
         : DEFAULT_CHAT_MEMORY_MODE
-    const sealEveryMessages =
-      typeof raw.sealEveryMessages === 'number' &&
-      Number.isFinite(raw.sealEveryMessages) &&
-      raw.sealEveryMessages >= 1
-        ? Math.trunc(raw.sealEveryMessages)
-        : undefined
     const retainTailMessages =
       typeof raw.retainTailMessages === 'number' &&
       Number.isFinite(raw.retainTailMessages) &&
@@ -136,7 +128,6 @@ export function normalizeChatModelConfig(input: unknown): ChatModelConfig {
 
     normalized.memory = {
       mode,
-      sealEveryMessages,
       retainTailMessages,
     }
   }
@@ -183,14 +174,11 @@ export function resolveChatMemoryConfig(
 ): Required<ChatMemoryConfig> {
   const normalized = normalizeChatModelConfig(input)
   const mode = normalized.memory?.mode ?? options?.defaultMode ?? DEFAULT_CHAT_MEMORY_MODE
-  const sealEveryMessages =
-    normalized.memory?.sealEveryMessages ?? DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES
   const retainTailMessages =
     normalized.memory?.retainTailMessages ?? DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES
 
   return {
     mode,
-    sealEveryMessages,
     retainTailMessages,
   }
 }
@@ -205,7 +193,6 @@ export function buildOperatorDefaultChatModelConfig(input: unknown): ChatModelCo
     ...normalized,
     memory: {
       mode: memory.mode,
-      sealEveryMessages: memory.sealEveryMessages,
       retainTailMessages: memory.retainTailMessages,
     },
   }
@@ -253,7 +240,6 @@ export function hasPersistableChatModelConfig(config: ChatModelConfig): boolean 
   const memory = resolveChatMemoryConfig(config)
   const hasNonDefaultMemory =
     memory.mode !== DEFAULT_CHAT_MEMORY_MODE ||
-    memory.sealEveryMessages !== DEFAULT_PREFIX_LIVE_BLOCKS_SEAL_EVERY_MESSAGES ||
     memory.retainTailMessages !== DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES
   const agenticTranscriptRecall = config.experimental?.agenticTranscriptRecall
   const hasCustomAgenticTranscriptRecallBudget =

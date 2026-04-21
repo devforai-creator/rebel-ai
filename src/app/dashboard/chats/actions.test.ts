@@ -228,7 +228,6 @@ describe('dashboard chats actions', () => {
         model_config: {
           memory: {
             mode: 'prefix_live_blocks',
-            sealEveryMessages: 100,
             retainTailMessages: 4,
           },
         },
@@ -410,7 +409,6 @@ describe('dashboard chats actions', () => {
         model_config: {
           memory: {
             mode: 'prefix_live_blocks',
-            sealEveryMessages: 100,
             retainTailMessages: 4,
           },
         },

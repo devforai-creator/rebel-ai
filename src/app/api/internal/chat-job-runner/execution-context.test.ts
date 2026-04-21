@@ -42,7 +42,6 @@ vi.mock('@/lib/chat/model-config', () => ({
   normalizeChatModelConfig: vi.fn((config: unknown) => config ?? {}),
   resolveChatMemoryConfig: vi.fn((config: { memory?: { mode?: string } } | null | undefined) => ({
     mode: config?.memory?.mode === 'prefix_live_blocks' ? 'prefix_live_blocks' : 'summary_window',
-    sealEveryMessages: 100,
     retainTailMessages: 4,
   })),
 }))

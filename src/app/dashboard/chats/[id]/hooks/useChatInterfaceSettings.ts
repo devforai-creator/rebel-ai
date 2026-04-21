@@ -146,10 +146,7 @@ export function useChatInterfaceSettings({
   )
   const [memoryMode, setMemoryMode] = useState<ChatMemoryMode>(initialResolvedMemoryConfig.mode)
   const agenticTranscriptRecallMode = initialAgenticTranscriptRecallMode
-  const [memorySettings] = useState(() => ({
-    sealEveryMessages: initialResolvedMemoryConfig.sealEveryMessages,
-    retainTailMessages: initialResolvedMemoryConfig.retainTailMessages,
-  }))
+  const [memoryRetainTailMessages] = useState(initialResolvedMemoryConfig.retainTailMessages)
   const [anthropicBatchModeEnabled, setAnthropicBatchModeEnabled] = useState(false)
   const [developerMode, setDeveloperMode] = useState(false)
 
@@ -196,8 +193,7 @@ export function useChatInterfaceSettings({
           nextMemoryMode === 'prefix_live_blocks'
             ? {
                 mode: nextMemoryMode,
-                sealEveryMessages: memorySettings.sealEveryMessages,
-                retainTailMessages: memorySettings.retainTailMessages,
+                retainTailMessages: memoryRetainTailMessages,
               }
             : null,
         ...buildAgenticTranscriptRecallOverrideModelConfigPatch(
@@ -211,12 +207,7 @@ export function useChatInterfaceSettings({
         toast.error(result.error)
       }
     },
-    [
-      chatId,
-      memorySettings.retainTailMessages,
-      memorySettings.sealEveryMessages,
-      normalizedModelConfig,
-    ],
+    [chatId, memoryRetainTailMessages, normalizedModelConfig],
   )
 
   const selectedApiKey = useMemo(

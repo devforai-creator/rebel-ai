@@ -34,6 +34,25 @@ reviewed and handled on `2026-04-21`:
 - ATR bounded fetch now using projected turn windows instead of full transcript
   reloads:
   `108ae04` `Bound ATR transcript fetches to projected turn windows`
+- canonical backfill and regeneration now respect episodic-RAG-off contracts and
+  do not preserve stale facts:
+  `b35032b` `Respect episodic memory contracts in backfill and regeneration`
+- dead full-facts reads were removed from context building:
+  `fed8fc0` `Drop dead fallback fact reads from context building`
+- legacy transcript fallback was removed from the split chat request contract:
+  `94edee5` `Remove legacy chat transcript fallback`
+- chat request body size and extra-field boundaries were hardened:
+  `9371fcd` `Harden chat request body boundaries`
+- assistant finalization now fails closed on incomplete rollback and no longer
+  supports turn-less regeneration:
+  `c597c79` `Fail closed on assistant finalization rollback`
+- dead post-generation summary trigger timing metrics were removed, and service
+  tests now follow the turn-based regeneration contract:
+  `df6ca94` `Drop dead summary trigger timing metrics`
+- the dead `sealEveryMessages` prefix-memory knob was removed from current
+  config writes and tests while read-side normalization remains backward-
+  compatible with older rows:
+  `uncommitted in current session`
 
 This backlog therefore starts after those fixes, not before them.
 
@@ -69,129 +88,105 @@ small bounded queue with explicit end conditions.
 
 ## Current Risk Map
 
-The remaining review surface is concentrated in two areas:
+The broad route-split and post-generation-split review passes are now closed.
 
-- memory and backfill contract drift
-- chat core path split boundaries that were mechanically improved but not yet
-  deeply re-audited after the same feature burst
+The remaining review surface is narrower and more specific:
+
+- shared sealed-memory integrity in `prefix_live_blocks`
+- canonical frontier detection for malformed summary/meta rows
+- the product-facing repair path when sealed-memory artifacts drift out of
+  canonical shape
+
+The first item has now been handled.
+The remaining two stay active in this backlog, but they are intentionally
+deferred until the product philosophy is clearer about sealed-memory repair,
+fallback, and user-facing recovery.
 
 So the next work should prioritize:
 
-1. contract drift that can mutate or rebuild persisted memory incorrectly
-2. stale-data cases that can resurrect invalid facts later
-3. dead or duplicate read paths on hot request surfaces
-4. deep-audit review of the route and post-generation split only after the
-   memory/backfill issues are either fixed or explicitly downgraded
+1. parking runtime frontier hardening until product doctrine is clearer
+2. parking repair-surface design until product doctrine is clearer
 
 ## Priority Order
 
-### P0-1. Fix Canonical Backfill To Respect Episodic-RAG-Off Chats
+Only the remaining active work stays in this list.
+Earlier `P0-1`, `P0-2`, and `P1-1` findings are closed and recorded above in
+`Already Reviewed And Closed`.
 
-Why first:
-
-- this is a real contract bug, not just code smell
-- the operator backfill path can currently mark healthy chats as broken and
-  purge/rebuild them unnecessarily
-
-Primary scope:
-
-- [scripts/backfill-canonical-memory.js](/home/tmdduq96kr/projects/rebel-ai/scripts/backfill-canonical-memory.js)
-- [scripts/backfill-canonical-memory.test.js](/home/tmdduq96kr/projects/rebel-ai/scripts/backfill-canonical-memory.test.js)
-- [src/lib/chat-summaries/episodic-memory.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat-summaries/episodic-memory.ts)
-
-Done when:
-
-- backfill analysis understands that `chat_facts` are optional when episodic RAG
-  is disabled for the chat owner
-- canonical chunk/meta validation still works as before
-- dry-run output no longer flags `missing_fact_ranges` for healthy
-  episodic-RAG-off chats
-- tests cover both episodic-RAG-on and episodic-RAG-off cases
-
-### P0-2. Prevent Stale Facts During Regeneration When Episodic RAG Is Disabled
+### P2-2. Deferred: Canonical Frontier Helper And Gap Handling Doctrine
 
 Why next:
 
-- this is a persisted stale-data risk
-- disabling fact generation should not leave old fact rows silently attached to
-  regenerated chunk ranges
+- the current helper path trusts highest `end_seq`, not contiguous verified
+  frontier
+- malformed chunk/meta rows can blur the sealed-vs-live boundary even if raw
+  transcript truth is still intact
+- this can be fixed without adding hidden repair logic, request-path LLM work,
+  or silent raw-context expansion
 
 Primary scope:
 
-- [src/lib/chat-summaries/regeneration.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat-summaries/regeneration.ts)
-- [src/lib/chat-summaries/regeneration.test.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat-summaries/regeneration.test.ts)
+- [src/lib/chat-summaries/db-helpers.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat-summaries/db-helpers.ts)
 - [src/lib/chat-summaries/sealed-memory-writer.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat-summaries/sealed-memory-writer.ts)
+- [src/lib/chat-memory/prefix-live-blocks.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat-memory/prefix-live-blocks.ts)
+- [src/app/api/internal/chat-job-runner/execution-context.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/execution-context.ts)
 
 Done when:
 
-- chunk regeneration removes existing facts for the same range even when new
-  fact generation is disabled
-- fact-only regeneration still remains a no-op when episodic RAG is disabled
-- tests prove that disabling episodic RAG cannot preserve stale `chat_facts`
-  rows for regenerated ranges
+- a helper can report contiguous canonical frontier and first missing canonical
+  range for chunk/meta summaries
+- runtime uses validated frontier for prefix visibility cutoff
+- writer/update-work decisions use validated frontier instead of bare
+  `max(end_seq)`
+- the helper stays read-only: no LLM calls, no queueing, no state machine
+- malformed artifact chains are ignored instead of trusting bad sealed summaries
+- runtime does not silently expand raw context to compensate for malformed
+  sealed memory
 
-### P1-1. Remove The Dead Full-Facts Query From Context Building
+Current status:
 
-Why after the two correctness bugs:
+- keep active in the backlog
+- do not implement yet
+- revisit only after the product doctrine is settled on whether malformed
+  sealed memory should be silently ignored, surfaced in memory UI, or paired
+  with an explicit user repair action
 
-- this is not a data-corruption issue, but it is a request-path boundary leak
-- the query currently pays read cost without affecting the built context
-
-Primary scope:
-
-- [src/lib/chat-summaries/context-builder.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat-summaries/context-builder.ts)
-- [src/lib/chat-summaries/types.ts](/home/tmdduq96kr/projects/rebel-ai/src/lib/chat-summaries/types.ts)
-- any related diagnostics tests
-
-Done when:
-
-- `buildContext()` stops loading full fallback fact rows that it does not use
-- diagnostics remain honest about what was actually queried
-- tests lock the intended RAG path without the dead read-side work
-
-### P1-2. Deep Audit The Split Chat Request Path
-
-Why now:
-
-- the route split on `2026-04-20` was probably directionally right
-- it still deserves one focused review pass after the same-day feature burst
-
-Primary scope:
-
-- [src/app/api/chat/route.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/route.ts)
-- [src/app/api/chat/request-contract.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/request-contract.ts)
-- [src/app/api/chat/chat-admission.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/chat-admission.ts)
-- [src/app/api/chat/submit-chat-job.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/submit-chat-job.ts)
-- [src/app/api/chat/job-persistence.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/chat/job-persistence.ts)
-
-Done when:
-
-- one review pass confirms whether request parsing, admission, persistence, and
-  enqueue rollback semantics still match the supported contract
-- any concrete findings are either fixed or explicitly parked with rationale
-- the queue no longer needs an “unreviewed route split” warning
-
-### P1-3. Deep Audit The Post-Generation Split And Best-Effort Follow-ups
+### P2-3. Deferred: User-Triggered Targeted Repair Path
 
 Why last:
 
-- this is lower urgency than the memory correctness items
-- it is still part of the same `2026-04-20` burst and touches durable-vs-best-
-  effort boundaries
+- SQL/manual operator repair is the wrong product surface here
+- full-chat rebuilds are too expensive and too blunt for long chats
+- the right recovery path is explicit, bounded, chat-scoped, and user-driven
 
 Primary scope:
 
-- [src/app/api/internal/chat-job-runner/post-generation-pipeline.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/post-generation-pipeline.ts)
-- [src/app/api/internal/chat-job-runner/assistant-finalization.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/assistant-finalization.ts)
-- [src/app/api/internal/chat-job-runner/post-generation-followups.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/post-generation-followups.ts)
-- [src/app/api/internal/chat-job-runner/post-generation-metadata.ts](/home/tmdduq96kr/projects/rebel-ai/src/app/api/internal/chat-job-runner/post-generation-metadata.ts)
+- the existing memory/chunk UI surface that should expose repair when malformed
+  sealed memory is detected
+- a user-triggered action path for targeted canonical repair
+- regeneration helpers for repairing missing chunk ranges and affected parent
+  meta ranges only
 
 Done when:
 
-- one review pass confirms that best-effort translation and summary follow-ups
-  cannot blur durable success semantics
-- any concrete findings are either fixed or explicitly parked with rationale
-- the queue no longer needs an “unreviewed post-generation split” warning
+- a user can explicitly request repair for a specific malformed chunk or
+  affected parent range without leaving the product
+- repair is targeted to missing canonical ranges and affected parent summaries,
+  not a full sealed-memory rebuild
+- repair is rate-limited and deduped per chat
+- request-time generation stays free of hidden repair LLM calls
+- the main chat UX does not rely on global degraded banners or silent fallback;
+  repair is offered where the user already inspects memory state
+- the resulting UX matches the real contract: raw transcript is source of
+  truth, sealed memory is repairable cache that may simply be ignored when
+  malformed
+
+Current status:
+
+- keep active in the backlog
+- do not implement yet
+- revisit only after `P2-2` doctrine is settled, so repair UX is not designed
+  against the wrong fallback/failure policy
 
 ## Explicitly Parked
 
@@ -203,13 +198,21 @@ Do not pull these into this backlog unless a concrete bug points there:
 - debug-modal presentation cleanup by itself
 - a broad long-term-memory redesign
 
+Also explicitly out of scope for this queue unless a new concrete bug changes
+the tradeoff:
+
+- hidden request-path auto-repair of malformed sealed memory
+- automatic full-chat sealed-memory rebuilds for long conversations
+- silent raw-context expansion as fallback for malformed sealed memory
+- SQL-only/manual-only recovery as the primary product repair path
+
 ## End Condition
 
 This queue is done when:
 
 1. the known memory/backfill findings are fixed or intentionally downgraded
-2. the `2026-04-20` chat route split and post-generation split each receive one
-   explicit review pass
+2. the remaining shared sealed-memory integrity items are fixed or explicitly
+   downgraded
 3. the repo no longer needs a vague “April 20 work may still have blurry
    boundaries” warning
 

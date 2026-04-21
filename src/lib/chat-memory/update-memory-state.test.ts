@@ -418,34 +418,6 @@ describe('chat memory orchestration', () => {
     expect(hoistedMocks.getMessageCountMock).not.toHaveBeenCalled()
   })
 
-  it('warns and stops when prefix_live_blocks config cannot seal any messages', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await updateMemoryState({
-      supabase: createMemorySupabaseStub(),
-      chatId: 'chat-1',
-      userId: 'user-1',
-      model: {} as never,
-      provider: 'openai',
-      modelName: 'gpt-4o-mini',
-      modelConfig: {
-        memory: {
-          mode: 'prefix_live_blocks',
-          sealEveryMessages: 4,
-          retainTailMessages: 4,
-        },
-      },
-    })
-
-    expect(hoistedMocks.getMessageCountMock).not.toHaveBeenCalled()
-    expect(warnSpy).toHaveBeenCalledWith('[chat-memory] Invalid prefix_live_blocks config', {
-      chatId: 'chat-1',
-      userId: 'user-1',
-      sealEveryMessages: 4,
-      retainTailMessages: 4,
-    })
-  })
-
   it('returns early when the projected conversation size cannot be determined', async () => {
     hoistedMocks.getMessageCountMock.mockResolvedValue(null)
 
@@ -459,7 +431,6 @@ describe('chat memory orchestration', () => {
       modelConfig: {
         memory: {
           mode: 'prefix_live_blocks',
-          sealEveryMessages: 6,
           retainTailMessages: 2,
         },
       },
@@ -493,7 +464,6 @@ describe('chat memory orchestration', () => {
       modelConfig: {
         memory: {
           mode: 'prefix_live_blocks',
-          sealEveryMessages: 6,
           retainTailMessages: 2,
         },
       },
@@ -524,7 +494,6 @@ describe('chat memory orchestration', () => {
       modelConfig: {
         memory: {
           mode: 'prefix_live_blocks',
-          sealEveryMessages: 6,
           retainTailMessages: 2,
         },
       },

@@ -2,6 +2,9 @@
 
 Historical note: this document captures the first implementation/design pass for switchable memory modes.
 For the current top-level doctrine, use [LONG_TERM_MEMORY_STRATEGY.md](./LONG_TERM_MEMORY_STRATEGY.md).
+The current implementation no longer exposes `sealEveryMessages` as a live
+product knob. Canonical chunk sizing is fixed, and only
+`retainTailMessages` remains part of the persisted prefix-memory config.
 
 This document defines the first implementation of switchable chat memory modes in RebelAI.
 
@@ -56,10 +59,13 @@ This mode is optimized for providers that benefit from stable prompt prefixes, e
 
 V1 uses simple fixed numbers on purpose.
 
-- `sealEveryMessages`: `100`
+- canonical sealing hierarchy: fixed `10`-message chunks and `100`-message
+  meta recaps
 - `retainTailMessages`: `4`
 
-These values are configuration fields, but V1 should treat them as conservative fixed defaults rather than adding token-based adaptation.
+These values were intended as conservative defaults rather than token-adaptive
+controls. In the current implementation, only `retainTailMessages` remains a
+persisted chat-level setting.
 
 ## Configuration
 
@@ -70,7 +76,6 @@ type ChatMemoryMode = 'summary_window' | 'prefix_live_blocks'
 
 type ChatMemoryConfig = {
   mode: ChatMemoryMode
-  sealEveryMessages?: number
   retainTailMessages?: number
 }
 
@@ -151,10 +156,11 @@ Mode B exists for general architecture reasons, but Anthropic is the primary pro
 V1 sealing rules:
 
 1. Live block accumulates raw messages.
-2. If live block size is below `sealEveryMessages`, do nothing.
-3. If live block size reaches `sealEveryMessages`, seal the oldest portion of the live block.
-4. Retain the last `retainTailMessages` raw messages as the next live block seed.
-5. Generate summaries/facts for the sealed range only.
+2. Canonical summaries are generated in fixed `10`-message chunk ranges once the
+   sealed prefix advances far enough beyond the retained tail.
+3. Retain the last `retainTailMessages` raw messages as the next live block
+   seed.
+4. Generate summaries/facts for the newly sealed canonical range only.
 
 Expected result:
 

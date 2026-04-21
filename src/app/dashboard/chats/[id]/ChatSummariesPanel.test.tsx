@@ -63,7 +63,6 @@ describe('ChatSummariesPanel memory stats copy', () => {
   it('uses canonical chunk checkpoints for summary_window', () => {
     const memoryConfig = createMemoryConfig({
       mode: 'summary_window',
-      sealEveryMessages: 100,
       retainTailMessages: 4,
     })
 
@@ -76,7 +75,6 @@ describe('ChatSummariesPanel memory stats copy', () => {
   it('uses canonical chunk checkpoints for prefix mode instead of legacy 96-message blocks', () => {
     const memoryConfig = createMemoryConfig({
       mode: 'prefix_live_blocks',
-      sealEveryMessages: 100,
       retainTailMessages: 4,
     })
 
@@ -89,7 +87,6 @@ describe('ChatSummariesPanel memory stats copy', () => {
   it('describes prefix mode using canonical chunk generation language', () => {
     const memoryConfig = createMemoryConfig({
       mode: 'prefix_live_blocks',
-      sealEveryMessages: 100,
       retainTailMessages: 4,
     })
 
@@ -111,7 +108,6 @@ describe('ChatSummariesPanel memory stats copy', () => {
         latestSequence={104}
         memoryConfig={createMemoryConfig({
           mode: 'prefix_live_blocks',
-          sealEveryMessages: 100,
           retainTailMessages: 4,
         })}
       />,

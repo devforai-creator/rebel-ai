@@ -608,6 +608,67 @@ describe('requestProviderStage', () => {
     })
   })
 
+  it('skips google explicit cache creation when compatibility retry disables it', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const payload = buildPayload({
+      provider: 'google',
+      modelName: 'gemini-2.5-flash',
+    })
+    const context = buildContext({
+      recentMessages: [
+        { role: 'user', content: 'Older context' },
+        { role: 'user', content: 'Last message' },
+      ],
+      debugMetrics: {},
+    })
+
+    resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
+    buildStreamPayloadPlanMock.mockReturnValueOnce({
+      strategy: 'default',
+      streamRequest: {
+        system: 'FINAL',
+        messages: [
+          { role: 'user', content: 'Older context' },
+          { role: 'user', content: 'Last message' },
+        ],
+      },
+      actualPayload: {
+        provider: 'google',
+        strategy: 'default',
+        systemMessages: [{ role: 'system', content: 'FINAL' }],
+        conversationMessages: [
+          { role: 'user', content: 'Older context' },
+          { role: 'user', content: 'Last message' },
+        ],
+      },
+    })
+
+    const result = await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-google-retry',
+      payload,
+      context,
+      timings: {},
+      disableGoogleExplicitCache: true,
+    })
+
+    expect(createGoogleCacheMock).not.toHaveBeenCalled()
+    expect(buildStreamPayloadPlanMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        googleCacheResult: null,
+      }),
+    )
+    expect(result).toMatchObject({
+      status: 'streaming',
+      googleExplicitCacheEnabled: false,
+      googleCacheDecision: { enabled: true, minTokens: 1024 },
+      googleCacheResult: null,
+    })
+    expect(context.debugMetrics).toMatchObject({
+      google_explicit_cache_disabled_for_compatibility_retry: true,
+    })
+  })
+
   it('submits anthropic batch jobs without calling streamText', async () => {
     const { requestProviderStage } = await import('./provider-request-stage')
     const payload = buildPayload({

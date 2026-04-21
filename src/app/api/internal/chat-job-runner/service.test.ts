@@ -1124,6 +1124,136 @@ describe('processChatJobs', () => {
     )
   })
 
+  it('retries Google explicit-cache requests without cache after a tool conflict', async () => {
+    const supabase = createChatJobRunnerSupabaseMock({
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    decryptSecretMock.mockResolvedValue('sk-test')
+    parseChatJobPayloadMock.mockReturnValue(
+      buildValidPayload({
+        requestId: 'req-google-cache-retry',
+        provider: 'google',
+        modelName: 'gemini-1.5-flash',
+      }),
+    )
+    buildMemoryPlanMock.mockResolvedValueOnce({
+      mode: 'summary_window',
+      promptBlocks: [
+        {
+          role: 'system',
+          content: 'CTX',
+          cachePreference: 'prefer-cache',
+          stability: 'static',
+        },
+        {
+          role: 'assistant',
+          content: 'previous turn',
+          cachePreference: 'avoid-cache',
+          stability: 'live',
+        },
+        {
+          role: 'user',
+          content: 'latest user message',
+          cachePreference: 'avoid-cache',
+          stability: 'live',
+        },
+      ],
+      fallbackSystemPrompt: 'CTX',
+      fallbackMessages: [
+        { role: 'assistant', content: 'previous turn' },
+        { role: 'user', content: 'latest user message' },
+      ],
+      staticSystemPrompt: 'CTX',
+      dynamicContext: null,
+      ragInfo: null,
+    })
+    resolveGoogleCacheDecisionMock.mockReturnValue({ enabled: true, minTokens: 1024 })
+    createGoogleCacheMock.mockResolvedValueOnce({
+      success: true,
+      cacheName: 'cache-1',
+      cachedTokenCount: 777,
+    })
+    streamTextMock
+      .mockResolvedValueOnce({
+        textStream: [],
+        fullStream: (async function* () {
+          yield {
+            type: 'error',
+            error: {
+              message: 'cached content is not compatible with function calling',
+              code: 'INVALID_ARGUMENT',
+            },
+          }
+        })(),
+        finishReason: Promise.resolve('error'),
+        providerMetadata: Promise.resolve({}),
+        usage: Promise.resolve({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }),
+      })
+      .mockResolvedValueOnce({
+        textStream: ['retried answer'],
+        finishReason: Promise.resolve('stop'),
+        providerMetadata: Promise.resolve({}),
+        usage: Promise.resolve({ inputTokens: 20, outputTokens: 10, totalTokens: 30 }),
+      })
+    claimPendingJobMock.mockResolvedValueOnce({
+      id: 'job-google-cache-retry',
+      payload: { ok: true },
+    })
+    claimPendingJobMock.mockResolvedValueOnce(null)
+
+    const { processChatJobs } = await import('./service')
+    const result = await processChatJobs(1)
+
+    expect(result.results[0]).toMatchObject({
+      jobId: 'job-google-cache-retry',
+      status: 'success',
+    })
+    expect(createGoogleCacheMock).toHaveBeenCalledTimes(1)
+    expect(streamTextMock).toHaveBeenCalledTimes(2)
+
+    const firstCall = streamTextMock.mock.calls[0]?.[0] as {
+      system?: string
+      messages?: Array<{ role: string; content: string }>
+      providerOptions?: Record<string, unknown>
+    }
+    const secondCall = streamTextMock.mock.calls[1]?.[0] as {
+      system?: string
+      messages?: Array<{ role: string; content: string }>
+      providerOptions?: Record<string, unknown>
+    }
+
+    expect(firstCall.messages).toEqual([{ role: 'user', content: 'latest user message' }])
+    expect((firstCall.providerOptions?.google as { cachedContent?: string })?.cachedContent).toBe(
+      'cache-1',
+    )
+    expect(secondCall.system).toBe('CTX')
+    expect(secondCall.messages).toEqual([
+      { role: 'assistant', content: 'previous turn' },
+      { role: 'user', content: 'latest user message' },
+    ])
+    expect(
+      (secondCall.providerOptions?.google as { cachedContent?: string } | undefined)?.cachedContent,
+    ).toBeUndefined()
+
+    const latest = supabase.messages[supabase.messages.length - 1]
+    expect(latest).toMatchObject({
+      role: 'assistant',
+      content: 'retried answer',
+    })
+    expect(latest.debug_info).toMatchObject({
+      googleCache: {
+        featureEnabled: false,
+        cacheCreated: false,
+        compatibilityRetryAttempted: true,
+        compatibilityRetrySucceeded: true,
+        compatibilityRetryReason: 'cached content is not compatible with function calling',
+        disabledForCompatibilityRetry: true,
+      },
+    })
+  })
+
   it('marks job as error when model returns empty text without content filter', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       rpc: { get_decrypted_secret: () => decryptSecretMock() },

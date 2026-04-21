@@ -212,3 +212,28 @@ export function normalizeProviderError({
     recognized: false,
   }
 }
+
+export function isGoogleExplicitCacheToolConflict(error: unknown): boolean {
+  const parsed = parseProviderError(error)
+  const combined = [parsed.message, parsed.code, parsed.type].filter(Boolean).join(' ')
+
+  const hasCacheSignal = includesAny(combined, [
+    'cached content',
+    'cachedcontent',
+    'cached_content',
+    'cached-content',
+    'context caching',
+  ])
+  const hasToolSignal = includesAny(combined, [
+    'function call',
+    'function calling',
+    'function_calling',
+    'function-calling',
+    'tool call',
+    'tool use',
+    'tool calling',
+    'tools',
+  ])
+
+  return hasCacheSignal && hasToolSignal
+}

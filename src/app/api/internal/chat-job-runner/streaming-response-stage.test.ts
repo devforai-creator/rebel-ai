@@ -4,6 +4,7 @@ const broadcastAssistantStreamSnapshotMock = vi.fn()
 const broadcastAssistantStreamErrorMock = vi.fn()
 const evaluateContentFilterMock = vi.fn()
 const normalizeProviderErrorMock = vi.fn()
+const isGoogleExplicitCacheToolConflictMock = vi.fn()
 
 vi.mock('./assistant-stream-broadcaster', () => ({
   broadcastAssistantStreamSnapshot: (...args: unknown[]) =>
@@ -17,6 +18,8 @@ vi.mock('./content-filter', () => ({
 
 vi.mock('@/lib/llm/provider-error', () => ({
   normalizeProviderError: (...args: unknown[]) => normalizeProviderErrorMock(...args),
+  isGoogleExplicitCacheToolConflict: (...args: unknown[]) =>
+    isGoogleExplicitCacheToolConflictMock(...args),
 }))
 
 async function* textDeltaStream(parts: string[]) {
@@ -44,11 +47,13 @@ describe('consumeStreamingResponseStage', () => {
     broadcastAssistantStreamErrorMock.mockReset()
     evaluateContentFilterMock.mockReset()
     normalizeProviderErrorMock.mockReset()
+    isGoogleExplicitCacheToolConflictMock.mockReset()
 
     broadcastAssistantStreamSnapshotMock.mockResolvedValue(undefined)
     broadcastAssistantStreamErrorMock.mockResolvedValue(undefined)
     evaluateContentFilterMock.mockReturnValue({ blocked: false, categories: [] })
     normalizeProviderErrorMock.mockReturnValue({ userMessage: 'Friendly stream error' })
+    isGoogleExplicitCacheToolConflictMock.mockReturnValue(false)
   })
 
   it('streams snapshots and returns usage metadata for a successful response', async () => {
@@ -209,6 +214,55 @@ describe('consumeStreamingResponseStage', () => {
         error: 'Friendly stream error',
       }),
     )
+  })
+
+  it('suppresses the first Google stream error broadcast for explicit-cache tool conflicts', async () => {
+    const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
+
+    normalizeProviderErrorMock.mockReturnValueOnce({
+      category: 'unknown',
+      userMessage: 'Friendly stream error',
+      technicalMessage: 'cached content is not compatible with function calling',
+      providerCode: 'INVALID_ARGUMENT',
+      retryable: false,
+      recognized: false,
+    })
+    isGoogleExplicitCacheToolConflictMock.mockReturnValueOnce(true)
+
+    await expect(
+      consumeStreamingResponseStage({
+        supabase: {} as never,
+        chatId: 'chat-1',
+        jobId: 'job-google-cache-tool-conflict',
+        stream: {
+          textStream: textDeltaStream([]),
+          fullStream: fullDeltaStream([
+            {
+              type: 'error',
+              error: {
+                message: 'cached content is not compatible with function calling',
+                code: 'INVALID_ARGUMENT',
+              },
+            },
+          ]),
+          finishReason: Promise.resolve('error'),
+          providerMetadata: Promise.resolve({}),
+          usage: Promise.resolve(null),
+        } as never,
+        provider: 'google',
+        regenerateAssistantMessageId: null,
+        allowGoogleExplicitCacheRecovery: true,
+      }),
+    ).rejects.toMatchObject({
+      message: 'Friendly stream error',
+      lifecycleStage: 'provider_stream_error',
+      details: expect.objectContaining({
+        streamedTextLength: 0,
+        googleExplicitCacheToolConflict: true,
+      }),
+    })
+
+    expect(broadcastAssistantStreamErrorMock).not.toHaveBeenCalled()
   })
 
   it('treats blocked empty responses as content-filter failures', async () => {

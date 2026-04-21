@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeProviderError } from './provider-error'
+import { isGoogleExplicitCacheToolConflict, normalizeProviderError } from './provider-error'
 
 describe('normalizeProviderError', () => {
   it('recognizes prohibited Gemini content blocks from parsed response bodies', () => {
@@ -135,5 +135,23 @@ describe('normalizeProviderError', () => {
       retryable: false,
       recognized: false,
     })
+  })
+
+  it('detects Google explicit-cache conflicts with tool use', () => {
+    expect(
+      isGoogleExplicitCacheToolConflict({
+        message: 'cached content is not compatible with function calling',
+        code: 'INVALID_ARGUMENT',
+      }),
+    ).toBe(true)
+  })
+
+  it('does not over-match ordinary Google cache failures', () => {
+    expect(
+      isGoogleExplicitCacheToolConflict({
+        message: 'cached content was not found',
+        code: 'NOT_FOUND',
+      }),
+    ).toBe(false)
   })
 })

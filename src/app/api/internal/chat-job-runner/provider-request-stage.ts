@@ -52,6 +52,7 @@ export async function requestProviderStage({
   context,
   timings,
   logDebug = () => undefined,
+  disableGoogleExplicitCache = false,
 }: {
   supabase: AdminSupabaseClient
   jobId: string
@@ -59,6 +60,7 @@ export async function requestProviderStage({
   context: LoadedChatJobExecutionContext
   timings: Record<string, number>
   logDebug?: (...args: unknown[]) => void
+  disableGoogleExplicitCache?: boolean
 }): Promise<ProviderRequestStageResult> {
   const { provider, modelName } = payload
   const {
@@ -119,7 +121,10 @@ export async function requestProviderStage({
         })
       : null
 
-  const googleExplicitCacheEnabled = isGoogleExplicitCacheEnabled()
+  debugMetrics['google_explicit_cache_disabled_for_compatibility_retry'] =
+    provider === 'google' ? disableGoogleExplicitCache : null
+
+  const googleExplicitCacheEnabled = !disableGoogleExplicitCache && isGoogleExplicitCacheEnabled()
   let googleCacheResult: CreateGoogleCacheResult | null = null
   if (
     provider === 'google' &&
@@ -153,6 +158,13 @@ export async function requestProviderStage({
         },
       )
     }
+  }
+
+  if (provider === 'google' && disableGoogleExplicitCache) {
+    logDebug('[Chat Job Runner] Google explicit cache disabled for compatibility retry', {
+      jobId,
+      modelName,
+    })
   }
 
   const model = buildLanguageModel({

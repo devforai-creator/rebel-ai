@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { streamText } from 'ai'
-import { normalizeProviderError } from '@/lib/llm/provider-error'
+import { isGoogleExplicitCacheToolConflict, normalizeProviderError } from '@/lib/llm/provider-error'
 import {
   CHAT_JOB_LIFECYCLE_STAGE_CONTENT_FILTERED,
   CHAT_JOB_LIFECYCLE_STAGE_EMPTY_RESPONSE,
@@ -18,6 +18,34 @@ import type { UsageMetrics } from './usage-debug'
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type ProviderTextStream = Awaited<ReturnType<typeof streamText>>
 type DebugMetricValue = string | number | boolean | null
+
+function buildProviderStreamExecutionError({
+  provider,
+  error,
+  streamedTextLength,
+}: {
+  provider: LlmProvider
+  error: unknown
+  streamedTextLength: number
+}) {
+  const normalizedError = normalizeProviderError({
+    provider,
+    error,
+  })
+
+  return new ChatJobExecutionError(
+    normalizedError.userMessage,
+    CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
+    {
+      normalizedProviderError: normalizedError,
+      streamedTextLength,
+      googleExplicitCacheToolConflict:
+        provider === 'google' &&
+        streamedTextLength === 0 &&
+        isGoogleExplicitCacheToolConflict(error),
+    },
+  )
+}
 
 export type StreamingResponseStageResult = {
   fullText: string
@@ -129,14 +157,11 @@ async function collectTextFromStreamWithSnapshots({
         }
 
         if (part.type === 'error') {
-          const normalizedError = normalizeProviderError({
+          throw buildProviderStreamExecutionError({
             provider,
             error: part.error,
+            streamedTextLength: fullText.length,
           })
-          throw new ChatJobExecutionError(
-            normalizedError.userMessage,
-            CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
-          )
         }
       }
     } else {
@@ -155,14 +180,11 @@ async function collectTextFromStreamWithSnapshots({
       throw error
     }
 
-    const normalizedError = normalizeProviderError({
+    throw buildProviderStreamExecutionError({
       provider,
       error,
+      streamedTextLength: fullText.length,
     })
-    throw new ChatJobExecutionError(
-      normalizedError.userMessage,
-      CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
-    )
   }
 
   if (fullText) {
@@ -184,6 +206,7 @@ export async function consumeStreamingResponseStage({
   logDebug = () => undefined,
   updateIntervalMs,
   now,
+  allowGoogleExplicitCacheRecovery,
 }: {
   supabase: AdminSupabaseClient
   chatId: string
@@ -195,6 +218,7 @@ export async function consumeStreamingResponseStage({
   logDebug?: (...args: unknown[]) => void
   updateIntervalMs?: number
   now?: () => number
+  allowGoogleExplicitCacheRecovery?: boolean
 }): Promise<StreamingResponseStageResult> {
   let fullText = ''
 
@@ -218,13 +242,21 @@ export async function consumeStreamingResponseStage({
             error instanceof Error ? error.message : String(error),
             CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
           )
-    await broadcastAssistantStreamError({
-      supabase,
-      chatId,
-      jobId,
-      error: streamError.message,
-      regenerateAssistantMessageId,
-    })
+    const shouldSuppressBroadcast =
+      allowGoogleExplicitCacheRecovery === true &&
+      streamError.lifecycleStage === CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR &&
+      streamError.details?.googleExplicitCacheToolConflict === true &&
+      (streamError.details?.streamedTextLength ?? 0) === 0
+
+    if (!shouldSuppressBroadcast) {
+      await broadcastAssistantStreamError({
+        supabase,
+        chatId,
+        jobId,
+        error: streamError.message,
+        regenerateAssistantMessageId,
+      })
+    }
     throw streamError
   }
 

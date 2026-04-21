@@ -133,6 +133,10 @@ export interface DebugInfo {
     error?: string | null
     minTokens?: number | null
     meetsMinTokens?: boolean
+    compatibilityRetryAttempted?: boolean | null
+    compatibilityRetrySucceeded?: boolean | null
+    compatibilityRetryReason?: string | null
+    disabledForCompatibilityRetry?: boolean | null
   }
   actualPayload?: {
     provider: string

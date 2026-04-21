@@ -5,6 +5,7 @@ import { resolveInternalApiOrigin } from '@/lib/internal-api-origin'
 import {
   CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT,
   CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING,
+  CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
   CHAT_JOB_LIFECYCLE_STAGE_REQUESTING_PROVIDER,
   CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE,
   type ChatJobLifecycleStage,
@@ -46,6 +47,21 @@ function formatMetricsForDebug(
         typeof value === 'number' ? Math.round(value * 100) / 100 : value,
       ])
       .sort(([a], [b]) => String(a).localeCompare(String(b))),
+  )
+}
+
+function shouldRetryGoogleExplicitCacheCompatibility(
+  provider: string,
+  error: unknown,
+  actualPayload: { strategy?: string } | null,
+): error is ChatJobExecutionError {
+  return (
+    provider === 'google' &&
+    error instanceof ChatJobExecutionError &&
+    error.lifecycleStage === CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR &&
+    actualPayload?.strategy === 'google-explicit-cache' &&
+    error.details?.googleExplicitCacheToolConflict === true &&
+    (error.details?.streamedTextLength ?? 0) === 0
   )
 }
 
@@ -178,42 +194,54 @@ async function executeJob({
       timings,
     })
 
+    debugMetrics['google_explicit_cache_compatibility_retry_attempted'] =
+      provider === 'google' ? false : null
+    debugMetrics['google_explicit_cache_compatibility_retry_succeeded'] =
+      provider === 'google' ? false : null
+    debugMetrics['google_explicit_cache_compatibility_retry_reason'] = null
+
+    const executionContext = {
+      apiKeyData,
+      decryptedApiKey,
+      generationTranscript,
+      finalSystemPrompt,
+      staticSystemPrompt,
+      dynamicContext,
+      dynamicContextTokens,
+      promptBlocks,
+      recentMessages,
+      ragInfo,
+      agenticTranscriptRecall,
+      agenticTranscriptRecallSourceHints,
+      agenticTranscriptRecallSourceMap,
+      bilingualEnabled,
+      anthropicConversationMessages,
+      anthropicPlaceholderAdded,
+      totalInputTokens,
+      staticPromptTokens,
+      debugMetrics,
+    }
+
+    const requestProvider = (disableGoogleExplicitCache: boolean = false) =>
+      requestProviderStage({
+        supabase,
+        jobId,
+        payload,
+        context: executionContext,
+        timings,
+        logDebug: logChatJobRunnerDebug,
+        disableGoogleExplicitCache,
+      })
+
     await markStage(CHAT_JOB_LIFECYCLE_STAGE_REQUESTING_PROVIDER)
     stepStart = performance.now()
-    const providerRequest = await requestProviderStage({
-      supabase,
-      jobId,
-      payload,
-      context: {
-        apiKeyData,
-        decryptedApiKey,
-        generationTranscript,
-        finalSystemPrompt,
-        staticSystemPrompt,
-        dynamicContext,
-        dynamicContextTokens,
-        promptBlocks,
-        recentMessages,
-        ragInfo,
-        agenticTranscriptRecall,
-        agenticTranscriptRecallSourceHints,
-        agenticTranscriptRecallSourceMap,
-        bilingualEnabled,
-        anthropicConversationMessages,
-        anthropicPlaceholderAdded,
-        totalInputTokens,
-        staticPromptTokens,
-        debugMetrics,
-      },
-      timings,
-      logDebug: logChatJobRunnerDebug,
-    })
+    let providerRequest = await requestProvider()
 
     if (providerRequest.status === 'processing') {
       return { status: 'processing' }
     }
 
-    const {
+    let {
       stream,
       promptCache,
       anthropicCache,
@@ -224,16 +252,67 @@ async function executeJob({
     } = providerRequest
 
     await markStage(CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE)
-    const streamingResponse = await consumeStreamingResponseStage({
-      supabase,
-      chatId,
-      jobId,
-      stream,
-      provider,
-      regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
-      debugMetrics,
-      logDebug: logChatJobRunnerDebug,
-    })
+    let streamingResponse: Awaited<ReturnType<typeof consumeStreamingResponseStage>>
+    try {
+      streamingResponse = await consumeStreamingResponseStage({
+        supabase,
+        chatId,
+        jobId,
+        stream,
+        provider,
+        regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
+        debugMetrics,
+        logDebug: logChatJobRunnerDebug,
+        allowGoogleExplicitCacheRecovery: actualPayload?.strategy === 'google-explicit-cache',
+      })
+    } catch (error) {
+      if (!shouldRetryGoogleExplicitCacheCompatibility(provider, error, actualPayload)) {
+        throw error
+      }
+
+      debugMetrics['google_explicit_cache_compatibility_retry_attempted'] = true
+      debugMetrics['google_explicit_cache_compatibility_retry_reason'] =
+        error.details?.normalizedProviderError?.technicalMessage ?? error.message
+
+      logChatJobRunnerDebug(
+        '[Chat Job Runner] Retrying Google request without explicit cache after tool conflict',
+        {
+          chatId,
+          requestId: payload.requestId,
+          reason: error.details?.normalizedProviderError?.technicalMessage ?? error.message,
+        },
+      )
+
+      await markStage(CHAT_JOB_LIFECYCLE_STAGE_REQUESTING_PROVIDER)
+      providerRequest = await requestProvider(true)
+
+      if (providerRequest.status === 'processing') {
+        return { status: 'processing' }
+      }
+
+      ;({
+        stream,
+        promptCache,
+        anthropicCache,
+        googleExplicitCacheEnabled,
+        googleCacheDecision,
+        googleCacheResult,
+        actualPayload,
+      } = providerRequest)
+
+      await markStage(CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE)
+      streamingResponse = await consumeStreamingResponseStage({
+        supabase,
+        chatId,
+        jobId,
+        stream,
+        provider,
+        regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
+        debugMetrics,
+        logDebug: logChatJobRunnerDebug,
+      })
+      debugMetrics['google_explicit_cache_compatibility_retry_succeeded'] = true
+    }
     timings['8_llm_generation'] = performance.now() - stepStart
 
     await markStage(CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING)

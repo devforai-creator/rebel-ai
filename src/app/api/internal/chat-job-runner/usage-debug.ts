@@ -449,6 +449,22 @@ export function buildChatDebugInfo(args: BuildChatDebugInfoArgs): Record<string,
       error: googleCacheResult && !googleCacheResult.success ? googleCacheResult.error : null,
       minTokens: googleCacheDecision?.minTokens ?? null,
       meetsMinTokens: googleCacheDecision?.enabled ?? false,
+      compatibilityRetryAttempted: readBooleanMetric(
+        debugMetrics,
+        'google_explicit_cache_compatibility_retry_attempted',
+      ),
+      compatibilityRetrySucceeded: readBooleanMetric(
+        debugMetrics,
+        'google_explicit_cache_compatibility_retry_succeeded',
+      ),
+      compatibilityRetryReason: readStringMetric(
+        debugMetrics,
+        'google_explicit_cache_compatibility_retry_reason',
+      ),
+      disabledForCompatibilityRetry: readBooleanMetric(
+        debugMetrics,
+        'google_explicit_cache_disabled_for_compatibility_retry',
+      ),
     },
     rawResponse,
     processedResponse,

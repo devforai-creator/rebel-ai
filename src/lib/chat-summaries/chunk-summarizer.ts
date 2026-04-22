@@ -187,6 +187,98 @@ async function loadChunkTranscriptMessages({
   return transcript.slice(startSeq - 1, endSeq)
 }
 
+async function backfillMissingChunkFacts({
+  supabase,
+  chatId,
+  userId,
+  model,
+  provider,
+  modelName,
+  factPrompt,
+  latestCanonicalChunkEnd,
+  transcriptMessages,
+}: {
+  supabase: ProcessChunkOptions['supabase']
+  chatId: string
+  userId: string
+  model: ProcessChunkOptions['model']
+  provider: ProcessChunkOptions['provider']
+  modelName: ProcessChunkOptions['modelName']
+  factPrompt: string
+  latestCanonicalChunkEnd: number
+  transcriptMessages?: MessageTranscriptRow[]
+}): Promise<void> {
+  if (latestCanonicalChunkEnd < CHUNK_SIZE) {
+    return
+  }
+
+  const [{ data: chunkRows, error: chunkError }, { data: factRows, error: factError }] =
+    await Promise.all([
+      supabase
+        .from('chat_summaries')
+        .select<'start_seq, end_seq'>('start_seq, end_seq')
+        .eq('chat_id', chatId)
+        .eq('level', SUMMARY_LEVEL_CHUNK)
+        .lte('end_seq', latestCanonicalChunkEnd)
+        .order('start_seq', { ascending: true }),
+      supabase
+        .from('chat_facts')
+        .select<'start_seq, end_seq'>('start_seq, end_seq')
+        .eq('chat_id', chatId)
+        .lte('end_seq', latestCanonicalChunkEnd)
+        .order('start_seq', { ascending: true }),
+    ])
+
+  if (chunkError) {
+    throw new Error(`Failed to load chunk summaries for fact backfill: ${chunkError.message}`)
+  }
+
+  if (factError) {
+    throw new Error(`Failed to load existing facts for fact backfill: ${factError.message}`)
+  }
+
+  const factKeys = new Set(
+    ((factRows ?? []) as Array<{ start_seq: number; end_seq: number }>)
+      .filter((row) => row.end_seq === row.start_seq + CHUNK_SIZE - 1)
+      .map((row) => `${row.start_seq}-${row.end_seq}`),
+  )
+
+  const missingFactRanges = ((chunkRows ?? []) as Array<{ start_seq: number; end_seq: number }>)
+    .filter((row) => row.end_seq === row.start_seq + CHUNK_SIZE - 1)
+    .filter((row) => !factKeys.has(`${row.start_seq}-${row.end_seq}`))
+
+  if (missingFactRanges.length === 0) {
+    return
+  }
+
+  const resolvedTranscriptMessages =
+    transcriptMessages ??
+    (
+      await loadProjectedConversationMessages({
+        supabase,
+        chatId,
+      })
+    ).map((message) => ({
+      role: message.role,
+      content: message.content,
+    }))
+
+  for (const range of missingFactRanges) {
+    await createChunkFacts({
+      supabase,
+      chatId,
+      userId,
+      model,
+      provider,
+      modelName,
+      startSeq: range.start_seq,
+      endSeq: range.end_seq,
+      factPrompt,
+      transcriptMessages: resolvedTranscriptMessages,
+    })
+  }
+}
+
 /**
  * Create a chunk summary for a message range
  */
@@ -503,8 +595,21 @@ export async function processChunkSummaries({
   enableFactGeneration = true,
 }: ProcessChunkOptions): Promise<void> {
   const boundaries = calculateChunkBoundaries(totalMessages, previousEnd, CHUNK_SIZE)
+  const latestCanonicalChunkEnd = totalMessages - CHUNK_SIZE
 
   if (boundaries.length === 0) {
+    if (enableFactGeneration) {
+      await backfillMissingChunkFacts({
+        supabase,
+        chatId,
+        userId,
+        model,
+        provider,
+        modelName,
+        factPrompt,
+        latestCanonicalChunkEnd,
+      })
+    }
     return
   }
 
@@ -566,9 +671,22 @@ export async function processChunkSummaries({
       if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
         continue
       } else {
-        console.error('Failed to create chunk summary:', error)
-        return
+        throw error
       }
     }
+  }
+
+  if (enableFactGeneration) {
+    await backfillMissingChunkFacts({
+      supabase,
+      chatId,
+      userId,
+      model,
+      provider,
+      modelName,
+      factPrompt,
+      latestCanonicalChunkEnd,
+      transcriptMessages,
+    })
   }
 }

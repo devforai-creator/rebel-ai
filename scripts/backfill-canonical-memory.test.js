@@ -141,6 +141,24 @@ describe('backfill-canonical-memory helpers', () => {
     expect(analysis.missingChunkRanges).toEqual([{ start_seq: 1, end_seq: 10 }])
   })
 
+  it('does not over-report missing summary_window chunks beyond the live-tail cutoff', () => {
+    const analysis = analyzeChatMemoryRows({
+      summaryRows: [{ level: 0, start_seq: 1, end_seq: 10 }],
+      factRows: [],
+      totalMessages: 24,
+      memoryConfig: resolveChatMemoryConfig({
+        memory: {
+          mode: 'summary_window',
+        },
+      }),
+      episodicMemoryEnabled: false,
+    })
+
+    expect(analysis.needsRebuild).toBe(false)
+    expect(analysis.issues).toEqual([])
+    expect(analysis.missingChunkRanges).toEqual([])
+  })
+
   it('flags missing artifacts when a chat is large enough but has no rows at all', () => {
     const analysis = analyzeChatMemoryRows({
       summaryRows: [],

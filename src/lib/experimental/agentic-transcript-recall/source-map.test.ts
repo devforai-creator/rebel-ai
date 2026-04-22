@@ -383,6 +383,18 @@ describe('loadAgenticTranscriptRecallSourceMap', () => {
   it('discovers bounded child ranges from persisted summaries and facts even when only a parent range is surfaced', async () => {
     const supabase = createSupabaseMock({
       tables: {
+        chats: {
+          rows: [{ id: 'chat-1', user_id: 'user-1' }],
+        },
+        profiles: {
+          rows: [
+            {
+              id: 'user-1',
+              enable_episodic_rag: true,
+              voyage_embedding_api_key_id: 'voyage-key-1',
+            },
+          ],
+        },
         chat_summaries: {
           rows: [
             {
@@ -496,6 +508,106 @@ describe('loadAgenticTranscriptRecallSourceMap', () => {
               startSeq: 221,
               endSeq: 222,
               preview: 'Small fact range',
+            },
+          ],
+        },
+      ],
+    })
+  })
+
+  it('does not revive stored fact ranges when episodic RAG is disabled for the chat', async () => {
+    const supabase = createSupabaseMock({
+      tables: {
+        chats: {
+          rows: [{ id: 'chat-1', user_id: 'user-1' }],
+        },
+        profiles: {
+          rows: [
+            {
+              id: 'user-1',
+              enable_episodic_rag: false,
+              voyage_embedding_api_key_id: null,
+            },
+          ],
+        },
+        chat_summaries: {
+          rows: [
+            {
+              chat_id: 'chat-1',
+              level: 0,
+              start_seq: 201,
+              end_seq: 210,
+              summary: 'Chunk 201-210',
+            },
+            {
+              chat_id: 'chat-1',
+              level: 1,
+              start_seq: 201,
+              end_seq: 300,
+              summary: 'Meta 201-300',
+            },
+          ],
+        },
+        chat_facts: {
+          rows: [
+            {
+              chat_id: 'chat-1',
+              start_seq: 221,
+              end_seq: 222,
+              facts: 'Stored fact should stay inactive',
+            },
+          ],
+        },
+      },
+    }) as unknown as SupabaseClientType
+
+    const sourceMap = await loadAgenticTranscriptRecallSourceMap({
+      supabase,
+      chatId: 'chat-1',
+      sourceHints: {
+        rawContextStartOrdinal: 301,
+        cutoffOrdinal: 300,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'meta_summary',
+            startSeq: 201,
+            endSeq: 300,
+            preview: 'Meta 201-300',
+          },
+        ],
+      },
+      runtimeConfig,
+    })
+
+    expect(sourceMap).toEqual({
+      rawContextStartOrdinal: 301,
+      cutoffOrdinal: 300,
+      directFetchRanges: [
+        {
+          kind: 'summary',
+          label: 'summary',
+          startSeq: 201,
+          endSeq: 210,
+          preview: 'Chunk 201-210',
+        },
+      ],
+      navigationParents: [
+        {
+          parentRange: {
+            kind: 'summary',
+            label: 'meta_summary',
+            startSeq: 201,
+            endSeq: 300,
+            preview: 'Meta 201-300',
+          },
+          childRanges: [
+            {
+              kind: 'summary',
+              label: 'summary',
+              startSeq: 201,
+              endSeq: 210,
+              preview: 'Chunk 201-210',
             },
           ],
         },

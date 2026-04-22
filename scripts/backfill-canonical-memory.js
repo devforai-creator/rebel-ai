@@ -260,7 +260,7 @@ function buildExpectedCanonicalChunkRanges(totalMessages, memoryConfig) {
   const sealedThroughSeq =
     memoryConfig.mode === 'prefix_live_blocks'
       ? normalizedTotalMessages - memoryConfig.retainTailMessages
-      : normalizedTotalMessages
+      : normalizedTotalMessages - CANONICAL_CHUNK_SIZE
   const lastCanonicalChunkEnd =
     Math.floor(Math.max(0, sealedThroughSeq) / CANONICAL_CHUNK_SIZE) * CANONICAL_CHUNK_SIZE
 

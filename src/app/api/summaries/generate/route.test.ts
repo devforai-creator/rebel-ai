@@ -405,6 +405,22 @@ describe('POST /api/summaries/generate', () => {
     expect(updateMemoryStateMock).not.toHaveBeenCalled()
   })
 
+  it('returns 500 when summary work inspection fails', async () => {
+    currentSupabase = createSupabaseMock({})
+    hasMemoryUpdateWorkMock.mockRejectedValueOnce(new Error('work inspection failed'))
+    const { POST } = await import('./route')
+
+    const response = await POST(buildRequest(validBody, 'Bearer summary-secret'))
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Summary generation failed',
+    })
+    expect(currentSupabase?.rpcCalls).toEqual([])
+    expect(createOpenAIWithServiceTierMock).not.toHaveBeenCalled()
+    expect(updateMemoryStateMock).not.toHaveBeenCalled()
+  })
+
   it('uses anthropic provider model creation', async () => {
     currentSupabase = createSupabaseMock({ apiKeyProvider: 'anthropic' })
     const { POST } = await import('./route')

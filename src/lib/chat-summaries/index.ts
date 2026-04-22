@@ -65,24 +65,24 @@ export async function updateSummaries({
   modelName,
   regenerate,
 }: UpdateSummariesOptions): Promise<void> {
-  try {
-    const totalMessages = await getMessageCount(supabase, chatId)
+  const totalMessages = await getMessageCount(supabase, chatId)
 
-    if (totalMessages === null || totalMessages < CHUNK_SIZE * 2) {
-      return
-    }
-
-    await updateCanonicalSealedMemoryArtifacts({
-      supabase,
-      chatId,
-      userId,
-      model,
-      provider,
-      modelName,
-      regenerate,
-      sealedThroughSeq: totalMessages - CHUNK_SIZE,
-    })
-  } catch (error) {
-    console.error('Error updating chat summaries:', error)
+  if (totalMessages === null) {
+    throw new Error(`Failed to determine projected conversation size for summary update: ${chatId}`)
   }
+
+  if (totalMessages < CHUNK_SIZE * 2) {
+    return
+  }
+
+  await updateCanonicalSealedMemoryArtifacts({
+    supabase,
+    chatId,
+    userId,
+    model,
+    provider,
+    modelName,
+    regenerate,
+    sealedThroughSeq: totalMessages - CHUNK_SIZE,
+  })
 }

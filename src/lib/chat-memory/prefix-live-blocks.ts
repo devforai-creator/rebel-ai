@@ -230,23 +230,21 @@ export async function updatePrefixLiveBlocksMemoryState({
 
   const totalMessages = await getMessageCount(supabase, chatId)
   if (totalMessages === null) {
-    return
+    throw new Error(
+      `Failed to determine projected conversation size for prefix memory update: ${chatId}`,
+    )
   }
 
-  try {
-    await updateCanonicalSealedMemoryArtifacts({
-      supabase,
-      chatId,
-      userId,
-      model,
-      provider,
-      modelName,
-      regenerate,
-      sealedThroughSeq: totalMessages - memory.retainTailMessages,
-    })
-  } catch (error) {
-    console.error('[chat-memory] Failed to update canonical prefix memory artifacts:', error)
-  }
+  await updateCanonicalSealedMemoryArtifacts({
+    supabase,
+    chatId,
+    userId,
+    model,
+    provider,
+    modelName,
+    regenerate,
+    sealedThroughSeq: totalMessages - memory.retainTailMessages,
+  })
 }
 
 export async function hasPrefixLiveBlocksUpdateWork({
@@ -262,7 +260,9 @@ export async function hasPrefixLiveBlocksUpdateWork({
   const memory = resolveChatMemoryConfig(modelConfig)
   const totalMessages = await getMessageCount(supabase, chatId)
   if (totalMessages === null) {
-    return false
+    throw new Error(
+      `Failed to determine projected conversation size for prefix memory work check: ${chatId}`,
+    )
   }
 
   const lastProcessedChunkEnd = await getLastSummaryEnd(supabase, chatId, SUMMARY_LEVEL_CHUNK)
@@ -275,6 +275,54 @@ export async function hasPrefixLiveBlocksUpdateWork({
 
   if (hasChunkWork) {
     return true
+  }
+
+  const episodicMemorySettings = await loadChatEpisodicMemorySettings({
+    supabase,
+    chatId,
+  })
+  if (episodicMemorySettings.enabled) {
+    const sealedThroughSeq = totalMessages - memory.retainTailMessages
+    const [{ data: chunkRows, error: chunkError }, { data: factRows, error: factError }] =
+      await Promise.all([
+        supabase
+          .from('chat_summaries')
+          .select<'start_seq, end_seq'>('start_seq, end_seq')
+          .eq('chat_id', chatId)
+          .eq('level', SUMMARY_LEVEL_CHUNK)
+          .lte('end_seq', sealedThroughSeq)
+          .order('start_seq', { ascending: true }),
+        supabase
+          .from('chat_facts')
+          .select<'start_seq, end_seq'>('start_seq, end_seq')
+          .eq('chat_id', chatId)
+          .lte('end_seq', sealedThroughSeq)
+          .order('start_seq', { ascending: true }),
+      ])
+
+    if (chunkError) {
+      throw new Error(
+        `Failed to inspect canonical chunk summaries for fact work: ${chunkError.message}`,
+      )
+    }
+
+    if (factError) {
+      throw new Error(`Failed to inspect canonical facts for fact work: ${factError.message}`)
+    }
+
+    const factKeys = new Set(
+      ((factRows ?? []) as Array<Pick<FactRow, 'start_seq' | 'end_seq'>>)
+        .filter((row) => row.end_seq === row.start_seq + CHUNK_SIZE - 1)
+        .map((row) => `${row.start_seq}-${row.end_seq}`),
+    )
+
+    const hasMissingFacts = ((chunkRows ?? []) as Array<Pick<SummaryRow, 'start_seq' | 'end_seq'>>)
+      .filter((row) => row.end_seq === row.start_seq + CHUNK_SIZE - 1)
+      .some((row) => !factKeys.has(`${row.start_seq}-${row.end_seq}`))
+
+    if (hasMissingFacts) {
+      return true
+    }
   }
 
   return hasPendingMetaSummaryWork(supabase, chatId)
@@ -305,8 +353,7 @@ async function hasPendingMetaSummaryWork(
     .limit(SUMMARY_GROUP_SIZE)
 
   if (chunkError) {
-    console.error('[chat-memory] Failed to inspect pending meta summary work:', chunkError.message)
-    return false
+    throw new Error(`Failed to inspect pending meta summary work: ${chunkError.message}`)
   }
 
   const chunkRows = (candidateChunks ?? []) as Array<Pick<ChatSummary, 'start_seq' | 'end_seq'>>

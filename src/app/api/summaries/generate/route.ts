@@ -123,12 +123,18 @@ export async function POST(request: NextRequest) {
     }
 
     const modelConfig = normalizeChatModelConfig(chat.model_config)
-    const hasWork = await hasMemoryUpdateWork({
-      supabase,
-      chatId,
-      regenerate: normalizedRegenerate,
-      modelConfig,
-    })
+    let hasWork
+    try {
+      hasWork = await hasMemoryUpdateWork({
+        supabase,
+        chatId,
+        regenerate: normalizedRegenerate,
+        modelConfig,
+      })
+    } catch (error) {
+      console.error('[Summaries API] Failed to inspect summary work:', error)
+      return createApiErrorResponse('Summary generation failed', 500)
+    }
 
     if (!hasWork) {
       return Response.json({

@@ -132,8 +132,7 @@ export async function processMetaSummaries({
       .limit(SUMMARY_GROUP_SIZE)
 
     if (chunkError) {
-      console.error('Failed to load chunk summaries:', chunkError.message)
-      return
+      throw new Error(`Failed to load chunk summaries: ${chunkError.message}`)
     }
 
     const chunkRows = (candidateChunks ?? []) as ChunkSummaryRow[]
@@ -183,8 +182,7 @@ export async function processMetaSummaries({
       if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
         return
       }
-      console.error('Failed to create meta summary:', error)
-      return
+      throw error
     }
 
     lastMetaEnd = metaEnd

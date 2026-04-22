@@ -608,6 +608,56 @@ describe('chunk-summarizer', () => {
     expect(generateTextMock).not.toHaveBeenCalled()
   })
 
+  it('backfills missing facts for existing canonical chunks even when no new chunk boundaries exist', async () => {
+    generateTextMock.mockResolvedValue({
+      text: '- remembered fact',
+      finishReason: 'stop',
+    })
+    generateFactEmbeddingMock.mockResolvedValue([0.2, 0.4, 0.6])
+    const supabase = createChatSummariesSupabaseMock({
+      messages: Array.from({ length: 20 }, (_, idx) => ({
+        role: idx % 2 === 0 ? 'user' : 'assistant',
+        content: `m-${idx + 1}`,
+        sequence: idx + 1,
+        chat_id: 'chat-1',
+      })),
+      chatSummaries: [
+        {
+          start_seq: 1,
+          end_seq: 10,
+          chat_id: 'chat-1',
+          level: SUMMARY_LEVEL_CHUNK,
+          summary: 'existing chunk',
+        },
+      ],
+      chatFacts: [],
+    })
+    const chunkModule = await import('./chunk-summarizer')
+
+    await chunkModule.processChunkSummaries({
+      supabase: supabase as unknown as SupabaseClientType,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      model: mockModel,
+      provider: 'google',
+      modelName: 'gemini',
+      totalMessages: 20,
+      previousEnd: 10,
+      chunkPrompt: 'SYS',
+      factPrompt: 'FACT',
+    })
+
+    const chatFacts = supabase.state.chatFacts as Array<Record<string, unknown>>
+    expect(chatFacts).toHaveLength(1)
+    expect(chatFacts[0]).toMatchObject({
+      chat_id: 'chat-1',
+      user_id: 'user-1',
+      start_seq: 1,
+      end_seq: 10,
+      facts: '- remembered fact',
+    })
+  })
+
   it('skips fact extraction during chunk processing when fact generation is disabled', async () => {
     generateTextMock.mockResolvedValue({
       text: 'summary',
@@ -657,6 +707,8 @@ describe('chunk-summarizer', () => {
             select: () => {
               const builder = {
                 eq: () => builder,
+                lte: () => builder,
+                order: async () => ({ data: [], error: null }),
                 in: async () => ({ data: [], error: null }),
               }
               return builder
@@ -701,7 +753,17 @@ describe('chunk-summarizer', () => {
           }
         }
         if (table === 'chat_facts') {
-          return { insert: async () => ({ error: null }) }
+          return {
+            select: () => {
+              const builder = {
+                eq: () => builder,
+                lte: () => builder,
+                order: async () => ({ data: [], error: null }),
+              }
+              return builder
+            },
+            insert: async () => ({ error: null }),
+          }
         }
         throw new Error(`Unexpected table: ${table}`)
       },
@@ -804,7 +866,7 @@ describe('chunk-summarizer', () => {
         chunkPrompt: 'SYS',
         factPrompt: 'FACT',
       }),
-    ).resolves.toBeUndefined()
+    ).rejects.toThrow('insert failed')
 
     expect(insertCallCount).toBe(1)
   })

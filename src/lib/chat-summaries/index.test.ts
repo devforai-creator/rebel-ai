@@ -69,6 +69,45 @@ describe('updateSummaries orchestrator', () => {
       }),
     )
   })
+
+  it('throws when the projected conversation size cannot be determined', async () => {
+    getMessageCountMock.mockResolvedValue(null)
+    const supabase = createSupabaseMock({ profilePrompts: null })
+    const { updateSummaries } = await import('./index')
+
+    await expect(
+      updateSummaries({
+        supabase: supabase as unknown as SupabaseClientType,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        model: mockModel,
+        provider: 'openai',
+        modelName: 'gpt-4o-mini',
+        regenerate: undefined,
+      }),
+    ).rejects.toThrow('Failed to determine projected conversation size for summary update')
+
+    expect(updateCanonicalSealedMemoryArtifactsMock).not.toHaveBeenCalled()
+  })
+
+  it('propagates canonical sealed-memory writer failures', async () => {
+    getMessageCountMock.mockResolvedValue(25)
+    updateCanonicalSealedMemoryArtifactsMock.mockRejectedValue(new Error('writer failed'))
+    const supabase = createSupabaseMock({ profilePrompts: null })
+    const { updateSummaries } = await import('./index')
+
+    await expect(
+      updateSummaries({
+        supabase: supabase as unknown as SupabaseClientType,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        model: mockModel,
+        provider: 'openai',
+        modelName: 'gpt-4o-mini',
+        regenerate: undefined,
+      }),
+    ).rejects.toThrow('writer failed')
+  })
 })
 
 function createSupabaseMock({ profilePrompts }: { profilePrompts: Record<string, string> | null }) {

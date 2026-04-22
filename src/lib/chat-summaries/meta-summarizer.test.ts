@@ -151,8 +151,7 @@ describe('meta-summarizer', () => {
     expect(summaries.filter((row) => row.level === SUMMARY_LEVEL_META)).toHaveLength(1)
   })
 
-  it('returns early when chunk summaries fetch fails', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('throws when chunk summaries fetch fails', async () => {
     getLastSummaryEndMock.mockResolvedValue(0)
 
     // Create a mock that returns an error for chat_summaries
@@ -183,20 +182,17 @@ describe('meta-summarizer', () => {
 
     const { processMetaSummaries } = await import('./meta-summarizer')
 
-    await processMetaSummaries({
-      supabase: supabase as unknown as SupabaseClientType,
-      chatId: 'chat-1',
-      userId: 'user-1',
-      model: mockModel,
-      provider: 'openai',
-      modelName: 'gpt-4o',
-      metaPrompt: 'META',
-    })
-
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'Failed to load chunk summaries:',
-      'Database connection failed',
-    )
+    await expect(
+      processMetaSummaries({
+        supabase: supabase as unknown as SupabaseClientType,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        model: mockModel,
+        provider: 'openai',
+        modelName: 'gpt-4o',
+        metaPrompt: 'META',
+      }),
+    ).rejects.toThrow('Failed to load chunk summaries: Database connection failed')
   })
 
   it('returns early when chunks are not sequential', async () => {
@@ -299,8 +295,7 @@ describe('meta-summarizer', () => {
     ).resolves.not.toThrow()
   })
 
-  it('logs error and returns on non-23505 error', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('throws on non-23505 meta creation errors', async () => {
     getLastSummaryEndMock.mockResolvedValue(0)
     generateSummaryWithFallbackMock.mockRejectedValue(new Error('LLM API error'))
     const chunks = Array.from({ length: SUMMARY_GROUP_SIZE }, (_, idx) => ({
@@ -313,20 +308,17 @@ describe('meta-summarizer', () => {
     const supabase = createChatSummariesSupabaseMock({ chatSummaries: chunks })
     const { processMetaSummaries } = await import('./meta-summarizer')
 
-    await processMetaSummaries({
-      supabase: supabase as unknown as SupabaseClientType,
-      chatId: 'chat-1',
-      userId: 'user-1',
-      model: mockModel,
-      provider: 'openai',
-      modelName: 'gpt-4o',
-      metaPrompt: 'META',
-    })
-
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'Failed to create meta summary:',
-      expect.any(Error),
-    )
+    await expect(
+      processMetaSummaries({
+        supabase: supabase as unknown as SupabaseClientType,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        model: mockModel,
+        provider: 'openai',
+        modelName: 'gpt-4o',
+        metaPrompt: 'META',
+      }),
+    ).rejects.toThrow('LLM API error')
   })
 })
 

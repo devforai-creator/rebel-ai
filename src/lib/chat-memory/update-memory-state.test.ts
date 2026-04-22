@@ -400,6 +400,22 @@ describe('chat memory orchestration', () => {
     expect(result).toBe(true)
   })
 
+  it('throws when summary_window work inspection cannot determine projected conversation size', async () => {
+    hoistedMocks.getMessageCountMock.mockResolvedValue(null)
+
+    await expect(
+      hasMemoryUpdateWork({
+        supabase: createMemorySupabaseStub(),
+        chatId: 'chat-1',
+        modelConfig: {
+          memory: {
+            mode: 'summary_window',
+          },
+        },
+      }),
+    ).rejects.toThrow('Failed to determine projected conversation size for summary work check')
+  })
+
   it('treats explicit regeneration ranges as summary work', async () => {
     const result = await hasMemoryUpdateWork({
       supabase: createMemorySupabaseStub(),
@@ -418,23 +434,60 @@ describe('chat memory orchestration', () => {
     expect(hoistedMocks.getMessageCountMock).not.toHaveBeenCalled()
   })
 
-  it('returns early when the projected conversation size cannot be determined', async () => {
-    hoistedMocks.getMessageCountMock.mockResolvedValue(null)
+  it('detects missing fact rows as pending work for episodic-enabled summary_window chats', async () => {
+    hoistedMocks.getMessageCountMock.mockResolvedValue(20)
+    hoistedMocks.getLastSummaryEndMock.mockResolvedValue(10)
 
-    await updateMemoryState({
-      supabase: createMemorySupabaseStub(),
+    const result = await hasMemoryUpdateWork({
+      supabase: createMemorySupabaseStub({
+        chats: [{ id: 'chat-1', user_id: 'user-1' }],
+        profiles: [
+          {
+            id: 'user-1',
+            enable_episodic_rag: true,
+            voyage_embedding_api_key_id: 'voyage-key-1',
+          },
+        ],
+        summaries: [
+          {
+            chat_id: 'chat-1',
+            level: 0,
+            start_seq: 1,
+            end_seq: 10,
+            summary: 'sealed chunk',
+          },
+        ],
+      }),
       chatId: 'chat-1',
-      userId: 'user-1',
-      model: {} as never,
-      provider: 'openai',
-      modelName: 'gpt-4o-mini',
       modelConfig: {
         memory: {
-          mode: 'prefix_live_blocks',
-          retainTailMessages: 2,
+          mode: 'summary_window',
         },
       },
     })
+
+    expect(result).toBe(true)
+  })
+
+  it('throws when the projected conversation size cannot be determined during prefix updates', async () => {
+    hoistedMocks.getMessageCountMock.mockResolvedValue(null)
+
+    await expect(
+      updateMemoryState({
+        supabase: createMemorySupabaseStub(),
+        chatId: 'chat-1',
+        userId: 'user-1',
+        model: {} as never,
+        provider: 'openai',
+        modelName: 'gpt-4o-mini',
+        modelConfig: {
+          memory: {
+            mode: 'prefix_live_blocks',
+            retainTailMessages: 2,
+          },
+        },
+      }),
+    ).rejects.toThrow('Failed to determine projected conversation size for prefix memory update')
 
     expect(hoistedMocks.updateCanonicalSealedMemoryArtifactsMock).not.toHaveBeenCalled()
   })
@@ -479,29 +532,151 @@ describe('chat memory orchestration', () => {
     )
   })
 
-  it('logs and aborts prefix updates when the canonical sealed-memory writer fails', async () => {
+  it('propagates prefix update failures when the canonical sealed-memory writer fails', async () => {
     hoistedMocks.getMessageCountMock.mockResolvedValue(104)
     hoistedMocks.updateCanonicalSealedMemoryArtifactsMock.mockRejectedValue(new Error('boom'))
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    await updateMemoryState({
-      supabase: createMemorySupabaseStub(),
+    await expect(
+      updateMemoryState({
+        supabase: createMemorySupabaseStub(),
+        chatId: 'chat-1',
+        userId: 'user-1',
+        model: {} as never,
+        provider: 'openai',
+        modelName: 'gpt-4o-mini',
+        modelConfig: {
+          memory: {
+            mode: 'prefix_live_blocks',
+            retainTailMessages: 2,
+          },
+        },
+      }),
+    ).rejects.toThrow('boom')
+  })
+
+  it('throws when prefix work inspection cannot determine projected conversation size', async () => {
+    hoistedMocks.getMessageCountMock.mockResolvedValue(null)
+
+    await expect(
+      hasMemoryUpdateWork({
+        supabase: createMemorySupabaseStub(),
+        chatId: 'chat-1',
+        modelConfig: {
+          memory: {
+            mode: 'prefix_live_blocks',
+            retainTailMessages: 2,
+          },
+        },
+      }),
+    ).rejects.toThrow(
+      'Failed to determine projected conversation size for prefix memory work check',
+    )
+  })
+
+  it('detects missing fact rows as pending work for episodic-enabled prefix chats', async () => {
+    hoistedMocks.getMessageCountMock.mockResolvedValue(14)
+    hoistedMocks.getLastSummaryEndMock.mockImplementation(async (_supabase, _chatId, level) =>
+      level === SUMMARY_LEVEL_META ? 0 : 10,
+    )
+
+    const result = await hasMemoryUpdateWork({
+      supabase: createMemorySupabaseStub({
+        chats: [{ id: 'chat-1', user_id: 'user-1' }],
+        profiles: [
+          {
+            id: 'user-1',
+            enable_episodic_rag: true,
+            voyage_embedding_api_key_id: 'voyage-key-1',
+          },
+        ],
+        summaries: [
+          {
+            chat_id: 'chat-1',
+            level: 0,
+            start_seq: 1,
+            end_seq: 10,
+            summary: 'sealed chunk',
+          },
+        ],
+      }),
       chatId: 'chat-1',
-      userId: 'user-1',
-      model: {} as never,
-      provider: 'openai',
-      modelName: 'gpt-4o-mini',
       modelConfig: {
         memory: {
           mode: 'prefix_live_blocks',
-          retainTailMessages: 2,
+          retainTailMessages: 4,
         },
       },
     })
 
-    expect(errorSpy).toHaveBeenCalledWith(
-      '[chat-memory] Failed to update canonical prefix memory artifacts:',
-      expect.any(Error),
-    )
+    expect(result).toBe(true)
+  })
+
+  it('throws when prefix meta work inspection fails', async () => {
+    hoistedMocks.getMessageCountMock.mockResolvedValue(104)
+    hoistedMocks.getLastSummaryEndMock.mockResolvedValue(100)
+
+    const supabase = {
+      from(table: string) {
+        if (table === 'chats') {
+          return {
+            select: () => ({
+              eq: () => ({
+                single: async () => ({
+                  data: { user_id: 'user-1' },
+                  error: null,
+                }),
+              }),
+            }),
+          }
+        }
+        if (table === 'profiles') {
+          return {
+            select: () => ({
+              eq: () => ({
+                single: async () => ({
+                  data: {
+                    enable_episodic_rag: false,
+                    voyage_embedding_api_key_id: null,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          }
+        }
+        if (table !== 'chat_summaries') {
+          throw new Error(`Unexpected table: ${table}`)
+        }
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                gt: () => ({
+                  order: () => ({
+                    limit: async () => ({
+                      data: null,
+                      error: { message: 'chunk inspection failed' },
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }
+      },
+    }
+
+    await expect(
+      hasMemoryUpdateWork({
+        supabase: supabase as never,
+        chatId: 'chat-1',
+        modelConfig: {
+          memory: {
+            mode: 'prefix_live_blocks',
+            retainTailMessages: 2,
+          },
+        },
+      }),
+    ).rejects.toThrow('Failed to inspect pending meta summary work: chunk inspection failed')
   })
 })

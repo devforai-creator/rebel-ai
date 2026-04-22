@@ -1,5 +1,6 @@
 import type { TurnClient } from '@/lib/chat/turn-types'
 import { SUMMARY_LEVEL_META, SUMMARY_LEVEL_SUPER_META } from '@/lib/chat-summaries/config'
+import { loadChatEpisodicMemorySettings } from '@/lib/chat-summaries/episodic-memory'
 import type { ChatFacts, ChatSummary } from '@/types/database.types'
 import type { AgenticTranscriptRecallRuntimeConfig } from './config'
 import {
@@ -288,6 +289,11 @@ async function loadDiscoveredDirectFetchHints({
     return []
   }
 
+  const episodicMemorySettings = await loadChatEpisodicMemorySettings({
+    supabase: supabase as never,
+    chatId,
+  })
+
   const [{ data: summaries, error: summaryError }, { data: facts, error: factsError }] =
     await Promise.all([
       supabase
@@ -297,13 +303,18 @@ async function loadDiscoveredDirectFetchHints({
         .gte('start_seq', minParentStartSeq)
         .lte('end_seq', maxParentEndSeq)
         .order('start_seq', { ascending: true }),
-      supabase
-        .from('chat_facts')
-        .select<'start_seq, end_seq, facts'>('start_seq, end_seq, facts')
-        .eq('chat_id', chatId)
-        .gte('start_seq', minParentStartSeq)
-        .lte('end_seq', maxParentEndSeq)
-        .order('start_seq', { ascending: true }),
+      episodicMemorySettings.enabled
+        ? supabase
+            .from('chat_facts')
+            .select<'start_seq, end_seq, facts'>('start_seq, end_seq, facts')
+            .eq('chat_id', chatId)
+            .gte('start_seq', minParentStartSeq)
+            .lte('end_seq', maxParentEndSeq)
+            .order('start_seq', { ascending: true })
+        : Promise.resolve({
+            data: [] as FactChildRow[],
+            error: null,
+          }),
     ])
 
   if (summaryError) {

@@ -146,6 +146,22 @@ describe('DebugModal', () => {
     expect(html).toContain('toolCallCount')
     expect(html).toContain('toolFetchCount')
   })
+
+  it('renders fetch failures separately from the missing-debug-info empty state', () => {
+    const html = renderToStaticMarkup(
+      <DebugModal
+        isOpen
+        debugInfo={null}
+        errorMessage="Unauthorized"
+        message={null}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('Failed to load server debug_info')
+    expect(html).toContain('Unauthorized')
+    expect(html).not.toContain('No server debug_info stored')
+  })
 })
 
 describe('ChatComposer', () => {

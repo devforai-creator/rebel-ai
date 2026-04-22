@@ -8,6 +8,7 @@ import ChatSummariesPanel, {
   getMemoryDescription,
   getNextMemoryCheckpoint,
 } from './ChatSummariesPanel'
+
 vi.mock('./hooks', () => ({
   useChatSummariesState: () => ({
     summaries: [
@@ -118,5 +119,31 @@ describe('ChatSummariesPanel memory stats copy', () => {
     expect(html).toContain('▶')
     expect(html).not.toContain('Meta summary content')
     expect(html).not.toContain('Fact content')
+  })
+
+  it('shows a visible memory warning banner when the latest assistant recorded a summary failure', () => {
+    const html = renderToStaticMarkup(
+      <ChatSummariesPanel
+        chatId="chat-1"
+        summaries={[]}
+        facts={[]}
+        totalMessages={104}
+        latestSequence={104}
+        memoryConfig={createMemoryConfig({
+          mode: 'prefix_live_blocks',
+          retainTailMessages: 4,
+        })}
+        summaryWarning={{
+          error: 'summary failed',
+          attempts: 2,
+          timestamp: '2026-04-20T01:00:00.000Z',
+        }}
+      />,
+    )
+
+    expect(html).toContain('Background memory update failed for the latest assistant response')
+    expect(html).toContain('No automatic retry was started')
+    expect(html).toContain('summary failed')
+    expect(html).toContain('Attempts: 2')
   })
 })

@@ -268,16 +268,14 @@ export function useChatSummariesState({
           messageCount: nextMessageCount,
         }))
       }
-      if (typeof data?.summaryCount === 'number' && data.summaryCount !== summaries.length) {
-        refreshPanel()
-      }
+      refreshPanel()
     } catch (error) {
       console.error('[Chat summaries] Failed to refresh stats', error)
       toast.error('통계를 불러오지 못했습니다')
     } finally {
       setIsRefreshingStats(false)
     }
-  }, [chatId, refreshPanel, summaries.length])
+  }, [chatId, refreshPanel])
 
   useEffect(() => {
     // Route refresh remains authoritative; local state only caches realtime changes between snapshots.

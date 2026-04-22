@@ -163,6 +163,11 @@ export interface DebugInfo {
       preview: string
     }>
   }
+  summaryWarning?: {
+    error?: string
+    attempts?: number
+    timestamp?: string
+  }
 }
 
 /**

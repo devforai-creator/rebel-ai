@@ -6,6 +6,7 @@ import type { DebugInfo } from '../utils'
 
 interface DebugModalMessageDetailsProps {
   debugInfo: DebugInfo | null | undefined
+  errorMessage?: string | null
 }
 
 type JsonPrimitive = string | number | boolean | null
@@ -87,11 +88,20 @@ const DebugJsonNode = memo(function DebugJsonNode({
 
 export const DebugModalMessageDetails = memo(function DebugModalMessageDetails({
   debugInfo,
+  errorMessage = null,
 }: DebugModalMessageDetailsProps) {
   if (debugInfo === undefined) {
     return (
       <InlineFeedback tone="info" className="py-8 text-center">
         Loading server debug_info...
+      </InlineFeedback>
+    )
+  }
+
+  if (errorMessage) {
+    return (
+      <InlineFeedback tone="error" className="py-8 text-center">
+        Failed to load server debug_info. {errorMessage}
       </InlineFeedback>
     )
   }

@@ -188,6 +188,7 @@ export default function ChatInterface({
       <DebugModal
         isOpen={debug.debugModal.isOpen}
         debugInfo={debug.debugModal.debugInfo}
+        errorMessage={debug.debugModal.errorMessage}
         message={debug.debugMessage}
         moduleRegex={moduleRegex}
         assetUrlMap={assetUrlMap}

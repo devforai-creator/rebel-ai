@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useState, type MutableRefObject } from 'react'
+import { readApiErrorMessage } from '@/lib/http/api-contract'
 import type { DebugInfo, DisplayMessage } from '../utils'
 
 type ChatDebugModalState = {
   isOpen: boolean
   messageId: string | null
   debugInfo: DebugInfo | null | undefined
+  errorMessage: string | null
   mode: 'message' | 'assets'
 }
 
@@ -26,6 +28,7 @@ const INITIAL_DEBUG_MODAL_STATE: ChatDebugModalState = {
   isOpen: false,
   messageId: null,
   debugInfo: undefined,
+  errorMessage: null,
   mode: 'message',
 }
 
@@ -53,19 +56,40 @@ export function useChatDebugModal({
     async (messageId: string) => {
       const cached = debugInfoMap.current.get(messageId)
       if (cached) {
-        setDebugModal({ isOpen: true, messageId, debugInfo: cached, mode: 'message' })
+        setDebugModal({
+          isOpen: true,
+          messageId,
+          debugInfo: cached,
+          errorMessage: null,
+          mode: 'message',
+        })
         return
       }
 
-      setDebugModal({ isOpen: true, messageId, debugInfo: undefined, mode: 'message' })
+      setDebugModal({
+        isOpen: true,
+        messageId,
+        debugInfo: undefined,
+        errorMessage: null,
+        mode: 'message',
+      })
 
       try {
         const response = await fetch(`/api/chats/${chatId}/messages/${messageId}/debug`)
         if (!response.ok) {
-          console.error('Failed to fetch debug info:', response.status, response.statusText)
+          const errorMessage = await readApiErrorMessage(
+            response,
+            'Failed to load server debug_info.',
+          )
+          console.error('Failed to fetch debug info:', response.status, errorMessage)
           setDebugModal((previous) =>
             previous.isOpen && previous.messageId === messageId
-              ? { ...previous, debugInfo: null, mode: 'message' }
+              ? {
+                  ...previous,
+                  debugInfo: null,
+                  errorMessage,
+                  mode: 'message',
+                }
               : previous,
           )
           return
@@ -79,14 +103,24 @@ export function useChatDebugModal({
 
         setDebugModal((previous) =>
           previous.isOpen && previous.messageId === messageId
-            ? { ...previous, debugInfo: serverDebugInfo, mode: 'message' }
+            ? {
+                ...previous,
+                debugInfo: serverDebugInfo,
+                errorMessage: null,
+                mode: 'message',
+              }
             : previous,
         )
       } catch (error) {
         console.error('Failed to fetch debug info:', error)
         setDebugModal((previous) =>
           previous.isOpen && previous.messageId === messageId
-            ? { ...previous, debugInfo: null, mode: 'message' }
+            ? {
+                ...previous,
+                debugInfo: null,
+                errorMessage: 'Failed to load server debug_info.',
+                mode: 'message',
+              }
             : previous,
         )
       }
@@ -100,6 +134,7 @@ export function useChatDebugModal({
       isOpen: true,
       messageId: target?.id ?? null,
       debugInfo: null,
+      errorMessage: null,
       mode: 'assets',
     })
   }, [combinedMessages])

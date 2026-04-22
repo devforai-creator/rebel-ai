@@ -13,6 +13,7 @@ import { CHUNK_SIZE } from '@/lib/chat-summaries/config'
 import { FactMemorySection, SummaryMemorySection } from './components'
 import { useChatSummariesState } from './hooks'
 import type { FactEntry, SummaryEntry } from './hooks/useChatSummariesState'
+import { resolveVisibleSummaryWarning, type SummaryWarningInfo } from './summary-warning'
 
 interface ChatSummariesPanelProps {
   chatId: string
@@ -21,6 +22,7 @@ interface ChatSummariesPanelProps {
   totalMessages: number
   latestSequence: number
   memoryConfig: Required<ChatMemoryConfig>
+  summaryWarning?: SummaryWarningInfo | null
 }
 
 function formatMessageCountLabel(count: number): string {
@@ -61,6 +63,24 @@ export function getEmptyStateText(memoryConfig: Required<ChatMemoryConfig>): str
   return `No sealed memory blocks yet. This mode starts generating canonical chunks after ${formatMessageCountLabel(memoryConfig.retainTailMessages + CHUNK_SIZE)} while keeping the latest ${formatMessageCountLabel(memoryConfig.retainTailMessages)} raw.`
 }
 
+function formatSummaryWarningTimestamp(value: string | null): string | null {
+  if (!value) {
+    return null
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
 export default function ChatSummariesPanel({
   chatId,
   summaries: initialSummaries,
@@ -68,6 +88,7 @@ export default function ChatSummariesPanel({
   totalMessages,
   latestSequence,
   memoryConfig,
+  summaryWarning = null,
 }: ChatSummariesPanelProps) {
   const {
     summaries,
@@ -184,6 +205,13 @@ export default function ChatSummariesPanel({
   const memoryDescription = getMemoryDescription(memoryConfig)
   const nextCheckpoint = getNextMemoryCheckpoint(messageCount, memoryConfig)
   const emptyStateText = getEmptyStateText(memoryConfig)
+  const visibleSummaryWarning = useMemo(
+    () => resolveVisibleSummaryWarning(summaryWarning, [...summaries, ...facts]),
+    [facts, summaries, summaryWarning],
+  )
+  const summaryWarningTimestamp = formatSummaryWarningTimestamp(
+    visibleSummaryWarning?.timestamp ?? null,
+  )
   const pendingDeleteSummary =
     summaries.find((summary) => summary.id === pendingDeleteSummaryId) ?? null
 
@@ -200,6 +228,39 @@ export default function ChatSummariesPanel({
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Long-term Memory</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{memoryDescription}</p>
         </div>
+
+        {visibleSummaryWarning ? (
+          <SurfaceCard
+            tone="subtle"
+            className="mb-4 border-amber-200 text-sm dark:border-amber-700"
+          >
+            <div className="space-y-2">
+              <div className="font-medium text-amber-900 dark:text-amber-100">
+                Background memory update failed for the latest assistant response.
+              </div>
+              <div className="text-amber-800 dark:text-amber-200">
+                Send another chat message to let the next background memory update retry, then
+                refresh this panel. No automatic retry was started.
+              </div>
+              {visibleSummaryWarning.error ? (
+                <div className="text-xs text-amber-800/90 dark:text-amber-200/90">
+                  Last error: <span className="font-medium">{visibleSummaryWarning.error}</span>
+                </div>
+              ) : null}
+              {visibleSummaryWarning.attempts !== null || summaryWarningTimestamp ? (
+                <div className="text-xs text-amber-800/90 dark:text-amber-200/90">
+                  {visibleSummaryWarning.attempts !== null
+                    ? `Attempts: ${visibleSummaryWarning.attempts}`
+                    : null}
+                  {visibleSummaryWarning.attempts !== null && summaryWarningTimestamp
+                    ? ' · '
+                    : null}
+                  {summaryWarningTimestamp ? `Recorded: ${summaryWarningTimestamp}` : null}
+                </div>
+              ) : null}
+            </div>
+          </SurfaceCard>
+        ) : null}
 
         <SurfaceCard tone="subtle" className="mb-6 text-sm text-gray-600 dark:text-gray-300">
           <div className="flex items-center justify-between">
@@ -220,7 +281,7 @@ export default function ChatSummariesPanel({
               disabled={isRefreshingStats}
               variant="secondary"
               size="sm"
-              title="Refresh stats"
+              title="Refresh memory panel"
             >
               {isRefreshingStats ? (
                 <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">

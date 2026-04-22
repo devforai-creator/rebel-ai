@@ -11,6 +11,7 @@ import { DebugModalMessageDetails } from './DebugModalMessageDetails'
 interface DebugModalProps {
   isOpen: boolean
   debugInfo: DebugInfo | null | undefined
+  errorMessage?: string | null
   message: DisplayMessage | null
   moduleRegex?: ModuleRegexEntry[]
   assetUrlMap?: Record<string, string>
@@ -27,6 +28,7 @@ interface DebugModalProps {
 export const DebugModal = memo(function DebugModal({
   isOpen,
   debugInfo,
+  errorMessage = null,
   message,
   moduleRegex,
   assetUrlMap,
@@ -83,7 +85,9 @@ export const DebugModal = memo(function DebugModal({
             imageCommandUrlMap={imageCommandUrlMap}
           />
 
-          {!isAssetMode ? <DebugModalMessageDetails debugInfo={debugInfo} /> : null}
+          {!isAssetMode ? (
+            <DebugModalMessageDetails debugInfo={debugInfo} errorMessage={errorMessage} />
+          ) : null}
         </div>
 
         <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">

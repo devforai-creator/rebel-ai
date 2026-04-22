@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 import { resolveChatMemoryConfig } from '@/lib/chat/model-config'
+import { loadLatestProjectedAssistantMessage } from '@/lib/chat/turns'
 import ChatSummariesPanel from './ChatSummariesPanel'
+import { parseSummaryWarningInfo } from './summary-warning'
 
 interface Props {
   chatId: string
@@ -16,6 +18,7 @@ export default async function ChatSummariesPanelLoader({ chatId }: Props) {
     { count: totalMessagesCount },
     { data: latestSequenceRow },
     { data: chat },
+    latestAssistant,
   ] = await Promise.all([
     supabase
       .from('chat_summaries')
@@ -48,12 +51,17 @@ export default async function ChatSummariesPanelLoader({ chatId }: Props) {
       .select('model_config')
       .eq('id', chatId)
       .single<{ model_config: unknown }>(),
+    loadLatestProjectedAssistantMessage({
+      supabase,
+      chatId,
+    }),
   ])
 
   const totalMessages = typeof totalMessagesCount === 'number' ? totalMessagesCount : 0
   const latestSequence =
     typeof latestSequenceRow?.sequence === 'number' ? latestSequenceRow.sequence : totalMessages
   const memoryConfig = resolveChatMemoryConfig(chat?.model_config ?? null)
+  const summaryWarning = parseSummaryWarningInfo(latestAssistant?.debug_info ?? null)
 
   return (
     <ChatSummariesPanel
@@ -63,6 +71,7 @@ export default async function ChatSummariesPanelLoader({ chatId }: Props) {
       totalMessages={totalMessages}
       latestSequence={latestSequence}
       memoryConfig={memoryConfig}
+      summaryWarning={summaryWarning}
     />
   )
 }

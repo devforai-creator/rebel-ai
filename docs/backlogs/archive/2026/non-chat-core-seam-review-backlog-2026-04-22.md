@@ -1,13 +1,29 @@
 # Non-Chat-Core Seam Review Backlog
 
 Updated: 2026-04-22
-Status: Active
+Status: Completed
+
+Completion note:
+
+- the five intended seam-review slices were all completed on `2026-04-22`
+- `S1` closed the remaining non-chat-core internal bearer auth and timeout
+  misconfiguration seams without reopening broader auth design work
+- `S2` closed the allowlisted browser Supabase exception path by failing closed
+  on realtime bootstrap errors instead of leaking unhandled rejections
+- `S3` closed the import upload, runner, and stale-timeout seams without
+  promoting a broader import hardening backlog
+- `S4` closed the private asset and storage-janitor seams by preserving
+  requested-path URL signing and rejecting invalid janitor runner inputs
+- `S5` closed the remaining dashboard mutation ownership seams by verifying
+  ownership before character, persona, and api-key write-side mutations
+- there is no remaining active review backlog from this queue; future issues in
+  these areas should start as a local bug or a narrower domain-specific queue
 
 This document is the current execution backlog for one repo-wide hardening
 review pass focused on seams outside the maintained chat core path.
 
 For the maintained core path itself, use
-[FIRST_CLASS_PATH_MAP.md](../../FIRST_CLASS_PATH_MAP.md) and the already closed
+[FIRST_CLASS_PATH_MAP.md](../../../FIRST_CLASS_PATH_MAP.md) and the already closed
 review/backlog work around `request -> queue -> runner -> finalize`.
 
 This queue answers one narrower question:
@@ -33,7 +49,7 @@ It is not:
 - Every behavior change that lands from this queue ships with direct regression
   coverage in the same change.
 - If a finding touches DB schema, migrations, RLS, or generated types, follow
-  [DB_CHANGE_WORKFLOW.md](../../DB_CHANGE_WORKFLOW.md).
+  [DB_CHANGE_WORKFLOW.md](../../../DB_CHANGE_WORKFLOW.md).
 - Favor ownership, auth, rollback, and cleanup boundaries over naming or style
   cleanup.
 
@@ -97,18 +113,18 @@ Why first:
 
 Primary scope:
 
-- [src/lib/http/api-contract.ts](../../../src/lib/http/api-contract.ts)
-- [src/app/api/internal/chat-admin/route.ts](../../../src/app/api/internal/chat-admin/route.ts)
-- [src/app/api/internal/chat-job-runner/trigger/route.ts](../../../src/app/api/internal/chat-job-runner/trigger/route.ts)
-- [src/app/api/internal/character-import-runner/route.ts](../../../src/app/api/internal/character-import-runner/route.ts)
-- [src/app/api/internal/character-import-runner/trigger/route.ts](../../../src/app/api/internal/character-import-runner/trigger/route.ts)
-- [src/app/api/internal/charx-import-runner/route.ts](../../../src/app/api/internal/charx-import-runner/route.ts)
-- [src/app/api/internal/charx-import-runner/trigger/route.ts](../../../src/app/api/internal/charx-import-runner/trigger/route.ts)
-- [src/app/api/internal/import-job-timeout/route.ts](../../../src/app/api/internal/import-job-timeout/route.ts)
-- [src/app/api/internal/job-janitor/route.ts](../../../src/app/api/internal/job-janitor/route.ts)
-- [src/app/api/internal/storage-janitor/route.ts](../../../src/app/api/internal/storage-janitor/route.ts)
-- [src/app/api/internal/translate-message/route.ts](../../../src/app/api/internal/translate-message/route.ts)
-- [src/app/api/internal/triage/route.ts](../../../src/app/api/internal/triage/route.ts)
+- [src/lib/http/api-contract.ts](../../../../src/lib/http/api-contract.ts)
+- [src/app/api/internal/chat-admin/route.ts](../../../../src/app/api/internal/chat-admin/route.ts)
+- [src/app/api/internal/chat-job-runner/trigger/route.ts](../../../../src/app/api/internal/chat-job-runner/trigger/route.ts)
+- [src/app/api/internal/character-import-runner/route.ts](../../../../src/app/api/internal/character-import-runner/route.ts)
+- [src/app/api/internal/character-import-runner/trigger/route.ts](../../../../src/app/api/internal/character-import-runner/trigger/route.ts)
+- [src/app/api/internal/charx-import-runner/route.ts](../../../../src/app/api/internal/charx-import-runner/route.ts)
+- [src/app/api/internal/charx-import-runner/trigger/route.ts](../../../../src/app/api/internal/charx-import-runner/trigger/route.ts)
+- [src/app/api/internal/import-job-timeout/route.ts](../../../../src/app/api/internal/import-job-timeout/route.ts)
+- [src/app/api/internal/job-janitor/route.ts](../../../../src/app/api/internal/job-janitor/route.ts)
+- [src/app/api/internal/storage-janitor/route.ts](../../../../src/app/api/internal/storage-janitor/route.ts)
+- [src/app/api/internal/translate-message/route.ts](../../../../src/app/api/internal/translate-message/route.ts)
+- [src/app/api/internal/triage/route.ts](../../../../src/app/api/internal/triage/route.ts)
 - adjacent internal-route tests
 
 Review invariants:
@@ -151,10 +167,10 @@ Why second:
 
 Primary scope:
 
-- [scripts/check-browser-supabase-client.js](../../../scripts/check-browser-supabase-client.js)
-- [src/lib/supabase/client.ts](../../../src/lib/supabase/client.ts)
-- [src/app/dashboard/chats/[id]/hooks/useChatRealtimeSubscription.ts](../../../src/app/dashboard/chats/[id]/hooks/useChatRealtimeSubscription.ts)
-- [src/app/dashboard/chats/[id]/hooks/useChatSummariesState.ts](../../../src/app/dashboard/chats/[id]/hooks/useChatSummariesState.ts)
+- [scripts/check-browser-supabase-client.js](../../../../../scripts/check-browser-supabase-client.js)
+- [src/lib/supabase/client.ts](../../../../src/lib/supabase/client.ts)
+- [src/app/dashboard/chats/[id]/hooks/useChatRealtimeSubscription.ts](../../../../src/app/dashboard/chats/[id]/hooks/useChatRealtimeSubscription.ts)
+- [src/app/dashboard/chats/[id]/hooks/useChatSummariesState.ts](../../../../src/app/dashboard/chats/[id]/hooks/useChatSummariesState.ts)
 - any directly adjacent realtime or auth-session tests
 
 Review invariants:
@@ -211,15 +227,15 @@ Why third:
 
 Primary scope:
 
-- [src/app/api/characters/import/storage/route.ts](../../../src/app/api/characters/import/storage/route.ts)
-- [src/lib/import/upload-ticket.ts](../../../src/lib/import/upload-ticket.ts)
-- [src/lib/import/upload-path.ts](../../../src/lib/import/upload-path.ts)
-- [src/lib/character-import-jobs.ts](../../../src/lib/character-import-jobs.ts)
-- [src/app/api/internal/character-import-runner/route.ts](../../../src/app/api/internal/character-import-runner/route.ts)
-- [src/app/api/internal/character-import-runner/trigger/route.ts](../../../src/app/api/internal/character-import-runner/trigger/route.ts)
-- [src/app/api/internal/charx-import-runner/route.ts](../../../src/app/api/internal/charx-import-runner/route.ts)
-- [src/app/api/internal/charx-import-runner/trigger/route.ts](../../../src/app/api/internal/charx-import-runner/trigger/route.ts)
-- [src/app/api/internal/import-job-timeout/route.ts](../../../src/app/api/internal/import-job-timeout/route.ts)
+- [src/app/api/characters/import/storage/route.ts](../../../../src/app/api/characters/import/storage/route.ts)
+- [src/lib/import/upload-ticket.ts](../../../../src/lib/import/upload-ticket.ts)
+- [src/lib/import/upload-path.ts](../../../../src/lib/import/upload-path.ts)
+- [src/lib/character-import-jobs.ts](../../../../src/lib/character-import-jobs.ts)
+- [src/app/api/internal/character-import-runner/route.ts](../../../../src/app/api/internal/character-import-runner/route.ts)
+- [src/app/api/internal/character-import-runner/trigger/route.ts](../../../../src/app/api/internal/character-import-runner/trigger/route.ts)
+- [src/app/api/internal/charx-import-runner/route.ts](../../../../src/app/api/internal/charx-import-runner/route.ts)
+- [src/app/api/internal/charx-import-runner/trigger/route.ts](../../../../src/app/api/internal/charx-import-runner/trigger/route.ts)
+- [src/app/api/internal/import-job-timeout/route.ts](../../../../src/app/api/internal/import-job-timeout/route.ts)
 - import-route and import-runner tests
 
 Review invariants:
@@ -264,13 +280,13 @@ Why fourth:
 
 Primary scope:
 
-- [src/app/api/chats/[chatId]/assets/route.ts](../../../src/app/api/chats/[chatId]/assets/route.ts)
-- [src/app/api/chats/[chatId]/assets/asset-queries.ts](../../../src/app/api/chats/[chatId]/assets/asset-queries.ts)
-- [src/lib/asset-token.ts](../../../src/lib/asset-token.ts)
-- [src/lib/asset-resolver.ts](../../../src/lib/asset-resolver.ts)
-- [src/lib/assets/signed-asset-url.ts](../../../src/lib/assets/signed-asset-url.ts)
-- [src/lib/assets/orphaned-storage-janitor.ts](../../../src/lib/assets/orphaned-storage-janitor.ts)
-- [src/lib/assets/storage-cleanup.ts](../../../src/lib/assets/storage-cleanup.ts)
+- [src/app/api/chats/[chatId]/assets/route.ts](../../../../src/app/api/chats/[chatId]/assets/route.ts)
+- [src/app/api/chats/[chatId]/assets/asset-queries.ts](../../../../src/app/api/chats/[chatId]/assets/asset-queries.ts)
+- [src/lib/asset-token.ts](../../../../src/lib/asset-token.ts)
+- [src/lib/asset-resolver.ts](../../../../src/lib/asset-resolver.ts)
+- [src/lib/assets/signed-asset-url.ts](../../../../src/lib/assets/signed-asset-url.ts)
+- [src/lib/assets/orphaned-storage-janitor.ts](../../../../src/lib/assets/orphaned-storage-janitor.ts)
+- [src/lib/assets/storage-cleanup.ts](../../../../src/lib/assets/storage-cleanup.ts)
 - asset and janitor tests
 
 Review invariants:
@@ -287,7 +303,20 @@ Review invariants:
 
 ### S5. Dashboard Mutation And Ownership Seams
 
-Status: `pending`
+Status: `completed`
+
+Progress note:
+
+- started on `2026-04-22`
+- character update/delete mutations now verify ownership before preloading
+  module or asset cleanup context, so zero-row update/delete paths no longer
+  fall through as generic failure or false success
+- api-key toggle now verifies ownership before update so missing or foreign keys
+  no longer report a successful state change on a zero-row mutation
+- persona update/delete now share the same ownership verifier and stop
+  collapsing lookup failures into the same not-found path
+- the remaining module-cleanup and typed-RPC seams closed without a larger
+  dashboard mutation redesign need
 
 Why last:
 
@@ -299,13 +328,13 @@ Why last:
 
 Primary scope:
 
-- [src/app/dashboard/characters/actions.ts](../../../src/app/dashboard/characters/actions.ts)
-- [src/lib/modules/ownership.ts](../../../src/lib/modules/ownership.ts)
-- [src/lib/modules/orphan-cleanup.ts](../../../src/lib/modules/orphan-cleanup.ts)
-- [src/app/dashboard/personas/actions.ts](../../../src/app/dashboard/personas/actions.ts)
-- [src/lib/personas/update.ts](../../../src/lib/personas/update.ts)
-- [src/app/dashboard/api-keys/actions.ts](../../../src/app/dashboard/api-keys/actions.ts)
-- [src/lib/supabase/rpc.ts](../../../src/lib/supabase/rpc.ts)
+- [src/app/dashboard/characters/actions.ts](../../../../src/app/dashboard/characters/actions.ts)
+- [src/lib/modules/ownership.ts](../../../../src/lib/modules/ownership.ts)
+- [src/lib/modules/orphan-cleanup.ts](../../../../src/lib/modules/orphan-cleanup.ts)
+- [src/app/dashboard/personas/actions.ts](../../../../src/app/dashboard/personas/actions.ts)
+- [src/lib/personas/update.ts](../../../../src/lib/personas/update.ts)
+- [src/app/dashboard/api-keys/actions.ts](../../../../src/app/dashboard/api-keys/actions.ts)
+- [src/lib/supabase/rpc.ts](../../../../src/lib/supabase/rpc.ts)
 - adjacent dashboard action tests
 
 Review invariants:

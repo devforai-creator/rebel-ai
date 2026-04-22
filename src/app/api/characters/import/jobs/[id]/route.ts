@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
+import { IMPORT_JOB_PROCESSING_TIMEOUT_MS } from '@/lib/import/job-queue'
 
-const STALE_JOB_TIMEOUT_MS = 15 * 60 * 1000
 const TIMEOUT_ROUTE_DELIVERY_TIMEOUT_MS = 5000
 
 function getChatAdminSecret(): string | null {
@@ -55,7 +55,7 @@ export async function GET(_request: NextRequest, context: RouteParams) {
     const referenceTime = job.started_at ?? job.created_at
     if (referenceTime) {
       const elapsedMs = Date.now() - new Date(referenceTime).getTime()
-      if (elapsedMs > STALE_JOB_TIMEOUT_MS) {
+      if (elapsedMs > IMPORT_JOB_PROCESSING_TIMEOUT_MS) {
         // Use internal admin API to update job status (bypasses RLS)
         const timedOutJob = await markJobAsTimedOut({
           jobId,

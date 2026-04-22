@@ -170,7 +170,7 @@ Review invariants:
 
 ### S3. Import Upload Contract And Import Runner Seams
 
-Status: `in_progress`
+Status: `completed`
 
 Progress note:
 
@@ -193,6 +193,11 @@ Progress note:
 - valid signed upload tickets now clean up their staged object when enqueue
   request metadata or path drifts from the signed claims, so stale-client
   contract mismatches stop leaving orphaned staged uploads behind
+- stale import polling now uses the same env-driven processing timeout as the
+  import queue janitor, so self-host timeout overrides do not split the stale
+  job decision between the user poll route and the recovery path
+- the remaining trigger, timeout, and alias seams closed without a broader
+  import-runner redesign need
 
 Why third:
 

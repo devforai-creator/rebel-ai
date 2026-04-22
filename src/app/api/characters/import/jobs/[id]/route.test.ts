@@ -204,6 +204,31 @@ describe('GET /api/characters/import/jobs/[id]', () => {
     )
   })
 
+  it('uses the shared import processing timeout env when deciding whether a job is stale', async () => {
+    const job = buildStaleJob({
+      created_at: new Date(Date.now() - 6 * 60 * 1000).toISOString(),
+    })
+    createClientMock.mockResolvedValue(
+      createSupabaseMock({
+        job,
+      }),
+    )
+    process.env.CHAT_ADMIN_SECRET = 'admin-secret'
+    process.env.CHARACTER_IMPORT_JOB_PROCESSING_TIMEOUT_MS = '300000'
+    const { GET } = await import('./route')
+
+    const response = await GET(buildRequest(job.id), buildContext(job.id) as never)
+
+    expect(response.status).toBe(200)
+    expect(global.fetch).toHaveBeenCalledWith(
+      new URL('http://localhost/api/internal/import-job-timeout'),
+      expect.objectContaining({
+        method: 'POST',
+        signal: expect.any(AbortSignal),
+      }),
+    )
+  })
+
   it('fails open when the timeout route call aborts', async () => {
     const job = buildStaleJob()
     createClientMock.mockResolvedValue(

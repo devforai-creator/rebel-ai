@@ -13,7 +13,8 @@ export type ImportUploadTicketClaims = {
 
 type ImportUploadTicketVerification =
   | { ok: true; claims: ImportUploadTicketClaims }
-  | { ok: false; reason: 'invalid' | 'expired' | 'missing_secret' }
+  | { ok: false; reason: 'invalid' | 'missing_secret' }
+  | { ok: false; reason: 'expired'; claims: ImportUploadTicketClaims }
 
 function getImportUploadTicketSecret() {
   return process.env.CHAT_ADMIN_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? null
@@ -70,7 +71,7 @@ export function verifyImportUploadTicket(ticket: string): ImportUploadTicketVeri
   }
 
   if (!Number.isFinite(claims.expiresAt) || claims.expiresAt < Date.now()) {
-    return { ok: false, reason: 'expired' }
+    return { ok: false, reason: 'expired', claims }
   }
 
   return { ok: true, claims }

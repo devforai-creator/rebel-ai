@@ -213,6 +213,14 @@ async function enqueueImportUpload({
       return createApiErrorResponse('Failed to verify upload reference', 500)
     }
 
+    if (
+      verification.reason === 'expired' &&
+      verification.claims.userId === userId &&
+      verification.claims.path === path
+    ) {
+      await cleanupStagedUpload(supabase, path)
+    }
+
     return createApiErrorResponse('Invalid upload reference', 403)
   }
 

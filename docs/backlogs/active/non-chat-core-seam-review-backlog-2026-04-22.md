@@ -181,6 +181,9 @@ Progress note:
 - shared path helpers and regression coverage now pin the staged-upload scope
   so import jobs cannot read or delete arbitrary user-scoped storage objects
   just because they share the same user prefix
+- expired signed upload tickets now clean up their own staged import object
+  before returning `403`, which closes one stale-client orphan path without
+  widening cleanup to malformed or untrusted ticket payloads
 
 Why third:
 

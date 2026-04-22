@@ -71,4 +71,4 @@ for the current queue and the archive split.
   point, and archive policy
 - current active queue: none currently
 - most recently archived queue:
-  [non-chat-core-seam-review-backlog-2026-04-22.md](./backlogs/archive/2026/non-chat-core-seam-review-backlog-2026-04-22.md)
+  [character-chat-atr-gate-backlog-2026-04-22.md](./backlogs/archive/2026/character-chat-atr-gate-backlog-2026-04-22.md)

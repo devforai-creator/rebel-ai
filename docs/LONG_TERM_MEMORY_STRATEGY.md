@@ -1,6 +1,6 @@
 # Long-Term Memory Strategy
 
-Updated: 2026-04-20
+Updated: 2026-04-22
 
 This document is the active doctrine for RebelAI's long-term memory direction.
 
@@ -21,11 +21,13 @@ The current operating direction is:
 - `prefix_live_blocks` for the operator-default chat memory mode
 - summary-backed sealed memory as the durable long-term substrate
 - ATR (Agentic Transcript Recall) as the preferred path for recovering exact older detail when summaries are not specific enough
+- a thin invocation-stage ATR gate is allowed when it forces exact-source recovery only for narrow high-precision cases
 - episodic RAG as a secondary, lower-priority path that stays available but is not treated as the main answer
 
 In practical terms:
 
 - the first-class long-chat path should be able to work well with `prefix_live_blocks + summaries + ATR`
+- thin ATR admission gates are acceptable when they stay replaceable and do not become a second memory system
 - episodic RAG should not be required for the maintained default path
 - cost and operational simplicity now matter more than preserving episodic RAG as a first-class surface
 
@@ -61,6 +63,10 @@ The real task is:
 - and escalate to exact source recovery only when needed
 
 That means the core problem is better described as **context admission policy** or **context assembly policy**, not just retrieval.
+
+Near-term, that admission policy can still be heuristic.
+What matters is keeping it narrow, observable, and replaceable by a later
+policy model.
 
 ## 4. Evolution Of Context Selection
 
@@ -145,6 +151,8 @@ This does **not** mean training a brand-new large foundation model first.
 The realistic progression is:
 
 - keep the current summary + ATR path as the main operating system
+- allow thin heuristic admission gates at the invocation seam where they
+  clearly improve exact older-detail recovery
 - collect clearer heuristics and failure cases
 - eventually build a smaller planner/reranker or distilled policy layer
 - keep ATR as the exact-source recovery tool under that planner

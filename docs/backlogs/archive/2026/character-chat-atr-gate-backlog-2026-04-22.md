@@ -1,9 +1,9 @@
 # Character-Chat ATR Gate Backlog
 
 Updated: 2026-04-22
-Status: Active
+Status: Archived (Completed)
 
-Progress note:
+Completion note:
 
 - `P0-1` through `P0-4` completed on `2026-04-22`
 - the gate contract now returns `auto` vs `required` tool-choice intent with
@@ -11,23 +11,26 @@ Progress note:
 - character-chat heuristic v0 now forces ATR tool usage only for a narrow set of
   older exact-recall cases and defers reset / new-AU / immediate-continuation
   requests
-- request-stage ATR invocations now apply `toolChoice: required` only when the
-  preflight matches and ATR tools are actually available
-- request debug metrics and regression coverage now pin both the force path and
-  the defer path
+- request-stage ATR invocations now apply forced tool use only on the first ATR
+  step, then release later steps back to normal model generation
+- Anthropic ATR forced-tool turns now disable incompatible thinking options for
+  that invocation only
+- request debug metrics and persisted `debug_info` now surface both the
+  heuristic preflight decision and whether forced tool choice was actually
+  applied
 
-This document is the current execution backlog for adding a thin
+This document was the execution backlog for adding a thin
 character-chat-specific ATR preflight that can force an ATR tool call when
 older exact source detail is likely to materially change the next reply.
 
-This queue answers two narrower questions:
+This queue answered two narrower questions:
 
 - how to add a high-precision ATR gate for character chat without inventing a
   second memory system
 - how to keep that gate replaceable by a later small policy model or hybrid
   policy layer
 
-It is not:
+It was not:
 
 - a general scene-state planner
 - a new memory artifact, carryover, or persistence queue
@@ -41,22 +44,20 @@ It is not:
   normal model path.
 - Keep the input surface thin. Start from the latest user message, the latest
   assistant message, and cheap ATR-availability metadata.
-- Do not introduce new summary, fact, note, or `debug_info` state for this
-  queue.
 - Treat request-stage tool forcing as an invocation policy seam, not as a new
   memory mode.
 - Every behavior change in this queue ships with direct regression coverage in
   the same change.
 
-## Why This Queue Exists
+## Why This Queue Existed
 
 RebelAI's ATR doctrine is already clear: ATR is the bounded exact-source
-recovery path when summaries are not specific enough. The next useful step is
-not a larger memory architecture change. It is a thin admission policy layer
+recovery path when summaries are not specific enough. The next useful step was
+not a larger memory architecture change. It was a thin admission policy layer
 that can force a tool-capable ATR turn in the small set of character-chat cases
 where getting older exact detail wrong would visibly break continuity.
 
-That means the first slice should stay deliberately narrow:
+That meant the first slice stayed deliberately narrow:
 
 - no scene-summary or relationship-summary interpreter yet
 - no persistent carryover state
@@ -109,7 +110,7 @@ Primary scope:
 Acceptance notes:
 
 - request-stage preflight decides whether the ATR invocation should keep
-  `toolChoice: auto` or escalate to `toolChoice: required`
+  `toolChoice: auto` or escalate to forced tool use
 - the wiring must fail closed back to the current path if the experimental ATR
   wrapper or stream request fails
 

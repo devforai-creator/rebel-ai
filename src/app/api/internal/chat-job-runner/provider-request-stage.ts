@@ -160,7 +160,7 @@ function findLastMessageContent(
 
 function buildRequiredFirstToolStepOverride() {
   return ({ stepNumber }: { stepNumber: number }) => ({
-    toolChoice: stepNumber === 1 ? ('required' as const) : ('auto' as const),
+    toolChoice: stepNumber === 0 ? ('required' as const) : ('auto' as const),
   })
 }
 

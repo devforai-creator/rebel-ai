@@ -471,7 +471,7 @@ describe('requestProviderStage', () => {
     expect(streamRequest.prepareStep).toEqual(expect.any(Function))
     expect(
       await streamRequest.prepareStep({
-        stepNumber: 1,
+        stepNumber: 0,
         steps: [],
         model: { kind: 'model' },
         messages: [],
@@ -481,7 +481,7 @@ describe('requestProviderStage', () => {
     })
     expect(
       await streamRequest.prepareStep({
-        stepNumber: 2,
+        stepNumber: 1,
         steps: [],
         model: { kind: 'model' },
         messages: [],
@@ -626,7 +626,7 @@ describe('requestProviderStage', () => {
     expect(streamRequest.prepareStep).toEqual(expect.any(Function))
     expect(
       await streamRequest.prepareStep({
-        stepNumber: 1,
+        stepNumber: 0,
         steps: [],
         model: { kind: 'model' },
         messages: [],
@@ -636,7 +636,7 @@ describe('requestProviderStage', () => {
     })
     expect(
       await streamRequest.prepareStep({
-        stepNumber: 2,
+        stepNumber: 1,
         steps: [],
         model: { kind: 'model' },
         messages: [],

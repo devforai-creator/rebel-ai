@@ -70,7 +70,7 @@ stop when the review stops paying for itself.
 
 ### S1. Internal Admin And Trigger Auth Seams
 
-Status: `in_progress`
+Status: `completed`
 
 Progress note:
 
@@ -82,8 +82,10 @@ Progress note:
   just to accept one valid configured bearer secret
 - misconfiguration responses on the reviewed internal bearer routes were
   normalized back to the shared `Server misconfigured` contract
-- review remains open for the rest of the internal/admin seam beyond this
-  helperization and contract cleanup pass
+- the remaining reviewed routes closed without a broader auth redesign need
+- one additional user-facing seam bug landed during the closing pass:
+  stale import-job polling no longer risks hanging on an unbounded internal
+  timeout-mark request
 
 Why first:
 

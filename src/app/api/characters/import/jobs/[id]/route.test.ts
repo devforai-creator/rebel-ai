@@ -20,6 +20,7 @@ const hoistedMocks = vi.hoisted(() => {
 
 const createClientMock = hoistedMocks.createClientMock
 const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: () => createClientMock(),
@@ -127,6 +128,7 @@ describe('GET /api/characters/import/jobs/[id]', () => {
     restoreEnv()
     createClientMock.mockReset()
     consoleWarnSpy.mockClear()
+    consoleErrorSpy.mockClear()
     global.fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ updated: false }), {
         status: 200,
@@ -141,6 +143,7 @@ describe('GET /api/characters/import/jobs/[id]', () => {
     restoreEnv()
     global.fetch = ORIGINAL_FETCH
     consoleWarnSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
   })
 
   it('warns and skips timeout marking when CHAT_ADMIN_SECRET is missing', async () => {
@@ -196,7 +199,37 @@ describe('GET /api/characters/import/jobs/[id]', () => {
           userId: 'user-1',
           errorMessage: 'Character import timed out. Please retry.',
         }),
+        signal: expect.any(AbortSignal),
       },
     )
+  })
+
+  it('fails open when the timeout route call aborts', async () => {
+    const job = buildStaleJob()
+    createClientMock.mockResolvedValue(
+      createSupabaseMock({
+        job,
+      }),
+    )
+    process.env.CHAT_ADMIN_SECRET = 'admin-secret'
+    const abortError = new Error('Request timed out')
+    abortError.name = 'AbortError'
+    global.fetch = vi.fn().mockRejectedValueOnce(abortError)
+    const { GET } = await import('./route')
+
+    const response = await GET(buildRequest(job.id), buildContext(job.id) as never)
+
+    expect(response.status).toBe(200)
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[Character Import][jobs] Timeout route timed out after 5s',
+      {
+        jobId: job.id,
+      },
+    )
+    expect(await response.json()).toMatchObject({
+      id: job.id,
+      status: 'processing',
+      error: null,
+    })
   })
 })

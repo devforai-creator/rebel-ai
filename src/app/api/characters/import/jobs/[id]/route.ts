@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
 
 const STALE_JOB_TIMEOUT_MS = 15 * 60 * 1000
+const TIMEOUT_ROUTE_DELIVERY_TIMEOUT_MS = 5000
 
 function getChatAdminSecret(): string | null {
   return process.env.CHAT_ADMIN_SECRET ?? null
@@ -95,6 +96,9 @@ async function markJobAsTimedOut(params: {
     return null
   }
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_ROUTE_DELIVERY_TIMEOUT_MS)
+
   try {
     const endpoint = buildInternalApiUrl('/api/internal/import-job-timeout')
     const headers: HeadersInit = {
@@ -110,6 +114,7 @@ async function markJobAsTimedOut(params: {
       method: 'POST',
       headers,
       body: JSON.stringify(params),
+      signal: controller.signal,
     })
 
     if (!response.ok) {
@@ -131,7 +136,16 @@ async function markJobAsTimedOut(params: {
     }
     return null
   } catch (error) {
+    if ((error as { name?: string }).name === 'AbortError') {
+      console.error('[Character Import][jobs] Timeout route timed out after 5s', {
+        jobId: params.jobId,
+      })
+      return null
+    }
+
     console.error('[Character Import][jobs] Error calling admin timeout API:', error)
     return null
+  } finally {
+    clearTimeout(timeout)
   }
 }

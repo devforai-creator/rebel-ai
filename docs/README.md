@@ -69,6 +69,7 @@ for the current queue and the archive split.
 
 - [backlogs/README.md](./backlogs/README.md): backlog structure, current entry
   point, and archive policy
-- current active queue: none
+- current active queue:
+  [non-chat-core-seam-review-backlog-2026-04-22.md](./backlogs/active/non-chat-core-seam-review-backlog-2026-04-22.md)
 - most recently archived queue:
   [april-20-feature-review-backlog-2026-04-21.md](./backlogs/archive/2026/april-20-feature-review-backlog-2026-04-21.md)

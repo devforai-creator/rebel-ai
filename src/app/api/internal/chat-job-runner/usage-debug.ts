@@ -87,6 +87,13 @@ type AgenticTranscriptRecallDebugInfo = {
   toolLastReason: string | null
   toolLastBlockReason: string | null
   stepCount: number | null
+  toolChoicePreflight: string | null
+  toolChoiceApplied: boolean | null
+  toolChoiceScore: number | null
+  toolChoiceSource: string | null
+  toolChoiceVersion: string | null
+  toolChoiceMatches: string | null
+  toolChoiceBlocks: string | null
 }
 
 type AnthropicThinkingDebugInfo = {
@@ -253,6 +260,34 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     debugMetrics,
     'experimental_agentic_transcript_recall_step_count',
   )
+  const toolChoicePreflight = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_choice_preflight',
+  )
+  const toolChoiceApplied = readBooleanMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_choice_applied',
+  )
+  const toolChoiceScore = readNumberMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_choice_score',
+  )
+  const toolChoiceSource = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_choice_source',
+  )
+  const toolChoiceVersion = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_choice_version',
+  )
+  const toolChoiceMatches = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_choice_matches',
+  )
+  const toolChoiceBlocks = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_choice_blocks',
+  )
 
   const hasAnyValue = [
     configured,
@@ -283,6 +318,13 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     toolLastReason,
     toolLastBlockReason,
     stepCount,
+    toolChoicePreflight,
+    toolChoiceApplied,
+    toolChoiceScore,
+    toolChoiceSource,
+    toolChoiceVersion,
+    toolChoiceMatches,
+    toolChoiceBlocks,
   ].some((value) => value !== null)
 
   if (!hasAnyValue) {
@@ -318,6 +360,13 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     toolLastReason,
     toolLastBlockReason,
     stepCount,
+    toolChoicePreflight,
+    toolChoiceApplied,
+    toolChoiceScore,
+    toolChoiceSource,
+    toolChoiceVersion,
+    toolChoiceMatches,
+    toolChoiceBlocks,
   }
 }
 

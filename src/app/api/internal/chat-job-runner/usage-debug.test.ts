@@ -251,6 +251,14 @@ describe('usage-debug helpers', () => {
           experimental_agentic_transcript_recall_tool_last_reason: 'Need the exact wording.',
           experimental_agentic_transcript_recall_tool_last_block_reason: null,
           experimental_agentic_transcript_recall_step_count: 2,
+          experimental_agentic_transcript_recall_tool_choice_preflight: 'required',
+          experimental_agentic_transcript_recall_tool_choice_applied: true,
+          experimental_agentic_transcript_recall_tool_choice_score: 7,
+          experimental_agentic_transcript_recall_tool_choice_source: 'heuristic',
+          experimental_agentic_transcript_recall_tool_choice_version: 'character-chat-v0',
+          experimental_agentic_transcript_recall_tool_choice_matches:
+            'OLDER_PAST_REFERENCE,EXACT_RECALL,PROMISE_OR_BOUNDARY',
+          experimental_agentic_transcript_recall_tool_choice_blocks: null,
         },
       })
 
@@ -285,6 +293,13 @@ describe('usage-debug helpers', () => {
             toolLastReason: 'Need the exact wording.',
             toolLastBlockReason: null,
             stepCount: 2,
+            toolChoicePreflight: 'required',
+            toolChoiceApplied: true,
+            toolChoiceScore: 7,
+            toolChoiceSource: 'heuristic',
+            toolChoiceVersion: 'character-chat-v0',
+            toolChoiceMatches: 'OLDER_PAST_REFERENCE,EXACT_RECALL,PROMISE_OR_BOUNDARY',
+            toolChoiceBlocks: null,
           },
         },
       })

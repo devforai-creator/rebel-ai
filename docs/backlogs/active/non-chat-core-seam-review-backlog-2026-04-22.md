@@ -236,7 +236,14 @@ Review invariants:
 
 ### S4. Private Asset Delivery And Storage Cleanup Seams
 
-Status: `pending`
+Status: `in_progress`
+
+Progress note:
+
+- started on `2026-04-22`
+- first seam fix landed: synchronous storage-janitor runner failures now return
+  a deliberate `500` JSON contract instead of escaping as an unstructured route
+  throw, so internal ops callers keep a stable failure surface
 
 Why fourth:
 

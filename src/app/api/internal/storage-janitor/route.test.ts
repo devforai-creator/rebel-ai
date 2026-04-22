@@ -432,5 +432,31 @@ describe('/api/internal/storage-janitor', () => {
         }),
       )
     })
+
+    it('returns 500 JSON when the synchronous janitor run fails', async () => {
+      process.env.CHAT_ADMIN_SECRET = 'admin-secret'
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      runStorageJanitorMock.mockReset().mockRejectedValueOnce(new Error('storage exploded'))
+      const { POST } = await import('./route')
+
+      const response = await POST(
+        buildPostRequest(
+          { execute: true, olderThanDays: 3, maxDelete: 25, sampleSize: 7 },
+          'Bearer admin-secret',
+        ),
+      )
+
+      expect(response.status).toBe(500)
+      await expect(response.json()).resolves.toEqual({
+        error: 'Storage janitor run failed',
+      })
+      expect(errorSpy).toHaveBeenCalledWith('[Storage Janitor Runner] Synchronous run failed', {
+        mode: 'execute',
+        olderThanDays: 3,
+        maxDelete: 25,
+        sampleSize: 7,
+        error: 'storage exploded',
+      })
+    })
   })
 })

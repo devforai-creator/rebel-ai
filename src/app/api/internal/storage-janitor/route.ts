@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
       ...buildRunOptionsMetadata(options),
       error: error instanceof Error ? error.message : String(error),
     })
-    throw error
+    return NextResponse.json({ error: 'Storage janitor run failed' }, { status: 500 })
   }
 }
 

@@ -29,6 +29,10 @@ type PendingImportJobRow = Pick<
   'id' | 'user_id' | 'storage_path' | 'original_filename' | 'file_type' | 'status'
 >
 type ProcessedJob = { jobId: string; status: 'success' | 'skipped' | 'error'; error?: string }
+type ClaimPendingJobResult =
+  | { kind: 'claimed'; job: JobRow }
+  | { kind: 'missing' }
+  | { kind: 'error'; error: string }
 
 export async function POST(req: NextRequest) {
   const adminSecret = process.env.CHAT_ADMIN_SECRET
@@ -68,9 +72,14 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const results = await processCharacterImportJobs({ limit, jobId })
+  try {
+    const results = await processCharacterImportJobs({ limit, jobId })
 
-  return NextResponse.json(results)
+    return NextResponse.json(results)
+  } catch (error) {
+    console.error('[Character Import Runner] Runner request failed', error)
+    return NextResponse.json({ error: 'Failed to claim pending import job' }, { status: 500 })
+  }
 }
 
 async function processCharacterImportJobs({
@@ -85,8 +94,12 @@ async function processCharacterImportJobs({
   const processed: ProcessedJob[] = []
 
   for (let index = 0; index < jobLimit; index += 1) {
-    const job = await claimPendingCharacterImportJob(supabase, jobId ?? undefined)
-    if (!job) {
+    const claimedJob = await claimPendingCharacterImportJob(supabase, jobId ?? undefined)
+    if (claimedJob.kind === 'error') {
+      throw new Error(claimedJob.error)
+    }
+
+    if (claimedJob.kind === 'missing') {
       if (jobId && index === 0) {
         processed.push({
           jobId,
@@ -96,6 +109,8 @@ async function processCharacterImportJobs({
       }
       break
     }
+
+    const job = claimedJob.job
 
     try {
       const result = await processCharacterImportJob(
@@ -132,7 +147,7 @@ async function processCharacterImportJobs({
 async function claimPendingCharacterImportJob(
   supabase: CharacterImportRunnerSupabaseClient,
   jobId?: string,
-): Promise<JobRow | null> {
+): Promise<ClaimPendingJobResult> {
   let query = supabase
     .from('charx_import_jobs')
     .select<'id, user_id, storage_path, original_filename, file_type, status'>(
@@ -151,12 +166,16 @@ async function claimPendingCharacterImportJob(
   if (error) {
     if (error.code !== 'PGRST116') {
       console.error('[Character Import Runner] Failed to query pending job', error)
+      return {
+        kind: 'error',
+        error: 'Failed to query pending job',
+      }
     }
-    return null
+    return { kind: 'missing' }
   }
 
   if (!pendingJob) {
-    return null
+    return { kind: 'missing' }
   }
 
   const processingUpdate: ImportJobUpdate = {
@@ -174,8 +193,24 @@ async function claimPendingCharacterImportJob(
     .select('id, user_id, storage_path, original_filename, file_type')
     .single<JobRow>()
 
-  if (claimError || !claimedJob) {
-    return null
+  if (claimError) {
+    if (claimError.code !== 'PGRST116') {
+      console.error('[Character Import Runner] Failed to claim pending job', claimError)
+      return {
+        kind: 'error',
+        error: 'Failed to claim pending job',
+      }
+    }
+
+    return { kind: 'missing' }
   }
-  return claimedJob
+
+  if (!claimedJob) {
+    return { kind: 'missing' }
+  }
+
+  return {
+    kind: 'claimed',
+    job: claimedJob,
+  }
 }

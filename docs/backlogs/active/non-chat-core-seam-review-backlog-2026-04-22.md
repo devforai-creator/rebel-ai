@@ -187,6 +187,9 @@ Progress note:
 - runner route responses now mirror the actual import execution result instead
   of reporting `success` after helper-managed job failures that already wrote
   `error` into `charx_import_jobs`
+- runner claim/query failures for pending import jobs no longer collapse into a
+  misleading `skipped` result; direct runner requests now return `500` and
+  background dispatch logs the failure path explicitly
 
 Why third:
 

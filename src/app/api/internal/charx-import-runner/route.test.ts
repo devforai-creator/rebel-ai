@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 type JobRow = {
@@ -13,6 +13,7 @@ type JobRow = {
 
 let supabaseMock: ReturnType<typeof createSupabaseMock>
 const processCharacterImportJobMock = vi.fn()
+const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
 vi.mock('@/lib/character-import-jobs', () => ({
   processCharacterImportJob: (...args: unknown[]) => processCharacterImportJobMock(...args),
@@ -32,7 +33,13 @@ vi.mock('next/server', async () => {
   }
 })
 
-function createSupabaseMock(jobs: JobRow[]) {
+function createSupabaseMock(
+  jobs: JobRow[],
+  options?: {
+    queryError?: { code?: string; message: string } | null
+    claimError?: { code?: string; message: string } | null
+  },
+) {
   const eqCalls: Array<[string, unknown]> = []
 
   return {
@@ -52,6 +59,13 @@ function createSupabaseMock(jobs: JobRow[]) {
         order: () => tableApi,
         limit: () => tableApi,
         maybeSingle: async () => {
+          if (options?.queryError) {
+            return {
+              data: null,
+              error: options.queryError,
+            }
+          }
+
           // Pending job lookup
           const pending = jobs.find((job) => job.status === 'pending')
           return pending
@@ -75,9 +89,13 @@ function createSupabaseMock(jobs: JobRow[]) {
             select: () => {
               return {
                 async single() {
+                  if (options?.claimError) {
+                    return { data: null, error: options.claimError }
+                  }
+
                   const job = jobs.find((candidate) => filters.every((fn) => fn(candidate)))
                   if (!job) {
-                    return { data: null, error: { message: 'not found' } }
+                    return { data: null, error: { code: 'PGRST116', message: 'not found' } }
                   }
                   Object.assign(job, payload)
                   return { data: job, error: null }
@@ -116,7 +134,12 @@ describe('POST /api/internal/charx-import-runner', () => {
     vi.resetModules()
     vi.unstubAllEnvs()
     processCharacterImportJobMock.mockReset()
+    consoleErrorSpy.mockClear()
     supabaseMock = createSupabaseMock([])
+  })
+
+  afterAll(() => {
+    consoleErrorSpy.mockRestore()
   })
 
   it('returns 500 when CHAT_ADMIN_SECRET is missing', async () => {
@@ -152,6 +175,57 @@ describe('POST /api/internal/charx-import-runner', () => {
       jobId: 'job-missing',
       status: 'skipped',
     })
+  })
+
+  it('returns 500 when querying the pending job fails', async () => {
+    process.env.CHAT_ADMIN_SECRET = 'admin-secret'
+    supabaseMock = createSupabaseMock([], {
+      queryError: { code: 'XX001', message: 'db down' },
+    })
+    const { POST } = await import('./route')
+
+    const response = await POST(buildRequest({ jobId: 'job-1' }, 'Bearer admin-secret'))
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Failed to claim pending import job',
+    })
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[Character Import Runner] Failed to query pending job',
+      { code: 'XX001', message: 'db down' },
+    )
+  })
+
+  it('returns 500 when claiming the pending job fails', async () => {
+    process.env.CHAT_ADMIN_SECRET = 'admin-secret'
+    supabaseMock = createSupabaseMock(
+      [
+        {
+          id: 'job-1',
+          user_id: 'user-1',
+          storage_path: 'path/file.rbx',
+          original_filename: 'file.rbx',
+          file_type: 'application/json',
+          status: 'pending',
+          updated_at: new Date().toISOString(),
+        },
+      ],
+      {
+        claimError: { code: 'XX002', message: 'claim update failed' },
+      },
+    )
+    const { POST } = await import('./route')
+
+    const response = await POST(buildRequest({ jobId: 'job-1' }, 'Bearer admin-secret'))
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Failed to claim pending import job',
+    })
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[Character Import Runner] Failed to claim pending job',
+      { code: 'XX002', message: 'claim update failed' },
+    )
   })
 
   it('processes pending jobs without mutating unrelated processing jobs', async () => {

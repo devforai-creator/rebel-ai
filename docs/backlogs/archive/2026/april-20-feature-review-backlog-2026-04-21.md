@@ -1,14 +1,33 @@
 # 2026-04-20 Feature Review Backlog
 
-Updated: 2026-04-21
-Status: Active
+Updated: 2026-04-22
+Status: Completed
+
+Completion note:
+
+- the four intended review slices were all completed on `2026-04-22`
+- `R1` closed with a preflight Google explicit-cache compatibility gate instead
+  of retry-only recovery:
+  `4e9bfee` `Disable Google cache before ATR tool requests`
+- `R2` did not justify additional runtime hardening work after review:
+  the remaining items were confirmed as intended fail-open metadata/debug
+  behavior and were handled as contract/document classification, not as active
+  product bugs
+- `R3` closed the memory/backfill silent-drift findings in one bounded slice:
+  `753927d` `Harden summary memory recovery and backfill`
+- `R4` closed the remaining UI/debug surface mismatches without adding implicit
+  retry behavior or hidden API-key spend:
+  `b1536db` `Surface summary warning and debug fetch failures`
+- there is no remaining active review backlog from this `2026-04-20` feature
+  drop; any future issue from these areas should start as a fresh local bug or
+  a narrower domain-specific queue
 
 This document is the current execution backlog for one more focused review pass
 over the large feature patches that landed on `2026-04-20` and the adjacent
 boundaries they changed.
 
 It starts after
-[`review-followup-backlog-2026-04-21.md`](../archive/2026/review-followup-backlog-2026-04-21.md),
+[`review-followup-backlog-2026-04-21.md`](./review-followup-backlog-2026-04-21.md),
 which closed the first concrete hardening findings found on `2026-04-21`.
 
 This queue answers one narrow question:
@@ -71,7 +90,7 @@ Use these rules during review so this document stays small:
 
 ### R1. ATR / Transcript Recall
 
-Status: `todo`
+Status: `completed`
 
 Why first:
 
@@ -102,7 +121,7 @@ Review invariants:
 
 ### R2. Chat Core Path Split
 
-Status: `todo`
+Status: `completed`
 
 Why second:
 
@@ -134,7 +153,7 @@ Review invariants:
 
 ### R3. Memory / Canonical Hierarchy / Backfill
 
-Status: `todo`
+Status: `completed`
 
 Why third:
 
@@ -163,7 +182,7 @@ Review invariants:
 
 ### R4. Surrounding UI / Debug / Summary Surfaces
 
-Status: `todo`
+Status: `completed`
 
 Why last:
 
@@ -206,3 +225,11 @@ Do not pull these into this review queue unless a concrete bug points there:
 - pure docs cleanup from the `2026-04-20` patch set
 - UI polish that does not change behavior or expose a contract mismatch
 - broad cleanup of tests or file names without a review finding attached
+
+## End Condition
+
+Met on `2026-04-22`.
+
+This queue is closed. Any future follow-up from this area should start as a new
+bug or a narrower queue instead of reopening the full `2026-04-20` review
+pass.

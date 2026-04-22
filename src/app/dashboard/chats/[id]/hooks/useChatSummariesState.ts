@@ -293,59 +293,63 @@ export function useChatSummariesState({
     let channelInstance: ReturnType<typeof supabase.channel> | null = null
 
     const setupChannel = async () => {
-      await supabase.auth.getSession()
-      if (!isActive) {
-        return
+      try {
+        await supabase.auth.getSession()
+        if (!isActive) {
+          return
+        }
+
+        channelInstance = supabase
+          .channel(`chat-${chatId}-summaries`, {
+            config: {
+              broadcast: { self: true },
+              presence: { key: '' },
+            },
+          })
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'chat_summaries',
+              filter: `chat_id=eq.${chatId}`,
+            },
+            (payload) => {
+              const nextPayload = parseRealtimeCollectionPayload(payload, isSummaryEntry)
+              if (!nextPayload) {
+                return
+              }
+
+              setCacheState((previousState) => ({
+                ...previousState,
+                summaries: applyRealtimeCollectionChange(previousState.summaries, nextPayload),
+              }))
+            },
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'chat_facts',
+              filter: `chat_id=eq.${chatId}`,
+            },
+            (payload) => {
+              const nextPayload = parseRealtimeCollectionPayload(payload, isFactEntry)
+              if (!nextPayload) {
+                return
+              }
+
+              setCacheState((previousState) => ({
+                ...previousState,
+                facts: applyRealtimeCollectionChange(previousState.facts, nextPayload),
+              }))
+            },
+          )
+          .subscribe()
+      } catch (error) {
+        console.error('[Chat summaries] Failed to initialize realtime subscription', error)
       }
-
-      channelInstance = supabase
-        .channel(`chat-${chatId}-summaries`, {
-          config: {
-            broadcast: { self: true },
-            presence: { key: '' },
-          },
-        })
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'chat_summaries',
-            filter: `chat_id=eq.${chatId}`,
-          },
-          (payload) => {
-            const nextPayload = parseRealtimeCollectionPayload(payload, isSummaryEntry)
-            if (!nextPayload) {
-              return
-            }
-
-            setCacheState((previousState) => ({
-              ...previousState,
-              summaries: applyRealtimeCollectionChange(previousState.summaries, nextPayload),
-            }))
-          },
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'chat_facts',
-            filter: `chat_id=eq.${chatId}`,
-          },
-          (payload) => {
-            const nextPayload = parseRealtimeCollectionPayload(payload, isFactEntry)
-            if (!nextPayload) {
-              return
-            }
-
-            setCacheState((previousState) => ({
-              ...previousState,
-              facts: applyRealtimeCollectionChange(previousState.facts, nextPayload),
-            }))
-          },
-        )
-        .subscribe()
     }
 
     void setupChannel()

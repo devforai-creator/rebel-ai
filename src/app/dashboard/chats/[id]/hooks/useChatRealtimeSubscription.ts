@@ -86,40 +86,44 @@ export function useChatRealtimeSubscription({
     let channel: ReturnType<typeof supabase.channel> | null = null
 
     const setupChannel = async () => {
-      await supabase.auth.getSession()
-      if (!isActive) {
-        return
-      }
+      try {
+        await supabase.auth.getSession()
+        if (!isActive) {
+          return
+        }
 
-      channel = supabase
-        .channel(getChatAssistantStreamChannelName(chatId), {
-          config: {
-            broadcast: { self: true },
-            presence: { key: `token-stats-${chatId}` },
-          },
-        })
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'messages',
-            filter: `chat_id=eq.${chatId}`,
-          },
-          (payload) => {
-            const messagePayload = parseMessageChangePayload(payload)
-            if (messagePayload) {
-              onMessageChange(messagePayload)
+        channel = supabase
+          .channel(getChatAssistantStreamChannelName(chatId), {
+            config: {
+              broadcast: { self: true },
+              presence: { key: `token-stats-${chatId}` },
+            },
+          })
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'messages',
+              filter: `chat_id=eq.${chatId}`,
+            },
+            (payload) => {
+              const messagePayload = parseMessageChangePayload(payload)
+              if (messagePayload) {
+                onMessageChange(messagePayload)
+              }
+            },
+          )
+          .on('broadcast', { event: CHAT_ASSISTANT_STREAM_EVENT }, (payload) => {
+            const streamPayload = parseAssistantStreamBroadcastPayload(payload.payload)
+            if (streamPayload) {
+              onAssistantStreamEvent(streamPayload)
             }
-          },
-        )
-        .on('broadcast', { event: CHAT_ASSISTANT_STREAM_EVENT }, (payload) => {
-          const streamPayload = parseAssistantStreamBroadcastPayload(payload.payload)
-          if (streamPayload) {
-            onAssistantStreamEvent(streamPayload)
-          }
-        })
-        .subscribe()
+          })
+          .subscribe()
+      } catch (error) {
+        console.error('[Chat realtime] Failed to initialize subscription', error)
+      }
     }
 
     void setupChannel()

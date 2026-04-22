@@ -124,7 +124,20 @@ Review invariants:
 
 ### S2. Browser Supabase And Realtime Exception Seams
 
-Status: `pending`
+Status: `completed`
+
+Progress note:
+
+- completed on `2026-04-22`
+- the two explicitly allowlisted browser Supabase hooks now fail closed when
+  browser session bootstrap rejects, instead of leaking an unhandled rejection
+  before channel setup
+- hook-level regression coverage now pins the bootstrap-failure path for both
+  allowed runtime importers
+- the browser Supabase import allowlist remains explicit and mechanically
+  guarded by `check-browser-supabase-client`
+- the rest of the reviewed seam did not justify a broader "remove browser auth"
+  refactor or allowlist expansion
 
 Why second:
 

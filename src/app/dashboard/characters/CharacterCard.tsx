@@ -73,7 +73,6 @@ export default function CharacterCard({ character, isStarter = false }: Props) {
                 alt={character.name}
                 width={64}
                 height={64}
-                unoptimized
                 className="w-16 h-16 rounded-full object-cover flex-shrink-0 border-2 border-gray-200 dark:border-gray-600"
               />
             ) : (

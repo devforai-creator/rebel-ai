@@ -35,7 +35,7 @@ export default function ApiKeyList({ apiKeys }: Props) {
       const result = await deleteApiKey(id)
       setDeletingId(null)
 
-      if (result?.error) {
+      if ('error' in result) {
         toast.error(result.error)
         return
       }
@@ -47,7 +47,7 @@ export default function ApiKeyList({ apiKeys }: Props) {
   async function handleToggle(id: string, isActive: boolean) {
     const result = await toggleApiKey(id, isActive)
 
-    if (result?.error) {
+    if ('error' in result) {
       toast.error(result.error)
       return
     }

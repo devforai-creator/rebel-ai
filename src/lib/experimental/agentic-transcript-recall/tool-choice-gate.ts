@@ -28,6 +28,16 @@ const EXACT_RECALL_PATTERNS = [
   /기억나/,
 ]
 
+const FIRST_OR_LAST_OCCURRENCE_PATTERNS = [
+  /처음에/,
+  /처음\s*(고백|사과|화해|약속|입맞춤|키스|인사|대화|손\s*잡|불렀|부른|말했|말한)/,
+  /첫\s*(고백|사과|화해|약속|입맞춤|키스|인사|대화|장면|애칭|호칭|별명)/,
+  /마지막에/,
+  /마지막\s*(고백|사과|화해|약속|대화|장면|부분|말|인사|애칭|호칭|별명)/,
+  /끝부분/,
+  /끝에/,
+]
+
 const PROMISE_OR_BOUNDARY_PATTERNS = [
   /약속/,
   /비밀/,
@@ -51,6 +61,19 @@ const CONTRADICTION_PATTERNS = [
   /기억\s*못\s*하/,
   /헷갈/,
   /설정\s*충돌/,
+]
+
+const OLDER_SCENE_ANCHOR_PATTERNS = [/그\s*장면/, /그\s*사건/, /그\s*일/, /그\s*순간/, /그날/]
+
+const RELATION_TURNING_POINT_PATTERNS = [
+  /왜\s*화났/,
+  /왜\s*화난/,
+  /왜\s*화해/,
+  /언제\s*고백/,
+  /언제\s*사과/,
+  /어떻게\s*화해/,
+  /왜\s*멀어졌/,
+  /왜\s*가까워졌/,
 ]
 
 const RESET_OR_NEW_AU_PATTERNS = [
@@ -100,7 +123,7 @@ export type AgenticTranscriptRecallToolChoiceGateDecision = {
   matchedRuleIds: string[]
   blockedRuleIds: string[]
   source: 'heuristic'
-  version: 'character-chat-v0'
+  version: 'character-chat-v1-aggressive'
 }
 
 function normalizeText(text: string | null | undefined): string {
@@ -141,7 +164,7 @@ export function decideAgenticTranscriptRecallToolChoice(
       matchedRuleIds: [],
       blockedRuleIds,
       source: 'heuristic',
-      version: 'character-chat-v0',
+      version: 'character-chat-v1-aggressive',
     }
   }
 
@@ -150,36 +173,56 @@ export function decideAgenticTranscriptRecallToolChoice(
   const isImmediateContinuation = hasAny(lastUserMessage, IMMEDIATE_CONTINUATION_PATTERNS)
   const hasOlderPastReference = hasAny(lastUserMessage, OLDER_PAST_REFERENCE_PATTERNS)
   const hasExactRecall = hasAny(lastUserMessage, EXACT_RECALL_PATTERNS)
+  const hasFirstOrLastOccurrence = hasAny(lastUserMessage, FIRST_OR_LAST_OCCURRENCE_PATTERNS)
   const hasPromiseOrBoundary = hasAny(lastUserMessage, PROMISE_OR_BOUNDARY_PATTERNS)
+  const hasOlderSceneAnchor = hasAny(lastUserMessage, OLDER_SCENE_ANCHOR_PATTERNS)
+  const hasRelationTurningPoint = hasAny(lastUserMessage, RELATION_TURNING_POINT_PATTERNS)
   const hasOlderContradiction =
     hasAny(lastUserMessage, CONTRADICTION_PATTERNS) && hasOlderPastReference
+  const hasOlderRecallAnchor =
+    hasOlderPastReference ||
+    hasFirstOrLastOccurrence ||
+    hasOlderSceneAnchor ||
+    hasRelationTurningPoint
 
-  if (isResetOrNewAu) {
+  if (
+    isResetOrNewAu &&
+    !hasOlderRecallAnchor &&
+    !hasExactRecall &&
+    !hasPromiseOrBoundary &&
+    !hasOlderContradiction
+  ) {
     return {
       toolChoice: 'auto',
       score: 0,
       matchedRuleIds: [],
       blockedRuleIds: ['RESET_OR_NEW_AU'],
       source: 'heuristic',
-      version: 'character-chat-v0',
+      version: 'character-chat-v1-aggressive',
     }
   }
 
-  if (isStyleOnly && !hasExactRecall && !hasPromiseOrBoundary && !hasOlderContradiction) {
+  if (
+    isStyleOnly &&
+    !hasExactRecall &&
+    !hasPromiseOrBoundary &&
+    !hasOlderContradiction &&
+    !hasOlderRecallAnchor
+  ) {
     return {
       toolChoice: 'auto',
       score: 0,
       matchedRuleIds: [],
       blockedRuleIds: ['PURE_STYLE_ONLY'],
       source: 'heuristic',
-      version: 'character-chat-v0',
+      version: 'character-chat-v1-aggressive',
     }
   }
 
   if (
     !!lastAssistantMessage &&
     isImmediateContinuation &&
-    !hasOlderPastReference &&
+    !hasOlderRecallAnchor &&
     !hasPromiseOrBoundary &&
     !hasOlderContradiction
   ) {
@@ -189,7 +232,7 @@ export function decideAgenticTranscriptRecallToolChoice(
       matchedRuleIds: [],
       blockedRuleIds: ['IMMEDIATE_CONTINUATION'],
       source: 'heuristic',
-      version: 'character-chat-v0',
+      version: 'character-chat-v1-aggressive',
     }
   }
 
@@ -198,6 +241,11 @@ export function decideAgenticTranscriptRecallToolChoice(
 
   if (hasOlderPastReference) {
     matchedRuleIds.push('OLDER_PAST_REFERENCE')
+    score += 2
+  }
+
+  if (hasFirstOrLastOccurrence) {
+    matchedRuleIds.push('FIRST_OR_LAST_OCCURRENCE')
     score += 2
   }
 
@@ -211,17 +259,27 @@ export function decideAgenticTranscriptRecallToolChoice(
     score += 2
   }
 
+  if (hasOlderSceneAnchor) {
+    matchedRuleIds.push('OLDER_SCENE_ANCHOR')
+    score += 2
+  }
+
+  if (hasRelationTurningPoint) {
+    matchedRuleIds.push('RELATION_TURNING_POINT')
+    score += 2
+  }
+
   if (hasOlderContradiction) {
     matchedRuleIds.push('OLDER_CONTRADICTION')
     score += 3
   }
 
   return {
-    toolChoice: score >= 5 ? 'required' : 'auto',
+    toolChoice: hasOlderRecallAnchor && score >= 4 ? 'required' : 'auto',
     score,
     matchedRuleIds,
     blockedRuleIds: [],
     source: 'heuristic',
-    version: 'character-chat-v0',
+    version: 'character-chat-v1-aggressive',
   }
 }

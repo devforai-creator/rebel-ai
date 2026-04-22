@@ -28,6 +28,20 @@ import type { ChatRunnerActualPayload } from './usage-debug'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type GoogleCacheDecision = ReturnType<typeof resolveGoogleCacheDecision>
+type ExperimentalPrepareStep = NonNullable<
+  NonNullable<
+    ReturnType<typeof prepareExperimentalAgenticTranscriptRecallRequest>['streamTextSettings']
+  >['prepareStep']
+>
+type DebugMetricValue = string | number | boolean | null
+
+type AnthropicThinkingDebugMetricSnapshot = {
+  requested: boolean | null
+  type: string | null
+  effort: string | null
+  interleavedThinkingRequested: boolean | null
+  disabledForRequiredToolChoice: boolean | null
+}
 
 function willExperimentalAgenticTranscriptRecallAttachTools({
   sourceHints,
@@ -158,10 +172,32 @@ function findLastMessageContent(
   return null
 }
 
-function buildRequiredFirstToolStepOverride() {
-  return ({ stepNumber }: { stepNumber: number }) => ({
-    toolChoice: stepNumber === 0 ? ('required' as const) : ('auto' as const),
-  })
+function applyAnthropicThinkingDebugMetrics({
+  debugMetrics,
+  snapshot,
+}: {
+  debugMetrics: Record<string, DebugMetricValue>
+  snapshot: AnthropicThinkingDebugMetricSnapshot
+}): void {
+  debugMetrics['anthropic_thinking_requested'] = snapshot.requested
+  debugMetrics['anthropic_thinking_type'] = snapshot.type
+  debugMetrics['anthropic_thinking_effort'] = snapshot.effort
+  debugMetrics['anthropic_interleaved_thinking_requested'] = snapshot.interleavedThinkingRequested
+  debugMetrics['anthropic_thinking_disabled_for_required_tool_choice'] =
+    snapshot.disabledForRequiredToolChoice
+}
+
+function buildRequiredFirstToolStepOverride(
+  existingPrepareStep?: ExperimentalPrepareStep,
+): ExperimentalPrepareStep {
+  return async (options) => {
+    const existingResult = await existingPrepareStep?.(options)
+
+    return {
+      ...existingResult,
+      toolChoice: options.stepNumber === 0 ? ('required' as const) : ('auto' as const),
+    }
+  }
 }
 
 export async function requestProviderStage({
@@ -365,24 +401,30 @@ export async function requestProviderStage({
     anthropicOptions?.thinking && typeof anthropicOptions.thinking === 'object'
       ? (anthropicOptions.thinking as Record<string, unknown>)
       : null
-  debugMetrics['anthropic_thinking_requested'] =
-    provider === 'anthropic' ? !!anthropicThinking : null
-  debugMetrics['anthropic_thinking_type'] =
-    provider === 'anthropic' && typeof anthropicThinking?.type === 'string'
-      ? anthropicThinking.type
-      : null
-  debugMetrics['anthropic_thinking_effort'] =
-    provider === 'anthropic' && typeof anthropicOptions?.effort === 'string'
-      ? anthropicOptions.effort
-      : null
-  debugMetrics['anthropic_interleaved_thinking_requested'] =
-    provider === 'anthropic' &&
-    Array.isArray(anthropicOptions?.anthropicBeta) &&
-    anthropicOptions.anthropicBeta.includes(ANTHROPIC_INTERLEAVED_THINKING_BETA)
-      ? true
-      : provider === 'anthropic'
-        ? false
-        : null
+  const standardAnthropicThinkingDebugMetrics: AnthropicThinkingDebugMetricSnapshot = {
+    requested: provider === 'anthropic' ? !!anthropicThinking : null,
+    type:
+      provider === 'anthropic' && typeof anthropicThinking?.type === 'string'
+        ? anthropicThinking.type
+        : null,
+    effort:
+      provider === 'anthropic' && typeof anthropicOptions?.effort === 'string'
+        ? anthropicOptions.effort
+        : null,
+    interleavedThinkingRequested:
+      provider === 'anthropic' &&
+      Array.isArray(anthropicOptions?.anthropicBeta) &&
+      anthropicOptions.anthropicBeta.includes(ANTHROPIC_INTERLEAVED_THINKING_BETA)
+        ? true
+        : provider === 'anthropic'
+          ? false
+          : null,
+    disabledForRequiredToolChoice: provider === 'anthropic' ? false : null,
+  }
+  applyAnthropicThinkingDebugMetrics({
+    debugMetrics,
+    snapshot: standardAnthropicThinkingDebugMetrics,
+  })
   const samplingOptions = resolveInvocationSamplingOptions({
     provider,
     modelName,
@@ -502,7 +544,9 @@ export async function requestProviderStage({
           experimentalResult.streamTextSettings?.tools
             ? {
                 ...experimentalResult.streamTextSettings,
-                prepareStep: buildRequiredFirstToolStepOverride(),
+                prepareStep: buildRequiredFirstToolStepOverride(
+                  experimentalResult.streamTextSettings.prepareStep,
+                ),
               }
             : experimentalResult.streamTextSettings
         debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied'] =
@@ -570,6 +614,11 @@ export async function requestProviderStage({
       }
 
       debugMetrics['experimental_agentic_transcript_recall_fallback_to_standard'] = true
+      debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied'] = false
+      applyAnthropicThinkingDebugMetrics({
+        debugMetrics,
+        snapshot: standardAnthropicThinkingDebugMetrics,
+      })
       logDebug('[Agentic Transcript Recall] Experimental stream request failed; falling back', {
         error: error instanceof Error ? error.message : String(error),
         provider,

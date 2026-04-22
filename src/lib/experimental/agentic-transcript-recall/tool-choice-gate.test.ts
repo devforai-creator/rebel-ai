@@ -16,7 +16,7 @@ describe('decideAgenticTranscriptRecallToolChoice', () => {
       matchedRuleIds: ['OLDER_PAST_REFERENCE', 'EXACT_RECALL', 'PROMISE_OR_BOUNDARY'],
       blockedRuleIds: [],
       source: 'heuristic',
-      version: 'character-chat-v0',
+      version: 'character-chat-v1-aggressive',
     })
   })
 
@@ -36,6 +36,70 @@ describe('decideAgenticTranscriptRecallToolChoice', () => {
     })
   })
 
+  it('forces required tool choice for older promise recall without explicit exact-wording cues', () => {
+    const decision = decideAgenticTranscriptRecallToolChoice({
+      lastUserMessage: '지난번 애칭 뭐였어?',
+      lastAssistantMessage: '...',
+      hasOlderSourceHints: true,
+      hasToolCapableSourceMap: true,
+    })
+
+    expect(decision).toMatchObject({
+      toolChoice: 'required',
+      score: 4,
+      matchedRuleIds: ['OLDER_PAST_REFERENCE', 'PROMISE_OR_BOUNDARY'],
+      blockedRuleIds: [],
+    })
+  })
+
+  it('forces required tool choice for first-turning-point exact recall', () => {
+    const decision = decideAgenticTranscriptRecallToolChoice({
+      lastUserMessage: '처음 고백할 때 뭐라고 했어?',
+      lastAssistantMessage: '...',
+      hasOlderSourceHints: true,
+      hasToolCapableSourceMap: true,
+    })
+
+    expect(decision).toMatchObject({
+      toolChoice: 'required',
+      score: 7,
+      matchedRuleIds: ['FIRST_OR_LAST_OCCURRENCE', 'EXACT_RECALL', 'PROMISE_OR_BOUNDARY'],
+      blockedRuleIds: [],
+    })
+  })
+
+  it('forces required tool choice for older scene-anchor promise recall', () => {
+    const decision = decideAgenticTranscriptRecallToolChoice({
+      lastUserMessage: '그 장면에서 한 약속 뭐였지?',
+      lastAssistantMessage: '...',
+      hasOlderSourceHints: true,
+      hasToolCapableSourceMap: true,
+    })
+
+    expect(decision).toMatchObject({
+      toolChoice: 'required',
+      score: 4,
+      matchedRuleIds: ['PROMISE_OR_BOUNDARY', 'OLDER_SCENE_ANCHOR'],
+      blockedRuleIds: [],
+    })
+  })
+
+  it('forces required tool choice for last relation-turning-point checks', () => {
+    const decision = decideAgenticTranscriptRecallToolChoice({
+      lastUserMessage: '마지막에 왜 화해했어?',
+      lastAssistantMessage: '...',
+      hasOlderSourceHints: true,
+      hasToolCapableSourceMap: true,
+    })
+
+    expect(decision).toMatchObject({
+      toolChoice: 'required',
+      score: 6,
+      matchedRuleIds: ['FIRST_OR_LAST_OCCURRENCE', 'PROMISE_OR_BOUNDARY', 'RELATION_TURNING_POINT'],
+      blockedRuleIds: [],
+    })
+  })
+
   it('defers reset or new-au prompts even when ATR tools are available', () => {
     const decision = decideAgenticTranscriptRecallToolChoice({
       lastUserMessage: '이번엔 현대 AU로 다시 시작하자.',
@@ -49,6 +113,22 @@ describe('decideAgenticTranscriptRecallToolChoice', () => {
       score: 0,
       matchedRuleIds: [],
       blockedRuleIds: ['RESET_OR_NEW_AU'],
+    })
+  })
+
+  it('does not block older exact recall just because the quoted moment mentions starting over', () => {
+    const decision = decideAgenticTranscriptRecallToolChoice({
+      lastUserMessage: '지난번에 다시 시작하자고 한 말 정확히 다시 말해줘.',
+      lastAssistantMessage: '...',
+      hasOlderSourceHints: true,
+      hasToolCapableSourceMap: true,
+    })
+
+    expect(decision).toMatchObject({
+      toolChoice: 'required',
+      score: 5,
+      matchedRuleIds: ['OLDER_PAST_REFERENCE', 'EXACT_RECALL'],
+      blockedRuleIds: [],
     })
   })
 

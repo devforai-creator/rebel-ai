@@ -255,7 +255,8 @@ describe('usage-debug helpers', () => {
           experimental_agentic_transcript_recall_tool_choice_applied: true,
           experimental_agentic_transcript_recall_tool_choice_score: 7,
           experimental_agentic_transcript_recall_tool_choice_source: 'heuristic',
-          experimental_agentic_transcript_recall_tool_choice_version: 'character-chat-v0',
+          experimental_agentic_transcript_recall_tool_choice_version:
+            'character-chat-v1-aggressive',
           experimental_agentic_transcript_recall_tool_choice_matches:
             'OLDER_PAST_REFERENCE,EXACT_RECALL,PROMISE_OR_BOUNDARY',
           experimental_agentic_transcript_recall_tool_choice_blocks: null,
@@ -297,7 +298,7 @@ describe('usage-debug helpers', () => {
             toolChoiceApplied: true,
             toolChoiceScore: 7,
             toolChoiceSource: 'heuristic',
-            toolChoiceVersion: 'character-chat-v0',
+            toolChoiceVersion: 'character-chat-v1-aggressive',
             toolChoiceMatches: 'OLDER_PAST_REFERENCE,EXACT_RECALL,PROMISE_OR_BOUNDARY',
             toolChoiceBlocks: null,
           },

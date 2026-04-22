@@ -158,6 +158,12 @@ function findLastMessageContent(
   return null
 }
 
+function buildRequiredFirstToolStepOverride() {
+  return ({ stepNumber }: { stepNumber: number }) => ({
+    toolChoice: stepNumber === 1 ? ('required' as const) : ('auto' as const),
+  })
+}
+
 export async function requestProviderStage({
   supabase,
   jobId,
@@ -496,7 +502,7 @@ export async function requestProviderStage({
           experimentalResult.streamTextSettings?.tools
             ? {
                 ...experimentalResult.streamTextSettings,
-                toolChoice: 'required',
+                prepareStep: buildRequiredFirstToolStepOverride(),
               }
             : experimentalResult.streamTextSettings
         debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied'] =

@@ -27,7 +27,7 @@ type ExperimentalStreamRequest = {
 type StreamTextInvocation = Parameters<typeof streamText>[0]
 type ExperimentalAgenticTranscriptRecallStreamSettings = Pick<
   StreamTextInvocation,
-  'toolChoice' | 'tools' | 'stopWhen' | 'onStepFinish'
+  'toolChoice' | 'tools' | 'stopWhen' | 'onStepFinish' | 'prepareStep'
 >
 
 type ExperimentalAgenticTranscriptRecallWrapperResult<TStreamRequest> = {

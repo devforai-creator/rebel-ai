@@ -459,16 +459,36 @@ describe('requestProviderStage', () => {
       timings: {},
     })
 
-    expect(streamTextMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        system: 'FINAL\n\nExperimental',
-        messages: context.recentMessages,
-        toolChoice: 'required',
-        tools: {
-          fetch_source_range: {},
-        },
+    const streamRequest = streamTextMock.mock.calls[0]?.[0]
+    expect(streamRequest).toMatchObject({
+      system: 'FINAL\n\nExperimental',
+      messages: context.recentMessages,
+      tools: {
+        fetch_source_range: {},
+      },
+    })
+    expect(streamRequest).not.toHaveProperty('toolChoice', 'required')
+    expect(streamRequest.prepareStep).toEqual(expect.any(Function))
+    expect(
+      await streamRequest.prepareStep({
+        stepNumber: 1,
+        steps: [],
+        model: { kind: 'model' },
+        messages: [],
       }),
-    )
+    ).toEqual({
+      toolChoice: 'required',
+    })
+    expect(
+      await streamRequest.prepareStep({
+        stepNumber: 2,
+        steps: [],
+        model: { kind: 'model' },
+        messages: [],
+      }),
+    ).toEqual({
+      toolChoice: 'auto',
+    })
     expect(context.debugMetrics).toMatchObject({
       experimental_agentic_transcript_recall_tool_choice_preflight: 'required',
       experimental_agentic_transcript_recall_tool_choice_source: 'heuristic',
@@ -591,19 +611,39 @@ describe('requestProviderStage', () => {
       timings: {},
     })
 
-    expect(streamTextMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        toolChoice: 'required',
-        tools: {
-          fetch_source_range: {},
+    const streamRequest = streamTextMock.mock.calls[0]?.[0]
+    expect(streamRequest).toMatchObject({
+      tools: {
+        fetch_source_range: {},
+      },
+      providerOptions: {
+        anthropic: {
+          cacheControl: { type: 'ephemeral', ttl: '1h' },
         },
-        providerOptions: {
-          anthropic: {
-            cacheControl: { type: 'ephemeral', ttl: '1h' },
-          },
-        },
+      },
+    })
+    expect(streamRequest).not.toHaveProperty('toolChoice', 'required')
+    expect(streamRequest.prepareStep).toEqual(expect.any(Function))
+    expect(
+      await streamRequest.prepareStep({
+        stepNumber: 1,
+        steps: [],
+        model: { kind: 'model' },
+        messages: [],
       }),
-    )
+    ).toEqual({
+      toolChoice: 'required',
+    })
+    expect(
+      await streamRequest.prepareStep({
+        stepNumber: 2,
+        steps: [],
+        model: { kind: 'model' },
+        messages: [],
+      }),
+    ).toEqual({
+      toolChoice: 'auto',
+    })
     expect(context.debugMetrics).toMatchObject({
       anthropic_thinking_requested: false,
       anthropic_thinking_type: null,

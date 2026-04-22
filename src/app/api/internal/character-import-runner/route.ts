@@ -98,7 +98,7 @@ async function processCharacterImportJobs({
     }
 
     try {
-      await processCharacterImportJob(
+      const result = await processCharacterImportJob(
         {
           jobId: job.id,
           userId: job.user_id,
@@ -108,7 +108,11 @@ async function processCharacterImportJobs({
         },
         supabase,
       )
-      processed.push({ jobId: job.id, status: 'success' })
+      processed.push(
+        result.status === 'success'
+          ? { jobId: job.id, status: 'success' }
+          : { jobId: job.id, status: 'error', error: result.error },
+      )
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown runner failure'
       console.error('[Character Import Runner] Job execution failed', {

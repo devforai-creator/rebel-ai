@@ -184,6 +184,9 @@ Progress note:
 - expired signed upload tickets now clean up their own staged import object
   before returning `403`, which closes one stale-client orphan path without
   widening cleanup to malformed or untrusted ticket payloads
+- runner route responses now mirror the actual import execution result instead
+  of reporting `success` after helper-managed job failures that already wrote
+  `error` into `charx_import_jobs`
 
 Why third:
 

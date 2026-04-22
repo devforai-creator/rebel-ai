@@ -169,7 +169,7 @@ describe('character-import-jobs', () => {
     const { processCharacterImportJob } = await loadModule()
     const mock = createSupabaseMock()
 
-    await processCharacterImportJob(
+    const result = await processCharacterImportJob(
       {
         jobId: 'job-1',
         userId: 'user-1',
@@ -179,6 +179,10 @@ describe('character-import-jobs', () => {
       mock.client as never,
     )
 
+    expect(result).toEqual({
+      status: 'error',
+      error: 'Security validation failed: unauthorized storage path',
+    })
     expect(mock.calls.jobUpdates).toHaveLength(1)
     expect(mock.calls.jobUpdates[0]).toMatchObject({
       id: 'job-1',
@@ -195,7 +199,7 @@ describe('character-import-jobs', () => {
     const { processCharacterImportJob } = await loadModule()
     const mock = createSupabaseMock()
 
-    await processCharacterImportJob(
+    const result = await processCharacterImportJob(
       {
         jobId: 'job-1',
         userId: 'user-1',
@@ -205,6 +209,7 @@ describe('character-import-jobs', () => {
       mock.client as never,
     )
 
+    expect(result).toEqual({ status: 'success' })
     expect(parseRbxArchiveMock).toHaveBeenCalledTimes(1)
     expect(importRbxMock).toHaveBeenCalledWith({
       userId: 'user-1',
@@ -240,7 +245,7 @@ describe('character-import-jobs', () => {
       downloadError: { message: 'Storage unavailable' },
     })
 
-    await processCharacterImportJob(
+    const result = await processCharacterImportJob(
       {
         jobId: 'job-1',
         userId: 'user-1',
@@ -250,6 +255,10 @@ describe('character-import-jobs', () => {
       mock.client as never,
     )
 
+    expect(result).toEqual({
+      status: 'error',
+      error: 'Storage unavailable',
+    })
     expect(parseRbxArchiveMock).not.toHaveBeenCalled()
     expect(importRbxMock).not.toHaveBeenCalled()
     expect(mock.calls.jobUpdates.at(-1)).toMatchObject({

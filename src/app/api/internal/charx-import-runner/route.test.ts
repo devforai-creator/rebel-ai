@@ -175,7 +175,7 @@ describe('POST /api/internal/charx-import-runner', () => {
       updated_at: new Date().toISOString(),
     }
     supabaseMock = createSupabaseMock([stuckJob, pendingJob])
-    processCharacterImportJobMock.mockResolvedValueOnce(undefined)
+    processCharacterImportJobMock.mockResolvedValueOnce({ status: 'success' })
 
     const { POST } = await import('./route')
     const response = await POST(buildRequest({ limit: 2 }, 'Bearer admin-secret'))
@@ -209,7 +209,7 @@ describe('POST /api/internal/charx-import-runner', () => {
       updated_at: new Date().toISOString(),
     }
     supabaseMock = createSupabaseMock([pendingJob])
-    processCharacterImportJobMock.mockResolvedValueOnce(undefined)
+    processCharacterImportJobMock.mockResolvedValueOnce({ status: 'success' })
 
     const { POST } = await import('./route')
     const response = await POST(buildRequest({ limit: 1, dispatch: true }, 'Bearer admin-secret'))
@@ -224,5 +224,35 @@ describe('POST /api/internal/charx-import-runner', () => {
       expect.objectContaining({ jobId: 'job-1' }),
       supabaseMock,
     )
+  })
+
+  it('reports an error when the import processor returns an error result', async () => {
+    process.env.CHAT_ADMIN_SECRET = 'admin-secret'
+    const pendingJob: JobRow = {
+      id: 'job-1',
+      user_id: 'user-1',
+      storage_path: 'path/file.rbx',
+      original_filename: 'file.rbx',
+      file_type: 'application/json',
+      status: 'pending',
+      updated_at: new Date().toISOString(),
+    }
+    supabaseMock = createSupabaseMock([pendingJob])
+    processCharacterImportJobMock.mockResolvedValueOnce({
+      status: 'error',
+      error: 'RBX import failed',
+    })
+
+    const { POST } = await import('./route')
+    const response = await POST(buildRequest({ limit: 1 }, 'Bearer admin-secret'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.processedCount).toBe(1)
+    expect(body.processed[0]).toMatchObject({
+      jobId: 'job-1',
+      status: 'error',
+      error: 'RBX import failed',
+    })
   })
 })

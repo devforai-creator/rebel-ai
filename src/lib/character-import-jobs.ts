@@ -21,6 +21,10 @@ export type CharacterImportJobPayload = {
   fileType?: string | null
 }
 
+export type CharacterImportJobExecutionResult =
+  | { status: 'success' }
+  | { status: 'error'; error: string }
+
 export function validateStoragePath(storagePath: string, userId: string): boolean {
   return isImportUploadPath(storagePath, userId)
 }
@@ -28,8 +32,9 @@ export function validateStoragePath(storagePath: string, userId: string): boolea
 export async function processCharacterImportJob(
   payload: CharacterImportJobPayload,
   supabase: CharacterImportSupabaseClient,
-): Promise<void> {
+): Promise<CharacterImportJobExecutionResult> {
   if (!validateStoragePath(payload.storagePath, payload.userId)) {
+    const errorMessage = 'Security validation failed: unauthorized storage path'
     console.error('[Character Import][runner] Security validation failed', {
       jobId: payload.jobId,
       userId: payload.userId,
@@ -38,14 +43,17 @@ export async function processCharacterImportJob(
     const securityFailureUpdate: ImportJobUpdate = {
       status: 'error',
       completed_at: new Date().toISOString(),
-      error_message: 'Security validation failed: unauthorized storage path',
+      error_message: errorMessage,
       result: null,
     }
     await supabase
       .from('charx_import_jobs')
       .update(securityFailureUpdate as never)
       .eq('id', payload.jobId)
-    return
+    return {
+      status: 'error',
+      error: errorMessage,
+    }
   }
 
   const processingUpdate: ImportJobUpdate = {
@@ -103,6 +111,7 @@ export async function processCharacterImportJob(
       .from('charx_import_jobs')
       .update(successUpdate as never)
       .eq('id', payload.jobId)
+    return { status: 'success' }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     console.error('[Character Import][runner] Job failed', {
@@ -120,6 +129,10 @@ export async function processCharacterImportJob(
       .from('charx_import_jobs')
       .update(errorUpdate as never)
       .eq('id', payload.jobId)
+    return {
+      status: 'error',
+      error: errorMessage,
+    }
   } finally {
     const removal = await supabase.storage.from(IMPORT_UPLOAD_BUCKET).remove([payload.storagePath])
     if (removal.error) {

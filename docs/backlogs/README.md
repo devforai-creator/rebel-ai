@@ -16,7 +16,7 @@ Use it to answer two questions quickly:
 
 - Active backlog: none currently
 - Most recently archived backlog:
-  [character-chat-atr-gate-backlog-2026-04-22.md](./archive/2026/character-chat-atr-gate-backlog-2026-04-22.md)
+  [explicit-memory-v0-backlog-2026-04-22.md](./archive/2026/explicit-memory-v0-backlog-2026-04-22.md)
 
 ## Working Rules
 

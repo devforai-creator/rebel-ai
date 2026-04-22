@@ -155,6 +155,59 @@ Tool rules:
 - proposal must reference a source range inside the current chat
 - proposal must be rejected if the statement is vague, emotional, or scene-local
 - proposal does not guarantee persistence
+- accepted proposals still require explicit user approval before commit
+
+### Preferred Future Write-Trigger Shape
+
+If this queue is resumed later, prefer the same broad shape as the current ATR
+admission seam:
+
+- cheap heuristic preflight first
+- then a bounded tool-choice decision
+- then model proposal
+- then user approval before persistence
+
+Recommended tiers:
+
+- `off`: do not expose the proposal tool for the turn
+- `auto`: expose the proposal tool but let the model decide whether to use it
+- `required`: force one proposal-tool step for the turn
+
+Recommended forced-path contract:
+
+- force a proposal or explicit skip, not a silent direct write
+- if the heuristic overfires, the model must still be allowed to return
+  `action='skip'`
+- the server validates the proposal and prepares it for review, but does not
+  persist until the user approves
+
+Draft shape:
+
+```ts
+type MemoryProposalToolResult =
+  | {
+      action: 'propose'
+      scope: 'chat' | 'character'
+      kind: ExplicitMemoryKind
+      statement: string
+      sourceStartSeq: number
+      sourceEndSeq: number
+      reason: string
+    }
+  | {
+      action: 'skip'
+      reason: string
+    }
+```
+
+Recommended first heuristic posture:
+
+- `required` only for strong direct user-authored signals such as explicit
+  preference, boundary, or promise statements
+- `auto` for plausible but less certain durable candidates such as strong
+  profile or canon facts
+- `off` for mood, scene interpretation, relationship interpretation, or weak
+  inferred preference
 
 ### Read Path
 
@@ -262,9 +315,11 @@ Recommended v0 shape:
 
 1. add the explicit-memory storage contract
 2. add `propose_memory_write`
-3. run server-side admission before commit
-4. surface a tiny set of applicable explicit memories during context assembly
-5. keep ATR as the verifier when exactness is still needed
+3. add a thin `off / auto / required` write-trigger gate ahead of the tool seam
+4. run server-side admission before review
+5. require explicit user approval before commit
+6. surface a tiny set of applicable explicit memories during context assembly
+7. keep ATR as the verifier when exactness is still needed
 
 This keeps the write path agentic, but keeps the read path predictable.
 

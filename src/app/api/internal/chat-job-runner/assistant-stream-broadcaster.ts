@@ -10,6 +10,18 @@ import {
 } from '@/lib/chat/assistant-stream-monitor'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
+type AssistantStreamChannel = {
+  httpSend?: (
+    event: string,
+    payload: AssistantStreamBroadcastPayload,
+    opts?: { timeout?: number },
+  ) => Promise<{ success: true } | { success: false; status: number; error: string }>
+  send?: (args: {
+    type: 'broadcast'
+    event: string
+    payload: AssistantStreamBroadcastPayload
+  }) => Promise<string>
+}
 
 async function broadcastAssistantStreamEvent({
   supabase,
@@ -40,30 +52,77 @@ async function broadcastAssistantStreamEvent({
   }
 
   try {
-    const status = await supabase.channel(getChatAssistantStreamChannelName(chatId)).send({
-      type: 'broadcast',
-      event: CHAT_ASSISTANT_STREAM_EVENT,
-      payload,
-    })
+    const channel = supabase.channel(
+      getChatAssistantStreamChannelName(chatId),
+    ) as AssistantStreamChannel
 
-    if (status !== 'ok') {
-      const error = new Error(`Assistant stream broadcast returned status ${status}`)
-      await recordAssistantStreamBroadcastFailure(error, {
+    if (typeof channel.httpSend === 'function') {
+      const result = await channel.httpSend(CHAT_ASSISTANT_STREAM_EVENT, payload)
+
+      if (!result.success) {
+        const error = new Error(
+          `Assistant stream broadcast returned status ${result.status}: ${result.error}`,
+        )
+        await recordAssistantStreamBroadcastFailure(error, {
+          ...metadata,
+          stage: 'http-send',
+          status: result.status,
+        })
+        console.warn('[Chat Job Runner] Assistant stream broadcast failed', {
+          ...metadata,
+          stage: 'http-send',
+          status: result.status,
+          error: result.error,
+        })
+        return
+      }
+
+      await recordAssistantStreamBroadcastSuccess({
+        ...metadata,
+        stage: 'http-send',
+        status: 'ok',
+      })
+      return
+    }
+
+    if (typeof channel.send === 'function') {
+      const status = await channel.send({
+        type: 'broadcast',
+        event: CHAT_ASSISTANT_STREAM_EVENT,
+        payload,
+      })
+
+      if (status !== 'ok') {
+        const error = new Error(`Assistant stream broadcast returned status ${status}`)
+        await recordAssistantStreamBroadcastFailure(error, {
+          ...metadata,
+          stage: 'send',
+          status,
+        })
+        console.warn('[Chat Job Runner] Assistant stream broadcast failed', {
+          ...metadata,
+          stage: 'send',
+          status,
+        })
+        return
+      }
+
+      await recordAssistantStreamBroadcastSuccess({
         ...metadata,
         stage: 'send',
-        status,
-      })
-      console.warn('[Chat Job Runner] Assistant stream broadcast failed', {
-        ...metadata,
         status,
       })
       return
     }
 
-    await recordAssistantStreamBroadcastSuccess({
+    const error = new Error('Supabase realtime channel does not expose httpSend() or send()')
+    await recordAssistantStreamBroadcastFailure(error, {
       ...metadata,
-      stage: 'send',
-      status,
+      stage: 'missing-broadcast-api',
+    })
+    console.warn('[Chat Job Runner] Assistant stream broadcast unavailable', {
+      ...metadata,
+      stage: 'missing-broadcast-api',
     })
   } catch (error) {
     await recordAssistantStreamBroadcastFailure(error, {

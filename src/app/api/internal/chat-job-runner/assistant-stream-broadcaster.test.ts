@@ -56,9 +56,9 @@ describe('assistant stream broadcaster', () => {
     })
   })
 
-  it('broadcasts snapshot payloads without logging when send succeeds', async () => {
-    const send = vi.fn(async () => 'ok')
-    const channel = vi.fn(() => ({ send }))
+  it('broadcasts snapshot payloads over httpSend without logging when available', async () => {
+    const httpSend = vi.fn(async () => ({ success: true as const }))
+    const channel = vi.fn(() => ({ httpSend }))
 
     await broadcastAssistantStreamSnapshot({
       supabase: { channel } as never,
@@ -69,15 +69,11 @@ describe('assistant stream broadcaster', () => {
     })
 
     expect(channel).toHaveBeenCalledWith(getChatAssistantStreamChannelName('chat-1'))
-    expect(send).toHaveBeenCalledWith({
-      type: 'broadcast',
-      event: CHAT_ASSISTANT_STREAM_EVENT,
-      payload: {
-        kind: 'snapshot',
-        jobId: 'job-1',
-        content: 'hello',
-        regenerateAssistantMessageId: 'assistant-1',
-      },
+    expect(httpSend).toHaveBeenCalledWith(CHAT_ASSISTANT_STREAM_EVENT, {
+      kind: 'snapshot',
+      jobId: 'job-1',
+      content: 'hello',
+      regenerateAssistantMessageId: 'assistant-1',
     })
     expect(console.warn).not.toHaveBeenCalled()
     expect(getAssistantStreamBroadcastStats()).toMatchObject({
@@ -88,15 +84,43 @@ describe('assistant stream broadcaster', () => {
         chatId: 'chat-1',
         jobId: 'job-1',
         kind: 'snapshot',
-        stage: 'send',
+        stage: 'http-send',
         status: 'ok',
       },
     })
   })
 
-  it('warns when the realtime broadcast returns a non-ok status', async () => {
+  it('falls back to send when httpSend is unavailable', async () => {
     const send = vi.fn(async () => 'timed out')
     const channel = vi.fn(() => ({ send }))
+
+    await broadcastAssistantStreamSnapshot({
+      supabase: { channel } as never,
+      chatId: 'chat-1',
+      jobId: 'job-1',
+      content: 'hello',
+      regenerateAssistantMessageId: null,
+    })
+
+    expect(send).toHaveBeenCalledWith({
+      type: 'broadcast',
+      event: CHAT_ASSISTANT_STREAM_EVENT,
+      payload: {
+        kind: 'snapshot',
+        jobId: 'job-1',
+        content: 'hello',
+        regenerateAssistantMessageId: null,
+      },
+    })
+  })
+
+  it('warns when the explicit HTTP broadcast returns a non-success result', async () => {
+    const httpSend = vi.fn(async () => ({
+      success: false as const,
+      status: 503,
+      error: 'broadcast unavailable',
+    }))
+    const channel = vi.fn(() => ({ httpSend }))
 
     await broadcastAssistantStreamSnapshot({
       supabase: { channel } as never,
@@ -112,20 +136,22 @@ describe('assistant stream broadcaster', () => {
         chatId: 'chat-1',
         jobId: 'job-1',
         kind: 'snapshot',
-        status: 'timed out',
+        stage: 'http-send',
+        status: 503,
+        error: 'broadcast unavailable',
       },
     )
     expect(getAssistantStreamBroadcastStats()).toMatchObject({
       totalSuccesses: 0,
       totalFailures: 1,
       consecutiveFailures: 1,
-      lastErrorMessage: 'Assistant stream broadcast returned status timed out',
+      lastErrorMessage: 'Assistant stream broadcast returned status 503: broadcast unavailable',
       lastMetadata: {
         chatId: 'chat-1',
         jobId: 'job-1',
         kind: 'snapshot',
-        stage: 'send',
-        status: 'timed out',
+        stage: 'http-send',
+        status: 503,
       },
     })
   })

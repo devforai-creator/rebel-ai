@@ -48,6 +48,7 @@ Many chat products can offer one or two of these. RebelAI is explicitly trying t
 - bring-your-own-key cost control
 - data ownership
 - a portable native character format
+- bounded transcript recall for exact older dialogue recovery when summaries are not enough (`experimental`)
 - trust-boundary-first engineering choices
 
 This is also why RebelAI avoids broad security marketing claims. The goal is not to claim perfect safety. The goal is to keep the trust surface explicit, narrow, and reviewable.

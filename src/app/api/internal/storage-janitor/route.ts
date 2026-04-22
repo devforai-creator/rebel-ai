@@ -22,6 +22,13 @@ type RunnerRequest = {
   sampleSize?: number
 }
 
+type ValidatedJanitorOptions = {
+  execute: boolean
+  olderThanDays: number
+  maxDelete: number
+  sampleSize?: number
+}
+
 export async function GET(req: NextRequest) {
   const adminSecret = process.env.CHAT_ADMIN_SECRET
   const cronSecret = process.env.CRON_SECRET
@@ -42,7 +49,12 @@ export async function GET(req: NextRequest) {
     return auth.response
   }
 
-  const options = resolveJanitorOptionsFromSearchParams(req)
+  const optionResult = resolveJanitorOptionsFromSearchParams(req)
+  if (!optionResult.success) {
+    return optionResult.response
+  }
+
+  const options = optionResult.options
   const endpoint = buildInternalApiUrl('/api/internal/storage-janitor')
   const headers = buildRunnerHeaders(adminSecret)
 
@@ -117,8 +129,18 @@ export async function POST(req: NextRequest) {
     return auth.response
   }
 
-  const body = ((await req.json().catch(() => ({}))) ?? {}) as RunnerRequest
-  const options = resolveJanitorOptionsFromBody(body)
+  const requestBody = await readRunnerRequestBody(req)
+  if (!requestBody.success) {
+    return requestBody.response
+  }
+
+  const body = requestBody.body
+  const optionResult = resolveJanitorOptionsFromBody(body)
+  if (!optionResult.success) {
+    return optionResult.response
+  }
+
+  const options = optionResult.options
 
   if (body.dispatch === true) {
     console.info(
@@ -177,6 +199,47 @@ export async function POST(req: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
     })
     return NextResponse.json({ error: 'Storage janitor run failed' }, { status: 500 })
+  }
+}
+
+async function readRunnerRequestBody(req: NextRequest): Promise<
+  | {
+      success: true
+      body: RunnerRequest
+    }
+  | {
+      success: false
+      response: NextResponse
+    }
+> {
+  const rawBody = await req.text()
+  if (!rawBody.trim()) {
+    return {
+      success: true,
+      body: {},
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(rawBody) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      console.error('[Storage Janitor Runner] Invalid request body')
+      return {
+        success: false,
+        response: NextResponse.json({ error: 'Invalid request body' }, { status: 400 }),
+      }
+    }
+
+    return {
+      success: true,
+      body: parsed as RunnerRequest,
+    }
+  } catch {
+    console.error('[Storage Janitor Runner] Invalid JSON body')
+    return {
+      success: false,
+      response: NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }),
+    }
   }
 }
 
@@ -261,22 +324,86 @@ function summarizeBucketResult(result: StorageJanitorSummary) {
   }
 }
 
-function resolveJanitorOptionsFromSearchParams(req: NextRequest) {
+function resolveJanitorOptionsFromSearchParams(req: NextRequest):
+  | { success: true; options: ValidatedJanitorOptions }
+  | {
+      success: false
+      response: NextResponse
+    } {
+  const dryRun = readBooleanQueryParam(req.nextUrl.searchParams.get('dryRun'), 'dryRun')
+  if (!dryRun.success) {
+    return dryRun
+  }
+
+  const olderThanDays = readPositiveIntQueryParam(
+    req.nextUrl.searchParams.get('olderThanDays'),
+    'olderThanDays',
+  )
+  if (!olderThanDays.success) {
+    return olderThanDays
+  }
+
+  const maxDelete = readPositiveIntQueryParam(
+    req.nextUrl.searchParams.get('maxDelete'),
+    'maxDelete',
+  )
+  if (!maxDelete.success) {
+    return maxDelete
+  }
+
+  const sampleSize = readPositiveIntQueryParam(
+    req.nextUrl.searchParams.get('sampleSize'),
+    'sampleSize',
+  )
+  if (!sampleSize.success) {
+    return sampleSize
+  }
+
   return {
-    execute: req.nextUrl.searchParams.get('dryRun') !== '1',
-    olderThanDays:
-      readPositiveInt(req.nextUrl.searchParams.get('olderThanDays')) ?? DEFAULT_OLDER_THAN_DAYS,
-    maxDelete: readPositiveInt(req.nextUrl.searchParams.get('maxDelete')) ?? DEFAULT_MAX_DELETE,
-    sampleSize: readPositiveInt(req.nextUrl.searchParams.get('sampleSize')) ?? undefined,
+    success: true,
+    options: {
+      execute: dryRun.value === null ? true : !dryRun.value,
+      olderThanDays: olderThanDays.value ?? DEFAULT_OLDER_THAN_DAYS,
+      maxDelete: maxDelete.value ?? DEFAULT_MAX_DELETE,
+      sampleSize: sampleSize.value ?? undefined,
+    },
   }
 }
 
-function resolveJanitorOptionsFromBody(body: RunnerRequest) {
+function resolveJanitorOptionsFromBody(body: RunnerRequest):
+  | { success: true; options: ValidatedJanitorOptions }
+  | {
+      success: false
+      response: NextResponse
+    } {
+  const execute = readOptionalBoolean(body.execute, 'execute')
+  if (!execute.success) {
+    return execute
+  }
+
+  const olderThanDays = readPositiveIntBodyValue(body.olderThanDays, 'olderThanDays')
+  if (!olderThanDays.success) {
+    return olderThanDays
+  }
+
+  const maxDelete = readPositiveIntBodyValue(body.maxDelete, 'maxDelete')
+  if (!maxDelete.success) {
+    return maxDelete
+  }
+
+  const sampleSize = readPositiveIntBodyValue(body.sampleSize, 'sampleSize')
+  if (!sampleSize.success) {
+    return sampleSize
+  }
+
   return {
-    execute: body.execute ?? true,
-    olderThanDays: normalizePositiveInt(body.olderThanDays) ?? DEFAULT_OLDER_THAN_DAYS,
-    maxDelete: normalizePositiveInt(body.maxDelete) ?? DEFAULT_MAX_DELETE,
-    sampleSize: normalizePositiveInt(body.sampleSize) ?? undefined,
+    success: true,
+    options: {
+      execute: execute.value ?? true,
+      olderThanDays: olderThanDays.value ?? DEFAULT_OLDER_THAN_DAYS,
+      maxDelete: maxDelete.value ?? DEFAULT_MAX_DELETE,
+      sampleSize: sampleSize.value ?? undefined,
+    },
   }
 }
 
@@ -293,18 +420,122 @@ function buildRunnerHeaders(adminSecret: string): HeadersInit {
   return headers
 }
 
-function readPositiveInt(raw: string | null): number | null {
-  if (!raw) {
-    return null
+function readBooleanQueryParam(
+  raw: string | null,
+  field: string,
+):
+  | { success: true; value: boolean | null }
+  | {
+      success: false
+      response: NextResponse
+    } {
+  if (raw === null) {
+    return {
+      success: true,
+      value: null,
+    }
   }
 
-  return normalizePositiveInt(Number.parseInt(raw, 10))
+  const normalized = raw.toLowerCase()
+  if (raw === '1' || normalized === 'true') {
+    return {
+      success: true,
+      value: true,
+    }
+  }
+
+  if (raw === '0' || normalized === 'false') {
+    return {
+      success: true,
+      value: false,
+    }
+  }
+
+  return invalidJanitorRequest(`${field} must be a boolean`)
 }
 
-function normalizePositiveInt(value: number | undefined): number | null {
-  if (!Number.isFinite(value) || (value ?? 0) <= 0) {
-    return null
+function readPositiveIntQueryParam(
+  raw: string | null,
+  field: string,
+):
+  | { success: true; value: number | null }
+  | {
+      success: false
+      response: NextResponse
+    } {
+  if (raw === null) {
+    return {
+      success: true,
+      value: null,
+    }
   }
 
-  return Math.trunc(value as number)
+  if (!/^[1-9]\d*$/.test(raw)) {
+    return invalidJanitorRequest(`${field} must be a positive integer`)
+  }
+
+  return {
+    success: true,
+    value: Number.parseInt(raw, 10),
+  }
+}
+
+function readOptionalBoolean(
+  value: boolean | undefined,
+  field: string,
+):
+  | { success: true; value: boolean | null }
+  | {
+      success: false
+      response: NextResponse
+    } {
+  if (value === undefined) {
+    return {
+      success: true,
+      value: null,
+    }
+  }
+
+  if (typeof value !== 'boolean') {
+    return invalidJanitorRequest(`${field} must be a boolean`)
+  }
+
+  return {
+    success: true,
+    value,
+  }
+}
+
+function readPositiveIntBodyValue(
+  value: number | undefined,
+  field: string,
+):
+  | { success: true; value: number | null }
+  | {
+      success: false
+      response: NextResponse
+    } {
+  if (value === undefined) {
+    return {
+      success: true,
+      value: null,
+    }
+  }
+
+  if (!Number.isInteger(value) || value <= 0) {
+    return invalidJanitorRequest(`${field} must be a positive integer`)
+  }
+
+  return {
+    success: true,
+    value,
+  }
+}
+
+function invalidJanitorRequest(message: string) {
+  console.error('[Storage Janitor] Invalid request option', { error: message })
+  return {
+    success: false as const,
+    response: NextResponse.json({ error: message }, { status: 400 }),
+  }
 }

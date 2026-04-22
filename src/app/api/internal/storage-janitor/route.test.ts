@@ -57,6 +57,14 @@ function buildPostRequest(body: unknown, auth?: string) {
   })
 }
 
+function buildRawPostRequest(body: string, auth?: string) {
+  return new NextRequest('http://localhost/api/internal/storage-janitor', {
+    method: 'POST',
+    headers: auth ? { authorization: auth, 'content-type': 'application/json' } : undefined,
+    body,
+  })
+}
+
 async function flushAfterTask() {
   await afterMock.mock.results.at(-1)?.value
 }
@@ -212,6 +220,27 @@ describe('/api/internal/storage-janitor', () => {
       )
     })
 
+    it('returns 400 when query params are invalid instead of dispatching with defaults', async () => {
+      process.env.CHAT_ADMIN_SECRET = 'admin-secret'
+      process.env.CRON_SECRET = 'cron-secret'
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      const { GET } = await import('./route')
+
+      const response = await GET(
+        buildGetRequest(
+          'http://localhost/api/internal/storage-janitor?dryRun=maybe&maxDelete=oops',
+          'Bearer admin-secret',
+        ),
+      )
+
+      expect(response.status).toBe(400)
+      await expect(response.json()).resolves.toEqual({ error: 'dryRun must be a boolean' })
+      expect(mockFetch).not.toHaveBeenCalled()
+      expect(errorSpy).toHaveBeenCalledWith('[Storage Janitor] Invalid request option', {
+        error: 'dryRun must be a boolean',
+      })
+    })
+
     it('logs structured metadata when runner dispatch fails', async () => {
       process.env.CHAT_ADMIN_SECRET = 'admin-secret'
       process.env.CRON_SECRET = 'cron-secret'
@@ -260,6 +289,36 @@ describe('/api/internal/storage-janitor', () => {
       const response = await POST(buildPostRequest({}))
 
       expect(response.status).toBe(401)
+    })
+
+    it('returns 400 instead of executing when the JSON body is malformed', async () => {
+      process.env.CHAT_ADMIN_SECRET = 'admin-secret'
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      const { POST } = await import('./route')
+
+      const response = await POST(buildRawPostRequest('{', 'Bearer admin-secret'))
+
+      expect(response.status).toBe(400)
+      await expect(response.json()).resolves.toEqual({ error: 'Invalid JSON body' })
+      expect(runStorageJanitorMock).not.toHaveBeenCalled()
+      expect(errorSpy).toHaveBeenCalledWith('[Storage Janitor Runner] Invalid JSON body')
+    })
+
+    it('returns 400 when body options use invalid types instead of executing defaults', async () => {
+      process.env.CHAT_ADMIN_SECRET = 'admin-secret'
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      const { POST } = await import('./route')
+
+      const response = await POST(
+        buildPostRequest({ execute: 'false', maxDelete: '10' }, 'Bearer admin-secret'),
+      )
+
+      expect(response.status).toBe(400)
+      await expect(response.json()).resolves.toEqual({ error: 'execute must be a boolean' })
+      expect(runStorageJanitorMock).not.toHaveBeenCalled()
+      expect(errorSpy).toHaveBeenCalledWith('[Storage Janitor] Invalid request option', {
+        error: 'execute must be a boolean',
+      })
     })
 
     it('runs both janitors synchronously by default', async () => {

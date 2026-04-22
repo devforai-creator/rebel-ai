@@ -70,7 +70,18 @@ stop when the review stops paying for itself.
 
 ### S1. Internal Admin And Trigger Auth Seams
 
-Status: `pending`
+Status: `in_progress`
+
+Progress note:
+
+- started on `2026-04-22`
+- first auth sub-slice landed: shared bearer-token helpers now cover the
+  internal admin-or-cron trigger routes plus the remaining single-secret
+  internal routes reviewed in this pass
+- `job-janitor` no longer requires both `CHAT_ADMIN_SECRET` and `CRON_SECRET`
+  just to accept one valid configured bearer secret
+- review remains open for the rest of the internal/admin seam beyond this
+  helperization and contract cleanup pass
 
 Why first:
 

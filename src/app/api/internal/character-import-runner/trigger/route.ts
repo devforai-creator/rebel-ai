@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server'
+import { requireAnyBearerToken } from '@/lib/http/api-contract'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
 
 export const runtime = 'nodejs'
@@ -23,16 +24,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
-  const authHeader = req.headers.get('authorization')
-
-  const isCronAuthorized = cronSecret ? authHeader === `Bearer ${cronSecret}` : false
-  const isAdminAuthorized = authHeader === `Bearer ${adminSecret}`
-
-  if (!isCronAuthorized && !isAdminAuthorized) {
+  const auth = requireAnyBearerToken(req, [adminSecret, cronSecret])
+  if (!auth.success) {
     console.error('[Character Import Runner Trigger] Unauthorized access attempt', {
-      hasAuthHeader: Boolean(authHeader),
+      hasAuthHeader: Boolean(req.headers.get('authorization')),
     })
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return auth.response
   }
 
   const limit =

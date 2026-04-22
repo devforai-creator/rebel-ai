@@ -3,6 +3,7 @@ import { getAssistantStreamBroadcastStats } from '@/lib/chat/assistant-stream-mo
 import { getChatJobLifecyclePersistenceStats } from '@/lib/chat/job-lifecycle-store'
 import { getChatRunnerTriggerStats } from '@/lib/chat/runner-trigger-monitor'
 import { getSummaryTriggerStats } from '@/lib/chat/summary-trigger'
+import { requireBearerToken } from '@/lib/http/api-contract'
 import {
   deriveAggregateSignalStatus,
   getServiceSignalStatus,
@@ -22,9 +23,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
-  const authHeader = req.headers.get('authorization')
-  if (authHeader !== `Bearer ${adminSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = requireBearerToken(req, adminSecret)
+  if (!auth.success) {
+    return auth.response
   }
 
   const fallbackStats = {

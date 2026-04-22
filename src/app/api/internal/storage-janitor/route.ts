@@ -4,6 +4,7 @@ import {
   type StorageJanitorSummary,
 } from '@/lib/assets/orphaned-storage-janitor'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
+import { requireAnyBearerToken, requireBearerToken } from '@/lib/http/api-contract'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
@@ -33,15 +34,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
-  const authHeader = req.headers.get('authorization')
-  const isValidCron = cronSecret ? authHeader === `Bearer ${cronSecret}` : false
-  const isValidAdmin = authHeader === `Bearer ${adminSecret}`
-
-  if (!isValidCron && !isValidAdmin) {
+  const auth = requireAnyBearerToken(req, [adminSecret, cronSecret])
+  if (!auth.success) {
     console.error('[Storage Janitor Trigger] Unauthorized access attempt', {
-      hasAuthHeader: !!authHeader,
+      hasAuthHeader: !!req.headers.get('authorization'),
     })
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return auth.response
   }
 
   const options = resolveJanitorOptionsFromSearchParams(req)
@@ -113,10 +111,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
-  const authHeader = req.headers.get('authorization')
-  if (!authHeader || authHeader !== `Bearer ${adminSecret}`) {
+  const auth = requireBearerToken(req, adminSecret)
+  if (!auth.success) {
     console.error('[Storage Janitor Runner] Unauthorized attempt')
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return auth.response
   }
 
   const body = ((await req.json().catch(() => ({}))) ?? {}) as RunnerRequest

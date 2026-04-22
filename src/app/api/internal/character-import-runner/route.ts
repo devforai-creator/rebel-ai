@@ -2,6 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/database.types'
 import { processCharacterImportJob } from '@/lib/character-import-jobs'
+import { requireBearerToken } from '@/lib/http/api-contract'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -37,10 +38,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 })
   }
 
-  const authHeader = req.headers.get('authorization')
-  if (!authHeader || authHeader !== `Bearer ${adminSecret}`) {
+  const auth = requireBearerToken(req, adminSecret)
+  if (!auth.success) {
     console.error('[Character Import Runner] Unauthorized attempt')
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return auth.response
   }
 
   const body = ((await req.json().catch(() => ({}))) ?? {}) as RunnerRequest

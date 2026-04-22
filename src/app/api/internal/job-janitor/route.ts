@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { pruneHistoricalChatJobs, resetStuckProcessingJobs } from '@/lib/chat/job-queue'
+import { requireAnyBearerToken } from '@/lib/http/api-contract'
 import { resetStuckImportProcessingJobs } from '@/lib/import/job-queue'
 
 export const runtime = 'nodejs'
@@ -10,23 +11,22 @@ export async function GET(req: NextRequest) {
   const adminSecret = process.env.CHAT_ADMIN_SECRET
   const cronSecret = process.env.CRON_SECRET
 
-  if (!adminSecret || !cronSecret) {
-    console.error('[Job Janitor] Required secrets not configured', {
-      hasAdminSecret: !!adminSecret,
-      hasCronSecret: !!cronSecret,
-    })
-    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
-  }
+  const auth = requireAnyBearerToken(req, [adminSecret, cronSecret])
+  if (!auth.success) {
+    const hasConfiguredSecret = Boolean(adminSecret || cronSecret)
 
-  const authHeader = req.headers.get('authorization')
-  const isValidCron = authHeader === `Bearer ${cronSecret}`
-  const isValidAdmin = authHeader === `Bearer ${adminSecret}`
+    if (!hasConfiguredSecret) {
+      console.error('[Job Janitor] Required secrets not configured', {
+        hasAdminSecret: !!adminSecret,
+        hasCronSecret: !!cronSecret,
+      })
+    } else {
+      console.error('[Job Janitor] Unauthorized access attempt', {
+        hasAuthHeader: !!req.headers.get('authorization'),
+      })
+    }
 
-  if (!isValidCron && !isValidAdmin) {
-    console.error('[Job Janitor] Unauthorized access attempt', {
-      hasAuthHeader: !!authHeader,
-    })
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return auth.response
   }
 
   const supabase = createAdminClient()

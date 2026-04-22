@@ -68,6 +68,26 @@ describe('GET /api/internal/job-janitor', () => {
     expect(response.status).toBe(500)
   })
 
+  it('accepts CRON_SECRET bearer auth when CHAT_ADMIN_SECRET is missing', async () => {
+    delete process.env.CHAT_ADMIN_SECRET
+    process.env.CRON_SECRET = 'cron-secret'
+    const { GET } = await import('./route')
+
+    const response = await GET(buildRequest('Bearer cron-secret'))
+
+    expect(response.status).toBe(200)
+  })
+
+  it('accepts CHAT_ADMIN_SECRET bearer auth when CRON_SECRET is missing', async () => {
+    process.env.CHAT_ADMIN_SECRET = 'admin-secret'
+    delete process.env.CRON_SECRET
+    const { GET } = await import('./route')
+
+    const response = await GET(buildRequest('Bearer admin-secret'))
+
+    expect(response.status).toBe(200)
+  })
+
   it('returns 401 when authorization is missing', async () => {
     process.env.CHAT_ADMIN_SECRET = 'admin-secret'
     process.env.CRON_SECRET = 'cron-secret'

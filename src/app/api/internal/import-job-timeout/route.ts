@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireBearerToken } from '@/lib/http/api-contract'
 import type { Database } from '@/types/database.types'
 
 const IMPORT_JOB_TIMEOUT_DEBUG_ENABLED = process.env.IMPORT_JOB_TIMEOUT_DEBUG === 'true'
@@ -41,11 +42,10 @@ export const runtime = 'nodejs'
  * Security: Protected by CHAT_ADMIN_SECRET bearer token.
  */
 export async function POST(request: NextRequest) {
-  // Verify admin secret
-  const authHeader = request.headers.get('Authorization')
   const chatAdminSecret = getChatAdminSecret()
-  if (!chatAdminSecret || authHeader !== `Bearer ${chatAdminSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = requireBearerToken(request, chatAdminSecret)
+  if (!auth.success) {
+    return auth.response
   }
 
   const body = await request.json().catch(() => null)

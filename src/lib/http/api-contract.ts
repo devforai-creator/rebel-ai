@@ -6,6 +6,15 @@ export interface ApiErrorBody {
   retryAfter?: number | null
 }
 
+type BearerTokenOptions = {
+  missingSecretMessage?: string
+  missingSecretCode?: string
+  missingSecretStatus?: number
+  unauthorizedMessage?: string
+  unauthorizedCode?: string
+  headers?: HeadersInit
+}
+
 type AuthenticatedClient<TUser> = {
   auth: {
     getUser: () => Promise<{
@@ -140,19 +149,16 @@ export async function requireAuthenticatedUser<TUser>(
   }
 }
 
-export function requireBearerToken(
+export function requireAnyBearerToken(
   request: Request,
-  expectedToken: string | null | undefined,
-  options?: {
-    missingSecretMessage?: string
-    missingSecretCode?: string
-    missingSecretStatus?: number
-    unauthorizedMessage?: string
-    unauthorizedCode?: string
-    headers?: HeadersInit
-  },
+  expectedTokens: Array<string | null | undefined>,
+  options?: BearerTokenOptions,
 ): { success: true } | { success: false; response: Response } {
-  if (!expectedToken) {
+  const availableTokens = expectedTokens.filter(
+    (token): token is string => typeof token === 'string' && token.length > 0,
+  )
+
+  if (availableTokens.length === 0) {
     return {
       success: false,
       response: createApiErrorResponse(
@@ -167,7 +173,7 @@ export function requireBearerToken(
   }
 
   const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${expectedToken}`) {
+  if (!authHeader || !availableTokens.some((token) => authHeader === `Bearer ${token}`)) {
     return {
       success: false,
       response: createApiErrorResponse(options?.unauthorizedMessage ?? 'Unauthorized', 401, {
@@ -178,6 +184,14 @@ export function requireBearerToken(
   }
 
   return { success: true }
+}
+
+export function requireBearerToken(
+  request: Request,
+  expectedToken: string | null | undefined,
+  options?: BearerTokenOptions,
+): { success: true } | { success: false; response: Response } {
+  return requireAnyBearerToken(request, [expectedToken], options)
 }
 
 export async function readApiErrorMessage(

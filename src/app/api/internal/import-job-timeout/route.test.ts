@@ -105,13 +105,14 @@ describe('POST /api/internal/import-job-timeout', () => {
     restoreEnv()
   })
 
-  it('returns 401 when CHAT_ADMIN_SECRET is missing', async () => {
+  it('returns 500 when CHAT_ADMIN_SECRET is missing', async () => {
     delete process.env.CHAT_ADMIN_SECRET
     const { POST } = await import('./route')
 
     const response = await POST(buildRequest({}))
 
-    expect(response.status).toBe(401)
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toEqual({ error: 'Server misconfigured' })
   })
 
   it('returns 401 when authorization header is missing', async () => {

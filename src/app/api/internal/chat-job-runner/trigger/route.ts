@@ -4,6 +4,7 @@ import {
   recordChatRunnerTriggerSuccess,
   getChatRunnerTriggerStats,
 } from '@/lib/chat/runner-trigger-monitor'
+import { requireAnyBearerToken } from '@/lib/http/api-contract'
 import { processChatJobs } from '../service'
 
 export const runtime = 'nodejs'
@@ -21,19 +22,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
-  // Security: only accept bearer token auth to avoid query secret leakage in logs.
-  const authHeader = req.headers.get('authorization')
-
-  const isValidCron = cronSecret ? authHeader === `Bearer ${cronSecret}` : false
-  const isValidAdmin = authHeader === `Bearer ${adminSecret}`
-
-  if (!isValidCron && !isValidAdmin) {
+  const auth = requireAnyBearerToken(req, [adminSecret, cronSecret])
+  if (!auth.success) {
     console.error('[Chat Job Runner Trigger] Unauthorized access attempt', {
-      hasAuthHeader: !!authHeader,
-      cronAuthMatch: authHeader === `Bearer ${cronSecret}`,
-      authMatch: authHeader === `Bearer ${adminSecret}`,
+      hasAuthHeader: !!req.headers.get('authorization'),
     })
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return auth.response
   }
 
   const limit = resolveBatchLimit()

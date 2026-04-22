@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server'
+import { requireBearerToken } from '@/lib/http/api-contract'
 import { processChatJobs } from './service'
 
 export const runtime = 'nodejs'
@@ -12,12 +13,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
-  const authHeader = req.headers.get('authorization')
-  if (!authHeader || authHeader !== `Bearer ${adminSecret}`) {
+  const auth = requireBearerToken(req, adminSecret)
+  if (!auth.success) {
     console.error('[Chat Job Runner] Auth failed', {
-      hasAuthHeader: !!authHeader,
+      hasAuthHeader: !!req.headers.get('authorization'),
     })
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return auth.response
   }
 
   const { limit = 1, dispatch = false } =

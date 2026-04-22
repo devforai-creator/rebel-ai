@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { streamText } from 'ai'
+import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from '@/lib/chat/delivery-mode'
 import {
@@ -65,6 +66,78 @@ export type ProviderRequestStageResult =
       status: 'streaming'
       stream: Awaited<ReturnType<typeof streamText>>
     } & ProviderRequestArtifacts)
+
+function disableAnthropicThinkingForRequiredToolChoice(
+  providerOptions: SharedV2ProviderOptions | undefined,
+): {
+  providerOptions: SharedV2ProviderOptions | undefined
+  disabled: boolean
+} {
+  const anthropicOptions =
+    providerOptions?.anthropic && typeof providerOptions.anthropic === 'object'
+      ? ({ ...(providerOptions.anthropic as Record<string, unknown>) } as Record<string, unknown>)
+      : null
+
+  if (!anthropicOptions) {
+    return {
+      providerOptions,
+      disabled: false,
+    }
+  }
+
+  let disabled = false
+
+  if (Object.prototype.hasOwnProperty.call(anthropicOptions, 'thinking')) {
+    delete anthropicOptions.thinking
+    disabled = true
+  }
+
+  if (Object.prototype.hasOwnProperty.call(anthropicOptions, 'effort')) {
+    delete anthropicOptions.effort
+    disabled = true
+  }
+
+  if (Array.isArray(anthropicOptions.anthropicBeta)) {
+    const filteredBetas = anthropicOptions.anthropicBeta.filter(
+      (value) => value !== ANTHROPIC_INTERLEAVED_THINKING_BETA,
+    )
+
+    if (filteredBetas.length !== anthropicOptions.anthropicBeta.length) {
+      disabled = true
+    }
+
+    if (filteredBetas.length > 0) {
+      anthropicOptions.anthropicBeta = filteredBetas
+    } else {
+      delete anthropicOptions.anthropicBeta
+    }
+  }
+
+  if (!disabled) {
+    return {
+      providerOptions,
+      disabled: false,
+    }
+  }
+
+  const nextProviderOptions: Record<string, unknown> = {
+    ...(providerOptions ?? {}),
+  }
+
+  if (Object.keys(anthropicOptions).length > 0) {
+    nextProviderOptions.anthropic = anthropicOptions
+  } else {
+    delete nextProviderOptions.anthropic
+  }
+
+  return {
+    providerOptions:
+      Object.keys(nextProviderOptions).length > 0
+        ? (nextProviderOptions as SharedV2ProviderOptions)
+        : undefined,
+    disabled: true,
+  }
+}
 
 function findLastMessageContent(
   messages: Array<{ role: string; content: string }>,
@@ -193,6 +266,8 @@ export async function requestProviderStage({
       ? atrToolChoiceDecision.blockedRuleIds.join(',')
       : null
   debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied'] = false
+  debugMetrics['anthropic_thinking_disabled_for_required_tool_choice'] =
+    provider === 'anthropic' ? false : null
 
   const googleExplicitCacheConfigured = isGoogleExplicitCacheEnabled()
   const googleExplicitCacheDisabledForToolUsePreflight =
@@ -427,6 +502,28 @@ export async function requestProviderStage({
         debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied'] =
           atrToolChoiceDecision?.toolChoice === 'required' &&
           !!experimentalResult.streamTextSettings?.tools
+
+        if (
+          provider === 'anthropic' &&
+          debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied']
+        ) {
+          const { providerOptions: sanitizedProviderOptions, disabled } =
+            disableAnthropicThinkingForRequiredToolChoice(
+              finalStreamRequest.providerOptions as SharedV2ProviderOptions | undefined,
+            )
+
+          if (disabled) {
+            finalStreamRequest = {
+              ...finalStreamRequest,
+              providerOptions: sanitizedProviderOptions,
+            }
+            debugMetrics['anthropic_thinking_requested'] = false
+            debugMetrics['anthropic_thinking_type'] = null
+            debugMetrics['anthropic_thinking_effort'] = null
+            debugMetrics['anthropic_interleaved_thinking_requested'] = false
+            debugMetrics['anthropic_thinking_disabled_for_required_tool_choice'] = true
+          }
+        }
 
         if (debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied']) {
           logDebug('[Agentic Transcript Recall] Tool-choice preflight forced tool use', {

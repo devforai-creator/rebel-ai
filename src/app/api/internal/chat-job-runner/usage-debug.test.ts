@@ -343,11 +343,62 @@ describe('usage-debug helpers', () => {
           type: 'adaptive',
           effort: 'medium',
           interleavedThinkingBetaRequested: true,
+          disabledForRequiredToolChoice: null,
           observedThinkingBlock: true,
           observedReasoningDeltaCount: 1,
           observedSignatureDelta: true,
           reasoningTokensReported: 7,
           used: true,
+        },
+      })
+    })
+
+    it('includes anthropic forced-tool-choice disable metric when present', () => {
+      const result = buildChatDebugInfo({
+        requestId: 'req-5',
+        finalSystemPrompt: 'SYSTEM',
+        recentMessages: [],
+        anthropicConversationMessages: [{ role: 'user', content: 'hello' }],
+        anthropicPlaceholderAdded: false,
+        promptCache: null,
+        totalInputTokens: 0,
+        anthropicCache: null,
+        anthropicCacheCreationInputTokens: null,
+        anthropicCacheReadInputTokens: null,
+        staticPromptTokens: 0,
+        dynamicContext: null,
+        dynamicContextTokens: 0,
+        googleExplicitCacheEnabled: false,
+        googleCacheResult: null,
+        googleCacheDecision: null,
+        rawResponse: 'raw',
+        processedResponse: 'processed',
+        apiKeyId: 'key-5',
+        provider: 'anthropic',
+        modelName: 'claude-opus-4-7',
+        finishReason: 'tool-calls',
+        usage: {
+          promptTokens: 10,
+          completionTokens: 20,
+          totalTokens: 30,
+          cachedInputTokens: null,
+          reasoningTokens: null,
+        },
+        sanitizedMessageCount: 1,
+        ragInfo: null,
+        actualPayload: null,
+        debugMetrics: {
+          anthropic_thinking_requested: false,
+          anthropic_interleaved_thinking_requested: false,
+          anthropic_thinking_disabled_for_required_tool_choice: true,
+        },
+      })
+
+      expect(result).toMatchObject({
+        anthropicThinking: {
+          requested: false,
+          interleavedThinkingBetaRequested: false,
+          disabledForRequiredToolChoice: true,
         },
       })
     })

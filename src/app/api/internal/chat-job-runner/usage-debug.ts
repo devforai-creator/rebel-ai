@@ -94,6 +94,7 @@ type AnthropicThinkingDebugInfo = {
   type: string | null
   effort: string | null
   interleavedThinkingBetaRequested: boolean | null
+  disabledForRequiredToolChoice: boolean | null
   observedThinkingBlock: boolean | null
   observedReasoningDeltaCount: number | null
   observedSignatureDelta: boolean | null
@@ -334,6 +335,10 @@ function buildAnthropicThinkingDebugInfo(
     debugMetrics,
     'anthropic_interleaved_thinking_requested',
   )
+  const disabledForRequiredToolChoice = readBooleanMetric(
+    debugMetrics,
+    'anthropic_thinking_disabled_for_required_tool_choice',
+  )
   const observedThinkingBlock = readBooleanMetric(debugMetrics, 'anthropic_thinking_block_seen')
   const observedReasoningDeltaCount = readNumberMetric(
     debugMetrics,
@@ -351,6 +356,7 @@ function buildAnthropicThinkingDebugInfo(
     type,
     effort,
     interleavedThinkingBetaRequested,
+    disabledForRequiredToolChoice,
     observedThinkingBlock,
     observedReasoningDeltaCount,
     observedSignatureDelta,
@@ -367,6 +373,7 @@ function buildAnthropicThinkingDebugInfo(
     type,
     effort,
     interleavedThinkingBetaRequested,
+    disabledForRequiredToolChoice,
     observedThinkingBlock,
     observedReasoningDeltaCount,
     observedSignatureDelta,

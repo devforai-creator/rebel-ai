@@ -481,6 +481,139 @@ describe('requestProviderStage', () => {
     })
   })
 
+  it('disables anthropic thinking when forced ATR tool choice is applied', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const payload = buildPayload({
+      provider: 'anthropic',
+      modelName: 'claude-opus-4-7',
+    })
+    const context = buildContext({
+      recentMessages: [
+        { role: 'assistant', content: '지난 약속을 떠올리며 숨을 고른다.' },
+        { role: 'user', content: '지난번에 한 약속 정확히 다시 말해줘.' },
+      ],
+      agenticTranscriptRecall: {
+        configured: true,
+        accountDefaultEnabled: false,
+        preferenceSource: 'chat_override',
+        globallyEnabled: true,
+        providerSupported: true,
+        providerAllowed: true,
+        enabled: true,
+        skipReason: null,
+        maxToolCalls: 1,
+        maxMessagesPerCall: 12,
+        maxTotalMessages: 12,
+        providerAllowlist: ['anthropic'],
+      },
+      agenticTranscriptRecallSourceHints: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Older promise',
+          },
+        ],
+      },
+      agenticTranscriptRecallSourceMap: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Older promise',
+          },
+        ],
+        navigationParents: [],
+      },
+      debugMetrics: {},
+    })
+
+    getProviderOptionsMock.mockReturnValueOnce({
+      anthropic: {
+        thinking: { type: 'adaptive' },
+        effort: 'medium',
+        anthropicBeta: ['interleaved-thinking-2025-05-14'],
+        cacheControl: { type: 'ephemeral', ttl: '1h' },
+      },
+    })
+    buildStreamPayloadPlanMock.mockReturnValueOnce({
+      strategy: 'anthropic-split-system',
+      streamRequest: {
+        messages: [{ role: 'user', content: 'Hello' }],
+        providerOptions: {
+          anthropic: {
+            thinking: { type: 'adaptive' },
+            effort: 'medium',
+            anthropicBeta: ['interleaved-thinking-2025-05-14'],
+            cacheControl: { type: 'ephemeral', ttl: '1h' },
+          },
+        },
+      },
+      actualPayload: {
+        provider: 'anthropic',
+        strategy: 'anthropic-split-system',
+        systemMessages: [{ role: 'system', content: 'FINAL' }],
+        conversationMessages: [{ role: 'user', content: 'Hello' }],
+      },
+    })
+    prepareExperimentalAgenticTranscriptRecallRequestMock.mockReturnValueOnce({
+      streamRequest: {
+        messages: [{ role: 'user', content: 'Hello' }],
+        providerOptions: {
+          anthropic: {
+            thinking: { type: 'adaptive' },
+            effort: 'medium',
+            anthropicBeta: ['interleaved-thinking-2025-05-14'],
+            cacheControl: { type: 'ephemeral', ttl: '1h' },
+          },
+        },
+      },
+      streamTextSettings: {
+        tools: {
+          fetch_source_range: {},
+        },
+      },
+    })
+
+    await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-anthropic-force-required',
+      payload,
+      context,
+      timings: {},
+    })
+
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolChoice: 'required',
+        tools: {
+          fetch_source_range: {},
+        },
+        providerOptions: {
+          anthropic: {
+            cacheControl: { type: 'ephemeral', ttl: '1h' },
+          },
+        },
+      }),
+    )
+    expect(context.debugMetrics).toMatchObject({
+      anthropic_thinking_requested: false,
+      anthropic_thinking_type: null,
+      anthropic_thinking_effort: null,
+      anthropic_interleaved_thinking_requested: false,
+      anthropic_thinking_disabled_for_required_tool_choice: true,
+      experimental_agentic_transcript_recall_tool_choice_applied: true,
+    })
+  })
+
   it('keeps tool choice on auto for immediate continuation requests', async () => {
     const { requestProviderStage } = await import('./provider-request-stage')
     const payload = buildPayload()

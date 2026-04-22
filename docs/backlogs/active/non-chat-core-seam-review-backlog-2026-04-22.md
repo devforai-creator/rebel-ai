@@ -236,7 +236,7 @@ Review invariants:
 
 ### S4. Private Asset Delivery And Storage Cleanup Seams
 
-Status: `in_progress`
+Status: `completed`
 
 Progress note:
 
@@ -244,6 +244,15 @@ Progress note:
 - first seam fix landed: synchronous storage-janitor runner failures now return
   a deliberate `500` JSON contract instead of escaping as an unstructured route
   throw, so internal ops callers keep a stable failure surface
+- signed asset URL creation no longer drops the whole map when one batch sign
+  request fails; the helper now preserves requested-path keys and retries per
+  path so one bad asset or batch failure does not blank unrelated private asset
+  URLs
+- storage-janitor trigger and runner request contracts now reject malformed
+  JSON and invalid option types with `400` instead of silently falling back to
+  destructive default execute values
+- the remaining asset-token, asset-resolver, and storage-cleanup seams closed
+  without a broader private-asset redesign need
 
 Why fourth:
 

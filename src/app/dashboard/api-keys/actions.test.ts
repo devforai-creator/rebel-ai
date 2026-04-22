@@ -22,11 +22,19 @@ type RpcError = { message: string; code?: string | null; details?: string | null
 
 type MutationState = {
   insertPayloads: Array<Record<string, unknown>>
+  apiKeys: Array<Record<string, unknown>>
+  updateCalls: Array<{
+    payload: Record<string, unknown>
+    filters: Array<[string, unknown]>
+  }>
 }
 
 type ApiKeysSupabaseOptions = {
   user?: { id: string } | null
   insertApiKeyError?: DbError | null
+  loadApiKeyError?: DbError | null
+  toggleApiKeyError?: DbError | null
+  apiKeys?: Array<Record<string, unknown>>
 }
 
 function buildApiKeyFormData(
@@ -80,6 +88,14 @@ function buildSupabase(options: ApiKeysSupabaseOptions = {}) {
 
   const state: MutationState = {
     insertPayloads: [],
+    apiKeys: options.apiKeys?.map((row) => ({ ...row })) ?? [
+      {
+        id: 'key-1',
+        user_id: user?.id ?? '11111111-1111-1111-1111-111111111111',
+        is_active: true,
+      },
+    ],
+    updateCalls: [],
   }
 
   return {
@@ -92,9 +108,81 @@ function buildSupabase(options: ApiKeysSupabaseOptions = {}) {
     from(table: string) {
       if (table === 'api_keys') {
         return {
+          select: vi.fn(() => {
+            const filters: Array<[string, unknown]> = []
+            const builder = {
+              eq(field: string, value: unknown) {
+                filters.push([field, value])
+                return builder
+              },
+              then<
+                TResult1 = { data: Record<string, unknown>[]; error: DbError | null },
+                TResult2 = never,
+              >(
+                onfulfilled?:
+                  | ((value: {
+                      data: Record<string, unknown>[]
+                      error: DbError | null
+                    }) => TResult1 | PromiseLike<TResult1>)
+                  | null,
+                onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+              ) {
+                if (options.loadApiKeyError) {
+                  return Promise.resolve({
+                    data: [] as Record<string, unknown>[],
+                    error: options.loadApiKeyError,
+                  }).then(onfulfilled, onrejected)
+                }
+
+                const data = state.apiKeys
+                  .filter((row) =>
+                    filters.every(([field, value]) => row[field as keyof typeof row] === value),
+                  )
+                  .map((row) => ({ id: row.id }))
+
+                return Promise.resolve({ data, error: null }).then(onfulfilled, onrejected)
+              },
+            }
+
+            return builder
+          }),
           insert: vi.fn(async (payload: Record<string, unknown>) => {
             state.insertPayloads.push(payload)
             return { error: options.insertApiKeyError ?? null }
+          }),
+          update: vi.fn((payload: Record<string, unknown>) => {
+            const filters: Array<[string, unknown]> = []
+            const builder = {
+              eq(field: string, value: unknown) {
+                filters.push([field, value])
+                return builder
+              },
+              then<TResult1 = { error: DbError | null }, TResult2 = never>(
+                onfulfilled?:
+                  | ((value: { error: DbError | null }) => TResult1 | PromiseLike<TResult1>)
+                  | null,
+                onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+              ) {
+                state.updateCalls.push({ payload, filters: [...filters] })
+
+                if (options.toggleApiKeyError) {
+                  return Promise.resolve({ error: options.toggleApiKeyError }).then(
+                    onfulfilled,
+                    onrejected,
+                  )
+                }
+
+                state.apiKeys = state.apiKeys.map((row) =>
+                  filters.every(([field, value]) => row[field as keyof typeof row] === value)
+                    ? { ...row, ...payload }
+                    : row,
+                )
+
+                return Promise.resolve({ error: null }).then(onfulfilled, onrejected)
+              },
+            }
+
+            return builder
           }),
         }
       }
@@ -480,6 +568,32 @@ describe('api key actions', () => {
       code: 'XX000',
       message: 'vault unavailable',
     })
+    expect(revalidatePathMock).not.toHaveBeenCalled()
+  })
+
+  it('toggles an owned API key and revalidates the page', async () => {
+    createClientMock.mockResolvedValue(buildSupabase())
+    const { toggleApiKey } = await import('./actions')
+
+    const result = await toggleApiKey('key-1', true)
+
+    expect(result).toEqual({ success: true })
+    expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/api-keys')
+  })
+
+  it('returns not found when toggling an API key outside ownership', async () => {
+    const supabase = buildSupabase({
+      apiKeys: [{ id: 'key-1', user_id: 'other-user', is_active: true }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { toggleApiKey } = await import('./actions')
+
+    const result = await toggleApiKey('key-1', true)
+
+    expect(result).toEqual({
+      error: 'API 키를 찾을 수 없습니다',
+    })
+    expect(supabase.state.updateCalls).toEqual([])
     expect(revalidatePathMock).not.toHaveBeenCalled()
   })
 })

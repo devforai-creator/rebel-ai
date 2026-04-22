@@ -317,6 +317,41 @@ export async function deleteApiKey(id: string) {
   return { success: true }
 }
 
+async function verifyOwnedApiKey(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  id: string,
+) {
+  const { data, error } = await supabase
+    .from('api_keys')
+    .select('id')
+    .eq('id', id)
+    .eq('user_id', userId)
+
+  if (error) {
+    console.error('[API Keys] Failed to verify API key ownership', {
+      userId,
+      apiKeyId: id,
+      code:
+        error && typeof error === 'object' && 'code' in error
+          ? ((error as { code?: string | null }).code ?? null)
+          : null,
+      message: error.message,
+    })
+    return {
+      error: 'API 키 상태 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+    }
+  }
+
+  if (!Array.isArray(data) || data.length === 0) {
+    return {
+      error: 'API 키를 찾을 수 없습니다',
+    }
+  }
+
+  return { success: true as const }
+}
+
 function getApiKeyFormErrorMessage(error: z.ZodError): string {
   const firstIssue = error.issues[0]
   const field = typeof firstIssue?.path[0] === 'string' ? firstIssue.path[0] : null
@@ -345,6 +380,11 @@ export async function toggleApiKey(id: string, isActive: boolean) {
 
   if (!user) {
     return { error: '로그인이 필요합니다' }
+  }
+
+  const ownership = await verifyOwnedApiKey(supabase, user.id, id)
+  if ('error' in ownership) {
+    return ownership
   }
 
   const { error } = await supabase

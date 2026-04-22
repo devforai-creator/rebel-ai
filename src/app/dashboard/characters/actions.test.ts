@@ -49,6 +49,7 @@ type ModuleRow = {
 type CharactersSupabaseOptions = {
   user?: { id: string } | null
   createCharacterError?: DbError | null
+  loadCharacterError?: DbError | null
   updateCharacterError?: DbError | null
   updateCharacterWithModulesError?: DbError | null
   deleteCharacterError?: DbError | null
@@ -211,6 +212,20 @@ function buildSupabase(options: CharactersSupabaseOptions = {}) {
     from(table: string) {
       if (table === 'characters') {
         return {
+          select() {
+            return createThenableQuery((filters) => {
+              if (options.loadCharacterError) {
+                return { data: [] as Array<{ id: string }>, error: options.loadCharacterError }
+              }
+
+              return {
+                data: state.characters
+                  .filter((row) => matchesFilters(row, filters))
+                  .map((row) => ({ id: row.id })),
+                error: null,
+              }
+            })
+          },
           insert(payload: Record<string, unknown>) {
             state.characterInsertPayloads.push(payload)
             return {
@@ -646,6 +661,34 @@ describe('character actions template syntax handling', () => {
     expect(result).toEqual({ error: 'Login required' })
   })
 
+  it('returns not found when updating a character outside ownership', async () => {
+    const supabase = buildSupabase({
+      characters: [
+        {
+          id: 'char-1',
+          user_id: 'other-user',
+          name: 'Other Character',
+          description: 'Existing description',
+          system_prompt: 'Existing prompt',
+          greeting_message: 'Existing hello',
+          visibility: 'private',
+        },
+      ],
+      characterModules: [
+        { character_id: 'char-1', module_id: 'old-mod', enabled: true, priority: 1 },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { updateCharacter } = await import('./actions')
+
+    const result = await updateCharacter('char-1', buildCharacterFormData())
+
+    expect(result).toEqual({
+      error: 'Character not found or you do not have permission.',
+    })
+    expect(supabase.state.rpcCalls).toEqual([])
+  })
+
   it('returns a validation error when the update payload is missing required fields', async () => {
     const supabase = buildSupabase()
     createClientMock.mockResolvedValue(supabase)
@@ -900,6 +943,39 @@ describe('character actions template syntax handling', () => {
     const result = await deleteCharacter('char-1')
 
     expect(result).toEqual({ error: 'Login required' })
+  })
+
+  it('returns not found when deleting a character outside ownership', async () => {
+    const supabase = buildSupabase({
+      characters: [
+        {
+          id: 'char-1',
+          user_id: 'other-user',
+          name: 'Other Character',
+          description: 'Existing description',
+          system_prompt: 'Existing prompt',
+          greeting_message: 'Existing hello',
+          visibility: 'private',
+        },
+      ],
+      characterModules: [
+        { character_id: 'char-1', module_id: 'old-mod', enabled: true, priority: 1 },
+      ],
+      characterAssetPaths: [
+        { character_id: 'char-1', storage_path: 'other-user/char-1/asset.webp' },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { deleteCharacter } = await import('./actions')
+
+    const result = await deleteCharacter('char-1')
+
+    expect(result).toEqual({
+      error: 'Character not found or you do not have permission.',
+    })
+    expect(supabase.state.characterDeleteCalls).toEqual([])
+    expect(supabase.state.rpcCalls).toEqual([])
+    expect(supabase.state.storageRemoveCalls).toEqual([])
   })
 
   it('returns a friendly error when delete fails', async () => {

@@ -4,7 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { PersonaInsert } from '@/types/database.types'
 import { MAX_PERSONA_DESCRIPTION_LENGTH, MAX_PERSONA_NAME_LENGTH } from '@/lib/personas/constants'
-import { parsePersonaUpdateInput, updateOwnedPersona } from '@/lib/personas/update'
+import {
+  parsePersonaUpdateInput,
+  updateOwnedPersona,
+  verifyOwnedPersona,
+} from '@/lib/personas/update'
 
 /**
  * Get all personas for the current user
@@ -142,19 +146,26 @@ export async function deletePersona(personaId: string) {
     return { error: 'Unauthorized' }
   }
 
-  // Verify ownership
-  const { data: existing } = await supabase
-    .from('personas')
-    .select('id')
-    .eq('id', personaId)
-    .eq('user_id', user.id)
-    .single()
+  const ownership = await verifyOwnedPersona({
+    supabase,
+    userId: user.id,
+    personaId,
+  })
 
-  if (!existing) {
-    return { error: 'Persona not found or you do not have permission' }
+  if (!ownership.success) {
+    return {
+      error:
+        ownership.status === 404
+          ? 'Persona not found or you do not have permission'
+          : 'Failed to load persona. Please try again.',
+    }
   }
 
-  const { error } = await supabase.from('personas').delete().eq('id', personaId)
+  const { error } = await supabase
+    .from('personas')
+    .delete()
+    .eq('id', personaId)
+    .eq('user_id', user.id)
 
   if (error) {
     return { error: error.message }

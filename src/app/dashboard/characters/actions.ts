@@ -30,6 +30,36 @@ function parseCharacterFormData(formData: FormData) {
   return { data: parsed.data }
 }
 
+async function verifyOwnedCharacterForMutation(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  characterId: string,
+  userId: string,
+  operation: 'update' | 'delete',
+) {
+  const { data, error } = await supabase
+    .from('characters')
+    .select('id')
+    .eq('id', characterId)
+    .eq('user_id', userId)
+
+  if (error) {
+    console.error('[Character] Failed to verify character ownership before mutation', {
+      characterId,
+      userId,
+      operation,
+      error: error.message,
+      code: error.code,
+    })
+    return { error: 'Failed to load character. Please try again.' }
+  }
+
+  if (!Array.isArray(data) || data.length === 0) {
+    return { error: 'Character not found or you do not have permission.' }
+  }
+
+  return { success: true as const }
+}
+
 export async function createCharacter(formData: FormData) {
   const supabase = await createClient()
 
@@ -122,6 +152,11 @@ export async function updateCharacter(id: string, formData: FormData) {
     return { error: 'Login required' }
   }
 
+  const ownership = await verifyOwnedCharacterForMutation(supabase, id, user.id, 'update')
+  if ('error' in ownership) {
+    return ownership
+  }
+
   const previousModuleIds = await listCharacterModuleIds(supabase, id).catch((error: Error) => {
     console.error('[Character] Failed to load linked modules before update', {
       characterId: id,
@@ -196,6 +231,11 @@ export async function deleteCharacter(id: string) {
 
   if (!user) {
     return { error: 'Login required' }
+  }
+
+  const ownership = await verifyOwnedCharacterForMutation(supabase, id, user.id, 'delete')
+  if ('error' in ownership) {
+    return ownership
   }
 
   const previousModuleIds = await listCharacterModuleIds(supabase, id).catch((error: Error) => {

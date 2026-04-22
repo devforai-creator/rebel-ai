@@ -103,4 +103,42 @@ describe('persona actions', () => {
     ])
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/personas')
   })
+
+  it('returns unauthorized when deleting without a session', async () => {
+    createClientMock.mockResolvedValue(buildSupabase({ user: null }))
+    const { deletePersona } = await import('./actions')
+
+    await expect(deletePersona('persona-1')).resolves.toEqual({
+      error: 'Unauthorized',
+    })
+  })
+
+  it('returns not found when deleting a persona that is not owned by the user', async () => {
+    createClientMock.mockResolvedValue(
+      buildSupabase({
+        user: { id: 'user-1' },
+        personas: [{ id: 'persona-1', user_id: 'user-2', name: 'Other', description: null }],
+      }),
+    )
+    const { deletePersona } = await import('./actions')
+
+    await expect(deletePersona('persona-1')).resolves.toEqual({
+      error: 'Persona not found or you do not have permission',
+    })
+  })
+
+  it('deletes an owned persona through the shared ownership path', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      personas: [{ id: 'persona-1', user_id: 'user-1', name: 'Old', description: 'Desc' }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { deletePersona } = await import('./actions')
+
+    await expect(deletePersona('persona-1')).resolves.toEqual({
+      success: true,
+    })
+    expect(supabase.state.personas).toEqual([])
+    expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/personas')
+  })
 })

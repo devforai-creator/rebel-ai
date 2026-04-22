@@ -49,6 +49,46 @@ export type UpdatedPersona = {
   description: string | null
 }
 
+export async function verifyOwnedPersona({
+  supabase,
+  userId,
+  personaId,
+}: {
+  supabase: Supabase
+  userId: string
+  personaId: string
+}): Promise<{ success: true } | { success: false; status: 404 | 500; message: string }> {
+  const { data, error } = await supabase
+    .from('personas')
+    .select('id')
+    .eq('id', personaId)
+    .eq('user_id', userId)
+
+  if (error) {
+    console.error('[Persona Update] Failed to verify ownership', {
+      userId,
+      personaId,
+      message: error.message,
+      code: error.code,
+    })
+    return {
+      success: false,
+      status: 500,
+      message: 'Failed to load persona',
+    }
+  }
+
+  if (!Array.isArray(data) || data.length === 0) {
+    return {
+      success: false,
+      status: 404,
+      message: 'Persona not found',
+    }
+  }
+
+  return { success: true }
+}
+
 export function getPersonaUpdateValidationMessage(error: z.ZodError): string {
   return error.issues[0]?.message ?? 'Invalid payload'
 }
@@ -71,19 +111,14 @@ export async function updateOwnedPersona({
   | { success: true; persona: UpdatedPersona }
   | { success: false; status: 404 | 500; message: string }
 > {
-  const { data: existingPersona } = await supabase
-    .from('personas')
-    .select('id')
-    .eq('id', personaId)
-    .eq('user_id', userId)
-    .single()
+  const ownership = await verifyOwnedPersona({
+    supabase,
+    userId,
+    personaId,
+  })
 
-  if (!existingPersona) {
-    return {
-      success: false,
-      status: 404,
-      message: 'Persona not found',
-    }
+  if (!ownership.success) {
+    return ownership
   }
 
   const updateData: PersonaUpdate = {}

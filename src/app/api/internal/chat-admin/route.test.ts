@@ -37,6 +37,7 @@ describe('POST /api/internal/chat-admin', () => {
     const response = await POST(buildRequest({}))
 
     expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toEqual({ error: 'Server misconfigured' })
   })
 
   it('returns 401 when secret does not match', async () => {

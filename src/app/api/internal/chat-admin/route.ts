@@ -64,7 +64,7 @@ export async function POST(req: Request) {
   }
 
   const auth = requireBearerToken(req, adminSecret, {
-    missingSecretMessage: 'Server misconfiguration',
+    missingSecretMessage: 'Server misconfigured',
   })
   if (!auth.success) {
     return auth.response

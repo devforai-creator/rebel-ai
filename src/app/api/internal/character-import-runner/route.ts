@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   if (!adminSecret) {
     console.error('[Character Import Runner] CHAT_ADMIN_SECRET is not configured')
-    return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 })
+    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
   const auth = requireBearerToken(req, adminSecret)

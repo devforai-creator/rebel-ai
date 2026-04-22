@@ -80,6 +80,8 @@ Progress note:
   internal routes reviewed in this pass
 - `job-janitor` no longer requires both `CHAT_ADMIN_SECRET` and `CRON_SECRET`
   just to accept one valid configured bearer secret
+- misconfiguration responses on the reviewed internal bearer routes were
+  normalized back to the shared `Server misconfigured` contract
 - review remains open for the rest of the internal/admin seam beyond this
   helperization and contract cleanup pass
 

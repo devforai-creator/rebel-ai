@@ -190,6 +190,9 @@ Progress note:
 - runner claim/query failures for pending import jobs no longer collapse into a
   misleading `skipped` result; direct runner requests now return `500` and
   background dispatch logs the failure path explicitly
+- valid signed upload tickets now clean up their staged object when enqueue
+  request metadata or path drifts from the signed claims, so stale-client
+  contract mismatches stop leaving orphaned staged uploads behind
 
 Why third:
 

@@ -232,6 +232,10 @@ async function enqueueImportUpload({
     claims.fileType !== fileType ||
     claims.fileSize !== (fileSize ?? claims.fileSize)
   ) {
+    if (claims.userId === userId && isImportUploadPath(claims.path, userId)) {
+      await cleanupStagedUpload(supabase, claims.path)
+    }
+
     return createApiErrorResponse('Invalid upload reference', 403)
   }
 

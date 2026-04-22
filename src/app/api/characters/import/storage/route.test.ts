@@ -511,6 +511,58 @@ describe('POST /api/characters/import/storage', () => {
     expect(supabase.removedPaths).toEqual(['user-1/imports/new-file.rbx'])
   })
 
+  it('returns 403 and cleans up the signed staged upload when enqueue metadata mismatches', async () => {
+    const supabase = createSupabaseMock({
+      user: { id: 'user-1' },
+    })
+
+    const response = await POST(
+      buildRequest(
+        buildEnqueueRequestBody({
+          fileName: 'renamed-file.rbx',
+          uploadTicket: createImportUploadTicket({
+            userId: 'user-1',
+            path: 'user-1/imports/new-file.rbx',
+            fileName: 'new-file.rbx',
+            fileType: 'application/octet-stream',
+            fileSize: 1024,
+            expiresAt: Date.now() + 5 * 60 * 1000,
+          })!,
+        }),
+      ) as never,
+    )
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ error: 'Invalid upload reference' })
+    expect(supabase.removedPaths).toEqual(['user-1/imports/new-file.rbx'])
+  })
+
+  it('returns 403 and cleans up the signed staged upload when the request path drifts', async () => {
+    const supabase = createSupabaseMock({
+      user: { id: 'user-1' },
+    })
+
+    const response = await POST(
+      buildRequest(
+        buildEnqueueRequestBody({
+          path: 'user-1/imports/other-file.rbx',
+          uploadTicket: createImportUploadTicket({
+            userId: 'user-1',
+            path: 'user-1/imports/original-file.rbx',
+            fileName: 'new-file.rbx',
+            fileType: 'application/octet-stream',
+            fileSize: 1024,
+            expiresAt: Date.now() + 5 * 60 * 1000,
+          })!,
+        }),
+      ) as never,
+    )
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ error: 'Invalid upload reference' })
+    expect(supabase.removedPaths).toEqual(['user-1/imports/original-file.rbx'])
+  })
+
   it('returns 413 and cleans up the staged upload when the enqueue payload is oversized', async () => {
     const supabase = createSupabaseMock({
       user: { id: 'user-1' },

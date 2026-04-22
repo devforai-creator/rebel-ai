@@ -49,23 +49,77 @@ export async function createSignedAssetUrlMap(
       assetCount: uniquePaths.length,
       error: error.message ?? 'Unknown error',
     })
-    return {}
+
+    if (uniquePaths.length === 1) {
+      return {}
+    }
+
+    return await createFallbackSignedAssetUrlMap(supabase, bucket, uniquePaths, {
+      expiresIn,
+      logContext: options?.logContext,
+    })
   }
 
   const urlMap: Record<string, string> = {}
+  registerSignedUrlEntries(urlMap, uniquePaths, data)
 
-  for (let index = 0; index < uniquePaths.length; index += 1) {
-    const requestedPath = uniquePaths[index]
-    const signedEntry = data?.[index]
-    const resolvedPath =
-      typeof signedEntry?.path === 'string' && signedEntry.path.trim().length > 0
-        ? signedEntry.path
-        : requestedPath
+  return urlMap
+}
 
-    if (typeof signedEntry?.signedUrl === 'string' && signedEntry.signedUrl.length > 0) {
-      urlMap[resolvedPath] = signedEntry.signedUrl
+async function createFallbackSignedAssetUrlMap(
+  supabase: SignedAssetUrlStorage,
+  bucket: AssetBucket,
+  paths: string[],
+  options: {
+    expiresIn: number
+    logContext?: string
+  },
+): Promise<Record<string, string>> {
+  const urlMap: Record<string, string> = {}
+
+  for (const path of paths) {
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrls([path], options.expiresIn)
+
+    if (error) {
+      console.error(options.logContext ?? '[Assets] Failed to create signed URLs', {
+        bucket,
+        assetCount: 1,
+        storagePath: path,
+        error: error.message ?? 'Unknown error',
+      })
+      continue
     }
+
+    registerSignedUrlEntries(urlMap, [path], data)
   }
 
   return urlMap
+}
+
+function registerSignedUrlEntries(
+  urlMap: Record<string, string>,
+  requestedPaths: string[],
+  data: Array<{ path?: string | null; signedUrl?: string | null }> | null,
+) {
+  for (let index = 0; index < requestedPaths.length; index += 1) {
+    const requestedPath = requestedPaths[index]
+    const signedEntry = data?.[index]
+    const signedUrl = signedEntry?.signedUrl?.trim()
+    if (!signedUrl) {
+      continue
+    }
+
+    urlMap[requestedPath] = signedUrl
+
+    const resolvedPath =
+      typeof signedEntry?.path === 'string' && signedEntry.path.trim().length > 0
+        ? signedEntry.path.trim()
+        : null
+
+    if (resolvedPath && resolvedPath !== requestedPath) {
+      urlMap[resolvedPath] = signedUrl
+    }
+  }
 }

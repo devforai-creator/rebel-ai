@@ -152,6 +152,9 @@ describe('usage-debug helpers', () => {
         sanitizedMessageCount: 0,
         ragInfo: null,
         actualPayload: null,
+        debugMetrics: {
+          google_explicit_cache_disabled_for_tool_use_preflight: true,
+        },
       })
 
       expect(result).toMatchObject({
@@ -167,6 +170,7 @@ describe('usage-debug helpers', () => {
           error: 'cache failed',
           minTokens: null,
           meetsMinTokens: false,
+          disabledForToolUsePreflight: true,
         },
         cacheHit: false,
         modelConfig: {

@@ -27,6 +27,26 @@ import type { ChatRunnerActualPayload } from './usage-debug'
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type GoogleCacheDecision = ReturnType<typeof resolveGoogleCacheDecision>
 
+function willExperimentalAgenticTranscriptRecallAttachTools({
+  sourceHints,
+  sourceMap,
+}: {
+  sourceHints: LoadedChatJobExecutionContext['agenticTranscriptRecallSourceHints']
+  sourceMap: LoadedChatJobExecutionContext['agenticTranscriptRecallSourceMap']
+}): boolean {
+  const hasRecallHints = !!sourceHints && sourceHints.hints.length > 0
+  const hasToolCapableSourceMap =
+    !!sourceMap &&
+    (sourceMap.directFetchRanges.length > 0 || sourceMap.navigationParents.length > 0)
+
+  if (!hasRecallHints && !hasToolCapableSourceMap) {
+    return false
+  }
+
+  // In this request stage, ATR is the only path that can attach tools to the provider invocation.
+  return hasToolCapableSourceMap
+}
+
 type ProviderRequestArtifacts = {
   promptCache: PromptCacheDecision | null
   anthropicCache: AnthropicCacheDecision | null
@@ -121,10 +141,26 @@ export async function requestProviderStage({
         })
       : null
 
+  const googleExplicitCacheConfigured = isGoogleExplicitCacheEnabled()
+  const googleExplicitCacheDisabledForToolUsePreflight =
+    provider === 'google' &&
+    googleExplicitCacheConfigured &&
+    !disableGoogleExplicitCache &&
+    agenticTranscriptRecall.enabled &&
+    willExperimentalAgenticTranscriptRecallAttachTools({
+      sourceHints: agenticTranscriptRecallSourceHints,
+      sourceMap: agenticTranscriptRecallSourceMap,
+    })
+
+  debugMetrics['google_explicit_cache_disabled_for_tool_use_preflight'] =
+    provider === 'google' ? googleExplicitCacheDisabledForToolUsePreflight : null
   debugMetrics['google_explicit_cache_disabled_for_compatibility_retry'] =
     provider === 'google' ? disableGoogleExplicitCache : null
 
-  const googleExplicitCacheEnabled = !disableGoogleExplicitCache && isGoogleExplicitCacheEnabled()
+  const googleExplicitCacheEnabled =
+    googleExplicitCacheConfigured &&
+    !disableGoogleExplicitCache &&
+    !googleExplicitCacheDisabledForToolUsePreflight
   let googleCacheResult: CreateGoogleCacheResult | null = null
   if (
     provider === 'google' &&
@@ -158,6 +194,14 @@ export async function requestProviderStage({
         },
       )
     }
+  }
+
+  if (provider === 'google' && googleExplicitCacheDisabledForToolUsePreflight) {
+    logDebug('[Chat Job Runner] Google explicit cache disabled before request build', {
+      jobId,
+      modelName,
+      reason: 'tool-compatible invocation',
+    })
   }
 
   if (provider === 'google' && disableGoogleExplicitCache) {

@@ -461,6 +461,10 @@ export function buildChatDebugInfo(args: BuildChatDebugInfoArgs): Record<string,
         debugMetrics,
         'google_explicit_cache_compatibility_retry_reason',
       ),
+      disabledForToolUsePreflight: readBooleanMetric(
+        debugMetrics,
+        'google_explicit_cache_disabled_for_tool_use_preflight',
+      ),
       disabledForCompatibilityRetry: readBooleanMetric(
         debugMetrics,
         'google_explicit_cache_disabled_for_compatibility_retry',

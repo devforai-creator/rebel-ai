@@ -1,6 +1,6 @@
 # First-Class Path Map
 
-Updated: 2026-04-20
+Updated: 2026-04-22
 
 This document is the smallest useful map of the maintained chat path for the
 current operating mode.
@@ -70,13 +70,18 @@ This stage owns turning a queued job into a concrete assistant response.
 - [assistant-finalization.ts](../src/app/api/internal/chat-job-runner/assistant-finalization.ts):
   assistant insert/update, regeneration replacement, active turn state
 - [post-generation-metadata.ts](../src/app/api/internal/chat-job-runner/post-generation-metadata.ts):
-  stale `debug_info` cleanup, `api_keys.last_used_at`, usage-event writes
+  non-blocking operational metadata and hygiene writes such as stale
+  `debug_info` cleanup, `api_keys.last_used_at`, and usage-event inserts
 
 Durable ownership in this stage:
 
 - finalize the assistant message
 - update active assistant state for the turn
-- record usage and request metadata needed for later triage
+- persist the accepted assistant row and retained server `debug_info`
+
+Additional operational metadata in this stage is valuable, but it currently
+fails open and does not redefine chat success. That includes older-assistant
+`debug_info` cleanup, `api_keys.last_used_at`, and `chat_usage_events`.
 
 ## 5. Best-Effort Follow-Ups
 

@@ -608,6 +608,114 @@ describe('requestProviderStage', () => {
     })
   })
 
+  it('skips google explicit cache creation before request build when ATR can attach tools', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const payload = buildPayload({
+      provider: 'google',
+      modelName: 'gemini-2.5-flash',
+    })
+    const context = buildContext({
+      recentMessages: [
+        { role: 'assistant', content: 'Older context' },
+        { role: 'user', content: 'Last message' },
+      ],
+      agenticTranscriptRecall: {
+        configured: true,
+        accountDefaultEnabled: false,
+        preferenceSource: 'chat_override',
+        globallyEnabled: true,
+        providerSupported: true,
+        providerAllowed: true,
+        enabled: true,
+        skipReason: null,
+        maxToolCalls: 2,
+        maxMessagesPerCall: 12,
+        maxTotalMessages: 12,
+        providerAllowlist: ['google'],
+      },
+      agenticTranscriptRecallSourceHints: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Older context',
+          },
+        ],
+      },
+      agenticTranscriptRecallSourceMap: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Older context',
+          },
+        ],
+        navigationParents: [],
+      },
+      debugMetrics: {},
+    })
+
+    resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
+    prepareExperimentalAgenticTranscriptRecallRequestMock.mockReturnValueOnce({
+      streamRequest: {
+        system: 'FINAL\n\nExperimental',
+        messages: [{ role: 'user', content: 'Last message' }],
+      },
+      streamTextSettings: {
+        tools: {
+          fetch_source_range: {},
+        },
+      },
+    })
+
+    const result = await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-google-tools-preflight',
+      payload,
+      context,
+      timings: {},
+    })
+
+    expect(createGoogleCacheMock).not.toHaveBeenCalled()
+    expect(buildStreamPayloadPlanMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        googleCacheResult: null,
+      }),
+    )
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: 'FINAL\n\nExperimental',
+        messages: [{ role: 'user', content: 'Last message' }],
+        tools: {
+          fetch_source_range: {},
+        },
+      }),
+    )
+    expect(result).toMatchObject({
+      status: 'streaming',
+      googleExplicitCacheEnabled: false,
+      googleCacheDecision: { enabled: true, minTokens: 1024 },
+      googleCacheResult: null,
+      actualPayload: expect.objectContaining({
+        strategy: 'default',
+      }),
+    })
+    expect(context.debugMetrics).toMatchObject({
+      google_explicit_cache_disabled_for_tool_use_preflight: true,
+      google_explicit_cache_disabled_for_compatibility_retry: false,
+      experimental_agentic_transcript_recall_wrapper_used: true,
+      experimental_agentic_transcript_recall_fallback_to_standard: false,
+    })
+  })
+
   it('skips google explicit cache creation when compatibility retry disables it', async () => {
     const { requestProviderStage } = await import('./provider-request-stage')
     const payload = buildPayload({

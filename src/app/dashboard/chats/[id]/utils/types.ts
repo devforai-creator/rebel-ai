@@ -136,6 +136,7 @@ export interface DebugInfo {
     compatibilityRetryAttempted?: boolean | null
     compatibilityRetrySucceeded?: boolean | null
     compatibilityRetryReason?: string | null
+    disabledForToolUsePreflight?: boolean | null
     disabledForCompatibilityRetry?: boolean | null
   }
   actualPayload?: {

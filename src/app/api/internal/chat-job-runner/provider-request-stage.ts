@@ -18,6 +18,7 @@ import {
   type PromptCacheDecision,
 } from '@/lib/llm/prompt-cache'
 import { prepareExperimentalAgenticTranscriptRecallRequest } from '@/lib/experimental/agentic-transcript-recall/runner'
+import { decideAgenticTranscriptRecallToolChoice } from '@/lib/experimental/agentic-transcript-recall/tool-choice-gate'
 import { submitAnthropicBatchJob } from './anthropic-batch-orchestrator'
 import type { LoadedChatJobExecutionContext } from './execution-context'
 import { buildLanguageModel } from './model-factory'
@@ -64,6 +65,25 @@ export type ProviderRequestStageResult =
       status: 'streaming'
       stream: Awaited<ReturnType<typeof streamText>>
     } & ProviderRequestArtifacts)
+
+function findLastMessageContent(
+  messages: Array<{ role: string; content: string }>,
+  role: 'assistant' | 'user',
+): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message.role !== role) {
+      continue
+    }
+
+    const content = message.content.trim()
+    if (content.length > 0) {
+      return content
+    }
+  }
+
+  return null
+}
 
 export async function requestProviderStage({
   supabase,
@@ -141,16 +161,46 @@ export async function requestProviderStage({
         })
       : null
 
+  const hasOlderSourceHints =
+    !!agenticTranscriptRecallSourceHints && agenticTranscriptRecallSourceHints.hints.length > 0
+  const hasToolCapableSourceMap = willExperimentalAgenticTranscriptRecallAttachTools({
+    sourceHints: agenticTranscriptRecallSourceHints,
+    sourceMap: agenticTranscriptRecallSourceMap,
+  })
+  const atrToolChoiceDecision = agenticTranscriptRecall.enabled
+    ? decideAgenticTranscriptRecallToolChoice({
+        lastUserMessage: findLastMessageContent(recentMessages, 'user'),
+        lastAssistantMessage: findLastMessageContent(recentMessages, 'assistant'),
+        hasOlderSourceHints,
+        hasToolCapableSourceMap,
+      })
+    : null
+
+  debugMetrics['experimental_agentic_transcript_recall_tool_choice_preflight'] =
+    atrToolChoiceDecision?.toolChoice ?? null
+  debugMetrics['experimental_agentic_transcript_recall_tool_choice_source'] =
+    atrToolChoiceDecision?.source ?? null
+  debugMetrics['experimental_agentic_transcript_recall_tool_choice_version'] =
+    atrToolChoiceDecision?.version ?? null
+  debugMetrics['experimental_agentic_transcript_recall_tool_choice_score'] =
+    atrToolChoiceDecision?.score ?? null
+  debugMetrics['experimental_agentic_transcript_recall_tool_choice_matches'] =
+    atrToolChoiceDecision && atrToolChoiceDecision.matchedRuleIds.length > 0
+      ? atrToolChoiceDecision.matchedRuleIds.join(',')
+      : null
+  debugMetrics['experimental_agentic_transcript_recall_tool_choice_blocks'] =
+    atrToolChoiceDecision && atrToolChoiceDecision.blockedRuleIds.length > 0
+      ? atrToolChoiceDecision.blockedRuleIds.join(',')
+      : null
+  debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied'] = false
+
   const googleExplicitCacheConfigured = isGoogleExplicitCacheEnabled()
   const googleExplicitCacheDisabledForToolUsePreflight =
     provider === 'google' &&
     googleExplicitCacheConfigured &&
     !disableGoogleExplicitCache &&
     agenticTranscriptRecall.enabled &&
-    willExperimentalAgenticTranscriptRecallAttachTools({
-      sourceHints: agenticTranscriptRecallSourceHints,
-      sourceMap: agenticTranscriptRecallSourceMap,
-    })
+    hasToolCapableSourceMap
 
   debugMetrics['google_explicit_cache_disabled_for_tool_use_preflight'] =
     provider === 'google' ? googleExplicitCacheDisabledForToolUsePreflight : null
@@ -366,7 +416,27 @@ export async function requestProviderStage({
           logDebug,
         })
         finalStreamRequest = experimentalResult.streamRequest
-        experimentalStreamTextSettings = experimentalResult.streamTextSettings
+        experimentalStreamTextSettings =
+          atrToolChoiceDecision?.toolChoice === 'required' &&
+          experimentalResult.streamTextSettings?.tools
+            ? {
+                ...experimentalResult.streamTextSettings,
+                toolChoice: 'required',
+              }
+            : experimentalResult.streamTextSettings
+        debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied'] =
+          atrToolChoiceDecision?.toolChoice === 'required' &&
+          !!experimentalResult.streamTextSettings?.tools
+
+        if (debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied']) {
+          logDebug('[Agentic Transcript Recall] Tool-choice preflight forced tool use', {
+            jobId,
+            provider,
+            modelName,
+            score: atrToolChoiceDecision?.score ?? null,
+            matchedRules: atrToolChoiceDecision?.matchedRuleIds ?? [],
+          })
+        }
       } catch (error) {
         debugMetrics['experimental_agentic_transcript_recall_fallback_to_standard'] = true
         logDebug('[Agentic Transcript Recall] Experimental wrapper failed; falling back', {

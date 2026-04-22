@@ -1,0 +1,227 @@
+const NORMALIZE_RULES = [
+  { from: /그 때/g, to: '그때' },
+  { from: /지난 번/g, to: '지난번' },
+  { from: /\s+/g, to: ' ' },
+] as const
+
+const OLDER_PAST_REFERENCE_PATTERNS = [
+  /지난번/,
+  /그때/,
+  /전에/,
+  /이전에/,
+  /예전에/,
+  /첫\s*만남/,
+  /처음\s*만났/,
+  /오래전/,
+]
+
+const EXACT_RECALL_PATTERNS = [
+  /뭐라고\s*했/,
+  /무슨\s*말\s*했/,
+  /그대로/,
+  /원문/,
+  /인용/,
+  /정확히/,
+  /정확한/,
+  /다시\s*말해/,
+  /기억해/,
+  /기억나/,
+]
+
+const PROMISE_OR_BOUNDARY_PATTERNS = [
+  /약속/,
+  /비밀/,
+  /조건/,
+  /하지\s*말라/,
+  /선\s*넘/,
+  /경계/,
+  /애칭/,
+  /호칭/,
+  /별명/,
+  /고백/,
+  /사과/,
+  /화해/,
+]
+
+const CONTRADICTION_PATTERNS = [
+  /말이\s*다르/,
+  /말이\s*다른/,
+  /모순/,
+  /앞뒤가\s*안\s*맞/,
+  /기억\s*못\s*하/,
+  /헷갈/,
+  /설정\s*충돌/,
+]
+
+const RESET_OR_NEW_AU_PATTERNS = [
+  /다시\s*시작/,
+  /리셋/,
+  /초기화/,
+  /처음부터/,
+  /처음\s*만나는\s*설정/,
+  /첫만남\s*설정/,
+  /새\s*au/i,
+  /현대\s*au/i,
+  /학교\s*au/i,
+  /카페\s*au/i,
+  /기억\s*없이/,
+]
+
+const STYLE_ONLY_PATTERNS = [
+  /더\s*다정하게/,
+  /더\s*차갑게/,
+  /더\s*집착하/,
+  /더\s*질투하/,
+  /말투/,
+  /톤/,
+  /분위기/,
+]
+
+const IMMEDIATE_CONTINUATION_PATTERNS = [
+  /방금/,
+  /이어서/,
+  /계속해/,
+  /더\s*풀어/,
+  /다시\s*한번/,
+  /조금\s*더/,
+  /그\s*말\s*다시/,
+]
+
+export type AgenticTranscriptRecallToolChoiceGateInput = {
+  lastUserMessage: string | null
+  lastAssistantMessage: string | null
+  hasOlderSourceHints: boolean
+  hasToolCapableSourceMap: boolean
+}
+
+export type AgenticTranscriptRecallToolChoiceGateDecision = {
+  toolChoice: 'auto' | 'required'
+  score: number
+  matchedRuleIds: string[]
+  blockedRuleIds: string[]
+  source: 'heuristic'
+  version: 'character-chat-v0'
+}
+
+function normalizeText(text: string | null | undefined): string {
+  let normalized = text?.trim() ?? ''
+  for (const rule of NORMALIZE_RULES) {
+    normalized = normalized.replace(rule.from, rule.to)
+  }
+  return normalized.trim()
+}
+
+function hasAny(text: string, patterns: readonly RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(text))
+}
+
+export function decideAgenticTranscriptRecallToolChoice(
+  input: AgenticTranscriptRecallToolChoiceGateInput,
+): AgenticTranscriptRecallToolChoiceGateDecision {
+  const lastUserMessage = normalizeText(input.lastUserMessage)
+  const lastAssistantMessage = normalizeText(input.lastAssistantMessage)
+  const blockedRuleIds: string[] = []
+
+  if (!lastUserMessage) {
+    blockedRuleIds.push('NO_LAST_USER_MESSAGE')
+  }
+
+  if (!input.hasOlderSourceHints) {
+    blockedRuleIds.push('NO_OLDER_SOURCE_HINTS')
+  }
+
+  if (!input.hasToolCapableSourceMap) {
+    blockedRuleIds.push('NO_TOOL_CAPABLE_SOURCE_MAP')
+  }
+
+  if (blockedRuleIds.length > 0) {
+    return {
+      toolChoice: 'auto',
+      score: 0,
+      matchedRuleIds: [],
+      blockedRuleIds,
+      source: 'heuristic',
+      version: 'character-chat-v0',
+    }
+  }
+
+  const isResetOrNewAu = hasAny(lastUserMessage, RESET_OR_NEW_AU_PATTERNS)
+  const isStyleOnly = hasAny(lastUserMessage, STYLE_ONLY_PATTERNS)
+  const isImmediateContinuation = hasAny(lastUserMessage, IMMEDIATE_CONTINUATION_PATTERNS)
+  const hasOlderPastReference = hasAny(lastUserMessage, OLDER_PAST_REFERENCE_PATTERNS)
+  const hasExactRecall = hasAny(lastUserMessage, EXACT_RECALL_PATTERNS)
+  const hasPromiseOrBoundary = hasAny(lastUserMessage, PROMISE_OR_BOUNDARY_PATTERNS)
+  const hasOlderContradiction =
+    hasAny(lastUserMessage, CONTRADICTION_PATTERNS) && hasOlderPastReference
+
+  if (isResetOrNewAu) {
+    return {
+      toolChoice: 'auto',
+      score: 0,
+      matchedRuleIds: [],
+      blockedRuleIds: ['RESET_OR_NEW_AU'],
+      source: 'heuristic',
+      version: 'character-chat-v0',
+    }
+  }
+
+  if (isStyleOnly && !hasExactRecall && !hasPromiseOrBoundary && !hasOlderContradiction) {
+    return {
+      toolChoice: 'auto',
+      score: 0,
+      matchedRuleIds: [],
+      blockedRuleIds: ['PURE_STYLE_ONLY'],
+      source: 'heuristic',
+      version: 'character-chat-v0',
+    }
+  }
+
+  if (
+    !!lastAssistantMessage &&
+    isImmediateContinuation &&
+    !hasOlderPastReference &&
+    !hasPromiseOrBoundary &&
+    !hasOlderContradiction
+  ) {
+    return {
+      toolChoice: 'auto',
+      score: 0,
+      matchedRuleIds: [],
+      blockedRuleIds: ['IMMEDIATE_CONTINUATION'],
+      source: 'heuristic',
+      version: 'character-chat-v0',
+    }
+  }
+
+  const matchedRuleIds: string[] = []
+  let score = 0
+
+  if (hasOlderPastReference) {
+    matchedRuleIds.push('OLDER_PAST_REFERENCE')
+    score += 2
+  }
+
+  if (hasExactRecall) {
+    matchedRuleIds.push('EXACT_RECALL')
+    score += 3
+  }
+
+  if (hasPromiseOrBoundary) {
+    matchedRuleIds.push('PROMISE_OR_BOUNDARY')
+    score += 2
+  }
+
+  if (hasOlderContradiction) {
+    matchedRuleIds.push('OLDER_CONTRADICTION')
+    score += 3
+  }
+
+  return {
+    toolChoice: score >= 5 ? 'required' : 'auto',
+    score,
+    matchedRuleIds,
+    blockedRuleIds: [],
+    source: 'heuristic',
+    version: 'character-chat-v0',
+  }
+}

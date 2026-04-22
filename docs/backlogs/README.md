@@ -14,7 +14,8 @@ Use it to answer two questions quickly:
 
 ## Current Entry Point
 
-- Active backlog: none currently
+- Active backlog:
+  [character-chat-atr-gate-backlog-2026-04-22.md](./active/character-chat-atr-gate-backlog-2026-04-22.md)
 - Most recently archived backlog:
   [non-chat-core-seam-review-backlog-2026-04-22.md](./archive/2026/non-chat-core-seam-review-backlog-2026-04-22.md)
 

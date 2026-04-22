@@ -387,6 +387,189 @@ describe('requestProviderStage', () => {
     })
   })
 
+  it('forces required tool choice when the character-chat preflight matches older exact recall', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const payload = buildPayload()
+    const context = buildContext({
+      recentMessages: [
+        { role: 'assistant', content: '지난 약속을 떠올리며 숨을 고른다.' },
+        { role: 'user', content: '지난번에 한 약속 정확히 다시 말해줘.' },
+      ],
+      agenticTranscriptRecall: {
+        configured: true,
+        accountDefaultEnabled: false,
+        preferenceSource: 'chat_override',
+        globallyEnabled: true,
+        providerSupported: true,
+        providerAllowed: true,
+        enabled: true,
+        skipReason: null,
+        maxToolCalls: 1,
+        maxMessagesPerCall: 12,
+        maxTotalMessages: 12,
+        providerAllowlist: ['openai'],
+      },
+      agenticTranscriptRecallSourceHints: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Older promise',
+          },
+        ],
+      },
+      agenticTranscriptRecallSourceMap: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Older promise',
+          },
+        ],
+        navigationParents: [],
+      },
+      debugMetrics: {},
+    })
+
+    prepareExperimentalAgenticTranscriptRecallRequestMock.mockReturnValueOnce({
+      streamRequest: {
+        system: 'FINAL\n\nExperimental',
+        messages: context.recentMessages,
+      },
+      streamTextSettings: {
+        tools: {
+          fetch_source_range: {},
+        },
+      },
+    })
+
+    await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-force-required',
+      payload,
+      context,
+      timings: {},
+    })
+
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: 'FINAL\n\nExperimental',
+        messages: context.recentMessages,
+        toolChoice: 'required',
+        tools: {
+          fetch_source_range: {},
+        },
+      }),
+    )
+    expect(context.debugMetrics).toMatchObject({
+      experimental_agentic_transcript_recall_tool_choice_preflight: 'required',
+      experimental_agentic_transcript_recall_tool_choice_source: 'heuristic',
+      experimental_agentic_transcript_recall_tool_choice_version: 'character-chat-v0',
+      experimental_agentic_transcript_recall_tool_choice_score: 7,
+      experimental_agentic_transcript_recall_tool_choice_matches:
+        'OLDER_PAST_REFERENCE,EXACT_RECALL,PROMISE_OR_BOUNDARY',
+      experimental_agentic_transcript_recall_tool_choice_blocks: null,
+      experimental_agentic_transcript_recall_tool_choice_applied: true,
+    })
+  })
+
+  it('keeps tool choice on auto for immediate continuation requests', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const payload = buildPayload()
+    const context = buildContext({
+      recentMessages: [
+        { role: 'assistant', content: '조용히 손을 내민다.' },
+        { role: 'user', content: '방금 그 말 다시 해줘.' },
+      ],
+      agenticTranscriptRecall: {
+        configured: true,
+        accountDefaultEnabled: false,
+        preferenceSource: 'chat_override',
+        globallyEnabled: true,
+        providerSupported: true,
+        providerAllowed: true,
+        enabled: true,
+        skipReason: null,
+        maxToolCalls: 1,
+        maxMessagesPerCall: 12,
+        maxTotalMessages: 12,
+        providerAllowlist: ['openai'],
+      },
+      agenticTranscriptRecallSourceHints: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Older detail',
+          },
+        ],
+      },
+      agenticTranscriptRecallSourceMap: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Older detail',
+          },
+        ],
+        navigationParents: [],
+      },
+      debugMetrics: {},
+    })
+
+    prepareExperimentalAgenticTranscriptRecallRequestMock.mockReturnValueOnce({
+      streamRequest: {
+        system: 'FINAL\n\nExperimental',
+        messages: context.recentMessages,
+      },
+      streamTextSettings: {
+        tools: {
+          fetch_source_range: {},
+        },
+      },
+    })
+
+    await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-auto-continuation',
+      payload,
+      context,
+      timings: {},
+    })
+
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: 'FINAL\n\nExperimental',
+        messages: context.recentMessages,
+        tools: {
+          fetch_source_range: {},
+        },
+      }),
+    )
+    expect(streamTextMock.mock.calls[0]?.[0]).not.toHaveProperty('toolChoice', 'required')
+    expect(context.debugMetrics).toMatchObject({
+      experimental_agentic_transcript_recall_tool_choice_preflight: 'auto',
+      experimental_agentic_transcript_recall_tool_choice_blocks: 'IMMEDIATE_CONTINUATION',
+      experimental_agentic_transcript_recall_tool_choice_applied: false,
+    })
+  })
+
   it('falls back to the standard stream request when the experimental wrapper fails', async () => {
     const { requestProviderStage } = await import('./provider-request-stage')
     const payload = buildPayload()

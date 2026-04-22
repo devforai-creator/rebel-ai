@@ -1,5 +1,13 @@
 type UploadableFileName = Pick<{ name: string }, 'name'>
 
+export function buildImportUploadPrefix(userId: string) {
+  return `${userId}/imports/`
+}
+
+export function isImportUploadPath(path: string, userId: string) {
+  return path.startsWith(buildImportUploadPrefix(userId))
+}
+
 export function buildImportUploadPath(
   userId: string,
   file: UploadableFileName,
@@ -16,5 +24,5 @@ export function buildImportUploadPath(
     .replace(/-\.(?=[^.]+$)/, '.')
 
   const safeName = sanitizedName || 'character.rbx'
-  return `${userId}/imports/${createUniqueSuffix()}-${safeName}`
+  return `${buildImportUploadPrefix(userId)}${createUniqueSuffix()}-${safeName}`
 }

@@ -170,7 +170,17 @@ Review invariants:
 
 ### S3. Import Upload Contract And Import Runner Seams
 
-Status: `pending`
+Status: `in_progress`
+
+Progress note:
+
+- started on `2026-04-22`
+- first seam fix landed: import upload admission and runner-side storage-path
+  validation now require the staged `${userId}/imports/` prefix instead of
+  accepting any object under `${userId}/`
+- shared path helpers and regression coverage now pin the staged-upload scope
+  so import jobs cannot read or delete arbitrary user-scoped storage objects
+  just because they share the same user prefix
 
 Why third:
 

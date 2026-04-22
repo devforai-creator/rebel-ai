@@ -12,7 +12,7 @@ import {
   MAX_IMPORT_UPLOAD_BYTES,
   MAX_IMPORT_UPLOAD_MB,
 } from '@/lib/import/constants'
-import { buildImportUploadPath } from '@/lib/import/upload-path'
+import { buildImportUploadPath, isImportUploadPath } from '@/lib/import/upload-path'
 import { createImportUploadTicket, verifyImportUploadTicket } from '@/lib/import/upload-ticket'
 import {
   ACTIVE_IMPORT_JOB_CONFLICT_MESSAGE,
@@ -202,7 +202,7 @@ async function enqueueImportUpload({
   fileSize?: number
   uploadTicket: string
 }) {
-  if (!path.startsWith(`${userId}/`)) {
+  if (!isImportUploadPath(path, userId)) {
     return createApiErrorResponse('Access denied', 403)
   }
 

@@ -4,6 +4,7 @@ import {
   MAX_IMPORT_UPLOAD_BYTES,
   MAX_IMPORT_UPLOAD_MB,
 } from '@/lib/import/constants'
+import { isImportUploadPath } from '@/lib/import/upload-path'
 import { parseRbxArchive } from '@/lib/rbx-parser'
 import { assertRbxRuntimeContract } from '@/lib/rbx-runtime-contract'
 import { importRbx } from '@/lib/rbx-importer'
@@ -21,7 +22,7 @@ export type CharacterImportJobPayload = {
 }
 
 export function validateStoragePath(storagePath: string, userId: string): boolean {
-  return storagePath.startsWith(`${userId}/`)
+  return isImportUploadPath(storagePath, userId)
 }
 
 export async function processCharacterImportJob(

@@ -432,7 +432,7 @@ describe('POST /api/characters/import/storage', () => {
     ])
   })
 
-  it('returns 403 when the enqueue path is outside the user scope', async () => {
+  it('returns 403 when the enqueue path is outside the staged import scope', async () => {
     const supabase = createSupabaseMock({
       user: { id: 'user-1' },
     })
@@ -441,6 +441,24 @@ describe('POST /api/characters/import/storage', () => {
       buildRequest(
         buildEnqueueRequestBody({
           path: 'other-user/imports/new-file.rbx',
+        }),
+      ) as never,
+    )
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ error: 'Access denied' })
+    expect(supabase.removedPaths).toEqual([])
+  })
+
+  it('returns 403 when the enqueue path stays in the user scope but outside /imports/', async () => {
+    const supabase = createSupabaseMock({
+      user: { id: 'user-1' },
+    })
+
+    const response = await POST(
+      buildRequest(
+        buildEnqueueRequestBody({
+          path: 'user-1/character-assets/existing.png',
         }),
       ) as never,
     )

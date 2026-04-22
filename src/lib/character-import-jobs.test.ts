@@ -160,7 +160,8 @@ describe('character-import-jobs', () => {
   it('validateStoragePath accepts scoped paths and rejects foreign paths', async () => {
     const { validateStoragePath } = await loadModule()
 
-    expect(validateStoragePath('user-1/file.rbx', 'user-1')).toBe(true)
+    expect(validateStoragePath('user-1/imports/file.rbx', 'user-1')).toBe(true)
+    expect(validateStoragePath('user-1/character-assets/file.png', 'user-1')).toBe(false)
     expect(validateStoragePath('user-2/file.rbx', 'user-1')).toBe(false)
   })
 
@@ -198,7 +199,7 @@ describe('character-import-jobs', () => {
       {
         jobId: 'job-1',
         userId: 'user-1',
-        storagePath: 'user-1/file.rbx',
+        storagePath: 'user-1/imports/file.rbx',
         fileName: 'file.rbx',
       },
       mock.client as never,
@@ -230,7 +231,7 @@ describe('character-import-jobs', () => {
         },
       }),
     })
-    expect(mock.calls.removedPaths).toContainEqual(['user-1/file.rbx'])
+    expect(mock.calls.removedPaths).toContainEqual(['user-1/imports/file.rbx'])
   })
 
   it('marks the job as error when the staged file cannot be downloaded', async () => {
@@ -243,7 +244,7 @@ describe('character-import-jobs', () => {
       {
         jobId: 'job-1',
         userId: 'user-1',
-        storagePath: 'user-1/file.rbx',
+        storagePath: 'user-1/imports/file.rbx',
         fileName: 'file.rbx',
       },
       mock.client as never,
@@ -258,7 +259,7 @@ describe('character-import-jobs', () => {
         error_message: 'Storage unavailable',
       }),
     })
-    expect(mock.calls.removedPaths).toContainEqual(['user-1/file.rbx'])
+    expect(mock.calls.removedPaths).toContainEqual(['user-1/imports/file.rbx'])
   })
 
   it('falls back to a generic download error when storage returns no data', async () => {
@@ -271,7 +272,7 @@ describe('character-import-jobs', () => {
       {
         jobId: 'job-1',
         userId: 'user-1',
-        storagePath: 'user-1/file.rbx',
+        storagePath: 'user-1/imports/file.rbx',
         fileName: 'file.rbx',
       },
       mock.client as never,
@@ -297,7 +298,7 @@ describe('character-import-jobs', () => {
       {
         jobId: 'job-1',
         userId: 'user-1',
-        storagePath: 'user-1/file.rbx',
+        storagePath: 'user-1/imports/file.rbx',
         fileName: 'file.rbx',
       },
       mock.client as never,
@@ -353,7 +354,7 @@ describe('character-import-jobs', () => {
       {
         jobId: 'job-1',
         userId: 'user-1',
-        storagePath: 'user-1/file.rbx',
+        storagePath: 'user-1/imports/file.rbx',
         fileName: 'file.rbx',
       },
       mock.client as never,
@@ -367,7 +368,7 @@ describe('character-import-jobs', () => {
         error_message: expect.stringContaining('background_html'),
       }),
     })
-    expect(mock.calls.removedPaths).toContainEqual(['user-1/file.rbx'])
+    expect(mock.calls.removedPaths).toContainEqual(['user-1/imports/file.rbx'])
   })
 
   it('marks the job as error when importRbx reports a failure without an explicit message', async () => {
@@ -382,7 +383,7 @@ describe('character-import-jobs', () => {
       {
         jobId: 'job-1',
         userId: 'user-1',
-        storagePath: 'user-1/file.rbx',
+        storagePath: 'user-1/imports/file.rbx',
         fileName: 'file.rbx',
       },
       mock.client as never,
@@ -406,7 +407,7 @@ describe('character-import-jobs', () => {
       {
         jobId: 'job-1',
         userId: 'user-1',
-        storagePath: 'user-1/file.rbx',
+        storagePath: 'user-1/imports/file.rbx',
         fileName: 'file.rbx',
       },
       mock.client as never,
@@ -419,7 +420,7 @@ describe('character-import-jobs', () => {
         error_message: 'Unknown error',
       }),
     })
-    expect(mock.calls.removedPaths).toContainEqual(['user-1/file.rbx'])
+    expect(mock.calls.removedPaths).toContainEqual(['user-1/imports/file.rbx'])
   })
 
   it('logs staged-upload removal failures after processing', async () => {
@@ -432,7 +433,7 @@ describe('character-import-jobs', () => {
       {
         jobId: 'job-1',
         userId: 'user-1',
-        storagePath: 'user-1/file.rbx',
+        storagePath: 'user-1/imports/file.rbx',
         fileName: 'file.rbx',
       },
       mock.client as never,

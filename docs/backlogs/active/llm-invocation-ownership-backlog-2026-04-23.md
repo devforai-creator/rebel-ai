@@ -112,7 +112,7 @@ Acceptance notes:
 
 ### P0-2. Extract The Minimum Shared Invocation Setup Seam
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 
@@ -125,6 +125,12 @@ Acceptance notes:
   semantics
 - the first-class chat runner does not become coupled to secondary route needs
 - unsupported providers still fail closed at the right boundary
+- extracted seam landed at
+  [language-model-access.ts](../../../src/lib/llm/language-model-access.ts)
+- adopted by
+  [translation-service.ts](../../../src/lib/chat/translation-service.ts),
+  [route.ts](../../../src/app/api/messages/reprocess/route.ts), and
+  [route.ts](../../../src/app/api/summaries/generate/route.ts)
 
 ### P0-3. Tighten Secondary Invocation Ownership
 

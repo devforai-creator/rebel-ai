@@ -1,11 +1,11 @@
 import { NextRequest } from 'next/server'
+import type { LanguageModel } from 'ai'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hasMemoryUpdateWork, updateMemoryState } from '@/lib/chat-memory'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
-import { getDecryptedSecret } from '@/lib/supabase/rpc'
 import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
-import type { ApiServiceTier, Database } from '@/types/database.types'
-import { buildLanguageModel } from '@/lib/llm/model-factory'
+import { createLanguageModelFromSecretConfig } from '@/lib/llm/language-model-access'
+import type { ApiServiceTier } from '@/types/database.types'
 import {
   createApiErrorResponse,
   createUnexpectedRouteErrorResponse,
@@ -181,24 +181,6 @@ export async function POST(request: NextRequest) {
       return createApiErrorResponse('API key misconfigured', 500)
     }
 
-    const decryptArgs: Database['public']['Functions']['get_decrypted_secret']['Args'] = {
-      secret_name: apiKeyRow.vault_secret_name,
-      requester: userId,
-    }
-
-    const { data: decryptedKey, error: decryptError } = await getDecryptedSecret(
-      supabase,
-      decryptArgs,
-    )
-
-    if (decryptError || !decryptedKey) {
-      console.error('[Summaries API] Failed to decrypt API key', {
-        apiKeyId,
-        error: decryptError?.message,
-      })
-      return createApiErrorResponse('Failed to decrypt API key', 500)
-    }
-
     const resolvedProvider = provider === apiKeyRow.provider ? provider : apiKeyRow.provider
     if (resolvedProvider !== provider) {
       console.warn('[Summaries API] Provider mismatch detected, falling back to stored provider', {
@@ -218,19 +200,21 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Create model
-    let model
+    let model: LanguageModel
     try {
-      model = buildLanguageModel({
-        provider: resolvedProvider,
-        modelName: resolvedModelName,
-        apiKey: decryptedKey,
-        serviceTier: apiKeyRow.service_tier,
+      model = await createLanguageModelFromSecretConfig({
+        supabase,
+        requester: userId,
+        config: {
+          provider: resolvedProvider,
+          modelName: resolvedModelName,
+          serviceTier: apiKeyRow.service_tier,
+          vaultSecretName: apiKeyRow.vault_secret_name,
+        },
+        logPrefix: '[Summaries API]',
       })
-    } catch (error) {
-      if (error instanceof Error && error.message.startsWith('Unsupported provider:')) {
-        return createApiErrorResponse(error.message, 400)
-      }
-      throw error
+    } catch {
+      return createApiErrorResponse('Failed to decrypt API key', 500)
     }
 
     // 6. Generate summaries (direct execution)

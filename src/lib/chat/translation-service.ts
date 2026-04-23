@@ -1,7 +1,6 @@
-import { generateText } from 'ai'
+import { generateText, type LanguageModel } from 'ai'
 import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
-import { buildLanguageModel } from '@/lib/llm/model-factory'
-import { getDecryptedSecret } from '@/lib/supabase/rpc'
+import { createLanguageModelFromSecretConfig } from '@/lib/llm/language-model-access'
 import { TRANSLATION_SYSTEM_PROMPT } from '@/lib/chat/bilingual-context'
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { ApiKeyUpdate, MessageUpdate, Profile } from '@/types/database.types'
@@ -70,13 +69,14 @@ export async function translateMessageForUser({
     }
   }
 
-  let decryptedApiKey: string
+  let model: LanguageModel
   try {
     const adminSupabase = getAdminClient()
-    decryptedApiKey = await decryptSecret({
+    model = await createLanguageModelFromSecretConfig({
       supabase: adminSupabase,
-      secretName: resolvedConfig.config.vaultSecretName,
+      config: resolvedConfig.config,
       requester: userId,
+      logPrefix: '[Translate]',
     })
   } catch (error) {
     return { status: 'vault_error', error }
@@ -84,13 +84,6 @@ export async function translateMessageForUser({
 
   let translatedText: string
   try {
-    const model = buildLanguageModel({
-      provider: resolvedConfig.config.provider,
-      modelName: resolvedConfig.config.modelName,
-      apiKey: decryptedApiKey,
-      serviceTier: resolvedConfig.config.serviceTier,
-    })
-
     const { text } = await generateText({
       model,
       system: TRANSLATION_SYSTEM_PROMPT,
@@ -120,30 +113,4 @@ export async function translateMessageForUser({
     .eq('id', resolvedConfig.config.apiKeyId)
 
   return { status: 'success', content: translatedText }
-}
-
-async function decryptSecret({
-  supabase,
-  secretName,
-  requester,
-}: {
-  supabase: TranslationAdminSupabaseClient
-  secretName: string
-  requester: string
-}): Promise<string> {
-  const rpcArgs = {
-    secret_name: secretName,
-    requester,
-  }
-  const { data, error } = await getDecryptedSecret(supabase, rpcArgs)
-
-  if (error) {
-    console.error('[Translate] Vault decryption failed:', error)
-    throw new Error('Vault decryption failed')
-  }
-
-  if (!data) {
-    throw new Error('Vault returned empty secret')
-  }
-  return data
 }

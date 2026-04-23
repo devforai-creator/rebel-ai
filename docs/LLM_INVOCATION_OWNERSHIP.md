@@ -276,6 +276,26 @@ The best candidates are:
 The queued chat runner and embeddings path should stay separate unless a later
 slice shows a stronger reason to merge their setup.
 
+## P0-2 Outcome
+
+The extracted shared seam is intentionally small:
+
+- [language-model-access.ts](../src/lib/llm/language-model-access.ts): shared
+  non-chat helper for `vault decrypt -> build model`
+
+Adopted callers:
+
+- [translation-service.ts](../src/lib/chat/translation-service.ts)
+- [route.ts](../src/app/api/messages/reprocess/route.ts)
+- [route.ts](../src/app/api/summaries/generate/route.ts)
+
+Still intentionally local:
+
+- config resolution and product-specific ownership decisions
+- actual `generateText(...)` or `streamText(...)` invocation semantics
+- queued chat runner secret/model setup
+- embeddings client setup
+
 ## Explicitly Out Of Scope For This Queue
 
 These provider calls exist, but they are not part of the current ownership

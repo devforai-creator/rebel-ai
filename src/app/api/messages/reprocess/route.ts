@@ -3,13 +3,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import { checkUserRateLimit } from '@/lib/chat/rate-limiter'
 import { CHAT_REPROCESS_LIMITS } from '@/lib/chat/runtime-limits'
-import { streamText } from 'ai'
-import { buildLanguageModel } from '@/lib/llm/model-factory'
+import { streamText, type LanguageModel } from 'ai'
+import { createLanguageModelFromSecretConfig } from '@/lib/llm/language-model-access'
 import {
   SUPPORT_TIER_FEATURES,
   withSupportTierHeaders as withSupportTierHeadersBase,
 } from '@/lib/support-tier'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
@@ -125,24 +124,17 @@ export async function POST(request: Request) {
 
   // 4. Decrypt API key from Vault (requires admin client)
   const adminSupabase = createAdminClient()
-  let decryptedApiKey: string
+  let model: LanguageModel
   try {
-    decryptedApiKey = await decryptSecret({
+    model = await createLanguageModelFromSecretConfig({
       supabase: adminSupabase,
-      secretName: resolvedConfig.config.vaultSecretName,
+      config: resolvedConfig.config,
       requester: user.id,
+      logPrefix: '[Reprocess]',
     })
   } catch {
     return createReprocessTextResponse('Failed to decrypt API key', { status: 500 })
   }
-
-  // 5. Build language model
-  const model = buildLanguageModel({
-    provider: resolvedConfig.config.provider,
-    modelName: resolvedConfig.config.modelName,
-    apiKey: decryptedApiKey,
-    serviceTier: resolvedConfig.config.serviceTier,
-  })
 
   // 6. Stream text and update message in DB.
   // This experimental rewrite path updates the canonical message text in place, but intentionally
@@ -252,32 +244,4 @@ export async function POST(request: Request) {
     console.error('[Reprocess] Streaming failed:', error)
     return createReprocessTextResponse('Failed to reprocess message', { status: 500 })
   }
-}
-
-// Helper functions
-
-async function decryptSecret({
-  supabase,
-  secretName,
-  requester,
-}: {
-  supabase: SupabaseClient
-  secretName: string
-  requester: string
-}): Promise<string> {
-  const { data, error } = await supabase.rpc('get_decrypted_secret', {
-    secret_name: secretName,
-    requester,
-  })
-
-  if (error) {
-    console.error('[Reprocess] Vault decryption failed:', error)
-    throw new Error('Vault decryption failed')
-  }
-
-  if (!data) {
-    throw new Error('Vault returned empty secret')
-  }
-
-  return data
 }

@@ -25,6 +25,7 @@ Keep human-facing docs short and directional. Exact runtime behavior should come
   maintained chat request -> queue -> runner -> durable-write path
 - [CHAT_RUNTIME_TUNING.md](./CHAT_RUNTIME_TUNING.md): supported chat and runner tuning knobs
 - [DB_CHANGE_WORKFLOW.md](./DB_CHANGE_WORKFLOW.md): database migration and schema workflow
+- [GOOGLE_CACHE_BOUNDARY.md](./GOOGLE_CACHE_BOUNDARY.md): boundary contract for keeping Google explicit cache removable from the supported Google chat/tool path
 
 ## Reference (Not Exact Source Of Truth)
 
@@ -70,6 +71,7 @@ for the current queue and the archive split.
 
 - [backlogs/README.md](./backlogs/README.md): backlog structure, current entry
   point, and archive policy
-- current active queue: none currently
+- current active queue:
+  [google-cache-boundary-backlog-2026-04-23.md](./backlogs/active/google-cache-boundary-backlog-2026-04-23.md)
 - most recently archived queue:
-  [character-chat-atr-gate-backlog-2026-04-22.md](./backlogs/archive/2026/character-chat-atr-gate-backlog-2026-04-22.md)
+  [explicit-memory-v0-backlog-2026-04-22.md](./backlogs/archive/2026/explicit-memory-v0-backlog-2026-04-22.md)

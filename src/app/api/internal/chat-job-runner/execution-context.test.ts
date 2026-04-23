@@ -565,6 +565,7 @@ describe('loadChatJobExecutionContext', () => {
         {
           kind: 'summary',
           label: 'summary',
+          rangeId: 'R1',
           startSeq: 1,
           endSeq: 10,
           preview: 'Old summary',
@@ -572,6 +573,7 @@ describe('loadChatJobExecutionContext', () => {
         {
           kind: 'fact',
           label: null,
+          rangeId: 'R2',
           startSeq: 11,
           endSeq: 20,
           preview: 'Old fact',
@@ -582,6 +584,7 @@ describe('loadChatJobExecutionContext', () => {
           parentRange: {
             kind: 'summary',
             label: 'meta_summary',
+            parentId: 'P1',
             startSeq: 1,
             endSeq: 20,
             preview: 'Parent summary',
@@ -590,6 +593,7 @@ describe('loadChatJobExecutionContext', () => {
             {
               kind: 'summary',
               label: 'summary',
+              rangeId: 'R1',
               startSeq: 1,
               endSeq: 10,
               preview: 'Old summary',
@@ -597,6 +601,7 @@ describe('loadChatJobExecutionContext', () => {
             {
               kind: 'fact',
               label: null,
+              rangeId: 'R2',
               startSeq: 11,
               endSeq: 20,
               preview: 'Old fact',

@@ -4,8 +4,32 @@ import { createSupabaseMock, type SupabaseClientType } from '@/tests/mocks/supab
 import { deriveAgenticTranscriptRecallSourceHints } from './source-hints'
 import {
   deriveAgenticTranscriptRecallSourceMap,
+  findAgenticTranscriptRecallDirectFetchRangeById,
+  findAgenticTranscriptRecallNavigationParentEntryById,
   loadAgenticTranscriptRecallSourceMap,
 } from './source-map'
+
+function stripSelectionIds<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripSelectionIds(item)) as T
+  }
+
+  if (value && typeof value === 'object') {
+    const candidate = value as Record<string, unknown>
+    const stripped: Record<string, unknown> = {}
+
+    for (const [key, entry] of Object.entries(candidate)) {
+      if (key === 'rangeId' || key === 'parentId') {
+        continue
+      }
+      stripped[key] = stripSelectionIds(entry)
+    }
+
+    return stripped as T
+  }
+
+  return value
+}
 
 describe('deriveAgenticTranscriptRecallSourceMap', () => {
   const runtimeConfig = {
@@ -15,14 +39,16 @@ describe('deriveAgenticTranscriptRecallSourceMap', () => {
 
   it('returns empty buckets when no surfaced ranges exist', () => {
     expect(
-      deriveAgenticTranscriptRecallSourceMap({
-        sourceHints: {
-          rawContextStartOrdinal: 1,
-          cutoffOrdinal: 0,
-          hints: [],
-        },
-        runtimeConfig,
-      }),
+      stripSelectionIds(
+        deriveAgenticTranscriptRecallSourceMap({
+          sourceHints: {
+            rawContextStartOrdinal: 1,
+            cutoffOrdinal: 0,
+            hints: [],
+          },
+          runtimeConfig,
+        }),
+      ),
     ).toEqual({
       rawContextStartOrdinal: 1,
       cutoffOrdinal: 0,
@@ -33,29 +59,31 @@ describe('deriveAgenticTranscriptRecallSourceMap', () => {
 
   it('keeps direct summary chunks fetchable when no navigation parent is needed', () => {
     expect(
-      deriveAgenticTranscriptRecallSourceMap({
-        sourceHints: {
-          rawContextStartOrdinal: 21,
-          cutoffOrdinal: 20,
-          hints: [
-            {
-              kind: 'summary',
-              label: 'summary',
-              startSeq: 1,
-              endSeq: 10,
-              preview: 'Chunk 1',
-            },
-            {
-              kind: 'summary',
-              label: 'summary',
-              startSeq: 11,
-              endSeq: 20,
-              preview: 'Chunk 2',
-            },
-          ],
-        },
-        runtimeConfig,
-      }),
+      stripSelectionIds(
+        deriveAgenticTranscriptRecallSourceMap({
+          sourceHints: {
+            rawContextStartOrdinal: 21,
+            cutoffOrdinal: 20,
+            hints: [
+              {
+                kind: 'summary',
+                label: 'summary',
+                startSeq: 1,
+                endSeq: 10,
+                preview: 'Chunk 1',
+              },
+              {
+                kind: 'summary',
+                label: 'summary',
+                startSeq: 11,
+                endSeq: 20,
+                preview: 'Chunk 2',
+              },
+            ],
+          },
+          runtimeConfig,
+        }),
+      ),
     ).toEqual({
       rawContextStartOrdinal: 21,
       cutoffOrdinal: 20,
@@ -81,36 +109,38 @@ describe('deriveAgenticTranscriptRecallSourceMap', () => {
 
   it('derives navigation parents with multiple eligible direct-fetch child ranges', () => {
     expect(
-      deriveAgenticTranscriptRecallSourceMap({
-        sourceHints: {
-          rawContextStartOrdinal: 21,
-          cutoffOrdinal: 20,
-          hints: [
-            {
-              kind: 'summary',
-              label: 'summary',
-              startSeq: 1,
-              endSeq: 10,
-              preview: 'Chunk 1',
-            },
-            {
-              kind: 'summary',
-              label: 'summary',
-              startSeq: 11,
-              endSeq: 20,
-              preview: 'Chunk 2',
-            },
-            {
-              kind: 'summary',
-              label: 'meta_summary',
-              startSeq: 1,
-              endSeq: 20,
-              preview: 'Meta parent',
-            },
-          ],
-        },
-        runtimeConfig,
-      }),
+      stripSelectionIds(
+        deriveAgenticTranscriptRecallSourceMap({
+          sourceHints: {
+            rawContextStartOrdinal: 21,
+            cutoffOrdinal: 20,
+            hints: [
+              {
+                kind: 'summary',
+                label: 'summary',
+                startSeq: 1,
+                endSeq: 10,
+                preview: 'Chunk 1',
+              },
+              {
+                kind: 'summary',
+                label: 'summary',
+                startSeq: 11,
+                endSeq: 20,
+                preview: 'Chunk 2',
+              },
+              {
+                kind: 'summary',
+                label: 'meta_summary',
+                startSeq: 1,
+                endSeq: 20,
+                preview: 'Meta parent',
+              },
+            ],
+          },
+          runtimeConfig,
+        }),
+      ),
     ).toEqual({
       rawContextStartOrdinal: 21,
       cutoffOrdinal: 20,
@@ -186,10 +216,12 @@ describe('deriveAgenticTranscriptRecallSourceMap', () => {
     })
 
     expect(
-      deriveAgenticTranscriptRecallSourceMap({
-        sourceHints,
-        runtimeConfig,
-      }),
+      stripSelectionIds(
+        deriveAgenticTranscriptRecallSourceMap({
+          sourceHints,
+          runtimeConfig,
+        }),
+      ),
     ).toEqual({
       rawContextStartOrdinal: 21,
       cutoffOrdinal: 20,
@@ -262,10 +294,12 @@ describe('deriveAgenticTranscriptRecallSourceMap', () => {
     })
 
     expect(
-      deriveAgenticTranscriptRecallSourceMap({
-        sourceHints,
-        runtimeConfig,
-      }),
+      stripSelectionIds(
+        deriveAgenticTranscriptRecallSourceMap({
+          sourceHints,
+          runtimeConfig,
+        }),
+      ),
     ).toEqual({
       rawContextStartOrdinal: 21,
       cutoffOrdinal: 20,
@@ -287,43 +321,45 @@ describe('deriveAgenticTranscriptRecallSourceMap', () => {
 
   it('prefers summary previews over fact previews for the same direct-fetch child range', () => {
     expect(
-      deriveAgenticTranscriptRecallSourceMap({
-        sourceHints: {
-          rawContextStartOrdinal: 21,
-          cutoffOrdinal: 20,
-          hints: [
-            {
-              kind: 'fact',
-              label: null,
-              startSeq: 1,
-              endSeq: 10,
-              preview: 'Fact preview',
-            },
-            {
-              kind: 'summary',
-              label: 'summary',
-              startSeq: 1,
-              endSeq: 10,
-              preview: 'Summary preview',
-            },
-            {
-              kind: 'summary',
-              label: 'meta_summary',
-              startSeq: 1,
-              endSeq: 20,
-              preview: 'Meta parent',
-            },
-            {
-              kind: 'fact',
-              label: null,
-              startSeq: 11,
-              endSeq: 20,
-              preview: 'Fact child 2',
-            },
-          ],
-        },
-        runtimeConfig,
-      }),
+      stripSelectionIds(
+        deriveAgenticTranscriptRecallSourceMap({
+          sourceHints: {
+            rawContextStartOrdinal: 21,
+            cutoffOrdinal: 20,
+            hints: [
+              {
+                kind: 'fact',
+                label: null,
+                startSeq: 1,
+                endSeq: 10,
+                preview: 'Fact preview',
+              },
+              {
+                kind: 'summary',
+                label: 'summary',
+                startSeq: 1,
+                endSeq: 10,
+                preview: 'Summary preview',
+              },
+              {
+                kind: 'summary',
+                label: 'meta_summary',
+                startSeq: 1,
+                endSeq: 20,
+                preview: 'Meta parent',
+              },
+              {
+                kind: 'fact',
+                label: null,
+                startSeq: 11,
+                endSeq: 20,
+                preview: 'Fact child 2',
+              },
+            ],
+          },
+          runtimeConfig,
+        }),
+      ),
     ).toEqual({
       rawContextStartOrdinal: 21,
       cutoffOrdinal: 20,
@@ -369,6 +405,61 @@ describe('deriveAgenticTranscriptRecallSourceMap', () => {
             },
           ],
         },
+      ],
+    })
+  })
+
+  it('assigns deterministic request-local IDs to direct ranges and navigation parents', () => {
+    const sourceMap = deriveAgenticTranscriptRecallSourceMap({
+      sourceHints: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Chunk 1',
+          },
+          {
+            kind: 'fact',
+            label: null,
+            startSeq: 11,
+            endSeq: 20,
+            preview: 'Chunk 2',
+          },
+          {
+            kind: 'summary',
+            label: 'meta_summary',
+            startSeq: 1,
+            endSeq: 20,
+            preview: 'Meta parent',
+          },
+        ],
+      },
+      runtimeConfig,
+    })
+
+    expect(findAgenticTranscriptRecallDirectFetchRangeById(sourceMap, 'R1')).toMatchObject({
+      rangeId: 'R1',
+      startSeq: 1,
+      endSeq: 10,
+    })
+    expect(findAgenticTranscriptRecallDirectFetchRangeById(sourceMap, 'R2')).toMatchObject({
+      rangeId: 'R2',
+      startSeq: 11,
+      endSeq: 20,
+    })
+    expect(findAgenticTranscriptRecallNavigationParentEntryById(sourceMap, 'P1')).toMatchObject({
+      parentRange: {
+        parentId: 'P1',
+        startSeq: 1,
+        endSeq: 20,
+      },
+      childRanges: [
+        { rangeId: 'R1', startSeq: 1, endSeq: 10 },
+        { rangeId: 'R2', startSeq: 11, endSeq: 20 },
       ],
     })
   })
@@ -452,7 +543,7 @@ describe('loadAgenticTranscriptRecallSourceMap', () => {
       runtimeConfig,
     })
 
-    expect(sourceMap).toEqual({
+    expect(stripSelectionIds(sourceMap)).toEqual({
       rawContextStartOrdinal: 301,
       cutoffOrdinal: 300,
       directFetchRanges: [
@@ -580,7 +671,7 @@ describe('loadAgenticTranscriptRecallSourceMap', () => {
       runtimeConfig,
     })
 
-    expect(sourceMap).toEqual({
+    expect(stripSelectionIds(sourceMap)).toEqual({
       rawContextStartOrdinal: 301,
       cutoffOrdinal: 300,
       directFetchRanges: [

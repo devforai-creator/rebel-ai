@@ -16,10 +16,19 @@ import type {
 type SummaryChildRow = Pick<ChatSummary, 'level' | 'start_seq' | 'end_seq' | 'summary'>
 type FactChildRow = Pick<ChatFacts, 'start_seq' | 'end_seq' | 'facts'>
 
-export type AgenticTranscriptRecallDirectFetchRange = AgenticTranscriptRecallSourceHint
+export type AgenticTranscriptRecallRangeId = `R${number}`
+export type AgenticTranscriptRecallParentId = `P${number}`
+
+export type AgenticTranscriptRecallDirectFetchRange = AgenticTranscriptRecallSourceHint & {
+  rangeId?: AgenticTranscriptRecallRangeId
+}
+
+export type AgenticTranscriptRecallNavigationParentRange = AgenticTranscriptRecallSourceHint & {
+  parentId?: AgenticTranscriptRecallParentId
+}
 
 export type AgenticTranscriptRecallNavigationParentEntry = {
-  parentRange: AgenticTranscriptRecallSourceHint
+  parentRange: AgenticTranscriptRecallNavigationParentRange
   childRanges: AgenticTranscriptRecallDirectFetchRange[]
 }
 
@@ -42,6 +51,13 @@ export function findAgenticTranscriptRecallDirectFetchRange(
   )
 }
 
+export function findAgenticTranscriptRecallDirectFetchRangeById(
+  sourceMap: AgenticTranscriptRecallSourceMap,
+  rangeId: AgenticTranscriptRecallRangeId,
+): AgenticTranscriptRecallDirectFetchRange | null {
+  return sourceMap.directFetchRanges.find((range) => range.rangeId === rangeId) ?? null
+}
+
 export function findAgenticTranscriptRecallNavigationParentEntry(
   sourceMap: AgenticTranscriptRecallSourceMap,
   startSeq: number,
@@ -52,6 +68,27 @@ export function findAgenticTranscriptRecallNavigationParentEntry(
       (entry) => entry.parentRange.startSeq === startSeq && entry.parentRange.endSeq === endSeq,
     ) ?? null
   )
+}
+
+export function findAgenticTranscriptRecallNavigationParentEntryById(
+  sourceMap: AgenticTranscriptRecallSourceMap,
+  parentId: AgenticTranscriptRecallParentId,
+): AgenticTranscriptRecallNavigationParentEntry | null {
+  return (
+    sourceMap.navigationParents.find((entry) => entry.parentRange.parentId === parentId) ?? null
+  )
+}
+
+function buildAgenticTranscriptRecallDirectFetchRangeId(
+  ordinal: number,
+): AgenticTranscriptRecallRangeId {
+  return `R${ordinal}`
+}
+
+function buildAgenticTranscriptRecallNavigationParentId(
+  ordinal: number,
+): AgenticTranscriptRecallParentId {
+  return `P${ordinal}`
 }
 
 function getHintSortOrder(hint: AgenticTranscriptRecallSourceHint): number {
@@ -240,13 +277,21 @@ function buildSourceMapFromRanges({
   const directFetchRanges = dedupeRangesByKey({
     hints: [...surfacedDirectFetchRanges, ...discoveredDirectFetchHints],
     chooseRepresentative: chooseDirectFetchRepresentative,
-  })
+  }).map((range, index) => ({
+    ...range,
+    rangeId: buildAgenticTranscriptRecallDirectFetchRangeId(index + 1),
+  }))
+
+  const navigationParentRanges = navigationParents.map((parentRange, index) => ({
+    ...parentRange,
+    parentId: buildAgenticTranscriptRecallNavigationParentId(index + 1),
+  }))
 
   return {
     rawContextStartOrdinal: sourceHints.rawContextStartOrdinal,
     cutoffOrdinal: sourceHints.cutoffOrdinal,
     directFetchRanges,
-    navigationParents: navigationParents.map((parentRange) => ({
+    navigationParents: navigationParentRanges.map((parentRange) => ({
       parentRange,
       childRanges: directFetchRanges.filter(
         (childRange) =>

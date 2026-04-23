@@ -66,7 +66,7 @@ This queue is only successful if all of the following become true:
 
 ### P0-1. Define Request-Local ATR Selection IDs
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 
@@ -79,6 +79,12 @@ Acceptance notes:
 - navigation parents expose deterministic request-local IDs
 - expanded child ranges expose deterministic request-local IDs
 - IDs do not imply persistent storage or cross-turn stability
+
+Evidence:
+
+- `src/lib/experimental/agentic-transcript-recall/source-map.ts`
+- `src/lib/experimental/agentic-transcript-recall/source-map.test.ts`
+- `src/app/api/internal/chat-job-runner/execution-context.test.ts`
 
 ### P0-2. Switch Tool Schemas And Resolvers To ID Input
 

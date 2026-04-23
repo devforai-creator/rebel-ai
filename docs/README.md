@@ -23,6 +23,9 @@ Keep human-facing docs short and directional. Exact runtime behavior should come
 - [MAINTAINER_RBX_IMPORT.md](./MAINTAINER_RBX_IMPORT.md): local-only maintainer runbook for oversized RBX imports
 - [FIRST_CLASS_PATH_MAP.md](./FIRST_CLASS_PATH_MAP.md): compact map of the
   maintained chat request -> queue -> runner -> durable-write path
+- [LLM_INVOCATION_OWNERSHIP.md](./LLM_INVOCATION_OWNERSHIP.md): inventory of real
+  LLM invocation cores, wrappers, and duplicated setup ceremony outside the
+  narrow first-class chat path
 - [CHAT_RUNTIME_TUNING.md](./CHAT_RUNTIME_TUNING.md): supported chat and runner tuning knobs
 - [DB_CHANGE_WORKFLOW.md](./DB_CHANGE_WORKFLOW.md): database migration and schema workflow
 - [GOOGLE_CACHE_BOUNDARY.md](./GOOGLE_CACHE_BOUNDARY.md): boundary contract for keeping Google explicit cache removable from the supported Google chat/tool path

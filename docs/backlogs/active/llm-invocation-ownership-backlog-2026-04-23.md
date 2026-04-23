@@ -92,7 +92,7 @@ This queue is only successful if all of the following become true:
 
 ### P0-1. Inventory Real Invocation Cores
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 
@@ -108,6 +108,7 @@ Acceptance notes:
 - classify each core as first-class, secondary-but-supported, experimental, or
   compatibility
 - identify duplicated setup ceremony with exact file ownership
+- inventory captured in [LLM_INVOCATION_OWNERSHIP.md](../../LLM_INVOCATION_OWNERSHIP.md)
 
 ### P0-2. Extract The Minimum Shared Invocation Setup Seam
 

@@ -144,7 +144,7 @@ Evidence:
 
 ### P0-4. Verify The Bounded Contract Still Holds
 
-Status: `pending`
+Status: `in_progress`
 
 Primary scope:
 
@@ -159,6 +159,14 @@ Acceptance notes:
 - closure uses full-suite evidence, not only targeted ATR tests
 - if runner/internal route behavior changes in production, use
   `npm run ops:smoke:active` before archive
+
+Current verification:
+
+- `npm run verify` passed on 2026-04-23
+- `206 passed | 5 skipped` test files
+- `1802 passed | 54 skipped` tests
+- queue remains active until deploy-time `npm run ops:smoke:active` confirms the
+  runner/internal-route path on the active deployment
 
 ## Explicitly Out Of Scope
 

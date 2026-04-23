@@ -10,9 +10,14 @@ const createAnthropicProviderMock = vi.fn()
 const createDeepSeekProviderMock = vi.fn()
 const getDefaultModelForProviderMock = vi.fn()
 
-vi.mock('ai', () => ({
-  generateText: (...args: Parameters<typeof generateTextMock>) => generateTextMock(...args),
-}))
+vi.mock('ai', async () => {
+  const actual = await vi.importActual<typeof import('ai')>('ai')
+
+  return {
+    ...actual,
+    generateText: (...args: Parameters<typeof generateTextMock>) => generateTextMock(...args),
+  }
+})
 
 vi.mock('@ai-sdk/google', () => ({
   createGoogleGenerativeAI: (...args: Parameters<typeof createGoogleProviderMock>) =>

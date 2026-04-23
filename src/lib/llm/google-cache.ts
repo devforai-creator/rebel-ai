@@ -170,10 +170,8 @@ export function stripGoogleCachedRequestContractMarker(
     return providerOptions
   }
 
-  const {
-    [GOOGLE_CACHED_CONTENT_OWNS_REQUEST_CONTRACT_PROVIDER_OPTION]: _marker,
-    ...sanitizedGoogleOptions
-  } = googleOptions
+  const sanitizedGoogleOptions = { ...googleOptions }
+  delete sanitizedGoogleOptions[GOOGLE_CACHED_CONTENT_OWNS_REQUEST_CONTRACT_PROVIDER_OPTION]
 
   return {
     ...(providerOptions ?? {}),

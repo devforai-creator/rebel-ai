@@ -31,9 +31,14 @@ vi.mock('@/lib/chat/rate-limiter', () => ({
   checkUserRateLimit: hoistedMocks.checkUserRateLimitMock,
 }))
 
-vi.mock('ai', () => ({
-  generateText: hoistedMocks.generateTextMock,
-}))
+vi.mock('ai', async () => {
+  const actual = await vi.importActual<typeof import('ai')>('ai')
+
+  return {
+    ...actual,
+    generateText: hoistedMocks.generateTextMock,
+  }
+})
 
 // Mock provider SDKs
 vi.mock('@ai-sdk/google', () => ({

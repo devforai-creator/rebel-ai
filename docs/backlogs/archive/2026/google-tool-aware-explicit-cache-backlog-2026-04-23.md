@@ -1,13 +1,13 @@
 # Google Tool-Aware Explicit Cache Backlog
 
 Updated: 2026-04-23
-Status: Active
+Status: Archived
 
 Reactivation note:
 
 - drafted on `2026-04-23` immediately after the Google cache boundary cleanup
 - intentionally parked until
-  [`llm-invocation-ownership-backlog-2026-04-23.md`](../archive/2026/llm-invocation-ownership-backlog-2026-04-23.md)
+  [`llm-invocation-ownership-backlog-2026-04-23.md`](./llm-invocation-ownership-backlog-2026-04-23.md)
   clarified which invocation routes should share common config/decrypt/model
   setup and which should remain intentionally separate
 - reactivated on `2026-04-23` after that queue closed with full verification
@@ -15,13 +15,27 @@ Reactivation note:
   still exists on sequencing grounds, not because tool-aware explicit cache stopped
   mattering
 
+Close-out note:
+
+- deployed on `2026-04-23`
+- `npm run ops:smoke:active` returned `summary=warn`, but the failing signal was
+  internal triage `503` with `recentFailedJobCount=4`; health, signup, storage
+  janitor dry-run, chat runner active probe, and character import runner active
+  probe all passed
+- live post-deploy validation showed both normal cached Google turns and
+  tool-capable cached Google turns succeeding with `cacheCreated: true`,
+  `cachedInputTokens > 0`, and `compatibilityRetryAttempted: false`
+- this queue closes because the Google cached tool-turn path is now proven on the
+  active deployment; the triage warning remains an ops signal, not a blocker for
+  this queue
+
 This document is the execution backlog for adding Google explicit-cache support
 to tool-capable turns without breaking the Google cache boundary contract.
 
 This queue starts after
-[google-cache-boundary-backlog-2026-04-23.md](../archive/2026/google-cache-boundary-backlog-2026-04-23.md)
+[google-cache-boundary-backlog-2026-04-23.md](./google-cache-boundary-backlog-2026-04-23.md)
 closed the boundary-cleanup work and after
-[GOOGLE_CACHE_BOUNDARY.md](../../GOOGLE_CACHE_BOUNDARY.md) established the
+[GOOGLE_CACHE_BOUNDARY.md](../../../GOOGLE_CACHE_BOUNDARY.md) established the
 removable-adapter contract.
 
 It exists to answer two narrower questions:
@@ -175,7 +189,7 @@ Evidence:
 
 ### P0-4. Verify Deployment Safety And Decide Queue Close-Out
 
-Status: `in_progress`
+Status: `completed`
 
 Primary scope:
 
@@ -203,6 +217,21 @@ Execution notes:
   deployed and `npm run ops:smoke:active` is run against the active deployment
 - archive only after that deploy smoke confirms the runner/internal-route path
   remains healthy
+- `2026-04-23`: `npm run ops:smoke:active` against the active deployment returned
+  `summary=warn`
+- smoke details: signup closed `200`, internal health `200`, storage janitor
+  dry-run dispatch `202`, chat runner active probe `200`, character import runner
+  active probe `200`
+- smoke warning detail: internal triage `503` with
+  `{"degradedServiceCount":0,"recentFailedJobCount":4}`
+- `2026-04-23`: live runtime validation after deploy confirmed:
+  - normal Google cached turn with `cacheCreated: true` and
+    `cachedInputTokens > 0`
+  - tool-capable Google cached turn with `cacheCreated: true`,
+    `cachedInputTokens > 0`, `toolCallCount: 1`, `toolFetchCount: 1`, and
+    `compatibilityRetryAttempted: false`
+- close-out decision: archive this queue; the remaining triage warning is outside
+  the Google explicit-cache/tool-contract scope
 
 ## Explicitly Parked
 

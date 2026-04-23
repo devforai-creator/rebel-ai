@@ -1,5 +1,4 @@
 import { APICallError, generateText } from 'ai'
-import type { ChatSummaryInsert } from '@/types/database.types'
 import { generateFactEmbedding } from '@/lib/embeddings'
 import { getProviderOptions } from '@/lib/llm/provider-options'
 import { resolvePromptCacheDecision } from '@/lib/llm/prompt-cache'
@@ -25,37 +24,13 @@ import {
   buildChunkFallbackSummary,
   calculateChunkBoundaries,
 } from './formatters'
+import { persistChatSummaryRow } from './db-helpers'
 
 const FACTS_EXTRACTION_DEBUG_ENABLED = process.env.FACTS_EXTRACTION_DEBUG === 'true'
 
 function logFactsExtractionDebug(...args: unknown[]): void {
   if (FACTS_EXTRACTION_DEBUG_ENABLED) {
     console.debug(...args)
-  }
-}
-
-async function persistChunkSummary(
-  supabase: CreateChunkSummaryOptions['supabase'],
-  row: ChatSummaryInsert,
-): Promise<void> {
-  const summariesTable = supabase.from('chat_summaries')
-
-  if ('upsert' in summariesTable && typeof summariesTable.upsert === 'function') {
-    const { error } = await summariesTable.upsert(row, {
-      onConflict: 'chat_id,level,start_seq',
-    })
-
-    if (error) {
-      throw error
-    }
-
-    return
-  }
-
-  const { error } = await summariesTable.insert<ChatSummaryInsert>(row)
-
-  if (error) {
-    throw error
   }
 }
 
@@ -348,7 +323,7 @@ export async function createChunkSummary({
     promptCache,
   })
 
-  await persistChunkSummary(supabase, {
+  await persistChatSummaryRow(supabase, {
     chat_id: chatId,
     user_id: userId,
     level: SUMMARY_LEVEL_CHUNK,

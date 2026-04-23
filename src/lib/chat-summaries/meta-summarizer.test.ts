@@ -23,9 +23,13 @@ vi.mock('./chunk-summarizer', async () => {
   }
 })
 
-vi.mock('./db-helpers', () => ({
-  getLastSummaryEnd: (...args: unknown[]) => getLastSummaryEndMock(...args),
-}))
+vi.mock('./db-helpers', async () => {
+  const actual = await vi.importActual<typeof import('./db-helpers')>('./db-helpers')
+  return {
+    ...actual,
+    getLastSummaryEnd: (...args: unknown[]) => getLastSummaryEndMock(...args),
+  }
+})
 
 describe('meta-summarizer', () => {
   beforeEach(() => {
@@ -76,6 +80,76 @@ describe('meta-summarizer', () => {
       summary: 'meta summary',
       token_count: 7,
     })
+  })
+
+  it('updates an existing exact-range higher-level summary when persistence reports overlap', async () => {
+    generateSummaryWithFallbackMock.mockResolvedValue({
+      summaryText: 'replacement meta summary',
+      tokenCount: 11,
+      finishReason: 'stop',
+    })
+
+    const maybeSingleMock = vi.fn().mockResolvedValue({
+      data: { id: 'meta-1' },
+      error: null,
+    })
+
+    const updateBuilder = {
+      eq: vi.fn(),
+      select: vi.fn(() => ({
+        maybeSingle: maybeSingleMock,
+      })),
+    }
+    updateBuilder.eq.mockReturnValue(updateBuilder)
+
+    let updatePayload: Record<string, unknown> | null = null
+    const supabase = {
+      from: (table: string) => {
+        if (table !== 'chat_summaries') {
+          throw new Error(`Unexpected table: ${table}`)
+        }
+
+        return {
+          upsert: async () => ({
+            error: {
+              code: '23514',
+              message: 'Overlapping chat summary range for this chat/level',
+            },
+          }),
+          update: (payload: Record<string, unknown>) => {
+            updatePayload = payload
+            return updateBuilder
+          },
+        }
+      },
+    }
+    const { createHigherLevelSummary } = await import('./meta-summarizer')
+
+    await expect(
+      createHigherLevelSummary({
+        supabase: supabase as unknown as SupabaseClientType,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        model: mockModel,
+        provider: 'openai',
+        modelName: 'gpt-4o',
+        segments: [
+          { start_seq: 1, end_seq: 10, summary: 's1' },
+          { start_seq: 11, end_seq: 20, summary: 's2' },
+        ],
+        startSeq: 1,
+        endSeq: 20,
+        systemPrompt: 'META',
+        targetLevel: SUMMARY_LEVEL_META,
+        fallbackLabel: 'meta 1-20',
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(updatePayload).toEqual({
+      summary: 'replacement meta summary',
+      token_count: 11,
+    })
+    expect(maybeSingleMock).toHaveBeenCalled()
   })
 
   it('processes meta summaries when enough sequential chunks exist', async () => {

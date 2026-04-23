@@ -1,4 +1,10 @@
+import type { ChatSummaryInsert } from '@/types/database.types'
 import type { ServerSupabaseClient } from './types'
+
+type PersistableChatSummaryRow = Pick<
+  ChatSummaryInsert,
+  'chat_id' | 'user_id' | 'level' | 'start_seq' | 'end_seq' | 'summary' | 'token_count'
+>
 import { countProjectedConversationMessages } from '@/lib/chat/turns'
 
 /**
@@ -67,4 +73,60 @@ export async function getLastSummaryEnd(
   }
 
   return data ? data.end_seq : null
+}
+
+async function updateExistingExactSummaryRange(
+  supabase: ServerSupabaseClient,
+  row: PersistableChatSummaryRow,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('chat_summaries')
+    .update({
+      summary: row.summary,
+      token_count: row.token_count ?? null,
+    })
+    .eq('chat_id', row.chat_id)
+    .eq('level', row.level)
+    .eq('start_seq', row.start_seq)
+    .eq('end_seq', row.end_seq)
+    .select('id')
+    .maybeSingle<{ id: string }>()
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return false
+    }
+
+    throw error
+  }
+
+  return Boolean(data)
+}
+
+export async function persistChatSummaryRow(
+  supabase: ServerSupabaseClient,
+  row: PersistableChatSummaryRow,
+): Promise<void> {
+  const summariesTable = supabase.from('chat_summaries')
+
+  const result =
+    'upsert' in summariesTable && typeof summariesTable.upsert === 'function'
+      ? await summariesTable.upsert(row, {
+          onConflict: 'chat_id,level,start_seq',
+        })
+      : await summariesTable.insert<ChatSummaryInsert>(row)
+
+  const error = result.error
+  if (!error) {
+    return
+  }
+
+  if (
+    (error.code === '23514' || error.code === '23505') &&
+    (await updateExistingExactSummaryRange(supabase, row))
+  ) {
+    return
+  }
+
+  throw error
 }

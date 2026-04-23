@@ -233,6 +233,135 @@ describe('chunk-summarizer', () => {
     expect(generateTextMock.mock.calls[0][0]).not.toHaveProperty('temperature')
   })
 
+  it('updates an existing exact-range summary when persistence reports overlap', async () => {
+    generateTextMock.mockResolvedValue({
+      text: 'replacement summary',
+      usage: { outputTokens: 9 },
+      finishReason: 'stop',
+    })
+
+    const maybeSingleMock = vi.fn().mockResolvedValue({
+      data: { id: 'summary-1' },
+      error: null,
+    })
+
+    const updateBuilder = {
+      eq: vi.fn(),
+      select: vi.fn(() => ({
+        maybeSingle: maybeSingleMock,
+      })),
+    }
+    updateBuilder.eq.mockReturnValue(updateBuilder)
+
+    let updatePayload: Record<string, unknown> | null = null
+    const supabase = {
+      from: (table: string) => {
+        if (table !== 'chat_summaries') {
+          throw new Error(`Unexpected table: ${table}`)
+        }
+
+        return {
+          upsert: async () => ({
+            error: {
+              code: '23514',
+              message: 'Overlapping chat summary range for this chat/level',
+            },
+          }),
+          update: (payload: Record<string, unknown>) => {
+            updatePayload = payload
+            return updateBuilder
+          },
+        }
+      },
+    }
+    const { createChunkSummary } = await import('./chunk-summarizer')
+
+    await expect(
+      createChunkSummary({
+        supabase: supabase as unknown as SupabaseClientType,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        model: mockModel,
+        provider: 'openai',
+        modelName: 'gpt-4o',
+        startSeq: 1,
+        endSeq: 2,
+        systemPrompt: 'SYS',
+        expectedMessageCount: 2,
+        transcriptMessages: [
+          { role: 'user', content: 'hello' },
+          { role: 'assistant', content: 'hi' },
+        ],
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(updatePayload).toEqual({
+      summary: 'replacement summary',
+      token_count: 9,
+    })
+    expect(maybeSingleMock).toHaveBeenCalled()
+  })
+
+  it('rethrows overlapping-range errors when no exact-range summary exists to update', async () => {
+    generateTextMock.mockResolvedValue({
+      text: 'replacement summary',
+      usage: { outputTokens: 3 },
+      finishReason: 'stop',
+    })
+
+    const maybeSingleMock = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: 'PGRST116', message: 'No rows found' },
+    })
+
+    const updateBuilder = {
+      eq: vi.fn(),
+      select: vi.fn(() => ({
+        maybeSingle: maybeSingleMock,
+      })),
+    }
+    updateBuilder.eq.mockReturnValue(updateBuilder)
+
+    const overlapError = {
+      code: '23514',
+      message: 'Overlapping chat summary range for this chat/level',
+    }
+    const supabase = {
+      from: (table: string) => {
+        if (table !== 'chat_summaries') {
+          throw new Error(`Unexpected table: ${table}`)
+        }
+
+        return {
+          upsert: async () => ({
+            error: overlapError,
+          }),
+          update: () => updateBuilder,
+        }
+      },
+    }
+    const { createChunkSummary } = await import('./chunk-summarizer')
+
+    await expect(
+      createChunkSummary({
+        supabase: supabase as unknown as SupabaseClientType,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        model: mockModel,
+        provider: 'openai',
+        modelName: 'gpt-4o',
+        startSeq: 1,
+        endSeq: 2,
+        systemPrompt: 'SYS',
+        expectedMessageCount: 2,
+        transcriptMessages: [
+          { role: 'user', content: 'hello' },
+          { role: 'assistant', content: 'hi' },
+        ],
+      }),
+    ).rejects.toMatchObject(overlapError)
+  })
+
   it('throws when chunk size is incomplete', async () => {
     const supabase = createChatSummariesSupabaseMock({
       messages: [{ role: 'user', content: 'only one', sequence: 1, chat_id: 'chat-1' }],

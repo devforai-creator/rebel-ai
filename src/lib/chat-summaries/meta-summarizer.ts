@@ -1,4 +1,4 @@
-import type { ChatSummary, ChatSummaryInsert } from '@/types/database.types'
+import type { ChatSummary } from '@/types/database.types'
 import { resolvePromptCacheDecision } from '@/lib/llm/prompt-cache'
 import type { ChunkSummaryRow, ProcessMetaOptions, CreateHigherLevelSummaryOptions } from './types'
 import {
@@ -16,33 +16,8 @@ import {
   buildHigherLevelFallbackSummary,
   areChunksSequential,
 } from './formatters'
-import { getLastSummaryEnd } from './db-helpers'
+import { getLastSummaryEnd, persistChatSummaryRow } from './db-helpers'
 import { generateSummaryWithFallback } from './chunk-summarizer'
-
-async function persistHigherLevelSummary(
-  supabase: CreateHigherLevelSummaryOptions['supabase'],
-  row: ChatSummaryInsert,
-): Promise<void> {
-  const summariesTable = supabase.from('chat_summaries')
-
-  if ('upsert' in summariesTable && typeof summariesTable.upsert === 'function') {
-    const { error } = await summariesTable.upsert(row, {
-      onConflict: 'chat_id,level,start_seq',
-    })
-
-    if (error) {
-      throw error
-    }
-
-    return
-  }
-
-  const { error } = await summariesTable.insert<ChatSummaryInsert>(row)
-
-  if (error) {
-    throw error
-  }
-}
 
 /**
  * Create a higher-level summary (meta or super-meta) from segments
@@ -96,7 +71,7 @@ export async function createHigherLevelSummary({
     promptCache,
   })
 
-  await persistHigherLevelSummary(supabase, {
+  await persistChatSummaryRow(supabase, {
     chat_id: chatId,
     user_id: userId,
     level: targetLevel,

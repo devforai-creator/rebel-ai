@@ -1,13 +1,27 @@
 # Google Tool-Aware Explicit Cache Backlog
 
 Updated: 2026-04-23
-Status: Active
+Status: Archived (Parked)
 
-This is the current execution backlog for adding Google explicit-cache support
+Parking note:
+
+- drafted on `2026-04-23` immediately after the Google cache boundary cleanup
+- intentionally parked without implementation once it became clear that RebelAI
+  still has multiple LLM invocation ownership seams outside the first-class chat
+  path
+- revisit after
+  [`llm-invocation-ownership-backlog-2026-04-23.md`](../../active/llm-invocation-ownership-backlog-2026-04-23.md)
+  clarifies which invocation routes should share common config/decrypt/model
+  setup and which should remain intentionally separate
+- the boundary contract from `GOOGLE_CACHE_BOUNDARY.md` still stands; this queue
+  is parked on sequencing grounds, not because tool-aware explicit cache stopped
+  mattering
+
+This document was the execution backlog for adding Google explicit-cache support
 to tool-capable turns without breaking the Google cache boundary contract.
 
 This queue starts after
-[google-cache-boundary-backlog-2026-04-23.md](../archive/2026/google-cache-boundary-backlog-2026-04-23.md)
+[google-cache-boundary-backlog-2026-04-23.md](../../archive/2026/google-cache-boundary-backlog-2026-04-23.md)
 closed the boundary-cleanup work and after
 [GOOGLE_CACHE_BOUNDARY.md](../../GOOGLE_CACHE_BOUNDARY.md) established the
 removable-adapter contract.

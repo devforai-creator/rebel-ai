@@ -72,6 +72,8 @@ for the current queue and the archive split.
 - [backlogs/README.md](./backlogs/README.md): backlog structure, current entry
   point, and archive policy
 - current active queue:
-  [google-tool-aware-explicit-cache-backlog-2026-04-23.md](./backlogs/active/google-tool-aware-explicit-cache-backlog-2026-04-23.md)
+  [llm-invocation-ownership-backlog-2026-04-23.md](./backlogs/active/llm-invocation-ownership-backlog-2026-04-23.md)
+- most recently parked queue:
+  [google-tool-aware-explicit-cache-backlog-2026-04-23.md](./backlogs/parked/2026/google-tool-aware-explicit-cache-backlog-2026-04-23.md)
 - most recently archived queue:
   [google-cache-boundary-backlog-2026-04-23.md](./backlogs/archive/2026/google-cache-boundary-backlog-2026-04-23.md)

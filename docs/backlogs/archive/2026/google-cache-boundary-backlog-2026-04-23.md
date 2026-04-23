@@ -10,7 +10,7 @@ Completion note:
   Google / ATR tool-capable turns remain valid with cache off.
 - `P0-4` closed this queue by splitting future tool-aware explicit-cache work
   into
-  [`google-tool-aware-explicit-cache-backlog-2026-04-23.md`](../../active/google-tool-aware-explicit-cache-backlog-2026-04-23.md)
+  [`google-tool-aware-explicit-cache-backlog-2026-04-23.md`](../../parked/2026/google-tool-aware-explicit-cache-backlog-2026-04-23.md)
   instead of extending this boundary-cleanup queue.
 - Verification on `2026-04-23`: `npm run verify` passed with `204 passed | 5
 skipped` test files and `1784 passed | 54 skipped` tests.

@@ -80,6 +80,7 @@ describe('chunk-summarizer', () => {
 
     expect(result).toEqual({
       summaryText: 'summary text',
+      summaryStatus: 'ok',
       tokenCount: 12,
       finishReason: 'stop',
     })
@@ -103,6 +104,7 @@ describe('chunk-summarizer', () => {
     })
 
     expect(result.summaryText).toBe('local-fallback')
+    expect(result.summaryStatus).toBe('fallback')
     expect(result.finishReason).toBe('error')
   })
 
@@ -127,6 +129,7 @@ describe('chunk-summarizer', () => {
 
     expect(result).toEqual({
       summaryText: 'length-fallback',
+      summaryStatus: 'fallback',
       tokenCount: null,
       finishReason: 'error',
     })
@@ -162,6 +165,7 @@ describe('chunk-summarizer', () => {
     })
 
     expect(result.summaryText).toBe('api-fallback')
+    expect(result.summaryStatus).toBe('fallback')
     expect(result.finishReason).toBe('error')
   })
 
@@ -190,6 +194,7 @@ describe('chunk-summarizer', () => {
     })
 
     expect(result.summaryText).toBe('unparseable-fallback')
+    expect(result.summaryStatus).toBe('fallback')
     expect(result.finishReason).toBe('error')
   })
 
@@ -229,8 +234,41 @@ describe('chunk-summarizer', () => {
       start_seq: 1,
       end_seq: CHUNK_SIZE,
       summary: 'chunk summary',
+      summary_status: 'ok',
     })
     expect(generateTextMock.mock.calls[0][0]).not.toHaveProperty('temperature')
+  })
+
+  it('marks persisted chunk summaries as fallback when local fallback content is used', async () => {
+    generateTextMock.mockRejectedValue(new Error('LLM down'))
+    const supabase = createChatSummariesSupabaseMock({
+      messages: Array.from({ length: CHUNK_SIZE }, (_, idx) => ({
+        role: idx % 2 === 0 ? 'user' : 'assistant',
+        content: `message-${idx}`,
+        sequence: idx + 1,
+        chat_id: 'chat-1',
+      })),
+    })
+    const { createChunkSummary } = await import('./chunk-summarizer')
+
+    await createChunkSummary({
+      supabase: supabase as unknown as SupabaseClientType,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      model: mockModel,
+      provider: 'google',
+      modelName: 'gemini',
+      startSeq: 1,
+      endSeq: CHUNK_SIZE,
+      systemPrompt: 'SYS',
+    })
+
+    const chatSummaries = supabase.state.chatSummaries as Array<Record<string, unknown>>
+    expect(chatSummaries).toHaveLength(1)
+    expect(chatSummaries[0]).toMatchObject({
+      summary_status: 'fallback',
+      token_count: null,
+    })
   })
 
   it('updates an existing exact-range summary when persistence reports overlap', async () => {
@@ -297,6 +335,7 @@ describe('chunk-summarizer', () => {
 
     expect(updatePayload).toEqual({
       summary: 'replacement summary',
+      summary_status: 'ok',
       token_count: 9,
     })
     expect(maybeSingleMock).toHaveBeenCalled()

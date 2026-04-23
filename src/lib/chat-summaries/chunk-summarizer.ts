@@ -80,6 +80,7 @@ export async function generateSummaryWithFallback({
     }
     return {
       summaryText,
+      summaryStatus: 'ok',
       tokenCount: usage?.outputTokens ?? null,
       finishReason,
     }
@@ -128,6 +129,7 @@ export async function generateSummaryWithFallback({
     const fallbackText = fallbackTextFactory()
     return {
       summaryText: fallbackText,
+      summaryStatus: 'fallback',
       tokenCount: null,
       finishReason: 'error',
     }
@@ -312,7 +314,7 @@ export async function createChunkSummary({
     retentionPreference: '24h',
   })
 
-  const { summaryText, tokenCount } = await generateSummaryWithFallback({
+  const { summaryText, summaryStatus, tokenCount } = await generateSummaryWithFallback({
     model,
     provider,
     systemPrompt,
@@ -330,6 +332,7 @@ export async function createChunkSummary({
     start_seq: startSeq,
     end_seq: endSeq,
     summary: summaryText,
+    summary_status: summaryStatus,
     token_count: tokenCount,
   })
 }

@@ -15,6 +15,7 @@ describe('SummaryMemorySection', () => {
             start_seq: 1,
             end_seq: 40,
             summary: 'Conversation summary',
+            summary_status: 'fallback',
             created_at: '2026-04-12T00:00:00.000Z',
           },
         ]}
@@ -38,6 +39,7 @@ describe('SummaryMemorySection', () => {
     expect(html).toContain('Meta Summary (1)')
     expect(html).toContain('Summary note')
     expect(html).toContain('Conversation summary')
+    expect(html).toContain('Fallback')
     expect(html).toContain('♻️')
   })
 

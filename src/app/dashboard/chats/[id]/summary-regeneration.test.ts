@@ -57,6 +57,17 @@ describe('summary regeneration helpers', () => {
         chunkRanges: [{ startSeq: 1, endSeq: 10 }],
       },
     })
+    const fallbackSummary = {
+      level: 0,
+      start_seq: 1,
+      end_seq: 10,
+      summary_status: 'fallback' as const,
+    }
+    expect(buildSummaryRegenerationPayload(fallbackSummary)).toEqual({
+      regenerate: {
+        chunkRanges: [{ startSeq: 1, endSeq: 10 }],
+      },
+    })
     expect(buildSummaryRegenerationPayload({ level: 1, start_seq: 11, end_seq: 20 })).toEqual({
       regenerate: {
         metaRanges: [{ startSeq: 11, endSeq: 20 }],

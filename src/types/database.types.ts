@@ -33,6 +33,7 @@ export type EmbeddingOnlyProvider = Exclude<Provider, LlmProvider>
 export type ApiServiceTier = 'batch' | 'flex' | 'priority' | 'standard'
 export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high'
 export type AnnouncementSeverity = 'info' | 'warning' | 'critical'
+export type SummaryStatus = 'ok' | 'fallback'
 
 type RawProfileTable = PublicTables['profiles']
 type RawApiKeyTable = PublicTables['api_keys']
@@ -40,6 +41,7 @@ type RawCharacterTable = PublicTables['characters']
 type RawAnnouncementTable = PublicTables['announcements']
 type RawMessageTable = PublicTables['messages']
 type RawChatFactsTable = PublicTables['chat_facts']
+type RawChatSummaryTable = PublicTables['chat_summaries']
 type RawChatTurnTable = PublicTables['chat_turns']
 
 type ProfileRow = RawProfileTable['Row']
@@ -65,6 +67,10 @@ type MessageUpdateRow = RawMessageTable['Update']
 type ChatFactsRow = RawChatFactsTable['Row']
 type ChatFactsInsertRow = RawChatFactsTable['Insert']
 type ChatFactsUpdateRow = RawChatFactsTable['Update']
+
+type ChatSummaryRow = RawChatSummaryTable['Row']
+type ChatSummaryInsertRow = RawChatSummaryTable['Insert']
+type ChatSummaryUpdateRow = RawChatSummaryTable['Update']
 
 type ChatTurnRow = RawChatTurnTable['Row']
 type ChatTurnInsertRow = RawChatTurnTable['Insert']
@@ -140,11 +146,26 @@ export type ChatFactsUpdate = Omit<ChatFactsUpdateRow, 'embedding'> & {
   embedding?: number[] | null
 }
 
+export type ChatSummary = Omit<ChatSummaryRow, 'summary_status'> & {
+  summary_status: SummaryStatus
+}
+export type ChatSummaryInsert = Omit<ChatSummaryInsertRow, 'summary_status'> & {
+  summary_status?: SummaryStatus
+}
+export type ChatSummaryUpdate = Omit<ChatSummaryUpdateRow, 'summary_status'> & {
+  summary_status?: SummaryStatus
+}
+
 export interface Database extends Omit<GeneratedDatabase, 'public'> {
   public: Omit<PublicSchema, 'Tables' | 'Functions' | 'Enums' | 'CompositeTypes'> & {
     Tables: Omit<
       PublicTables,
-      'announcements' | 'api_keys' | 'characters' | 'chat_facts' | 'messages'
+      | 'announcements'
+      | 'api_keys'
+      | 'characters'
+      | 'chat_facts'
+      | 'chat_summaries'
+      | 'messages'
     > & {
       announcements: OverrideTable<
         RawAnnouncementTable,
@@ -155,6 +176,12 @@ export interface Database extends Omit<GeneratedDatabase, 'public'> {
       api_keys: OverrideTable<RawApiKeyTable, ApiKey, ApiKeyInsert, ApiKeyUpdate>
       characters: OverrideTable<RawCharacterTable, Character, CharacterInsert, CharacterUpdate>
       chat_facts: OverrideTable<RawChatFactsTable, ChatFacts, ChatFactsInsert, ChatFactsUpdate>
+      chat_summaries: OverrideTable<
+        RawChatSummaryTable,
+        ChatSummary,
+        ChatSummaryInsert,
+        ChatSummaryUpdate
+      >
       messages: OverrideTable<RawMessageTable, Message, MessageInsert, MessageUpdate>
     }
     Functions: Omit<PublicFunctions, 'match_chat_facts'> & {
@@ -215,10 +242,6 @@ export type GlobalVariableUpdate = TablesUpdate<'global_variables'>
 export type Chat = Tables<'chats'>
 export type ChatInsert = TablesInsert<'chats'>
 export type ChatUpdate = TablesUpdate<'chats'>
-
-export type ChatSummary = Tables<'chat_summaries'>
-export type ChatSummaryInsert = TablesInsert<'chat_summaries'>
-export type ChatSummaryUpdate = TablesUpdate<'chat_summaries'>
 
 export type ChatUsageEvent = Tables<'chat_usage_events'>
 export type ChatUsageEventInsert = TablesInsert<'chat_usage_events'>

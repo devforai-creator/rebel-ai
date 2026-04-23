@@ -24,7 +24,8 @@ import {
 export type SummaryEntry = Pick<
   ChatSummary,
   'id' | 'level' | 'start_seq' | 'end_seq' | 'summary' | 'created_at'
->
+> &
+  Partial<Pick<ChatSummary, 'summary_status'>>
 
 export type FactEntry = Pick<ChatFacts, 'id' | 'start_seq' | 'end_seq' | 'facts' | 'created_at'>
 
@@ -123,6 +124,10 @@ function hasStringId(value: unknown): value is { id: string } {
   return isRecord(value) && typeof value.id === 'string'
 }
 
+function isSummaryStatus(value: unknown): value is ChatSummary['summary_status'] {
+  return value === 'ok' || value === 'fallback'
+}
+
 function isSummaryEntry(value: unknown): value is SummaryEntry {
   return (
     isRecord(value) &&
@@ -131,7 +136,8 @@ function isSummaryEntry(value: unknown): value is SummaryEntry {
     typeof value.start_seq === 'number' &&
     typeof value.end_seq === 'number' &&
     typeof value.summary === 'string' &&
-    typeof value.created_at === 'string'
+    typeof value.created_at === 'string' &&
+    (!('summary_status' in value) || isSummaryStatus(value.summary_status))
   )
 }
 

@@ -45,6 +45,7 @@ describe('meta-summarizer', () => {
   it('creates higher-level summary and stores it', async () => {
     generateSummaryWithFallbackMock.mockResolvedValue({
       summaryText: 'meta summary',
+      summaryStatus: 'ok',
       tokenCount: 7,
       finishReason: 'stop',
     })
@@ -78,13 +79,52 @@ describe('meta-summarizer', () => {
       start_seq: 1,
       end_seq: 20,
       summary: 'meta summary',
+      summary_status: 'ok',
       token_count: 7,
+    })
+  })
+
+  it('stores fallback status for higher-level summaries when fallback content is selected', async () => {
+    generateSummaryWithFallbackMock.mockResolvedValue({
+      summaryText: 'fallback meta summary',
+      summaryStatus: 'fallback',
+      tokenCount: null,
+      finishReason: 'error',
+    })
+    const supabase = createChatSummariesSupabaseMock()
+    const { createHigherLevelSummary } = await import('./meta-summarizer')
+
+    await createHigherLevelSummary({
+      supabase: supabase as unknown as SupabaseClientType,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      model: mockModel,
+      provider: 'openai',
+      modelName: 'gpt-4o',
+      segments: [
+        { start_seq: 1, end_seq: 10, summary: 's1' },
+        { start_seq: 11, end_seq: 20, summary: 's2' },
+      ],
+      startSeq: 1,
+      endSeq: 20,
+      systemPrompt: 'META',
+      targetLevel: SUMMARY_LEVEL_META,
+      fallbackLabel: 'meta 1-20',
+    })
+
+    const chatSummaries = supabase.state.chatSummaries as Array<Record<string, unknown>>
+    expect(chatSummaries).toHaveLength(1)
+    expect(chatSummaries[0]).toMatchObject({
+      summary: 'fallback meta summary',
+      summary_status: 'fallback',
+      token_count: null,
     })
   })
 
   it('updates an existing exact-range higher-level summary when persistence reports overlap', async () => {
     generateSummaryWithFallbackMock.mockResolvedValue({
       summaryText: 'replacement meta summary',
+      summaryStatus: 'ok',
       tokenCount: 11,
       finishReason: 'stop',
     })
@@ -147,6 +187,7 @@ describe('meta-summarizer', () => {
 
     expect(updatePayload).toEqual({
       summary: 'replacement meta summary',
+      summary_status: 'ok',
       token_count: 11,
     })
     expect(maybeSingleMock).toHaveBeenCalled()
@@ -155,6 +196,7 @@ describe('meta-summarizer', () => {
   it('processes meta summaries when enough sequential chunks exist', async () => {
     generateSummaryWithFallbackMock.mockResolvedValue({
       summaryText: 'meta summary',
+      summaryStatus: 'ok',
       tokenCount: 1,
       finishReason: 'stop',
     })
@@ -414,6 +456,7 @@ describe('processSuperMetaSummaries', () => {
   it('creates super meta summary when enough sequential meta summaries exist', async () => {
     generateSummaryWithFallbackMock.mockResolvedValue({
       summaryText: 'super meta summary',
+      summaryStatus: 'ok',
       tokenCount: 5,
       finishReason: 'stop',
     })

@@ -25,6 +25,7 @@ function createSupabaseStub(options?: {
     start_seq: number
     end_seq: number
     summary: string
+    summary_status?: 'ok' | 'fallback'
   }> | null
   summaryError?: StubError | null
   factsData?: Array<{ start_seq: number; end_seq: number; facts: string }> | null
@@ -318,6 +319,7 @@ describe('buildContext branches', () => {
           start_seq: 1,
           end_seq: 10,
           summary: 'Summary from fallback cutoff',
+          summary_status: 'fallback',
         },
       ],
     })
@@ -330,6 +332,31 @@ describe('buildContext branches', () => {
     })
 
     expect(result.systemPrompt).toContain('Summary from fallback cutoff')
+  })
+
+  it('treats fallback summary status as metadata instead of filtering prompt context', async () => {
+    const supabase = createSupabaseStub({
+      latestSequence: CONTEXT_WINDOW + 20,
+      summariesData: [
+        {
+          level: 0,
+          start_seq: 1,
+          end_seq: 10,
+          summary: 'Fallback summary remains usable',
+          summary_status: 'fallback',
+        },
+      ],
+    })
+
+    const result = await buildContext({
+      supabase,
+      chatId: 'chat-1',
+      sanitizedMessages: makeMessages(CONTEXT_WINDOW + 5),
+      baseSystemPrompt: 'BASE',
+    })
+
+    expect(result.systemPrompt).toContain('Fallback summary remains usable')
+    expect(result.dynamicContext).toContain('Fallback summary remains usable')
   })
 
   it('returns base-only context when computed summary cutoff is non-positive', async () => {

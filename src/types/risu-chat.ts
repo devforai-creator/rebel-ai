@@ -38,6 +38,7 @@ export interface RebelSummary {
   start_seq: number
   end_seq: number
   summary: string
+  summary_status?: 'ok' | 'fallback'
   token_count?: number | null
   created_at?: string
 }

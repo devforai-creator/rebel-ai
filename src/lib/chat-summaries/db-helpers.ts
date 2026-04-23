@@ -4,7 +4,9 @@ import type { ServerSupabaseClient } from './types'
 type PersistableChatSummaryRow = Pick<
   ChatSummaryInsert,
   'chat_id' | 'user_id' | 'level' | 'start_seq' | 'end_seq' | 'summary' | 'token_count'
->
+> & {
+  summary_status: NonNullable<ChatSummaryInsert['summary_status']>
+}
 import { countProjectedConversationMessages } from '@/lib/chat/turns'
 
 /**
@@ -83,6 +85,7 @@ async function updateExistingExactSummaryRange(
     .from('chat_summaries')
     .update({
       summary: row.summary,
+      summary_status: row.summary_status,
       token_count: row.token_count ?? null,
     })
     .eq('chat_id', row.chat_id)

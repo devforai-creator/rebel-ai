@@ -471,7 +471,7 @@ describe('loadAgenticTranscriptRecallSourceMap', () => {
     maxTotalMessages: 12,
   } as const
 
-  it('discovers bounded child ranges from persisted summaries and facts even when only a parent range is surfaced', async () => {
+  it('discovers bounded child ranges from persisted summaries and facts, including fallback summaries', async () => {
     const supabase = createSupabaseMock({
       tables: {
         chats: {
@@ -494,6 +494,7 @@ describe('loadAgenticTranscriptRecallSourceMap', () => {
               start_seq: 201,
               end_seq: 210,
               summary: 'Chunk 201-210',
+              summary_status: 'fallback',
             },
             {
               chat_id: 'chat-1',

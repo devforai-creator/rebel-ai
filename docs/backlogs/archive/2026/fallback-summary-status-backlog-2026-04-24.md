@@ -1,7 +1,26 @@
 # Fallback Summary Status Backlog
 
 Updated: 2026-04-24
-Status: Active
+Status: Archived
+
+Close-out note:
+
+- added `chat_summaries.summary_status` with constrained `ok` / `fallback`
+  values
+- fallback-aware summary generation now persists `fallback`, while model output
+  and explicit user edits persist `ok`
+- prompt assembly and ATR source-map loading continue to use fallback summaries
+  as normal context
+- dashboard memory UI and chat export metadata expose fallback status without
+  adding automatic retry behavior
+- verification:
+  - `bash scripts/build-hosted-schema.sh --check`
+  - focused Vitest run for summary generation/context, ATR source-map, dashboard
+    memory UI, summary regeneration helpers, export route, and summary
+    integration coverage (`90 passed`)
+  - `tsc --noEmit`
+  - `git diff --check`
+  - `/home/tmdduq96kr/.local/bin/supabase db push --local`
 
 Activation note:
 
@@ -107,7 +126,7 @@ an `ok` summary.
 
 ### P0-1. Add The Row Status Contract
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 
@@ -124,7 +143,7 @@ Acceptance notes:
 
 ### P0-2. Propagate Fallback Status From Generation
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 
@@ -143,7 +162,7 @@ Acceptance notes:
 
 ### P0-3. Preserve Prompt Assembly Semantics
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 
@@ -158,7 +177,7 @@ Acceptance notes:
 
 ### P0-4. Add Explicit Visibility, Not Automatic Retry
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 

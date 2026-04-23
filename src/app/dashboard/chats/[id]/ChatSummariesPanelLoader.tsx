@@ -22,7 +22,7 @@ export default async function ChatSummariesPanelLoader({ chatId }: Props) {
   ] = await Promise.all([
     supabase
       .from('chat_summaries')
-      .select('id, level, start_seq, end_seq, summary, created_at')
+      .select('id, level, start_seq, end_seq, summary, summary_status, created_at')
       .eq('chat_id', chatId)
       .order('level', { ascending: false })
       .order('start_seq', { ascending: true }),

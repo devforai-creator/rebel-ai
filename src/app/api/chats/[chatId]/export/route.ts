@@ -96,7 +96,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ chatId: 
   const [summariesResult, factsResult] = await Promise.all([
     supabase
       .from('chat_summaries')
-      .select('level, start_seq, end_seq, summary, token_count, created_at')
+      .select('level, start_seq, end_seq, summary, summary_status, token_count, created_at')
       .eq('chat_id', chatId)
       .order('start_seq', { ascending: true }),
     supabase
@@ -111,6 +111,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ chatId: 
     start_seq: s.start_seq,
     end_seq: s.end_seq,
     summary: s.summary,
+    summary_status: s.summary_status === 'fallback' ? 'fallback' : 'ok',
     token_count: s.token_count,
     created_at: s.created_at,
   }))

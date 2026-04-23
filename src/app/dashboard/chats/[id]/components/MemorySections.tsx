@@ -135,9 +135,20 @@ export function SummaryMemorySection({
           return (
             <li key={summary.id} className={cardClassName}>
               <div className="mb-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                <div>
-                  {LEVEL_LABEL[summary.level] ?? 'Summary'} · {summary.start_seq}-{summary.end_seq}
-                  {formattedTimestamp ? ` · ${formattedTimestamp}` : null}
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span>
+                    {LEVEL_LABEL[summary.level] ?? 'Summary'} ·{' '}
+                    {`${summary.start_seq}-${summary.end_seq}`}
+                    {formattedTimestamp ? ` · ${formattedTimestamp}` : null}
+                  </span>
+                  {summary.summary_status === 'fallback' ? (
+                    <span
+                      className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+                      title="Local fallback summary"
+                    >
+                      Fallback
+                    </span>
+                  ) : null}
                 </div>
                 {!isEditing ? (
                   <div className="flex gap-2">

@@ -351,6 +351,7 @@ class ChatSummariesTable {
     start_seq: number
     end_seq: number
     summary: string
+    summary_status?: 'ok' | 'fallback'
     token_count: number | null
   }) {
     const row: ChatSummaryRow = {
@@ -361,6 +362,7 @@ class ChatSummariesTable {
       start_seq: data.start_seq,
       end_seq: data.end_seq,
       summary: data.summary,
+      summary_status: data.summary_status ?? 'ok',
       token_count: data.token_count,
       created_at: new Date().toISOString(),
     }

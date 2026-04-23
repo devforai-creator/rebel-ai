@@ -44,7 +44,7 @@ export async function updateSummary(summaryId: string, chatId: string, newSummar
 
   const { error } = await context.supabase
     .from('chat_summaries')
-    .update({ summary: newSummary })
+    .update({ summary: newSummary, summary_status: 'ok' })
     .eq('id', summaryId)
     .eq('chat_id', chatId)
 

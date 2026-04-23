@@ -558,6 +558,7 @@ export type Database = {
           level: number
           start_seq: number
           summary: string
+          summary_status: string
           token_count: number | null
           user_id: string
         }
@@ -569,6 +570,7 @@ export type Database = {
           level: number
           start_seq: number
           summary: string
+          summary_status?: string
           token_count?: number | null
           user_id: string
         }
@@ -580,6 +582,7 @@ export type Database = {
           level?: number
           start_seq?: number
           summary?: string
+          summary_status?: string
           token_count?: number | null
           user_id?: string
         }

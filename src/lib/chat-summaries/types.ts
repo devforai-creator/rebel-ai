@@ -1,4 +1,4 @@
-import type { ChatSummary, LlmProvider, Message } from '@/types/database.types'
+import type { ChatSummary, LlmProvider, Message, SummaryStatus } from '@/types/database.types'
 import type { createClient as createServerClient } from '@/lib/supabase/server'
 import type { LanguageModel } from 'ai'
 
@@ -192,6 +192,7 @@ export interface SummaryWithFallbackOptions {
 
 export interface SummaryWithFallbackResult {
   summaryText: string
+  summaryStatus: SummaryStatus
   tokenCount: number | null
   finishReason?: string
 }

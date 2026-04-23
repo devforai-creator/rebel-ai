@@ -1,3 +1,4 @@
+import React from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
@@ -13,6 +14,9 @@ import TranslationModelSettingsForm from './TranslationModelSettingsForm'
 import { isLLMProvider } from '@/lib/api-keys/provider-utils'
 import type { SelectableLlmApiKey, VoyageEmbeddingsKeyOption } from './options'
 
+const ACCOUNT_PROFILE_SELECT_COLUMNS =
+  'display_name, chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt, enable_episodic_rag, enable_agentic_transcript_recall_default, enable_chat_usage_stats, voyage_embedding_api_key_id, summary_api_key_id, reprocess_prompt, reprocess_api_key_id, translation_api_key_id'
+
 export default async function AccountPage() {
   const supabase = await createClient()
 
@@ -26,9 +30,7 @@ export default async function AccountPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select(
-      'display_name, chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt, enable_episodic_rag, enable_agentic_transcript_recall_default, enable_chat_usage_stats, voyage_embedding_api_key_id, summary_api_key_id, reprocess_prompt, reprocess_api_key_id, translation_api_key_id',
-    )
+    .select(ACCOUNT_PROFILE_SELECT_COLUMNS)
     .eq('id', user.id)
     .single()
 

@@ -27,5 +27,7 @@ describe('TranslationModelSettingsForm', () => {
     expect(html).toContain('Translation API Key (Bilingual Memory)')
     expect(html).toContain('Experimental option.')
     expect(html).toContain('may not lower total cost')
+    expect(html).toContain('for="translation_key_id"')
+    expect(html).toContain('id="translation_key_id"')
   })
 })

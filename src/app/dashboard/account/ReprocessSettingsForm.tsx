@@ -20,6 +20,9 @@ const initialState: ReprocessSettingsState = {
   success: false,
 }
 
+const REPROCESS_PROMPT_ID = 'reprocess_prompt'
+const REPROCESS_KEY_ID = 'reprocess_key_id'
+
 export default function ReprocessSettingsForm({ initialPrompt, initialKeyId, apiKeys }: Props) {
   const [state, formAction] = useActionState(updateReprocessSettings, initialState)
   const [selectedKey, setSelectedKey] = useState(initialKeyId ?? '')
@@ -33,10 +36,14 @@ export default function ReprocessSettingsForm({ initialPrompt, initialKeyId, api
   return (
     <form action={formAction} className="space-y-4">
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-900 dark:text-gray-200">
+        <label
+          htmlFor={REPROCESS_PROMPT_ID}
+          className="block text-sm font-medium text-gray-900 dark:text-gray-200"
+        >
           Reprocess Prompt
         </label>
         <textarea
+          id={REPROCESS_PROMPT_ID}
           name="reprocess_prompt"
           value={prompt}
           onChange={(e) => {
@@ -54,10 +61,14 @@ export default function ReprocessSettingsForm({ initialPrompt, initialKeyId, api
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-900 dark:text-gray-200">
+        <label
+          htmlFor={REPROCESS_KEY_ID}
+          className="block text-sm font-medium text-gray-900 dark:text-gray-200"
+        >
           Reprocess API Key
         </label>
         <select
+          id={REPROCESS_KEY_ID}
           name="reprocess_key_id"
           className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50"
           value={selectedKey}

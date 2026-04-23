@@ -19,6 +19,8 @@ const initialState: TranslationModelPreferenceState = {
   success: false,
 }
 
+const TRANSLATION_KEY_ID = 'translation_key_id'
+
 export default function TranslationModelSettingsForm({ initialKeyId, apiKeys }: Props) {
   const [state, formAction] = useActionState(updateTranslationModelPreference, initialState)
   const [selectedKey, setSelectedKey] = useState(initialKeyId ?? '')
@@ -31,10 +33,14 @@ export default function TranslationModelSettingsForm({ initialKeyId, apiKeys }: 
   return (
     <form action={formAction} className="space-y-4">
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-900 dark:text-gray-200">
+        <label
+          htmlFor={TRANSLATION_KEY_ID}
+          className="block text-sm font-medium text-gray-900 dark:text-gray-200"
+        >
           Translation API Key (Bilingual Memory)
         </label>
         <select
+          id={TRANSLATION_KEY_ID}
           name="translation_key_id"
           className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50"
           value={selectedKey}

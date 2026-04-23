@@ -1,16 +1,29 @@
 # LLM Invocation Ownership Backlog
 
 Updated: 2026-04-23
-Status: Active
+Status: Archived
 
-This is the current execution backlog for cleaning up RebelAI's LLM invocation
+Close-out note:
+
+- closed on `2026-04-23` after `P0-1` through `P0-4`
+- this queue clarified real invocation ownership, extracted the minimum shared
+  non-chat model-access seam, and moved secondary invocation ownership behind
+  explicit services without widening the first-class chat contract
+- full verification passed before archive on `2026-04-23 16:54:17 KST` via
+  `npm run verify`
+- verification result: `205 passed | 5 skipped` test files and
+  `1787 passed | 54 skipped` tests
+- post-deploy smoke remains a rollout concern, not part of this local archive
+  step; if these changes are deployed, use `npm run ops:smoke:active`
+
+This was the execution backlog for cleaning up RebelAI's LLM invocation
 ownership before adding more provider-specific behavior such as Google
 tool-aware explicit cache.
 
 This queue starts after
-[google-cache-boundary-backlog-2026-04-23.md](../archive/2026/google-cache-boundary-backlog-2026-04-23.md)
+[google-cache-boundary-backlog-2026-04-23.md](./google-cache-boundary-backlog-2026-04-23.md)
 made the Google uncached path primary and after
-[google-tool-aware-explicit-cache-backlog-2026-04-23.md](../parked/2026/google-tool-aware-explicit-cache-backlog-2026-04-23.md)
+[google-tool-aware-explicit-cache-backlog-2026-04-23.md](../../active/google-tool-aware-explicit-cache-backlog-2026-04-23.md)
 was parked as a sequencing follow-up.
 
 It exists to answer two narrower questions:
@@ -108,7 +121,7 @@ Acceptance notes:
 - classify each core as first-class, secondary-but-supported, experimental, or
   compatibility
 - identify duplicated setup ceremony with exact file ownership
-- inventory captured in [LLM_INVOCATION_OWNERSHIP.md](../../LLM_INVOCATION_OWNERSHIP.md)
+- inventory captured in [LLM_INVOCATION_OWNERSHIP.md](../../../LLM_INVOCATION_OWNERSHIP.md)
 
 ### P0-2. Extract The Minimum Shared Invocation Setup Seam
 
@@ -126,11 +139,11 @@ Acceptance notes:
 - the first-class chat runner does not become coupled to secondary route needs
 - unsupported providers still fail closed at the right boundary
 - extracted seam landed at
-  [language-model-access.ts](../../../src/lib/llm/language-model-access.ts)
+  [language-model-access.ts](../../../../src/lib/llm/language-model-access.ts)
 - adopted by
-  [translation-service.ts](../../../src/lib/chat/translation-service.ts),
-  [route.ts](../../../src/app/api/messages/reprocess/route.ts), and
-  [route.ts](../../../src/app/api/summaries/generate/route.ts)
+  [translation-service.ts](../../../../src/lib/chat/translation-service.ts),
+  [route.ts](../../../../src/app/api/messages/reprocess/route.ts), and
+  [route.ts](../../../../src/app/api/summaries/generate/route.ts)
 
 ### P0-3. Tighten Secondary Invocation Ownership
 
@@ -148,15 +161,15 @@ Acceptance notes:
 - each secondary surface has one obvious owner for LLM invocation
 - secondary surfaces stay outside the maintained core chat success path
 - summary invocation ownership moved behind
-  [summary-generation-service.ts](../../../src/lib/chat-memory/summary-generation-service.ts)
+  [summary-generation-service.ts](../../../../src/lib/chat-memory/summary-generation-service.ts)
 - reprocess invocation ownership moved behind
-  [reprocess-service.ts](../../../src/lib/chat/reprocess-service.ts)
+  [reprocess-service.ts](../../../../src/lib/chat/reprocess-service.ts)
 - translation route response mapping moved behind
-  [translation-route-response.ts](../../../src/lib/chat/translation-route-response.ts)
+  [translation-route-response.ts](../../../../src/lib/chat/translation-route-response.ts)
 
 ### P0-4. Decide The Next Feature Queue
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 
@@ -170,6 +183,10 @@ Acceptance notes:
 - if another invocation seam still blocks that work, write the smaller follow-up
   explicitly
 - do not let this queue drift into generic provider-platform cleanup
+- ownership is now clear enough to reopen Google tool-aware explicit cache as
+  the next bounded queue
+- that follow-up must stay inside the Google explicit-cache adapter seam around
+  queued chat, not expand into cross-surface cache rollout
 
 ## Explicitly Parked
 

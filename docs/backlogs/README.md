@@ -18,11 +18,11 @@ Use it to answer two questions quickly:
 ## Current Entry Point
 
 - Active backlog:
-  [llm-invocation-ownership-backlog-2026-04-23.md](./active/llm-invocation-ownership-backlog-2026-04-23.md)
+  [google-tool-aware-explicit-cache-backlog-2026-04-23.md](./active/google-tool-aware-explicit-cache-backlog-2026-04-23.md)
 - Most recently parked backlog:
-  [google-tool-aware-explicit-cache-backlog-2026-04-23.md](./parked/2026/google-tool-aware-explicit-cache-backlog-2026-04-23.md)
+  [explicit-memory-v0-backlog-2026-04-22.md](./parked/2026/explicit-memory-v0-backlog-2026-04-22.md)
 - Most recently archived backlog:
-  [google-cache-boundary-backlog-2026-04-23.md](./archive/2026/google-cache-boundary-backlog-2026-04-23.md)
+  [llm-invocation-ownership-backlog-2026-04-23.md](./archive/2026/llm-invocation-ownership-backlog-2026-04-23.md)
 
 ## Working Rules
 

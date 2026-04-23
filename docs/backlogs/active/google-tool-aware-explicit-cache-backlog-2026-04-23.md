@@ -1,27 +1,25 @@
 # Google Tool-Aware Explicit Cache Backlog
 
 Updated: 2026-04-23
-Status: Archived (Parked)
+Status: Active
 
-Parking note:
+Reactivation note:
 
 - drafted on `2026-04-23` immediately after the Google cache boundary cleanup
-- intentionally parked without implementation once it became clear that RebelAI
-  still has multiple LLM invocation ownership seams outside the first-class chat
-  path
-- revisit after
-  [`llm-invocation-ownership-backlog-2026-04-23.md`](../../active/llm-invocation-ownership-backlog-2026-04-23.md)
-  clarifies which invocation routes should share common config/decrypt/model
+- intentionally parked until
+  [`llm-invocation-ownership-backlog-2026-04-23.md`](../archive/2026/llm-invocation-ownership-backlog-2026-04-23.md)
+  clarified which invocation routes should share common config/decrypt/model
   setup and which should remain intentionally separate
+- reactivated on `2026-04-23` after that queue closed with full verification
 - the boundary contract from `GOOGLE_CACHE_BOUNDARY.md` still stands; this queue
-  is parked on sequencing grounds, not because tool-aware explicit cache stopped
+  still exists on sequencing grounds, not because tool-aware explicit cache stopped
   mattering
 
-This document was the execution backlog for adding Google explicit-cache support
+This document is the execution backlog for adding Google explicit-cache support
 to tool-capable turns without breaking the Google cache boundary contract.
 
 This queue starts after
-[google-cache-boundary-backlog-2026-04-23.md](../../archive/2026/google-cache-boundary-backlog-2026-04-23.md)
+[google-cache-boundary-backlog-2026-04-23.md](../archive/2026/google-cache-boundary-backlog-2026-04-23.md)
 closed the boundary-cleanup work and after
 [GOOGLE_CACHE_BOUNDARY.md](../../GOOGLE_CACHE_BOUNDARY.md) established the
 removable-adapter contract.
@@ -39,11 +37,19 @@ It is not:
 - a cache TTL or hit-rate tuning sweep
 - permission for hidden retries or silent user spend
 - a reason to weaken the uncached Google core path
+- a mandate to make summary, translation, reprocess, or other secondary surfaces
+  inherit explicit cache behavior
+- a pretext for building a repo-wide cache platform before the chat runner use
+  case is proven
 
 ## Working Rules
 
 - Preserve the uncached Google path as the supported default contract.
 - Keep all tool-aware cache work inside the explicit-cache adapter seam.
+- Treat the queued chat runner as the only rollout target for this queue.
+- Allow reusable provider-level cache primitives only when they stay below the
+  chat-runner adapter seam and do not silently activate explicit cache in other
+  invocation owners.
 - Do not widen ATR into a general Google cache orchestrator.
 - Every cached tool-turn behavior change lands with regression coverage and
   debug visibility in the same slice.
@@ -95,6 +101,8 @@ Acceptance notes:
 - one canonical cached tool-turn envelope exists
 - tool schema and tool config ownership are explicit at cache-create time
 - cached and uncached Google request shapes stay comparable at the seam
+- canonical uncached Google invocation remains the source of truth and the
+  cached variant stays an adapter overlay
 
 ### P0-2. Teach Cache Creation And Request Wiring About Tools
 
@@ -113,6 +121,8 @@ Acceptance notes:
 - cache inputs include the Google tool contract required by the real provider
   call
 - cache failure still degrades to the uncached path, not to a broken tool turn
+- no secondary invocation owner starts using explicit cache as a side effect of
+  this queue
 
 ### P0-3. Prove Cached Tool-Turn Correctness And Narrow Compatibility Retry
 
@@ -158,6 +168,8 @@ Do not pull these into this queue unless the contract changes:
 - broader provider cache unification across OpenAI / Anthropic / Google
 - unrelated Google model or pricing adjustments
 - ATR feature expansion unrelated to Google cache/tool compatibility
+- opt-in explicit cache rollout for summary, translation, reprocess, or other
+  non-chat invocation owners
 
 ## End Condition
 

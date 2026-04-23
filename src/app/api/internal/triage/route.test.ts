@@ -226,6 +226,14 @@ describe('GET /api/internal/triage', () => {
           lastErrorMessage: 'runner down',
         },
       ],
+      jobFailureSignal: {
+        status: 'warn',
+        blocking: false,
+        recentFailedJobCount: 1,
+        failureStageCounts: {
+          requesting_provider: 1,
+        },
+      },
       recentFailedJobs: [
         {
           id: 'job-1',
@@ -248,6 +256,66 @@ describe('GET /api/internal/triage', () => {
       throw new Error('Expected gte mock to be captured')
     }
     expect(gteMock).toHaveBeenCalledWith('created_at', expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/))
+  })
+
+  it('keeps recent failed jobs as a non-blocking warning when services are healthy', async () => {
+    createAdminClientMock.mockReturnValue({
+      from: () =>
+        createChatGenerationJobsTable({
+          rows: [
+            {
+              id: 'job-auth',
+              chat_id: 'chat-1',
+              status: 'error',
+              error: 'Authentication with the model provider failed.',
+              delivery_mode: 'streaming',
+              lifecycle_stage: 'requesting_provider',
+              failure_stage: 'requesting_provider',
+              created_at: '2026-04-11T10:00:00.000Z',
+              updated_at: '2026-04-11T10:01:00.000Z',
+            },
+            {
+              id: 'job-empty',
+              chat_id: 'chat-2',
+              status: 'error',
+              error: 'The assistant returned an empty response.',
+              delivery_mode: 'streaming',
+              lifecycle_stage: 'empty_response',
+              failure_stage: 'empty_response',
+              created_at: '2026-04-11T10:02:00.000Z',
+              updated_at: '2026-04-11T10:03:00.000Z',
+            },
+          ],
+        }),
+    })
+
+    loadDurableServiceHealthStatsMock.mockResolvedValue(new Map())
+
+    const response = await GET(buildRequest('Bearer admin-secret'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.status).toBe('warn')
+    expect(body.degradedServices).toEqual([])
+    expect(body.jobFailureSignal).toEqual({
+      status: 'warn',
+      blocking: false,
+      recentFailedJobCount: 2,
+      failureStageCounts: {
+        requesting_provider: 1,
+        empty_response: 1,
+      },
+    })
+    expect(body.recentFailedJobs).toEqual([
+      expect.objectContaining({
+        id: 'job-auth',
+        failureStage: 'requesting_provider',
+      }),
+      expect.objectContaining({
+        id: 'job-empty',
+        failureStage: 'empty_response',
+      }),
+    ])
   })
 
   it('falls back to in-memory health stats when durable stats are unavailable', async () => {

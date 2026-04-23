@@ -157,6 +157,89 @@ describe('first-class-smoke-check', () => {
     })
   })
 
+  it('treats triage failed-job warnings as non-blocking smoke evidence', async () => {
+    const checks = createCheckDefinitions({
+      origin: 'https://example.com',
+      adminSecret: 'secret',
+      activeRunners: false,
+    })
+
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          status: 'warn',
+          warningServices: [],
+          recentFailedJobs: [{ id: 'job-1' }],
+          jobFailureSignal: {
+            status: 'warn',
+            blocking: false,
+            recentFailedJobCount: 1,
+          },
+        }),
+    })
+
+    const results = await runSmokeChecks({
+      checks: [checks[2]],
+      fetchImpl,
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+    })
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        key: 'triage',
+        status: 'pass',
+        summary: 'triage has non-blocking warnings',
+        details: {
+          warningServiceCount: 0,
+          recentFailedJobCount: 1,
+          jobFailureStatus: 'warn',
+        },
+      }),
+    ])
+  })
+
+  it('treats legacy failed-job-only triage degradation as non-blocking smoke evidence', async () => {
+    const checks = createCheckDefinitions({
+      origin: 'https://example.com',
+      adminSecret: 'secret',
+      activeRunners: false,
+    })
+
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () =>
+        JSON.stringify({
+          status: 'degraded',
+          degradedServices: [],
+          recentFailedJobs: [{ id: 'job-1' }, { id: 'job-2' }],
+        }),
+    })
+
+    const results = await runSmokeChecks({
+      checks: [checks[2]],
+      fetchImpl,
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+    })
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        key: 'triage',
+        httpStatus: 503,
+        status: 'pass',
+        summary: 'triage has non-blocking failed-job evidence',
+        details: {
+          degradedServiceCount: 0,
+          recentFailedJobCount: 2,
+          jobFailureStatus: null,
+          legacyTriageStatus: true,
+        },
+      }),
+    ])
+  })
+
   it('fails when the signup page no longer exposes the closed-signup notice', async () => {
     const checks = createCheckDefinitions({
       origin: 'https://example.com',

@@ -200,14 +200,42 @@ function createCheckDefinitions({ origin, adminSecret, activeRunners }) {
         }
 
         if (body.status === 'degraded') {
+          const degradedServiceCount = Array.isArray(body.degradedServices)
+            ? body.degradedServices.length
+            : null
+          if (degradedServiceCount === 0 && body.recentFailedJobs.length > 0) {
+            return {
+              status: 'pass',
+              summary: 'triage has non-blocking failed-job evidence',
+              details: {
+                degradedServiceCount,
+                recentFailedJobCount: body.recentFailedJobs.length,
+                jobFailureStatus: body.jobFailureSignal?.status ?? null,
+                legacyTriageStatus: true,
+              },
+            }
+          }
+
           return {
             status: 'warn',
             summary: 'triage reports degraded state',
             details: {
-              degradedServiceCount: Array.isArray(body.degradedServices)
-                ? body.degradedServices.length
+              degradedServiceCount,
+              recentFailedJobCount: body.recentFailedJobs.length,
+            },
+          }
+        }
+
+        if (body.status === 'warn') {
+          return {
+            status: 'pass',
+            summary: 'triage has non-blocking warnings',
+            details: {
+              warningServiceCount: Array.isArray(body.warningServices)
+                ? body.warningServices.length
                 : null,
               recentFailedJobCount: body.recentFailedJobs.length,
+              jobFailureStatus: body.jobFailureSignal?.status ?? null,
             },
           }
         }

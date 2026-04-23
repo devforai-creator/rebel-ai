@@ -18,11 +18,11 @@ Use it to answer two questions quickly:
 ## Current Entry Point
 
 - Active backlog:
-  [agentic-transcript-recall-id-contract-backlog-2026-04-23.md](./active/agentic-transcript-recall-id-contract-backlog-2026-04-23.md)
+  [fallback-summary-status-backlog-2026-04-24.md](./active/fallback-summary-status-backlog-2026-04-24.md)
 - Most recently parked backlog:
   [explicit-memory-v0-backlog-2026-04-22.md](./parked/2026/explicit-memory-v0-backlog-2026-04-22.md)
 - Most recently archived backlog:
-  [google-tool-aware-explicit-cache-backlog-2026-04-23.md](./archive/2026/google-tool-aware-explicit-cache-backlog-2026-04-23.md)
+  [agentic-transcript-recall-id-contract-backlog-2026-04-23.md](./archive/2026/agentic-transcript-recall-id-contract-backlog-2026-04-23.md)
 
 ## Working Rules
 

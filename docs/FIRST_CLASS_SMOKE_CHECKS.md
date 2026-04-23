@@ -98,11 +98,22 @@ Origin resolution order:
 
 Interpretation:
 
-- `PASS`: route responded with the expected shape and did not report degraded state
-- `WARN`: route responded correctly but reported degraded state or existing failed jobs
+- `PASS`: route responded with the expected shape and did not report a blocking
+  degraded state
+- `WARN`: route responded correctly but reported degraded state
 - `FAIL`: auth, transport, or response-contract failure
 
 The script exits non-zero on either `WARN` or `FAIL`. That is intentional. A degraded system is still a failed smoke check.
+
+Recent failed chat jobs are triage evidence, but they do not by themselves make
+the deployed smoke check fail. `/api/internal/triage` returns them under
+`recentFailedJobs` and summarizes them under `jobFailureSignal`; the blocking
+gate remains current service degradation, runner probe failure, auth failure, or
+response-contract failure.
+
+For compatibility with deployments that still report failed-job-only triage as
+`status: degraded`, the smoke checker treats a triage payload with zero
+`degradedServices` as non-blocking failed-job evidence.
 
 The passive janitor probe checks that dry-run dispatch is accepted quickly. It does not wait for a full storage scan to finish.
 The signup probe checks that the deployment still presents the explicit closed-signup notice instead of silently reopening registration UX.

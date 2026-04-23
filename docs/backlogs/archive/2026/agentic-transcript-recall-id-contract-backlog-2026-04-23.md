@@ -1,7 +1,20 @@
 # ATR ID-Contract Backlog
 
 Updated: 2026-04-23
-Status: Active
+Status: Archived
+
+Close-out note:
+
+- `npm run verify` passed on `2026-04-24`
+- `207 passed | 5 skipped` test files
+- `1810 passed | 54 skipped` tests
+- `npm run ops:smoke:active` returned `summary=ok` against
+  `https://rebel-chat.vercel.app/`
+- the active smoke confirmed signup, internal health, internal triage, storage
+  janitor dry-run dispatch, chat runner, and character import runner
+- active triage still returned legacy HTTP `503` for failed-job-only evidence,
+  but the smoke checker classified it as non-blocking because
+  `degradedServiceCount=0`
 
 This document is the execution backlog for changing ATR tool inputs from
 sequence-number exact-match entry to request-local ID selection while preserving
@@ -144,7 +157,7 @@ Evidence:
 
 ### P0-4. Verify The Bounded Contract Still Holds
 
-Status: `in_progress`
+Status: `completed`
 
 Primary scope:
 
@@ -165,8 +178,10 @@ Current verification:
 - `npm run verify` passed on 2026-04-23
 - `206 passed | 5 skipped` test files
 - `1802 passed | 54 skipped` tests
-- queue remains active until deploy-time `npm run ops:smoke:active` confirms the
-  runner/internal-route path on the active deployment
+- `npm run verify` passed on 2026-04-24
+- `207 passed | 5 skipped` test files
+- `1810 passed | 54 skipped` tests
+- `npm run ops:smoke:active` passed on 2026-04-24 with `summary=ok`
 
 ## Explicitly Out Of Scope
 

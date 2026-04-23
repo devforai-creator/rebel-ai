@@ -26,6 +26,42 @@ export const maxDuration = 60
 const FAILED_JOB_LIMIT = 10
 const RECENT_FAILED_JOB_WINDOW_HOURS = 72
 
+type RecentFailedJob = {
+  id: unknown
+  chatId: unknown
+  status: unknown
+  error: unknown
+  deliveryMode: unknown
+  lifecycleStage: unknown
+  failureStage: unknown
+  createdAt: unknown
+  updatedAt: unknown
+}
+
+function summarizeFailedJobSignal(failedJobs: RecentFailedJob[]) {
+  const failureStageCounts = failedJobs.reduce<Record<string, number>>((counts, job) => {
+    const stage = typeof job.failureStage === 'string' ? job.failureStage : 'unknown'
+    counts[stage] = (counts[stage] ?? 0) + 1
+    return counts
+  }, {})
+
+  if (failedJobs.length === 0) {
+    return {
+      status: 'ok' as const,
+      blocking: false,
+      recentFailedJobCount: 0,
+      failureStageCounts,
+    }
+  }
+
+  return {
+    status: 'warn' as const,
+    blocking: false,
+    recentFailedJobCount: failedJobs.length,
+    failureStageCounts,
+  }
+}
+
 export async function GET(req: NextRequest) {
   const adminSecret = process.env.CHAT_ADMIN_SECRET
   if (!adminSecret) {
@@ -80,17 +116,20 @@ export async function GET(req: NextRequest) {
     )
     const warningServices = healthSnapshot.services.filter((service) => service.status === 'warn')
     const translationSignal = decorateExperimentalSignalStats(getMessageTranslationTriggerStats())
+    const jobFailureSignal = summarizeFailedJobSignal(failedJobs)
 
     const body = {
       status: deriveAggregateSignalStatus([
-        degradedServices.length > 0 || failedJobs.length > 0 ? 'degraded' : 'ok',
+        degradedServices.length > 0 ? 'degraded' : 'ok',
         warningServices.length > 0 || translationSignal.status === 'warn' ? 'warn' : 'ok',
+        jobFailureSignal.status,
       ]),
       timestamp: new Date().toISOString(),
       healthSource: healthSnapshot.source,
       warningServices,
       failedJobWindowHours: RECENT_FAILED_JOB_WINDOW_HOURS,
       degradedServices,
+      jobFailureSignal,
       experimentalSignals: {
         translationTrigger: translationSignal,
       },

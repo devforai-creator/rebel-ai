@@ -113,6 +113,7 @@ describe('executeFetchSourceRange', () => {
           {
             kind: 'summary',
             label: 'summary',
+            rangeId: 'R1',
             startSeq: 1,
             endSeq: 2,
             preview: 'The first exchange.',
@@ -121,8 +122,7 @@ describe('executeFetchSourceRange', () => {
       }),
       budgetState: createAgenticTranscriptRecallBudgetState(),
       input: {
-        startSeq: 1,
-        endSeq: 2,
+        rangeId: 'R1',
         reason: 'Need the exact exchange.',
       },
     })
@@ -130,6 +130,7 @@ describe('executeFetchSourceRange', () => {
     expect(result).toEqual({
       result: {
         status: 'fetched',
+        rangeId: 'R1',
         startSeq: 1,
         endSeq: 2,
         reason: 'Need the exact exchange.',
@@ -164,6 +165,7 @@ describe('executeFetchSourceRange', () => {
           {
             kind: 'summary',
             label: 'summary',
+            rangeId: 'R1',
             startSeq: 1,
             endSeq: 2,
             preview: 'The first exchange.',
@@ -172,21 +174,21 @@ describe('executeFetchSourceRange', () => {
       }),
       budgetState: createAgenticTranscriptRecallBudgetState(),
       input: {
-        startSeq: 2,
-        endSeq: 3,
-        reason: 'Try a non-surfaced range.',
+        rangeId: 'R9',
+        reason: 'Try a non-surfaced range id.',
       },
     })
 
     expect(result).toEqual({
       result: {
         status: 'blocked',
-        blockReason: 'range_not_allowed',
+        blockReason: 'range_id_not_available',
         message:
-          'requested transcript range must exactly match one directly fetchable surfaced range or one expanded child range',
-        startSeq: 2,
-        endSeq: 3,
-        reason: 'Try a non-surfaced range.',
+          'requested transcript range id must match one directly fetchable surfaced range or expanded child range available to this reply',
+        rangeId: 'R9',
+        startSeq: null,
+        endSeq: null,
+        reason: 'Try a non-surfaced range id.',
       },
       budgetState: {
         toolCallsUsed: 0,
@@ -208,6 +210,7 @@ describe('executeFetchSourceRange', () => {
             parentRange: {
               kind: 'summary',
               label: 'meta_summary',
+              parentId: 'P1',
               startSeq: 1,
               endSeq: 100,
               preview: 'Large parent range.',
@@ -218,8 +221,7 @@ describe('executeFetchSourceRange', () => {
       }),
       budgetState: createAgenticTranscriptRecallBudgetState(),
       input: {
-        startSeq: 1,
-        endSeq: 100,
+        rangeId: 'P1',
         reason: 'Need the exact ending location.',
       },
     })
@@ -229,9 +231,10 @@ describe('executeFetchSourceRange', () => {
         status: 'blocked',
         blockReason: 'parent_range_requires_expansion',
         message:
-          'requested transcript range is a surfaced parent range and must be expanded into a smaller child range before raw fetch',
-        startSeq: 1,
-        endSeq: 100,
+          'requested transcript range id refers to a surfaced parent range and must be expanded into a smaller child range before raw fetch',
+        rangeId: 'P1',
+        startSeq: null,
+        endSeq: null,
         reason: 'Need the exact ending location.',
       },
       budgetState: {
@@ -253,6 +256,7 @@ describe('executeFetchSourceRange', () => {
           {
             kind: 'fact',
             label: null,
+            rangeId: 'R5',
             startSeq: 5,
             endSeq: 7,
             preview: 'This hint is inconsistent with the chat length.',
@@ -261,8 +265,7 @@ describe('executeFetchSourceRange', () => {
       }),
       budgetState: createAgenticTranscriptRecallBudgetState(),
       input: {
-        startSeq: 5,
-        endSeq: 7,
+        rangeId: 'R5',
         reason: 'Test inconsistent range.',
       },
     })
@@ -273,6 +276,7 @@ describe('executeFetchSourceRange', () => {
         blockReason: 'range_not_in_chat',
         message:
           'requested transcript range could not be resolved from the current chat transcript',
+        rangeId: 'R5',
         startSeq: 5,
         endSeq: 7,
         reason: 'Test inconsistent range.',
@@ -294,6 +298,7 @@ describe('executeFetchSourceRange', () => {
           {
             kind: 'summary',
             label: 'summary',
+            rangeId: 'R1',
             startSeq: 1,
             endSeq: 2,
             preview: 'The first exchange.',
@@ -302,8 +307,7 @@ describe('executeFetchSourceRange', () => {
       }),
       budgetState: createAgenticTranscriptRecallBudgetState(),
       input: {
-        startSeq: 1,
-        endSeq: 2,
+        rangeId: 'R1',
         reason: 'Need the exact exchange.',
       },
     })
@@ -313,6 +317,7 @@ describe('executeFetchSourceRange', () => {
         status: 'blocked',
         blockReason: 'tool_execution_failed',
         message: 'transcript recall tool execution failed and was blocked for this request',
+        rangeId: 'R1',
         startSeq: 1,
         endSeq: 2,
         reason: 'Need the exact exchange.',

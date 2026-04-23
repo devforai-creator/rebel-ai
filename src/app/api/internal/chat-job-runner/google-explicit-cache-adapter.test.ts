@@ -225,9 +225,9 @@ describe('prepareGoogleExplicitCache', () => {
             inputSchema: {
               type: 'object',
               properties: {
-                startSeq: { type: 'integer' },
+                rangeId: { type: 'string' },
               },
-              required: ['startSeq'],
+              required: ['rangeId'],
             },
           },
         ],

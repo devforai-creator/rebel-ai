@@ -1,13 +1,14 @@
 import type { AgenticTranscriptRecallRuntimeConfig } from './config'
 import type { AgenticTranscriptRecallSourceMap } from './source-map'
 import {
-  findAgenticTranscriptRecallDirectFetchRange,
-  findAgenticTranscriptRecallNavigationParentEntry,
+  findAgenticTranscriptRecallDirectFetchRangeById,
+  findAgenticTranscriptRecallNavigationParentEntryById,
+  isAgenticTranscriptRecallParentId,
+  isAgenticTranscriptRecallRangeId,
 } from './source-map'
 
 export type FetchSourceRangeRequest = {
-  startSeq: number
-  endSeq: number
+  rangeId: string
   reason: string
 }
 
@@ -20,8 +21,8 @@ export type AgenticTranscriptRecallFetchBlockedReason =
   | 'feature_disabled'
   | 'provider_not_allowed'
   | 'source_map_unavailable'
-  | 'invalid_range'
-  | 'range_not_allowed'
+  | 'invalid_range_id'
+  | 'range_id_not_available'
   | 'parent_range_requires_expansion'
   | 'max_tool_calls_exceeded'
   | 'max_messages_per_call_exceeded'
@@ -69,10 +70,13 @@ function block(
 
 function findExactAllowedRange(
   sourceMap: AgenticTranscriptRecallSourceMap,
-  startSeq: number,
-  endSeq: number,
+  rangeId: string,
 ): AgenticTranscriptRecallSourceMap['directFetchRanges'][number] | null {
-  return findAgenticTranscriptRecallDirectFetchRange(sourceMap, startSeq, endSeq)
+  if (!isAgenticTranscriptRecallRangeId(rangeId)) {
+    return null
+  }
+
+  return findAgenticTranscriptRecallDirectFetchRangeById(sourceMap, rangeId)
 }
 
 export function evaluateFetchSourceRangeRequest({
@@ -101,31 +105,29 @@ export function evaluateFetchSourceRangeRequest({
     )
   }
 
-  const { startSeq, endSeq } = request
-  if (
-    !Number.isInteger(startSeq) ||
-    !Number.isInteger(endSeq) ||
-    startSeq < 1 ||
-    endSeq < startSeq
-  ) {
-    return block(
-      'invalid_range',
-      'requested transcript range must be a valid 1-based inclusive span',
-    )
-  }
-
-  const exactAllowedRange = findExactAllowedRange(sourceMap, startSeq, endSeq)
-  if (!exactAllowedRange) {
-    if (findAgenticTranscriptRecallNavigationParentEntry(sourceMap, startSeq, endSeq)) {
+  const { rangeId } = request
+  if (!isAgenticTranscriptRecallRangeId(rangeId)) {
+    if (
+      isAgenticTranscriptRecallParentId(rangeId) &&
+      findAgenticTranscriptRecallNavigationParentEntryById(sourceMap, rangeId)
+    ) {
       return block(
         'parent_range_requires_expansion',
-        'requested transcript range is a surfaced parent range and must be expanded into a smaller child range before raw fetch',
+        'requested transcript range id refers to a surfaced parent range and must be expanded into a smaller child range before raw fetch',
       )
     }
 
     return block(
-      'range_not_allowed',
-      'requested transcript range must exactly match one directly fetchable surfaced range or one expanded child range',
+      'invalid_range_id',
+      'requested transcript range id must be a valid direct-fetch or child-range id such as `R1`',
+    )
+  }
+
+  const exactAllowedRange = findExactAllowedRange(sourceMap, rangeId)
+  if (!exactAllowedRange) {
+    return block(
+      'range_id_not_available',
+      'requested transcript range id must match one directly fetchable surfaced range or expanded child range available to this reply',
     )
   }
 
@@ -136,7 +138,7 @@ export function evaluateFetchSourceRangeRequest({
     )
   }
 
-  const expectedMessageCount = endSeq - startSeq + 1
+  const expectedMessageCount = exactAllowedRange.endSeq - exactAllowedRange.startSeq + 1
   if (expectedMessageCount > runtimeConfig.maxMessagesPerCall) {
     return block(
       'max_messages_per_call_exceeded',
@@ -154,8 +156,8 @@ export function evaluateFetchSourceRangeRequest({
   return {
     status: 'allowed',
     requestedRange: {
-      startSeq,
-      endSeq,
+      startSeq: exactAllowedRange.startSeq,
+      endSeq: exactAllowedRange.endSeq,
     },
     expectedMessageCount,
     nextBudgetState: {

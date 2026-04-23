@@ -197,9 +197,9 @@ describe('google-cache', () => {
             inputSchema: {
               type: 'object',
               properties: {
-                startSeq: { type: 'integer' },
+                rangeId: { type: 'string' },
               },
-              required: ['startSeq'],
+              required: ['rangeId'],
             },
           },
         ],
@@ -505,10 +505,10 @@ describe('google-cache', () => {
                 inputSchema: {
                   type: 'object',
                   properties: {
-                    startSeq: { type: 'integer', description: 'start seq' },
+                    rangeId: { type: 'string', description: 'range id' },
                     reason: { type: 'string' },
                   },
-                  required: ['startSeq', 'reason'],
+                  required: ['rangeId', 'reason'],
                 },
               },
             ],
@@ -527,10 +527,10 @@ describe('google-cache', () => {
                     parameters: {
                       type: 'object',
                       properties: {
-                        startSeq: { type: 'integer', description: 'start seq' },
+                        rangeId: { type: 'string', description: 'range id' },
                         reason: { type: 'string' },
                       },
-                      required: ['startSeq', 'reason'],
+                      required: ['rangeId', 'reason'],
                     },
                   },
                 ],

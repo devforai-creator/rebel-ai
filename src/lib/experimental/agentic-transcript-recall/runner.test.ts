@@ -93,8 +93,7 @@ function buildRuntimeConfig(): AgenticTranscriptRecallRuntimeConfig {
 type TestFetchSourceRangeTool = {
   execute: (
     input: {
-      startSeq: number
-      endSeq: number
+      rangeId: string
       reason: string
     },
     options: {
@@ -107,8 +106,7 @@ type TestFetchSourceRangeTool = {
 type TestExpandSourceRangeTool = {
   execute: (
     input: {
-      parentStartSeq: number
-      parentEndSeq: number
+      parentId: string
       reason: string
     },
     options: {
@@ -185,6 +183,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
           {
             kind: 'summary',
             label: 'summary',
+            rangeId: 'R1',
             startSeq: 1,
             endSeq: 2,
             preview: 'First exchange',
@@ -221,8 +220,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
     )['fetch_source_range']
     const toolResult = await fetchTool.execute(
       {
-        startSeq: 1,
-        endSeq: 2,
+        rangeId: 'R1',
         reason: 'Need the original wording.',
       },
       {
@@ -233,6 +231,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
 
     expect(toolResult).toEqual({
       status: 'fetched',
+      rangeId: 'R1',
       startSeq: 1,
       endSeq: 2,
       reason: 'Need the original wording.',
@@ -289,6 +288,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
             parentRange: {
               kind: 'summary',
               label: 'meta_summary',
+              parentId: 'P1',
               startSeq: 1,
               endSeq: 40,
               preview: 'Large parent range',
@@ -340,6 +340,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
           {
             kind: 'summary',
             label: 'summary',
+            rangeId: 'R1',
             startSeq: 1,
             endSeq: 2,
             preview: 'First exchange',
@@ -390,6 +391,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
           {
             kind: 'summary',
             label: 'summary',
+            rangeId: 'R1',
             startSeq: 291,
             endSeq: 300,
             preview: 'Last child range',
@@ -400,6 +402,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
             parentRange: {
               kind: 'summary',
               label: 'meta_summary',
+              parentId: 'P1',
               startSeq: 201,
               endSeq: 300,
               preview: 'Older parent range',
@@ -408,6 +411,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
               {
                 kind: 'summary',
                 label: 'summary',
+                rangeId: 'R1',
                 startSeq: 291,
                 endSeq: 300,
                 preview: 'Last child range',
@@ -473,6 +477,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
           {
             kind: 'summary',
             label: 'summary',
+            rangeId: 'R1',
             startSeq: 1,
             endSeq: 2,
             preview: 'First exchange',
@@ -493,9 +498,8 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
     )['fetch_source_range']
     const toolResult = await fetchTool.execute(
       {
-        startSeq: 2,
-        endSeq: 3,
-        reason: 'Try an unsupported range.',
+        rangeId: 'R9',
+        reason: 'Try an unsupported range id.',
       },
       {
         toolCallId: 'tool-2',
@@ -505,18 +509,19 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
 
     expect(toolResult).toEqual({
       status: 'blocked',
-      blockReason: 'range_not_allowed',
+      blockReason: 'range_id_not_available',
       message:
-        'requested transcript range must exactly match one directly fetchable surfaced range or one expanded child range',
-      startSeq: 2,
-      endSeq: 3,
-      reason: 'Try an unsupported range.',
+        'requested transcript range id must match one directly fetchable surfaced range or expanded child range available to this reply',
+      rangeId: 'R9',
+      startSeq: null,
+      endSeq: null,
+      reason: 'Try an unsupported range id.',
     })
     expect(debugMetrics).toMatchObject({
       experimental_agentic_transcript_recall_tool_call_count: 1,
       experimental_agentic_transcript_recall_tool_fetch_count: 0,
       experimental_agentic_transcript_recall_tool_block_count: 1,
-      experimental_agentic_transcript_recall_tool_last_block_reason: 'range_not_allowed',
+      experimental_agentic_transcript_recall_tool_last_block_reason: 'range_id_not_available',
     })
   })
 
@@ -546,6 +551,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
           {
             kind: 'fact',
             label: null,
+            rangeId: 'R5',
             startSeq: 5,
             endSeq: 7,
             preview: 'Inconsistent stale range',
@@ -567,8 +573,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
 
     const firstAttempt = await fetchTool.execute(
       {
-        startSeq: 5,
-        endSeq: 7,
+        rangeId: 'R5',
         reason: 'Try the stale range once.',
       },
       {
@@ -579,8 +584,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
 
     const secondAttempt = await fetchTool.execute(
       {
-        startSeq: 5,
-        endSeq: 7,
+        rangeId: 'R5',
         reason: 'Try the stale range again.',
       },
       {
@@ -593,6 +597,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
       status: 'blocked',
       blockReason: 'range_not_in_chat',
       message: 'requested transcript range could not be resolved from the current chat transcript',
+      rangeId: 'R5',
       startSeq: 5,
       endSeq: 7,
       reason: 'Try the stale range once.',
@@ -601,8 +606,9 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
       status: 'blocked',
       blockReason: 'max_tool_calls_exceeded',
       message: 'transcript recall tool-call budget has already been used',
-      startSeq: 5,
-      endSeq: 7,
+      rangeId: 'R5',
+      startSeq: null,
+      endSeq: null,
       reason: 'Try the stale range again.',
     })
     expect(debugMetrics).toMatchObject({
@@ -646,6 +652,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
           {
             kind: 'summary',
             label: 'summary',
+            rangeId: 'R1',
             startSeq: 1,
             endSeq: 2,
             preview: 'First exchange',
@@ -656,6 +663,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
             parentRange: {
               kind: 'summary',
               label: 'meta_summary',
+              parentId: 'P1',
               startSeq: 1,
               endSeq: 4,
               preview: 'Parent summary',
@@ -664,6 +672,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
               {
                 kind: 'summary',
                 label: 'summary',
+                rangeId: 'R1',
                 startSeq: 1,
                 endSeq: 2,
                 preview: 'First exchange',
@@ -685,8 +694,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
     )['expand_source_range']
     const toolResult = await expandTool.execute(
       {
-        parentStartSeq: 1,
-        parentEndSeq: 4,
+        parentId: 'P1',
         reason: 'Need smaller child ranges first.',
       },
       {
@@ -697,6 +705,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
 
     expect(toolResult).toEqual({
       status: 'expanded',
+      parentId: 'P1',
       parentStartSeq: 1,
       parentEndSeq: 4,
       reason: 'Need smaller child ranges first.',
@@ -705,6 +714,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
         {
           kind: 'summary',
           label: 'summary',
+          rangeId: 'R1',
           startSeq: 1,
           endSeq: 2,
           preview: 'First exchange',

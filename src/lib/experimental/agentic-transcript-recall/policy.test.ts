@@ -43,6 +43,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
             {
               kind: 'summary',
               label: 'summary',
+              rangeId: 'R1',
               startSeq: 1,
               endSeq: 10,
               preview: 'Older context',
@@ -51,8 +52,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
         }),
         budgetState: createAgenticTranscriptRecallBudgetState(),
         request: {
-          startSeq: 1,
-          endSeq: 10,
+          rangeId: 'R1',
           reason: 'Need the exact wording.',
         },
       }),
@@ -79,6 +79,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
             {
               kind: 'summary',
               label: 'summary',
+              rangeId: 'R1',
               startSeq: 1,
               endSeq: 10,
               preview: 'Older context',
@@ -87,16 +88,15 @@ describe('evaluateFetchSourceRangeRequest', () => {
         }),
         budgetState: createAgenticTranscriptRecallBudgetState(),
         request: {
-          startSeq: 2,
-          endSeq: 5,
-          reason: 'Need the middle part only.',
+          rangeId: 'R9',
+          reason: 'Need a surfaced range that does not exist.',
         },
       }),
     ).toEqual({
       status: 'blocked',
-      blockReason: 'range_not_allowed',
+      blockReason: 'range_id_not_available',
       message:
-        'requested transcript range must exactly match one directly fetchable surfaced range or one expanded child range',
+        'requested transcript range id must match one directly fetchable surfaced range or expanded child range available to this reply',
     })
   })
 
@@ -112,6 +112,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
               parentRange: {
                 kind: 'summary',
                 label: 'meta_summary',
+                parentId: 'P1',
                 startSeq: 1,
                 endSeq: 100,
                 preview: 'A large parent range.',
@@ -122,8 +123,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
         }),
         budgetState: createAgenticTranscriptRecallBudgetState(),
         request: {
-          startSeq: 1,
-          endSeq: 100,
+          rangeId: 'P1',
           reason: 'Need the exact final fight location.',
         },
       }),
@@ -131,7 +131,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
       status: 'blocked',
       blockReason: 'parent_range_requires_expansion',
       message:
-        'requested transcript range is a surfaced parent range and must be expanded into a smaller child range before raw fetch',
+        'requested transcript range id refers to a surfaced parent range and must be expanded into a smaller child range before raw fetch',
     })
   })
 
@@ -147,6 +147,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
             {
               kind: 'fact',
               label: null,
+              rangeId: 'R7',
               startSeq: 7,
               endSeq: 12,
               preview: 'Promise reminder',
@@ -158,8 +159,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
           totalMessagesFetched: 8,
         },
         request: {
-          startSeq: 7,
-          endSeq: 12,
+          rangeId: 'R7',
           reason: 'Need the exact promise.',
         },
       }),
@@ -179,6 +179,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
             {
               kind: 'fact',
               label: null,
+              rangeId: 'R11',
               startSeq: 11,
               endSeq: 12,
               preview: 'Two-message recall',
@@ -190,8 +191,7 @@ describe('evaluateFetchSourceRangeRequest', () => {
           totalMessagesFetched: 2,
         },
         request: {
-          startSeq: 11,
-          endSeq: 12,
+          rangeId: 'R11',
           reason: 'Need the exact line.',
         },
       }),
@@ -199,6 +199,25 @@ describe('evaluateFetchSourceRangeRequest', () => {
       status: 'blocked',
       blockReason: 'max_tool_calls_exceeded',
       message: 'transcript recall tool-call budget has already been used',
+    })
+  })
+
+  it('blocks malformed range ids before budget or availability checks', () => {
+    expect(
+      evaluateFetchSourceRangeRequest({
+        runtimeConfig: enabledRuntimeConfig,
+        sourceMap: buildSourceMap(),
+        budgetState: createAgenticTranscriptRecallBudgetState(),
+        request: {
+          rangeId: 'not-a-range',
+          reason: 'Malformed id.',
+        },
+      }),
+    ).toEqual({
+      status: 'blocked',
+      blockReason: 'invalid_range_id',
+      message:
+        'requested transcript range id must be a valid direct-fetch or child-range id such as `R1`',
     })
   })
 })

@@ -19,6 +19,9 @@ type FactChildRow = Pick<ChatFacts, 'start_seq' | 'end_seq' | 'facts'>
 export type AgenticTranscriptRecallRangeId = `R${number}`
 export type AgenticTranscriptRecallParentId = `P${number}`
 
+const AGENTIC_TRANSCRIPT_RECALL_RANGE_ID_PATTERN = /^R\d+$/
+const AGENTIC_TRANSCRIPT_RECALL_PARENT_ID_PATTERN = /^P\d+$/
+
 export type AgenticTranscriptRecallDirectFetchRange = AgenticTranscriptRecallSourceHint & {
   rangeId?: AgenticTranscriptRecallRangeId
 }
@@ -58,6 +61,12 @@ export function findAgenticTranscriptRecallDirectFetchRangeById(
   return sourceMap.directFetchRanges.find((range) => range.rangeId === rangeId) ?? null
 }
 
+export function isAgenticTranscriptRecallRangeId(
+  value: string,
+): value is AgenticTranscriptRecallRangeId {
+  return AGENTIC_TRANSCRIPT_RECALL_RANGE_ID_PATTERN.test(value)
+}
+
 export function findAgenticTranscriptRecallNavigationParentEntry(
   sourceMap: AgenticTranscriptRecallSourceMap,
   startSeq: number,
@@ -77,6 +86,12 @@ export function findAgenticTranscriptRecallNavigationParentEntryById(
   return (
     sourceMap.navigationParents.find((entry) => entry.parentRange.parentId === parentId) ?? null
   )
+}
+
+export function isAgenticTranscriptRecallParentId(
+  value: string,
+): value is AgenticTranscriptRecallParentId {
+  return AGENTIC_TRANSCRIPT_RECALL_PARENT_ID_PATTERN.test(value)
 }
 
 function buildAgenticTranscriptRecallDirectFetchRangeId(

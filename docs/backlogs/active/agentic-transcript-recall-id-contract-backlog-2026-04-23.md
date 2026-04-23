@@ -88,7 +88,7 @@ Evidence:
 
 ### P0-2. Switch Tool Schemas And Resolvers To ID Input
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 
@@ -103,6 +103,18 @@ Acceptance notes:
 - server resolution still maps every ID to one exact bounded range
 - blocked reasons clearly distinguish unknown ID vs unavailable range vs budget
   issues
+
+Evidence:
+
+- `src/lib/experimental/agentic-transcript-recall/tool.ts`
+- `src/lib/experimental/agentic-transcript-recall/expand-tool.ts`
+- `src/lib/experimental/agentic-transcript-recall/policy.ts`
+- `src/lib/experimental/agentic-transcript-recall/tool.test.ts`
+- `src/lib/experimental/agentic-transcript-recall/expand-tool.test.ts`
+- `src/lib/experimental/agentic-transcript-recall/policy.test.ts`
+- `src/lib/experimental/agentic-transcript-recall/tool-contract.test.ts`
+- `src/app/api/internal/chat-job-runner/google-explicit-cache-adapter.test.ts`
+- `src/lib/llm/google-cache.test.ts`
 
 ### P0-3. Reframe Runner Prompt And Debug Around Selection
 

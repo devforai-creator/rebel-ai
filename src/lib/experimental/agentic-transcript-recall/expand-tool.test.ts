@@ -32,6 +32,7 @@ describe('executeExpandSourceRange', () => {
           {
             kind: 'summary',
             label: 'summary',
+            rangeId: 'R1',
             startSeq: 1,
             endSeq: 10,
             preview: 'Chunk 1',
@@ -39,6 +40,7 @@ describe('executeExpandSourceRange', () => {
           {
             kind: 'fact',
             label: null,
+            rangeId: 'R2',
             startSeq: 11,
             endSeq: 20,
             preview: 'Chunk 2',
@@ -49,6 +51,7 @@ describe('executeExpandSourceRange', () => {
             parentRange: {
               kind: 'summary',
               label: 'meta_summary',
+              parentId: 'P1',
               startSeq: 1,
               endSeq: 20,
               preview: 'Meta parent',
@@ -57,6 +60,7 @@ describe('executeExpandSourceRange', () => {
               {
                 kind: 'summary',
                 label: 'summary',
+                rangeId: 'R1',
                 startSeq: 1,
                 endSeq: 10,
                 preview: 'Chunk 1',
@@ -64,6 +68,7 @@ describe('executeExpandSourceRange', () => {
               {
                 kind: 'fact',
                 label: null,
+                rangeId: 'R2',
                 startSeq: 11,
                 endSeq: 20,
                 preview: 'Chunk 2',
@@ -74,8 +79,7 @@ describe('executeExpandSourceRange', () => {
       },
       budgetState: createAgenticTranscriptRecallExpandBudgetState(),
       input: {
-        parentStartSeq: 1,
-        parentEndSeq: 20,
+        parentId: 'P1',
         reason: 'Need the final scene details.',
       },
     })
@@ -83,6 +87,7 @@ describe('executeExpandSourceRange', () => {
     expect(result).toEqual({
       result: {
         status: 'expanded',
+        parentId: 'P1',
         parentStartSeq: 1,
         parentEndSeq: 20,
         reason: 'Need the final scene details.',
@@ -91,6 +96,7 @@ describe('executeExpandSourceRange', () => {
           {
             kind: 'summary',
             label: 'summary',
+            rangeId: 'R1',
             startSeq: 1,
             endSeq: 10,
             preview: 'Chunk 1',
@@ -98,6 +104,7 @@ describe('executeExpandSourceRange', () => {
           {
             kind: 'fact',
             label: null,
+            rangeId: 'R2',
             startSeq: 11,
             endSeq: 20,
             preview: 'Chunk 2',
@@ -120,6 +127,7 @@ describe('executeExpandSourceRange', () => {
           {
             kind: 'summary',
             label: 'summary',
+            rangeId: 'R1',
             startSeq: 1,
             endSeq: 10,
             preview: 'Chunk 1',
@@ -129,8 +137,7 @@ describe('executeExpandSourceRange', () => {
       },
       budgetState: createAgenticTranscriptRecallExpandBudgetState(),
       input: {
-        parentStartSeq: 1,
-        parentEndSeq: 10,
+        parentId: 'R1',
         reason: 'Wrong tool for a direct range.',
       },
     })
@@ -140,9 +147,10 @@ describe('executeExpandSourceRange', () => {
         status: 'blocked',
         blockReason: 'parent_range_not_expandable',
         message:
-          'requested parent range is already directly fetchable; call fetch_source_range instead',
-        parentStartSeq: 1,
-        parentEndSeq: 10,
+          'requested parent id is already directly fetchable; call fetch_source_range instead',
+        parentId: 'R1',
+        parentStartSeq: null,
+        parentEndSeq: null,
         reason: 'Wrong tool for a direct range.',
       },
       budgetState: {
@@ -160,8 +168,7 @@ describe('executeExpandSourceRange', () => {
       },
       budgetState: createAgenticTranscriptRecallExpandBudgetState(),
       input: {
-        parentStartSeq: 1,
-        parentEndSeq: 20,
+        parentId: 'P9',
         reason: 'Nothing surfaced this range.',
       },
     })
@@ -169,12 +176,45 @@ describe('executeExpandSourceRange', () => {
     expect(unavailableParentResult).toEqual({
       result: {
         status: 'blocked',
-        blockReason: 'parent_range_not_available',
+        blockReason: 'parent_id_not_available',
         message:
-          'requested parent range must exactly match one surfaced navigation range available to this reply',
-        parentStartSeq: 1,
-        parentEndSeq: 20,
+          'requested parent id must match one surfaced navigation range available to this reply',
+        parentId: 'P9',
+        parentStartSeq: null,
+        parentEndSeq: null,
         reason: 'Nothing surfaced this range.',
+      },
+      budgetState: {
+        expandCallsUsed: 0,
+      },
+    })
+  })
+
+  it('blocks malformed parent ids before availability checks', async () => {
+    const result = await executeExpandSourceRange({
+      runtimeConfig: enabledRuntimeConfig,
+      sourceMap: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        directFetchRanges: [],
+        navigationParents: [],
+      },
+      budgetState: createAgenticTranscriptRecallExpandBudgetState(),
+      input: {
+        parentId: 'not-a-parent',
+        reason: 'Malformed id.',
+      },
+    })
+
+    expect(result).toEqual({
+      result: {
+        status: 'blocked',
+        blockReason: 'invalid_parent_id',
+        message: 'requested parent id must be a valid surfaced parent id such as `P1`',
+        parentId: 'not-a-parent',
+        parentStartSeq: null,
+        parentEndSeq: null,
+        reason: 'Malformed id.',
       },
       budgetState: {
         expandCallsUsed: 0,

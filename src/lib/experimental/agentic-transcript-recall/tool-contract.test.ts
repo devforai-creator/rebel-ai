@@ -20,6 +20,7 @@ describe('buildAgenticTranscriptRecallToolContract', () => {
           {
             kind: 'summary',
             label: 'summary',
+            rangeId: 'R1',
             startSeq: 1,
             endSeq: 10,
             preview: 'Older context',
@@ -37,8 +38,7 @@ describe('buildAgenticTranscriptRecallToolContract', () => {
     expect(result?.tools[0]?.inputSchema).toMatchObject({
       type: 'object',
       properties: {
-        startSeq: { type: 'integer' },
-        endSeq: { type: 'integer' },
+        rangeId: { type: 'string' },
         reason: { type: 'string' },
       },
     })
@@ -53,6 +53,7 @@ describe('buildAgenticTranscriptRecallToolContract', () => {
           {
             kind: 'summary',
             label: 'summary',
+            rangeId: 'R1',
             startSeq: 281,
             endSeq: 290,
             preview: 'Later child range',
@@ -63,6 +64,7 @@ describe('buildAgenticTranscriptRecallToolContract', () => {
             parentRange: {
               kind: 'summary',
               label: 'meta_summary',
+              parentId: 'P1',
               startSeq: 201,
               endSeq: 300,
               preview: 'Expanded parent',
@@ -71,6 +73,7 @@ describe('buildAgenticTranscriptRecallToolContract', () => {
               {
                 kind: 'summary',
                 label: 'summary',
+                rangeId: 'R1',
                 startSeq: 281,
                 endSeq: 290,
                 preview: 'Later child range',
@@ -89,8 +92,7 @@ describe('buildAgenticTranscriptRecallToolContract', () => {
     expect(result?.tools[0]?.inputSchema).toMatchObject({
       type: 'object',
       properties: {
-        parentStartSeq: { type: 'integer' },
-        parentEndSeq: { type: 'integer' },
+        parentId: { type: 'string' },
         reason: { type: 'string' },
       },
     })

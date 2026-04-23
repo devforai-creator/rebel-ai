@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import type { AgenticTranscriptRecallRuntimeConfig } from './config'
 import {
-  findAgenticTranscriptRecallDirectFetchRange,
-  findAgenticTranscriptRecallNavigationParentEntry,
+  findAgenticTranscriptRecallDirectFetchRangeById,
+  findAgenticTranscriptRecallNavigationParentEntryById,
+  isAgenticTranscriptRecallParentId,
+  isAgenticTranscriptRecallRangeId,
   type AgenticTranscriptRecallSourceMap,
 } from './source-map'
 
@@ -12,25 +14,17 @@ export const EXPAND_SOURCE_RANGE_TOOL_NAME = 'expand_source_range'
 export const EXPAND_SOURCE_RANGE_TOOL_DESCRIPTION = [
   'Expand one surfaced navigation parent range into smaller child ranges that are legal raw transcript fetch targets for this reply.',
   'Use this when the answer likely depends on an older scene, turning point, promise, or other specific historical detail, but you do not yet know which bounded child range should be fetched as raw evidence.',
-  'Call this only with the exact start and end sequence numbers of one surfaced navigation parent range. Do not call it for recent raw context, directly fetchable small ranges, or invented subranges such as `210-220` unless those exact child ranges were already returned by this tool.',
+  'Call this only with the exact `parentId` of one surfaced navigation parent range. Do not call it for recent raw context, directly fetchable small ranges, or invented ids.',
   'The result is a list of bounded child ranges. Expansion narrows the search space, but it is not raw evidence by itself. If exact older detail still matters after expansion, fetch at most one exact child range at a time with `fetch_source_range`.',
 ].join(' ')
 export const expandSourceRangeToolInputSchema = z
   .object({
-    parentStartSeq: z
-      .number()
-      .int()
+    parentId: z
+      .string()
+      .trim()
       .min(1)
-      .describe(
-        'The exact inclusive start sequence number of one surfaced navigation parent range, such as `201` from `[Meta Summary 201-300]`.',
-      ),
-    parentEndSeq: z
-      .number()
-      .int()
-      .min(1)
-      .describe(
-        'The exact inclusive end sequence number of the same surfaced navigation parent range, such as `300` from `[Meta Summary 201-300]`.',
-      ),
+      .max(32)
+      .describe('The request-local id of one surfaced navigation parent range, such as `P1`.'),
     reason: z
       .string()
       .trim()
@@ -43,10 +37,6 @@ export const expandSourceRangeToolInputSchema = z
   .describe(
     'Expand one surfaced parent transcript range into smaller child ranges that can later be fetched exactly.',
   )
-  .refine((value) => value.parentEndSeq >= value.parentStartSeq, {
-    message: 'parentEndSeq must be greater than or equal to parentStartSeq',
-    path: ['parentEndSeq'],
-  })
 
 export type ExpandSourceRangeToolInput = z.infer<typeof expandSourceRangeToolInputSchema>
 
@@ -58,15 +48,16 @@ export type AgenticTranscriptRecallExpandBlockedReason =
   | 'feature_disabled'
   | 'provider_not_allowed'
   | 'source_map_unavailable'
-  | 'invalid_parent_range'
+  | 'invalid_parent_id'
   | 'max_expand_calls_exceeded'
-  | 'parent_range_not_available'
+  | 'parent_id_not_available'
   | 'parent_range_not_expandable'
 
 export type ExpandSourceRangeToolBlockedResult = {
   status: 'blocked'
   blockReason: AgenticTranscriptRecallExpandBlockedReason
   message: string
+  parentId: string | null
   parentStartSeq: number | null
   parentEndSeq: number | null
   reason: string | null
@@ -74,6 +65,7 @@ export type ExpandSourceRangeToolBlockedResult = {
 
 export type ExpandSourceRangeToolExpandedResult = {
   status: 'expanded'
+  parentId: string
   parentStartSeq: number
   parentEndSeq: number
   reason: string
@@ -100,17 +92,20 @@ function toBlockedResult({
   blockReason,
   message,
   input,
+  resolvedParentRange = null,
 }: {
   blockReason: AgenticTranscriptRecallExpandBlockedReason
   message: string
   input: Partial<ExpandSourceRangeToolInput> | null
+  resolvedParentRange?: { startSeq: number; endSeq: number } | null
 }): ExpandSourceRangeToolBlockedResult {
   return {
     status: 'blocked',
     blockReason,
     message,
-    parentStartSeq: typeof input?.parentStartSeq === 'number' ? input.parentStartSeq : null,
-    parentEndSeq: typeof input?.parentEndSeq === 'number' ? input.parentEndSeq : null,
+    parentId: typeof input?.parentId === 'string' ? input.parentId : null,
+    parentStartSeq: resolvedParentRange?.startSeq ?? null,
+    parentEndSeq: resolvedParentRange?.endSeq ?? null,
     reason: typeof input?.reason === 'string' ? input.reason : null,
   }
 }
@@ -130,15 +125,14 @@ export async function executeExpandSourceRange({
   if (!parsedInput.success) {
     const flattened = parsedInput.error.flatten()
     const fieldMessage =
-      flattened.fieldErrors.parentStartSeq?.[0] ??
-      flattened.fieldErrors.parentEndSeq?.[0] ??
+      flattened.fieldErrors.parentId?.[0] ??
       flattened.fieldErrors.reason?.[0] ??
       flattened.formErrors[0] ??
       'tool input did not match the expected schema'
 
     return {
       result: toBlockedResult({
-        blockReason: 'invalid_parent_range',
+        blockReason: 'invalid_parent_id',
         message: fieldMessage,
         input:
           input && typeof input === 'object'
@@ -195,34 +189,42 @@ export async function executeExpandSourceRange({
     }
   }
 
-  const directFetchRange = findAgenticTranscriptRecallDirectFetchRange(
-    sourceMap,
-    request.parentStartSeq,
-    request.parentEndSeq,
-  )
-  if (directFetchRange) {
+  if (!isAgenticTranscriptRecallParentId(request.parentId)) {
+    if (
+      isAgenticTranscriptRecallRangeId(request.parentId) &&
+      findAgenticTranscriptRecallDirectFetchRangeById(sourceMap, request.parentId)
+    ) {
+      return {
+        result: toBlockedResult({
+          blockReason: 'parent_range_not_expandable',
+          message:
+            'requested parent id is already directly fetchable; call fetch_source_range instead',
+          input: request,
+        }),
+        budgetState,
+      }
+    }
+
     return {
       result: toBlockedResult({
-        blockReason: 'parent_range_not_expandable',
-        message:
-          'requested parent range is already directly fetchable; call fetch_source_range instead',
+        blockReason: 'invalid_parent_id',
+        message: 'requested parent id must be a valid surfaced parent id such as `P1`',
         input: request,
       }),
       budgetState,
     }
   }
 
-  const parentEntry = findAgenticTranscriptRecallNavigationParentEntry(
+  const parentEntry = findAgenticTranscriptRecallNavigationParentEntryById(
     sourceMap,
-    request.parentStartSeq,
-    request.parentEndSeq,
+    request.parentId,
   )
   if (!parentEntry) {
     return {
       result: toBlockedResult({
-        blockReason: 'parent_range_not_available',
+        blockReason: 'parent_id_not_available',
         message:
-          'requested parent range must exactly match one surfaced navigation range available to this reply',
+          'requested parent id must match one surfaced navigation range available to this reply',
         input: request,
       }),
       budgetState,
@@ -232,8 +234,9 @@ export async function executeExpandSourceRange({
   return {
     result: {
       status: 'expanded',
-      parentStartSeq: request.parentStartSeq,
-      parentEndSeq: request.parentEndSeq,
+      parentId: request.parentId,
+      parentStartSeq: parentEntry.parentRange.startSeq,
+      parentEndSeq: parentEntry.parentRange.endSeq,
       reason: request.reason,
       childRangeCount: parentEntry.childRanges.length,
       childRanges: parentEntry.childRanges,

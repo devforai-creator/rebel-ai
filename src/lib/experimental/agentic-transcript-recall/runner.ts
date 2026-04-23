@@ -175,10 +175,8 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
       async execute(input) {
         debugMetrics['experimental_agentic_transcript_recall_expand_call_count'] =
           Number(debugMetrics['experimental_agentic_transcript_recall_expand_call_count'] ?? 0) + 1
-        debugMetrics['experimental_agentic_transcript_recall_expand_last_parent_start_seq'] =
-          input.parentStartSeq
-        debugMetrics['experimental_agentic_transcript_recall_expand_last_parent_end_seq'] =
-          input.parentEndSeq
+        debugMetrics['experimental_agentic_transcript_recall_expand_last_parent_start_seq'] = null
+        debugMetrics['experimental_agentic_transcript_recall_expand_last_parent_end_seq'] = null
         debugMetrics['experimental_agentic_transcript_recall_expand_last_reason'] = input.reason
         debugMetrics['experimental_agentic_transcript_recall_expand_last_block_reason'] = null
         debugMetrics['experimental_agentic_transcript_recall_expand_last_child_range_count'] = null
@@ -191,6 +189,10 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
         })
 
         expandBudgetState = executionResult.budgetState
+        debugMetrics['experimental_agentic_transcript_recall_expand_last_parent_start_seq'] =
+          executionResult.result.parentStartSeq
+        debugMetrics['experimental_agentic_transcript_recall_expand_last_parent_end_seq'] =
+          executionResult.result.parentEndSeq
 
         if (executionResult.result.status === 'expanded') {
           debugMetrics['experimental_agentic_transcript_recall_expand_last_child_range_count'] =
@@ -226,8 +228,8 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
       async execute(input) {
         debugMetrics['experimental_agentic_transcript_recall_tool_call_count'] =
           Number(debugMetrics['experimental_agentic_transcript_recall_tool_call_count'] ?? 0) + 1
-        debugMetrics['experimental_agentic_transcript_recall_tool_last_start_seq'] = input.startSeq
-        debugMetrics['experimental_agentic_transcript_recall_tool_last_end_seq'] = input.endSeq
+        debugMetrics['experimental_agentic_transcript_recall_tool_last_start_seq'] = null
+        debugMetrics['experimental_agentic_transcript_recall_tool_last_end_seq'] = null
         debugMetrics['experimental_agentic_transcript_recall_tool_last_reason'] = input.reason
         debugMetrics['experimental_agentic_transcript_recall_tool_last_block_reason'] = null
 
@@ -242,6 +244,10 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
           })
 
           budgetState = executionResult.budgetState
+          debugMetrics['experimental_agentic_transcript_recall_tool_last_start_seq'] =
+            executionResult.result.startSeq
+          debugMetrics['experimental_agentic_transcript_recall_tool_last_end_seq'] =
+            executionResult.result.endSeq
 
           if (executionResult.result.status === 'fetched') {
             debugMetrics['experimental_agentic_transcript_recall_tool_fetch_count'] =
@@ -284,8 +290,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
 
           logDebug('[Agentic Transcript Recall] Tool execution failed', {
             chatId,
-            startSeq: input.startSeq,
-            endSeq: input.endSeq,
+            rangeId: input.rangeId,
             error: error instanceof Error ? error.message : String(error),
           })
 
@@ -293,8 +298,9 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
             status: 'blocked',
             blockReason: 'tool_execution_failed',
             message: 'transcript recall tool execution failed and was blocked for this request',
-            startSeq: input.startSeq,
-            endSeq: input.endSeq,
+            rangeId: input.rangeId,
+            startSeq: null,
+            endSeq: null,
             reason: input.reason,
           }
         }

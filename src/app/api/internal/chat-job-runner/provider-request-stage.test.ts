@@ -1266,7 +1266,10 @@ describe('requestProviderStage', () => {
         provider: 'google',
         strategy: 'google-explicit-cache',
         systemMessages: [{ role: 'system', content: 'FINAL' }],
-        conversationMessages: [{ role: 'user', content: 'Last message' }],
+        conversationMessages: [
+          { role: 'user', content: 'Older context' },
+          { role: 'user', content: 'Last message' },
+        ],
         cache: {
           cacheName: 'cache-1',
           cachedTokenCount: 2048,

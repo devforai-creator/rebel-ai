@@ -185,6 +185,10 @@ describe('buildStreamPayloadPlan', () => {
       dynamicContext: null,
       anthropicCache: null,
       anthropicConversationMessages: [],
+      recentMessages: [
+        { role: 'user', content: 'old message' },
+        { role: 'assistant', content: 'last response' },
+      ],
       googleCacheResult: {
         success: true,
         cacheName: 'cache-name',
@@ -204,6 +208,21 @@ describe('buildStreamPayloadPlan', () => {
       google: {
         cachedContent: 'cache-name',
         safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }],
+      },
+    })
+    expect(result.actualPayload).toMatchObject({
+      provider: 'google',
+      strategy: 'google-explicit-cache',
+      systemMessages: [{ role: 'system', content: 'FINAL' }],
+      conversationMessages: [
+        { role: 'user', content: 'old message' },
+        { role: 'assistant', content: 'last response' },
+      ],
+      cache: {
+        systemPrompt: 'FINAL',
+        cacheName: 'cache-name',
+        cachedTokenCount: 400,
+        messagesToCache: [{ role: 'user', content: 'old message' }],
       },
     })
   })
@@ -232,6 +251,51 @@ describe('buildStreamPayloadPlan', () => {
     expect(result.streamRequest.system).toBe('FINAL')
     expect(result.streamRequest.messages).toEqual([{ role: 'user', content: 'recent user' }])
     expect(result.streamRequest.providerOptions).toEqual(providerOptions)
+  })
+
+  it('builds the standard google payload when explicit cache is unavailable', () => {
+    const providerOptions: SharedV2ProviderOptions = {
+      google: { safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }] },
+    }
+
+    const result = buildStreamPayloadPlan({
+      ...BASE_ARGS,
+      provider: 'google',
+      finalSystemPrompt: 'FINAL',
+      staticSystemPrompt: 'STATIC',
+      dynamicContext: null,
+      anthropicCache: null,
+      anthropicConversationMessages: [],
+      recentMessages: [
+        { role: 'assistant', content: 'Older context' },
+        { role: 'user', content: 'Last message' },
+      ],
+      googleCacheResult: null,
+      messagesToCacheForGoogle: [{ role: 'assistant', content: 'Older context' }],
+      lastMessageForGoogle: { role: 'user', content: 'Last message' },
+      providerOptions,
+    })
+
+    expect(result).toMatchObject({
+      strategy: 'default',
+      streamRequest: {
+        system: 'FINAL',
+        messages: [
+          { role: 'assistant', content: 'Older context' },
+          { role: 'user', content: 'Last message' },
+        ],
+        providerOptions,
+      },
+      actualPayload: {
+        provider: 'google',
+        strategy: 'default',
+        systemMessages: [{ role: 'system', content: 'FINAL' }],
+        conversationMessages: [
+          { role: 'assistant', content: 'Older context' },
+          { role: 'user', content: 'Last message' },
+        ],
+      },
+    })
   })
 
   it('uses request-level automatic cache control for prefix mode', () => {

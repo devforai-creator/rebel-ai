@@ -16,6 +16,36 @@ type StreamRequest = {
   providerOptions?: SharedV2ProviderOptions
 }
 
+function buildDefaultStreamPayloadPlan({
+  provider,
+  finalSystemPrompt,
+  recentMessages,
+  providerOptions,
+}: {
+  provider: LlmProvider
+  finalSystemPrompt: string
+  recentMessages: SanitizedMessage[]
+  providerOptions?: SharedV2ProviderOptions
+}): StreamPayloadPlan {
+  return {
+    strategy: 'default',
+    streamRequest: {
+      system: finalSystemPrompt,
+      messages: recentMessages,
+      providerOptions,
+    },
+    actualPayload: {
+      provider,
+      strategy: 'default',
+      systemMessages: [{ role: 'system', content: finalSystemPrompt }],
+      conversationMessages: recentMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+    },
+  }
+}
+
 function buildAnthropicMessage(
   role: 'system' | 'user' | 'assistant',
   content: string,
@@ -227,6 +257,13 @@ export function buildStreamPayloadPlan({
     }
   }
 
+  const defaultPlan = buildDefaultStreamPayloadPlan({
+    provider,
+    finalSystemPrompt,
+    recentMessages,
+    providerOptions,
+  })
+
   if (provider === 'google' && googleCacheResult?.success && lastMessageForGoogle) {
     return {
       strategy: 'google-explicit-cache',
@@ -241,12 +278,8 @@ export function buildStreamPayloadPlan({
         },
       },
       actualPayload: {
-        provider: 'google',
+        ...defaultPlan.actualPayload,
         strategy: 'google-explicit-cache',
-        systemMessages: [],
-        conversationMessages: [
-          { role: lastMessageForGoogle.role, content: lastMessageForGoogle.content },
-        ],
         cache: {
           systemPrompt: finalSystemPrompt,
           cacheName: googleCacheResult.cacheName,
@@ -260,21 +293,5 @@ export function buildStreamPayloadPlan({
     }
   }
 
-  return {
-    strategy: 'default',
-    streamRequest: {
-      system: finalSystemPrompt,
-      messages: recentMessages,
-      providerOptions,
-    },
-    actualPayload: {
-      provider,
-      strategy: 'default',
-      systemMessages: [{ role: 'system', content: finalSystemPrompt }],
-      conversationMessages: recentMessages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-    },
-  }
+  return defaultPlan
 }

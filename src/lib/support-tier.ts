@@ -31,6 +31,11 @@ export const SUPPORT_TIER_FEATURES = {
     tier: SUPPORT_TIERS.FALLBACK,
     description: 'Maintained Summary Window memory fallback',
   },
+  LOCAL_RBX_MAINTAINER_IMPORT: {
+    id: 'local-rbx-maintainer-import',
+    tier: SUPPORT_TIERS.FALLBACK,
+    description: 'Local-only maintainer RBX import route for oversized archives',
+  },
   MESSAGE_TRANSLATION_TRIGGER: {
     id: 'message-translation-trigger',
     tier: SUPPORT_TIERS.EXPERIMENTAL,

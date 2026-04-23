@@ -401,4 +401,58 @@ describe('parseRbxArchive validation', () => {
     const buffer = await buildRbxZip(manifest)
     await expect(parseRbxArchive(buffer)).rejects.toThrow('Invalid .rbx manifest')
   })
+
+  it('supports trusted callers overriding the asset-count limit', async () => {
+    const manifest = buildManifest({
+      assets: [
+        { file_name: 'a.png', asset_type: 'icon' },
+        { file_name: 'b.png', asset_type: 'character_image' },
+        { file_name: 'c.png', asset_type: 'background' },
+      ],
+    })
+    const buffer = await buildRbxZip(manifest, {
+      'a.png': TINY_PNG,
+      'b.png': TINY_PNG,
+      'c.png': TINY_PNG,
+    })
+
+    await expect(parseRbxArchive(buffer, { maxAssetCount: 2 })).rejects.toThrow(
+      'Archive contains more than 2 assets',
+    )
+
+    const result = await parseRbxArchive(buffer, { maxAssetCount: 4 })
+    expect(result.characterAssets).toHaveLength(3)
+  })
+
+  it('supports trusted callers overriding the decompressed-size limit', async () => {
+    const mediumAsset = new Uint8Array(2_048)
+    const manifest = buildManifest({
+      assets: [{ file_name: 'large.png', asset_type: 'background' }],
+    })
+    const buffer = await buildRbxZip(manifest, {
+      'large.png': mediumAsset,
+    })
+
+    await expect(parseRbxArchive(buffer, { maxDecompressedMb: 0.001 })).rejects.toThrow(
+      'Total decompressed size exceeds 0.001MB limit',
+    )
+
+    const result = await parseRbxArchive(buffer, { maxDecompressedMb: 1 })
+    expect(result.characterAssets).toHaveLength(1)
+  })
+
+  it('supports trusted callers overriding the manifest-size limit', async () => {
+    const oversizedManifest = buildManifest({
+      character: {
+        name: 'Large Manifest',
+        system_prompt: 'x'.repeat(1_100_000),
+      },
+    })
+    const buffer = await buildRbxZip(oversizedManifest)
+
+    await expect(parseRbxArchive(buffer)).rejects.toThrow('manifest.json exceeds 1MB limit')
+
+    const result = await parseRbxArchive(buffer, { maxManifestBytes: 2 * 1024 * 1024 })
+    expect(result.manifest.character.name).toBe('Large Manifest')
+  })
 })

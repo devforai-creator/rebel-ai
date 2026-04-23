@@ -47,6 +47,7 @@ describe('dispatchNonBlockingSupportEffect', () => {
 
 describe('support-tier feature registry', () => {
   it('classifies the currently agreed feature boundaries', () => {
+    expect(SUPPORT_TIER_FEATURES.LOCAL_RBX_MAINTAINER_IMPORT.tier).toBe('fallback')
     expect(SUPPORT_TIER_FEATURES.MESSAGE_TRANSLATION_TRIGGER.tier).toBe('experimental')
     expect(SUPPORT_TIER_FEATURES.MESSAGE_REPROCESS.tier).toBe('experimental')
     expect(SUPPORT_TIER_FEATURES.SUMMARY_WINDOW_MEMORY.tier).toBe('fallback')

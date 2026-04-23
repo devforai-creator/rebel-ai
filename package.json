@@ -31,6 +31,8 @@
     "chat:jobs": "node scripts/run-chat-jobs.js",
     "character:jobs": "node scripts/run-character-import-jobs.js",
     "import:jobs": "node scripts/run-character-import-jobs.js",
+    "maintainer:import:rbx:file": "node scripts/import-local-rbx-file.js",
+    "import:rbx:file": "node scripts/import-local-rbx-file.js",
     "ops:smoke": "node scripts/first-class-smoke-check.js",
     "ops:smoke:local": "node scripts/first-class-smoke-check.js --local",
     "ops:smoke:active": "node scripts/first-class-smoke-check.js --active-runners",

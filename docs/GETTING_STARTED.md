@@ -102,6 +102,12 @@ Use this only if you explicitly want to evaluate the secondary episodic RAG path
 npm run backfill:embeddings
 ```
 
+### Maintainer-only oversized local RBX import
+
+If you need to ingest a very large local `.rbx` archive that is not practical through the normal browser upload path, use the local-only maintainer runbook in [MAINTAINER_RBX_IMPORT.md](./MAINTAINER_RBX_IMPORT.md).
+
+Keep that tool opt-in and local-only. It is a maintainer surface, not the standard import contract.
+
 ## Deployment Notes
 
 ### Vercel

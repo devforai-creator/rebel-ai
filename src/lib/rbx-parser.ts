@@ -43,9 +43,15 @@ const SUPPORTED_ASSET_EXTENSIONS = new Set(['png', 'webp', 'jpg', 'jpeg', 'gif',
  */
 export async function parseRbxArchive(
   data: ArrayBuffer | Uint8Array | File,
+  options?: {
+    maxAssetCount?: number
+    maxDecompressedMb?: number
+    maxManifestBytes?: number
+  },
 ): Promise<RbxParseResult> {
   // Convert File to ArrayBuffer if needed
   const buffer = data instanceof File ? await data.arrayBuffer() : data
+  const limits = resolveExtractionLimits(options)
 
   // 1. Open ZIP
   let zip: JSZip
@@ -64,9 +70,11 @@ export async function parseRbxArchive(
   let manifestJson: unknown
   try {
     const manifestText = await manifestFile.async('text')
-    if (manifestText.length > MAX_MANIFEST_BYTES) {
+    if (manifestText.length > limits.maxManifestBytes) {
       throw new Error(
-        `Invalid .rbx file: ${MANIFEST_FILE} exceeds ${(MAX_MANIFEST_BYTES / 1024 / 1024).toFixed(0)}MB limit`,
+        `Invalid .rbx file: ${MANIFEST_FILE} exceeds ${formatMbLimit(
+          limits.maxManifestBytes / 1024 / 1024,
+        )}MB limit`,
       )
     }
     manifestJson = JSON.parse(manifestText)
@@ -91,13 +99,13 @@ export async function parseRbxArchive(
   const budget: ExtractionBudget = { totalBytes: 0, totalFiles: 0 }
 
   // 4. Extract character assets from assets/ directory
-  const characterAssets = await extractDirectoryAssets(zip, ASSETS_DIR, budget)
+  const characterAssets = await extractDirectoryAssets(zip, ASSETS_DIR, budget, limits)
 
   // 5. Extract module assets from module_assets/{i}/ directories
   const moduleAssets = new Map<number, RbxAssetFile[]>()
   for (let i = 0; i < manifest.modules.length; i++) {
     const moduleDir = `${MODULE_ASSETS_DIR}${i}/`
-    const assets = await extractDirectoryAssets(zip, moduleDir, budget)
+    const assets = await extractDirectoryAssets(zip, moduleDir, budget, limits)
     if (assets.length > 0) {
       moduleAssets.set(i, assets)
     }
@@ -155,6 +163,13 @@ type ExtractionBudget = {
   totalFiles: number
 }
 
+type ExtractionLimits = {
+  maxAssetCount: number
+  maxDecompressedBytes: number
+  maxDecompressedMb: number
+  maxManifestBytes: number
+}
+
 /**
  * Extract all asset files from a directory within the ZIP archive.
  * Enforces per-asset, total decompressed size, and file count limits.
@@ -167,6 +182,7 @@ async function extractDirectoryAssets(
   zip: JSZip,
   dirPath: string,
   budget: ExtractionBudget,
+  limits: ExtractionLimits,
 ): Promise<RbxAssetFile[]> {
   // 1. Collect eligible entries (cheap — no decompression yet)
   const entries: Array<{ fileName: string; file: JSZip.JSZipObject }> = []
@@ -188,9 +204,9 @@ async function extractDirectoryAssets(
   entries.sort((a, b) => a.fileName.localeCompare(b.fileName))
 
   // 2. Early file-count check before decompressing anything
-  if (budget.totalFiles + entries.length > MAX_ASSET_COUNT) {
+  if (budget.totalFiles + entries.length > limits.maxAssetCount) {
     throw new Error(
-      `Archive contains more than ${MAX_ASSET_COUNT} assets. ` +
+      `Archive contains more than ${limits.maxAssetCount} assets. ` +
         'Self-hosters can raise NEXT_PUBLIC_IMPORT_MAX_ASSET_COUNT.',
     )
   }
@@ -211,9 +227,9 @@ async function extractDirectoryAssets(
     budget.totalBytes += data.byteLength
     budget.totalFiles += 1
 
-    if (budget.totalBytes > MAX_DECOMPRESSED_BYTES) {
+    if (budget.totalBytes > limits.maxDecompressedBytes) {
       throw new Error(
-        `Total decompressed size exceeds ${MAX_DECOMPRESSED_MB}MB limit. ` +
+        `Total decompressed size exceeds ${formatMbLimit(limits.maxDecompressedMb)}MB limit. ` +
           'This archive is too large for web import. ' +
           'Self-hosters can raise NEXT_PUBLIC_IMPORT_MAX_DECOMPRESSED_MB.',
       )
@@ -223,6 +239,45 @@ async function extractDirectoryAssets(
   }
 
   return assets
+}
+
+function resolveExtractionLimits(overrides?: {
+  maxAssetCount?: number
+  maxDecompressedMb?: number
+  maxManifestBytes?: number
+}): ExtractionLimits {
+  const rawMaxAssetCount = overrides?.maxAssetCount
+  const rawMaxDecompressedMb = overrides?.maxDecompressedMb
+  const rawMaxManifestBytes = overrides?.maxManifestBytes
+  const maxAssetCount =
+    typeof rawMaxAssetCount === 'number' &&
+    Number.isFinite(rawMaxAssetCount) &&
+    rawMaxAssetCount > 0
+      ? Math.floor(rawMaxAssetCount)
+      : MAX_ASSET_COUNT
+  const maxDecompressedMb =
+    typeof rawMaxDecompressedMb === 'number' &&
+    Number.isFinite(rawMaxDecompressedMb) &&
+    rawMaxDecompressedMb > 0
+      ? rawMaxDecompressedMb
+      : MAX_DECOMPRESSED_MB
+  const maxManifestBytes =
+    typeof rawMaxManifestBytes === 'number' &&
+    Number.isFinite(rawMaxManifestBytes) &&
+    rawMaxManifestBytes > 0
+      ? Math.floor(rawMaxManifestBytes)
+      : MAX_MANIFEST_BYTES
+
+  return {
+    maxAssetCount,
+    maxDecompressedMb,
+    maxDecompressedBytes: maxDecompressedMb * 1024 * 1024,
+    maxManifestBytes,
+  }
+}
+
+function formatMbLimit(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/\.?0+$/, '')
 }
 
 /**

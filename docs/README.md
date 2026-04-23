@@ -20,6 +20,7 @@ Keep human-facing docs short and directional. Exact runtime behavior should come
 - [LONG_TERM_MEMORY_STRATEGY.md](./LONG_TERM_MEMORY_STRATEGY.md): active doctrine for long-chat memory direction, role split, and future planner/reranker target
 - [PROJECT_SCALING_HARDENING.md](./PROJECT_SCALING_HARDENING.md): design direction for keeping the repo maintainable as scope, complexity, and contributor surface area grow
 - [FIRST_CLASS_SMOKE_CHECKS.md](./FIRST_CLASS_SMOKE_CHECKS.md): repeatable operator verification
+- [MAINTAINER_RBX_IMPORT.md](./MAINTAINER_RBX_IMPORT.md): local-only maintainer runbook for oversized RBX imports
 - [FIRST_CLASS_PATH_MAP.md](./FIRST_CLASS_PATH_MAP.md): compact map of the
   maintained chat request -> queue -> runner -> durable-write path
 - [CHAT_RUNTIME_TUNING.md](./CHAT_RUNTIME_TUNING.md): supported chat and runner tuning knobs

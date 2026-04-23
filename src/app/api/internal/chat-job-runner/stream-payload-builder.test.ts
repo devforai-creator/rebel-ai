@@ -199,6 +199,27 @@ describe('buildStreamPayloadPlan', () => {
         },
         disabledForToolUsePreflight: false,
         disabledForCompatibilityRetry: false,
+        requestContract: {
+          canonicalRequest: {
+            systemPrompt: 'FINAL',
+            messages: [
+              { role: 'user', content: 'old message' },
+              { role: 'assistant', content: 'last response' },
+            ],
+            providerOptions,
+            toolContract: null,
+          },
+          cacheCreateInput: {
+            systemPrompt: 'FINAL',
+            messagesToCache: [{ role: 'user', content: 'old message' }],
+            toolContract: null,
+          },
+          liveRequestTail: {
+            messages: [{ role: 'assistant', content: 'last response' }],
+            providerOptions,
+            toolContract: null,
+          },
+        },
         streamRequestOverride: {
           messages: [{ role: 'assistant', content: 'last response' }],
           providerOptions: {

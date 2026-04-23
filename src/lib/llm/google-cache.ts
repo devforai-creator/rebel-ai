@@ -18,7 +18,9 @@
  * @see https://ai.google.dev/api/caching
  */
 
+import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import { GoogleAICacheManager, type CachedContent } from '@google/generative-ai/server'
+import type { SerializableFunctionToolContract } from './function-tool-contract'
 import { resolveProviderCacheMode } from './cache-mode'
 
 /**
@@ -62,14 +64,104 @@ function getCachedTokenCount(cache: CachedContent): number {
   return usageMetadata.totalTokenCount
 }
 
+export function splitGoogleConversationMessagesForExplicitCache(
+  messages: GoogleConversationMessage[],
+): {
+  messagesToCache: GoogleConversationMessage[]
+  lastMessage: GoogleConversationMessage | null
+} {
+  return {
+    messagesToCache: messages.length > 1 ? messages.slice(0, -1) : [],
+    lastMessage: messages.length > 0 ? messages[messages.length - 1] : null,
+  }
+}
+
+export function buildGoogleCachedProviderOptions({
+  providerOptions,
+  cacheName,
+}: {
+  providerOptions: SharedV2ProviderOptions | undefined
+  cacheName: string
+}): SharedV2ProviderOptions | undefined {
+  return {
+    ...(providerOptions ?? {}),
+    google: {
+      ...((providerOptions?.google as Record<string, unknown>) || {}),
+      cachedContent: cacheName,
+    },
+  }
+}
+
+export function buildGoogleExplicitCacheRequestContract({
+  systemPrompt,
+  messages,
+  providerOptions,
+  toolContract,
+}: {
+  systemPrompt: string
+  messages: GoogleConversationMessage[]
+  providerOptions?: SharedV2ProviderOptions
+  toolContract?: SerializableFunctionToolContract | null
+}): GoogleExplicitCacheRequestContract {
+  const normalizedToolContract = toolContract ?? null
+  const { messagesToCache, lastMessage } = splitGoogleConversationMessagesForExplicitCache(messages)
+
+  return {
+    canonicalRequest: {
+      systemPrompt,
+      messages,
+      providerOptions,
+      toolContract: normalizedToolContract,
+    },
+    cacheCreateInput: {
+      systemPrompt,
+      messagesToCache,
+      toolContract: normalizedToolContract,
+    },
+    liveRequestTail: {
+      messages: lastMessage ? [lastMessage] : [],
+      providerOptions,
+      toolContract: normalizedToolContract,
+    },
+  }
+}
+
 export interface GoogleCacheConfig {
   apiKey: string
   modelName: string
   systemPrompt: string
   /** Messages to cache (excluding the last one) */
   messagesToCache: Array<{ role: 'user' | 'assistant'; content: string }>
+  /** Serializable function-tool contract owned at cache-create time. */
+  toolContract?: SerializableFunctionToolContract | null
   /** Cache TTL in seconds (default: 20) */
   ttlSeconds?: number
+}
+
+export type GoogleConversationMessage = {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export type GoogleExplicitCacheLogicalRequest = {
+  systemPrompt: string
+  messages: GoogleConversationMessage[]
+  providerOptions: SharedV2ProviderOptions | undefined
+  toolContract: SerializableFunctionToolContract | null
+}
+
+export type GoogleExplicitCacheRequestContract = {
+  canonicalRequest: GoogleExplicitCacheLogicalRequest
+  cacheCreateInput: {
+    systemPrompt: string
+    messagesToCache: GoogleConversationMessage[]
+    toolContract: SerializableFunctionToolContract | null
+  }
+  liveRequestTail: {
+    messages: GoogleConversationMessage[]
+    providerOptions: SharedV2ProviderOptions | undefined
+    toolContract: SerializableFunctionToolContract | null
+  }
 }
 
 export interface GoogleCacheResult {

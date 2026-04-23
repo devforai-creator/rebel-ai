@@ -85,11 +85,17 @@ vi.mock('@/lib/chat/summary-model-preference', () => ({
 vi.mock('@/lib/internal-api-origin', () => ({
   resolveInternalApiOrigin: vi.fn(() => 'https://internal.example.com'),
 }))
-vi.mock('@/lib/llm/google-cache', () => ({
-  createGoogleCache: (...args: unknown[]) => createGoogleCacheMock(...args),
-  resolveGoogleCacheDecision: (...args: unknown[]) => resolveGoogleCacheDecisionMock(...args),
-  isGoogleExplicitCacheEnabled: (...args: unknown[]) => isGoogleExplicitCacheEnabledMock(...args),
-}))
+vi.mock('@/lib/llm/google-cache', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/lib/llm/google-cache')>('@/lib/llm/google-cache')
+
+  return {
+    ...actual,
+    createGoogleCache: (...args: unknown[]) => createGoogleCacheMock(...args),
+    resolveGoogleCacheDecision: (...args: unknown[]) => resolveGoogleCacheDecisionMock(...args),
+    isGoogleExplicitCacheEnabled: (...args: unknown[]) => isGoogleExplicitCacheEnabledMock(...args),
+  }
+})
 vi.mock('@/lib/llm/anthropic-batch', () => ({
   createAnthropicMessageBatch: (...args: unknown[]) => createAnthropicMessageBatchMock(...args),
   retrieveAnthropicMessageBatch: (...args: unknown[]) => retrieveAnthropicMessageBatchMock(...args),

@@ -88,7 +88,7 @@ This queue is only successful if all of the following become true:
 
 ### P0-1. Define The Cached Tool-Turn Request Contract
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 
@@ -103,6 +103,17 @@ Acceptance notes:
 - cached and uncached Google request shapes stay comparable at the seam
 - canonical uncached Google invocation remains the source of truth and the
   cached variant stays an adapter overlay
+
+Evidence:
+
+- `src/lib/llm/google-cache.ts`
+- `src/lib/llm/function-tool-contract.ts`
+- `src/lib/experimental/agentic-transcript-recall/tool-contract.ts`
+- `src/app/api/internal/chat-job-runner/google-explicit-cache-adapter.ts`
+- `src/lib/llm/google-cache.test.ts`
+- `src/lib/experimental/agentic-transcript-recall/tool-contract.test.ts`
+- `src/app/api/internal/chat-job-runner/google-explicit-cache-adapter.test.ts`
+- `src/app/api/internal/chat-job-runner/provider-request-stage.test.ts`
 
 ### P0-2. Teach Cache Creation And Request Wiring About Tools
 

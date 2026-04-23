@@ -5,11 +5,17 @@ const createGoogleCacheMock = vi.fn()
 const resolveGoogleCacheDecisionMock = vi.fn()
 const isGoogleExplicitCacheEnabledMock = vi.fn()
 
-vi.mock('@/lib/llm/google-cache', () => ({
-  createGoogleCache: (...args: unknown[]) => createGoogleCacheMock(...args),
-  resolveGoogleCacheDecision: (...args: unknown[]) => resolveGoogleCacheDecisionMock(...args),
-  isGoogleExplicitCacheEnabled: (...args: unknown[]) => isGoogleExplicitCacheEnabledMock(...args),
-}))
+vi.mock('@/lib/llm/google-cache', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/lib/llm/google-cache')>('@/lib/llm/google-cache')
+
+  return {
+    ...actual,
+    createGoogleCache: (...args: unknown[]) => createGoogleCacheMock(...args),
+    resolveGoogleCacheDecision: (...args: unknown[]) => resolveGoogleCacheDecisionMock(...args),
+    isGoogleExplicitCacheEnabled: (...args: unknown[]) => isGoogleExplicitCacheEnabledMock(...args),
+  }
+})
 
 describe('prepareGoogleExplicitCache', () => {
   beforeEach(() => {
@@ -53,6 +59,7 @@ describe('prepareGoogleExplicitCache', () => {
       modelName: 'gemini-2.5-flash',
       systemPrompt: 'FINAL',
       messagesToCache: [{ role: 'assistant', content: 'Older context' }],
+      toolContract: null,
       ttlSeconds: 20,
     })
     expect(result).toMatchObject({
@@ -65,6 +72,35 @@ describe('prepareGoogleExplicitCache', () => {
       },
       disabledForToolUsePreflight: false,
       disabledForCompatibilityRetry: false,
+      requestContract: {
+        canonicalRequest: {
+          systemPrompt: 'FINAL',
+          messages: [
+            { role: 'assistant', content: 'Older context' },
+            { role: 'user', content: 'Last message' },
+          ],
+          providerOptions: {
+            google: {
+              safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }],
+            },
+          },
+          toolContract: null,
+        },
+        cacheCreateInput: {
+          systemPrompt: 'FINAL',
+          messagesToCache: [{ role: 'assistant', content: 'Older context' }],
+          toolContract: null,
+        },
+        liveRequestTail: {
+          messages: [{ role: 'user', content: 'Last message' }],
+          providerOptions: {
+            google: {
+              safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }],
+            },
+          },
+          toolContract: null,
+        },
+      },
       streamRequestOverride: {
         messages: [{ role: 'user', content: 'Last message' }],
         providerOptions: {
@@ -109,6 +145,14 @@ describe('prepareGoogleExplicitCache', () => {
       googleCacheResult: null,
       disabledForToolUsePreflight: true,
       disabledForCompatibilityRetry: false,
+      requestContract: {
+        cacheCreateInput: {
+          toolContract: null,
+        },
+        liveRequestTail: {
+          toolContract: null,
+        },
+      },
       streamRequestOverride: null,
       cacheDebugInfo: null,
     })
@@ -141,8 +185,75 @@ describe('prepareGoogleExplicitCache', () => {
       googleCacheResult: null,
       disabledForToolUsePreflight: false,
       disabledForCompatibilityRetry: true,
+      requestContract: {
+        cacheCreateInput: {
+          toolContract: null,
+        },
+        liveRequestTail: {
+          toolContract: null,
+        },
+      },
       streamRequestOverride: null,
       cacheDebugInfo: null,
     })
+  })
+
+  it('preserves a tool contract in the canonical cache request seam without changing runtime behavior yet', async () => {
+    const { prepareGoogleExplicitCache } = await import('./google-explicit-cache-adapter')
+
+    resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
+
+    const result = await prepareGoogleExplicitCache({
+      apiKey: 'sk-test',
+      modelName: 'gemini-2.5-flash',
+      systemPrompt: 'FINAL',
+      recentMessages: [
+        { role: 'assistant', content: 'Older context' },
+        { role: 'user', content: 'Last message' },
+      ],
+      providerOptions: undefined,
+      toolContract: {
+        tools: [
+          {
+            name: 'fetch_source_range',
+            description: 'Fetch older transcript evidence.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                startSeq: { type: 'integer' },
+              },
+              required: ['startSeq'],
+            },
+          },
+        ],
+        toolChoice: { type: 'required' },
+      },
+      toolCapableInvocation: true,
+      jobId: 'job-google-tools-contract',
+      timings: {},
+    })
+
+    expect(createGoogleCacheMock).not.toHaveBeenCalled()
+    expect(result.requestContract).toMatchObject({
+      canonicalRequest: {
+        toolContract: {
+          tools: [{ name: 'fetch_source_range' }],
+          toolChoice: { type: 'required' },
+        },
+      },
+      cacheCreateInput: {
+        toolContract: {
+          tools: [{ name: 'fetch_source_range' }],
+          toolChoice: { type: 'required' },
+        },
+      },
+      liveRequestTail: {
+        toolContract: {
+          tools: [{ name: 'fetch_source_range' }],
+          toolChoice: { type: 'required' },
+        },
+      },
+    })
+    expect(result.disabledForToolUsePreflight).toBe(true)
   })
 })

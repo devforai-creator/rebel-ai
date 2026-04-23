@@ -13,6 +13,7 @@ import {
   type PromptCacheDecision,
 } from '@/lib/llm/prompt-cache'
 import { prepareExperimentalAgenticTranscriptRecallRequest } from '@/lib/experimental/agentic-transcript-recall/runner'
+import { buildAgenticTranscriptRecallToolContract } from '@/lib/experimental/agentic-transcript-recall/tool-contract'
 import { decideAgenticTranscriptRecallToolChoice } from '@/lib/experimental/agentic-transcript-recall/tool-choice-gate'
 import { submitAnthropicBatchJob } from './anthropic-batch-orchestrator'
 import type { LoadedChatJobExecutionContext } from './execution-context'
@@ -288,6 +289,13 @@ export async function requestProviderStage({
   debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied'] = false
   debugMetrics['anthropic_thinking_disabled_for_required_tool_choice'] =
     provider === 'anthropic' ? false : null
+  const googleToolContract =
+    provider === 'google' && agenticTranscriptRecall.enabled && hasToolCapableSourceMap
+      ? buildAgenticTranscriptRecallToolContract({
+          sourceMap: agenticTranscriptRecallSourceMap,
+          toolChoice: atrToolChoiceDecision?.toolChoice ?? 'auto',
+        })
+      : null
 
   const model = buildLanguageModel({
     provider,
@@ -310,6 +318,7 @@ export async function requestProviderStage({
           systemPrompt: finalSystemPrompt,
           recentMessages,
           providerOptions,
+          toolContract: googleToolContract,
           toolCapableInvocation: agenticTranscriptRecall.enabled && hasToolCapableSourceMap,
           disableGoogleExplicitCache,
           jobId,

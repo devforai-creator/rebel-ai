@@ -31,11 +31,17 @@ vi.mock('@/lib/llm/prompt-cache', () => ({
   resolveAnthropicCacheDecision: (...args: unknown[]) => resolveAnthropicCacheDecisionMock(...args),
 }))
 
-vi.mock('@/lib/llm/google-cache', () => ({
-  createGoogleCache: (...args: unknown[]) => createGoogleCacheMock(...args),
-  resolveGoogleCacheDecision: (...args: unknown[]) => resolveGoogleCacheDecisionMock(...args),
-  isGoogleExplicitCacheEnabled: (...args: unknown[]) => isGoogleExplicitCacheEnabledMock(...args),
-}))
+vi.mock('@/lib/llm/google-cache', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/lib/llm/google-cache')>('@/lib/llm/google-cache')
+
+  return {
+    ...actual,
+    createGoogleCache: (...args: unknown[]) => createGoogleCacheMock(...args),
+    resolveGoogleCacheDecision: (...args: unknown[]) => resolveGoogleCacheDecisionMock(...args),
+    isGoogleExplicitCacheEnabled: (...args: unknown[]) => isGoogleExplicitCacheEnabledMock(...args),
+  }
+})
 
 vi.mock('@/lib/llm/provider-options', () => ({
   ANTHROPIC_INTERLEAVED_THINKING_BETA: 'interleaved-thinking-2025-05-14',
@@ -1290,6 +1296,7 @@ describe('requestProviderStage', () => {
       modelName: 'gemini-2.5-flash',
       systemPrompt: 'FINAL',
       messagesToCache: [{ role: 'user', content: 'Older context' }],
+      toolContract: null,
       ttlSeconds: 20,
     })
     expect(buildStreamPayloadPlanMock).toHaveBeenCalledWith(

@@ -1,5 +1,7 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest'
 import {
+  buildGoogleCachedProviderOptions,
+  buildGoogleExplicitCacheRequestContract,
   getGoogleCacheMinTokens,
   shouldCreateGoogleCache,
   resolveGoogleCacheDecision,
@@ -173,6 +175,82 @@ describe('google-cache', () => {
 
       expect(result.enabled).toBe(true)
       expect(result.minTokens).toBe(1024)
+    })
+  })
+
+  describe('buildGoogleExplicitCacheRequestContract', () => {
+    it('keeps a canonical uncached request and explicit cache split under one contract', () => {
+      const providerOptions = {
+        google: { safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }] },
+      }
+      const toolContract = {
+        tools: [
+          {
+            name: 'fetch_source_range',
+            description: 'Fetch older transcript evidence.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                startSeq: { type: 'integer' },
+              },
+              required: ['startSeq'],
+            },
+          },
+        ],
+        toolChoice: { type: 'required' as const },
+      }
+
+      const result = buildGoogleExplicitCacheRequestContract({
+        systemPrompt: 'FINAL',
+        messages: [
+          { role: 'assistant', content: 'Older context' },
+          { role: 'user', content: 'Last message' },
+        ],
+        providerOptions,
+        toolContract,
+      })
+
+      expect(result).toEqual({
+        canonicalRequest: {
+          systemPrompt: 'FINAL',
+          messages: [
+            { role: 'assistant', content: 'Older context' },
+            { role: 'user', content: 'Last message' },
+          ],
+          providerOptions,
+          toolContract,
+        },
+        cacheCreateInput: {
+          systemPrompt: 'FINAL',
+          messagesToCache: [{ role: 'assistant', content: 'Older context' }],
+          toolContract,
+        },
+        liveRequestTail: {
+          messages: [{ role: 'user', content: 'Last message' }],
+          providerOptions,
+          toolContract,
+        },
+      })
+    })
+  })
+
+  describe('buildGoogleCachedProviderOptions', () => {
+    it('overlays cachedContent without dropping existing google provider options', () => {
+      expect(
+        buildGoogleCachedProviderOptions({
+          providerOptions: {
+            google: {
+              safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }],
+            },
+          },
+          cacheName: 'cachedContents/demo',
+        }),
+      ).toEqual({
+        google: {
+          cachedContent: 'cachedContents/demo',
+          safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }],
+        },
+      })
     })
   })
 

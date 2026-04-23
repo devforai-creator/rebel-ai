@@ -1,13 +1,17 @@
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import {
+  buildGoogleCachedProviderOptions,
+  buildGoogleExplicitCacheRequestContract,
   createGoogleCache,
   isGoogleExplicitCacheEnabled,
   resolveGoogleCacheDecision,
   type CreateGoogleCacheResult,
+  type GoogleConversationMessage,
+  type GoogleExplicitCacheRequestContract,
 } from '@/lib/llm/google-cache'
+import type { SerializableFunctionToolContract } from '@/lib/llm/function-tool-contract'
 
-type GoogleConversationMessage = { role: 'user' | 'assistant'; content: string }
 type GoogleCacheDecision = ReturnType<typeof resolveGoogleCacheDecision>
 
 function buildGoogleConversationMessages(
@@ -19,38 +23,13 @@ function buildGoogleConversationMessages(
   }))
 }
 
-function splitGoogleConversationMessagesForExplicitCache(messages: GoogleConversationMessage[]): {
-  messagesToCache: GoogleConversationMessage[]
-  lastMessage: GoogleConversationMessage | null
-} {
-  return {
-    messagesToCache: messages.length > 1 ? messages.slice(0, -1) : [],
-    lastMessage: messages.length > 0 ? messages[messages.length - 1] : null,
-  }
-}
-
-function buildGoogleCachedProviderOptions({
-  providerOptions,
-  cacheName,
-}: {
-  providerOptions: SharedV2ProviderOptions | undefined
-  cacheName: string
-}): SharedV2ProviderOptions | undefined {
-  return {
-    ...(providerOptions ?? {}),
-    google: {
-      ...((providerOptions?.google as Record<string, unknown>) || {}),
-      cachedContent: cacheName,
-    },
-  }
-}
-
 export type GoogleExplicitCachePreparation = {
   googleExplicitCacheEnabled: boolean
   googleCacheDecision: GoogleCacheDecision | null
   googleCacheResult: CreateGoogleCacheResult | null
   disabledForToolUsePreflight: boolean
   disabledForCompatibilityRetry: boolean
+  requestContract: GoogleExplicitCacheRequestContract
   streamRequestOverride: {
     messages: GoogleConversationMessage[]
     providerOptions: SharedV2ProviderOptions | undefined
@@ -69,6 +48,7 @@ export async function prepareGoogleExplicitCache({
   systemPrompt,
   recentMessages,
   providerOptions,
+  toolContract,
   toolCapableInvocation,
   disableGoogleExplicitCache = false,
   jobId,
@@ -80,6 +60,7 @@ export async function prepareGoogleExplicitCache({
   systemPrompt: string
   recentMessages: SanitizedMessage[]
   providerOptions?: SharedV2ProviderOptions
+  toolContract?: SerializableFunctionToolContract | null
   toolCapableInvocation: boolean
   disableGoogleExplicitCache?: boolean
   jobId: string
@@ -87,14 +68,18 @@ export async function prepareGoogleExplicitCache({
   logDebug?: (...args: unknown[]) => void
 }): Promise<GoogleExplicitCachePreparation> {
   const googleConversationMessages = buildGoogleConversationMessages(recentMessages)
-  const { messagesToCache, lastMessage } = splitGoogleConversationMessagesForExplicitCache(
-    googleConversationMessages,
-  )
+  const requestContract = buildGoogleExplicitCacheRequestContract({
+    systemPrompt,
+    messages: googleConversationMessages,
+    providerOptions,
+    toolContract,
+  })
+  const lastMessage = requestContract.liveRequestTail.messages[0] ?? null
 
   const googleCacheDecision = resolveGoogleCacheDecision({
     modelName,
-    systemPrompt,
-    messagesToCache,
+    systemPrompt: requestContract.cacheCreateInput.systemPrompt,
+    messagesToCache: requestContract.cacheCreateInput.messagesToCache,
   })
 
   const googleExplicitCacheConfigured = isGoogleExplicitCacheEnabled()
@@ -127,17 +112,18 @@ export async function prepareGoogleExplicitCache({
     googleCacheResult = await createGoogleCache({
       apiKey,
       modelName,
-      systemPrompt,
-      messagesToCache,
+      systemPrompt: requestContract.cacheCreateInput.systemPrompt,
+      messagesToCache: requestContract.cacheCreateInput.messagesToCache,
+      toolContract: requestContract.cacheCreateInput.toolContract,
       ttlSeconds: 20,
     })
     timings['7c_google_cache_create'] = performance.now() - googleCacheCreateStart
 
     if (googleCacheResult.success) {
       streamRequestOverride = {
-        messages: [lastMessage],
+        messages: requestContract.liveRequestTail.messages,
         providerOptions: buildGoogleCachedProviderOptions({
-          providerOptions,
+          providerOptions: requestContract.liveRequestTail.providerOptions,
           cacheName: googleCacheResult.cacheName,
         }),
       }
@@ -145,7 +131,7 @@ export async function prepareGoogleExplicitCache({
         systemPrompt,
         cacheName: googleCacheResult.cacheName,
         cachedTokenCount: googleCacheResult.cachedTokenCount,
-        messagesToCache,
+        messagesToCache: requestContract.cacheCreateInput.messagesToCache,
       }
 
       logDebug('[Chat Job Runner] Google explicit caching enabled', {
@@ -171,6 +157,7 @@ export async function prepareGoogleExplicitCache({
     googleCacheResult,
     disabledForToolUsePreflight,
     disabledForCompatibilityRetry: disableGoogleExplicitCache,
+    requestContract,
     streamRequestOverride,
     cacheDebugInfo,
   }

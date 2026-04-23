@@ -12,9 +12,15 @@ import {
   type AnthropicCacheDecision,
   type PromptCacheDecision,
 } from '@/lib/llm/prompt-cache'
-import { prepareExperimentalAgenticTranscriptRecallRequest } from '@/lib/experimental/agentic-transcript-recall/runner'
+import {
+  buildExperimentalInstruction,
+  prepareExperimentalAgenticTranscriptRecallRequest,
+} from '@/lib/experimental/agentic-transcript-recall/runner'
+import { EXPAND_SOURCE_RANGE_TOOL_NAME } from '@/lib/experimental/agentic-transcript-recall/expand-tool'
+import { FETCH_SOURCE_RANGE_TOOL_NAME } from '@/lib/experimental/agentic-transcript-recall/tool'
 import { buildAgenticTranscriptRecallToolContract } from '@/lib/experimental/agentic-transcript-recall/tool-contract'
 import { decideAgenticTranscriptRecallToolChoice } from '@/lib/experimental/agentic-transcript-recall/tool-choice-gate'
+import type { SerializableFunctionToolContract } from '@/lib/llm/function-tool-contract'
 import { submitAnthropicBatchJob } from './anthropic-batch-orchestrator'
 import type { LoadedChatJobExecutionContext } from './execution-context'
 import {
@@ -198,6 +204,31 @@ function buildRequiredFirstToolStepOverride(
   }
 }
 
+function buildGoogleCachedSystemPromptForAgenticTranscriptRecall({
+  systemPrompt,
+  toolContract,
+  maxToolCalls,
+}: {
+  systemPrompt: string
+  toolContract: SerializableFunctionToolContract | null
+  maxToolCalls: number
+}): string {
+  if (!toolContract || toolContract.tools.length === 0) {
+    return systemPrompt
+  }
+
+  const toolNames = new Set(toolContract.tools.map((tool) => tool.name))
+  const instruction = buildExperimentalInstruction({
+    maxToolCalls,
+    fetchAvailable: toolNames.has(FETCH_SOURCE_RANGE_TOOL_NAME),
+    expandAvailable: toolNames.has(EXPAND_SOURCE_RANGE_TOOL_NAME),
+  })
+
+  return [systemPrompt, instruction]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join('\n\n')
+}
+
 export async function requestProviderStage({
   supabase,
   jobId,
@@ -296,6 +327,14 @@ export async function requestProviderStage({
           toolChoice: atrToolChoiceDecision?.toolChoice ?? 'auto',
         })
       : null
+  const googleCacheSystemPrompt =
+    provider === 'google'
+      ? buildGoogleCachedSystemPromptForAgenticTranscriptRecall({
+          systemPrompt: finalSystemPrompt,
+          toolContract: googleToolContract,
+          maxToolCalls: agenticTranscriptRecall.maxToolCalls,
+        })
+      : finalSystemPrompt
 
   const model = buildLanguageModel({
     provider,
@@ -315,7 +354,7 @@ export async function requestProviderStage({
       ? await prepareGoogleExplicitCache({
           apiKey: decryptedApiKey,
           modelName,
-          systemPrompt: finalSystemPrompt,
+          systemPrompt: googleCacheSystemPrompt,
           recentMessages,
           providerOptions,
           toolContract: googleToolContract,

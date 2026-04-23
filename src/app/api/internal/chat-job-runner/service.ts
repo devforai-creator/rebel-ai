@@ -50,6 +50,8 @@ function formatMetricsForDebug(
   )
 }
 
+// Temporary provider-compatibility shim. Keep this narrow until cached Google
+// tool-capable turns are verified well enough to remove the uncached retry path.
 function shouldRetryGoogleExplicitCacheCompatibility(
   provider: string,
   error: unknown,
@@ -275,7 +277,7 @@ async function executeJob({
         error.details?.normalizedProviderError?.technicalMessage ?? error.message
 
       logChatJobRunnerDebug(
-        '[Chat Job Runner] Retrying Google request without explicit cache after tool conflict',
+        '[Chat Job Runner] Retrying Google request without explicit cache after tool conflict (temporary compatibility shim)',
         {
           chatId,
           requestId: payload.requestId,

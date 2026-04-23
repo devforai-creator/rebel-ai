@@ -459,6 +459,57 @@ describe('google-cache', () => {
           }),
         )
       })
+
+      it('includes function tool declarations in cache creation when a tool contract is provided', async () => {
+        mockCreate.mockResolvedValue({
+          name: 'cachedContents/tool-contract',
+        })
+
+        await createGoogleCache({
+          ...baseConfig,
+          toolContract: {
+            tools: [
+              {
+                name: 'fetch_source_range',
+                description: 'Fetch older transcript evidence.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    startSeq: { type: 'integer', description: 'start seq' },
+                    reason: { type: 'string' },
+                  },
+                  required: ['startSeq', 'reason'],
+                },
+              },
+            ],
+            toolChoice: { type: 'required' },
+          },
+        })
+
+        expect(mockCreate).toHaveBeenCalledWith(
+          expect.objectContaining({
+            tools: [
+              {
+                functionDeclarations: [
+                  {
+                    name: 'fetch_source_range',
+                    description: 'Fetch older transcript evidence.',
+                    parameters: {
+                      type: 'object',
+                      properties: {
+                        startSeq: { type: 'integer', description: 'start seq' },
+                        reason: { type: 'string' },
+                      },
+                      required: ['startSeq', 'reason'],
+                    },
+                  },
+                ],
+              },
+            ],
+            toolConfig: undefined,
+          }),
+        )
+      })
     })
 
     describe('error cases', () => {

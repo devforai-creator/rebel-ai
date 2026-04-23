@@ -83,8 +83,15 @@ export async function prepareGoogleExplicitCache({
   })
 
   const googleExplicitCacheConfigured = isGoogleExplicitCacheEnabled()
+  const hasCacheableToolContract = !!(
+    requestContract.cacheCreateInput.toolContract &&
+    requestContract.cacheCreateInput.toolContract.tools.length > 0
+  )
   const disabledForToolUsePreflight =
-    googleExplicitCacheConfigured && !disableGoogleExplicitCache && toolCapableInvocation
+    googleExplicitCacheConfigured &&
+    !disableGoogleExplicitCache &&
+    toolCapableInvocation &&
+    !hasCacheableToolContract
   const googleExplicitCacheEnabled =
     googleExplicitCacheConfigured && !disableGoogleExplicitCache && !disabledForToolUsePreflight
 
@@ -92,7 +99,7 @@ export async function prepareGoogleExplicitCache({
     logDebug('[Chat Job Runner] Google explicit cache disabled before request build', {
       jobId,
       modelName,
-      reason: 'tool-compatible invocation',
+      reason: 'tool-compatible invocation without cacheable tool contract',
     })
   }
 

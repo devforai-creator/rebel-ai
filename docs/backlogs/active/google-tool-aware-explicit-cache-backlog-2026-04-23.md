@@ -117,7 +117,7 @@ Evidence:
 
 ### P0-2. Teach Cache Creation And Request Wiring About Tools
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 
@@ -135,9 +135,21 @@ Acceptance notes:
 - no secondary invocation owner starts using explicit cache as a side effect of
   this queue
 
+Evidence:
+
+- `src/lib/llm/google-cache.ts`
+- `src/lib/experimental/agentic-transcript-recall/runner.ts`
+- `src/app/api/internal/chat-job-runner/google-explicit-cache-adapter.ts`
+- `src/app/api/internal/chat-job-runner/provider-request-stage.ts`
+- `src/lib/llm/google-cache.test.ts`
+- `src/lib/experimental/agentic-transcript-recall/runner.test.ts`
+- `src/app/api/internal/chat-job-runner/google-explicit-cache-adapter.test.ts`
+- `src/app/api/internal/chat-job-runner/provider-request-stage.test.ts`
+- `src/app/api/internal/chat-job-runner/service.test.ts`
+
 ### P0-3. Prove Cached Tool-Turn Correctness And Narrow Compatibility Retry
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 
@@ -152,6 +164,14 @@ Acceptance notes:
   supported
 - the compatibility retry is either removed or left behind a visibly temporary
   log or backlog note
+- current runner behavior keeps the retry only as a temporary provider
+  compatibility shim in `service.ts`, to be revisited during `P0-4`
+
+Evidence:
+
+- `src/app/api/internal/chat-job-runner/service.ts`
+- `src/app/api/internal/chat-job-runner/service.test.ts`
+- `src/app/api/internal/chat-job-runner/usage-debug.test.ts`
 
 ### P0-4. Verify Deployment Safety And Decide Queue Close-Out
 

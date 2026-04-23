@@ -315,6 +315,56 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
     expect(result.streamTextSettings?.tools).not.toHaveProperty('fetch_source_range')
   })
 
+  it('keeps the live system empty when google cachedContent already owns the prompt prefix', () => {
+    const result = prepareExperimentalAgenticTranscriptRecallRequest({
+      supabase: createTranscriptSupabase(),
+      chatId,
+      runtimeConfig: buildRuntimeConfig(),
+      sourceHints: {
+        rawContextStartOrdinal: 5,
+        cutoffOrdinal: 4,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 2,
+            preview: 'First exchange',
+          },
+        ],
+      },
+      sourceMap: {
+        rawContextStartOrdinal: 5,
+        cutoffOrdinal: 4,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 2,
+            preview: 'First exchange',
+          },
+        ],
+        navigationParents: [],
+      },
+      streamRequest: {
+        messages: [{ role: 'user', content: 'Hello' }],
+        providerOptions: {
+          google: {
+            cachedContent: 'cachedContents/atr-1',
+          },
+        },
+      },
+      debugMetrics: {},
+      logDebug: vi.fn(),
+    })
+
+    expect((result.streamRequest as { system?: string }).system).toBeUndefined()
+    expect(result.streamTextSettings?.tools).toMatchObject({
+      fetch_source_range: expect.any(Object),
+    })
+  })
+
   it('always adds the stronger recall-priority instruction when transcript recall tools are available', () => {
     const result = prepareExperimentalAgenticTranscriptRecallRequest({
       supabase: createTranscriptSupabase(),

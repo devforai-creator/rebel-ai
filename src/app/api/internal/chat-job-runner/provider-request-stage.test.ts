@@ -69,10 +69,17 @@ vi.mock('./anthropic-batch-orchestrator', () => ({
   submitAnthropicBatchJob: (...args: unknown[]) => submitAnthropicBatchJobMock(...args),
 }))
 
-vi.mock('@/lib/experimental/agentic-transcript-recall/runner', () => ({
-  prepareExperimentalAgenticTranscriptRecallRequest: (...args: unknown[]) =>
-    prepareExperimentalAgenticTranscriptRecallRequestMock(...args),
-}))
+vi.mock('@/lib/experimental/agentic-transcript-recall/runner', async () => {
+  const actual = await vi.importActual<
+    typeof import('@/lib/experimental/agentic-transcript-recall/runner')
+  >('@/lib/experimental/agentic-transcript-recall/runner')
+
+  return {
+    ...actual,
+    prepareExperimentalAgenticTranscriptRecallRequest: (...args: unknown[]) =>
+      prepareExperimentalAgenticTranscriptRecallRequestMock(...args),
+  }
+})
 
 function buildPayload(overrides: Partial<ChatGenerationJobPayload> = {}): ChatGenerationJobPayload {
   return {
@@ -1340,7 +1347,7 @@ describe('requestProviderStage', () => {
     })
   })
 
-  it('skips google explicit cache creation before request build when ATR can attach tools', async () => {
+  it('keeps google ATR tool-capable turns cacheable when a tool contract can be mirrored into cache creation', async () => {
     const { requestProviderStage } = await import('./provider-request-stage')
     const payload = buildPayload({
       provider: 'google',
@@ -1396,10 +1403,43 @@ describe('requestProviderStage', () => {
     })
 
     resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
+    createGoogleCacheMock.mockResolvedValueOnce({
+      success: true,
+      cacheName: 'cache-tools-1',
+      cachedTokenCount: 2048,
+    })
+    buildStreamPayloadPlanMock.mockReturnValueOnce({
+      strategy: 'google-explicit-cache',
+      streamRequest: {
+        messages: [{ role: 'user', content: 'Last message' }],
+        providerOptions: {
+          google: {
+            cachedContent: 'cache-tools-1',
+          },
+        },
+      },
+      actualPayload: {
+        provider: 'google',
+        strategy: 'google-explicit-cache',
+        systemMessages: [{ role: 'system', content: 'FINAL' }],
+        conversationMessages: [
+          { role: 'assistant', content: 'Older context' },
+          { role: 'user', content: 'Last message' },
+        ],
+        cache: {
+          cacheName: 'cache-tools-1',
+          cachedTokenCount: 2048,
+        },
+      },
+    })
     prepareExperimentalAgenticTranscriptRecallRequestMock.mockReturnValueOnce({
       streamRequest: {
-        system: 'FINAL\n\nExperimental',
         messages: [{ role: 'user', content: 'Last message' }],
+        providerOptions: {
+          google: {
+            cachedContent: 'cache-tools-1',
+          },
+        },
       },
       streamTextSettings: {
         tools: {
@@ -1416,21 +1456,40 @@ describe('requestProviderStage', () => {
       timings: {},
     })
 
-    expect(createGoogleCacheMock).not.toHaveBeenCalled()
+    expect(createGoogleCacheMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: 'sk-test',
+        modelName: 'gemini-2.5-flash',
+        systemPrompt: expect.stringContaining('Experimental Transcript Recall'),
+        messagesToCache: [{ role: 'assistant', content: 'Older context' }],
+        toolContract: expect.objectContaining({
+          tools: expect.arrayContaining([expect.objectContaining({ name: 'fetch_source_range' })]),
+        }),
+        ttlSeconds: 20,
+      }),
+    )
     expect(buildStreamPayloadPlanMock).toHaveBeenCalledWith(
       expect.objectContaining({
         googleExplicitCache: expect.objectContaining({
-          googleExplicitCacheEnabled: false,
+          googleExplicitCacheEnabled: true,
           googleCacheDecision: { enabled: true, minTokens: 1024 },
-          googleCacheResult: null,
-          disabledForToolUsePreflight: true,
+          googleCacheResult: {
+            success: true,
+            cacheName: 'cache-tools-1',
+            cachedTokenCount: 2048,
+          },
+          disabledForToolUsePreflight: false,
         }),
       }),
     )
     expect(streamTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: 'FINAL\n\nExperimental',
         messages: [{ role: 'user', content: 'Last message' }],
+        providerOptions: {
+          google: {
+            cachedContent: 'cache-tools-1',
+          },
+        },
         tools: {
           fetch_source_range: {},
         },
@@ -1438,15 +1497,19 @@ describe('requestProviderStage', () => {
     )
     expect(result).toMatchObject({
       status: 'streaming',
-      googleExplicitCacheEnabled: false,
+      googleExplicitCacheEnabled: true,
       googleCacheDecision: { enabled: true, minTokens: 1024 },
-      googleCacheResult: null,
+      googleCacheResult: {
+        success: true,
+        cacheName: 'cache-tools-1',
+        cachedTokenCount: 2048,
+      },
       actualPayload: expect.objectContaining({
-        strategy: 'default',
+        strategy: 'google-explicit-cache',
       }),
     })
     expect(context.debugMetrics).toMatchObject({
-      google_explicit_cache_disabled_for_tool_use_preflight: true,
+      google_explicit_cache_disabled_for_tool_use_preflight: false,
       google_explicit_cache_disabled_for_compatibility_retry: false,
       experimental_agentic_transcript_recall_wrapper_used: true,
       experimental_agentic_transcript_recall_fallback_to_standard: false,

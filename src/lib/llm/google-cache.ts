@@ -19,7 +19,13 @@
  */
 
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
-import { GoogleAICacheManager, type CachedContent } from '@google/generative-ai/server'
+import {
+  GoogleAICacheManager,
+  type CachedContent,
+  type FunctionDeclarationSchema,
+  type Tool,
+  type ToolConfig,
+} from '@google/generative-ai/server'
 import type { SerializableFunctionToolContract } from './function-tool-contract'
 import { resolveProviderCacheMode } from './cache-mode'
 
@@ -52,6 +58,15 @@ function logGoogleCacheDebug(...args: unknown[]): void {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function isEmptyObjectSchema(value: unknown): value is Record<string, unknown> {
+  return (
+    isRecord(value) &&
+    value.type === 'object' &&
+    (!isRecord(value.properties) || Object.keys(value.properties).length === 0) &&
+    value.additionalProperties !== true
+  )
 }
 
 function getCachedTokenCount(cache: CachedContent): number {
@@ -123,6 +138,167 @@ export function buildGoogleExplicitCacheRequestContract({
       providerOptions,
       toolContract: normalizedToolContract,
     },
+  }
+}
+
+function convertJSONSchemaToGoogleOpenAPISchema(
+  jsonSchema: unknown,
+  isRoot = true,
+): Record<string, unknown> | undefined {
+  if (jsonSchema == null) {
+    return undefined
+  }
+
+  if (isEmptyObjectSchema(jsonSchema)) {
+    if (isRoot) {
+      return undefined
+    }
+
+    return typeof jsonSchema.description === 'string'
+      ? { type: 'object', description: jsonSchema.description }
+      : { type: 'object' }
+  }
+
+  if (typeof jsonSchema === 'boolean') {
+    return { type: 'boolean', properties: {} }
+  }
+
+  if (!isRecord(jsonSchema)) {
+    return undefined
+  }
+
+  const result: Record<string, unknown> = {}
+
+  if (typeof jsonSchema.description === 'string') {
+    result.description = jsonSchema.description
+  }
+
+  if (Array.isArray(jsonSchema.required)) {
+    result.required = jsonSchema.required
+  }
+
+  if (typeof jsonSchema.format === 'string') {
+    result.format = jsonSchema.format
+  }
+
+  if ('const' in jsonSchema && jsonSchema.const !== undefined) {
+    result.enum = [jsonSchema.const]
+  }
+
+  if (jsonSchema.type) {
+    if (Array.isArray(jsonSchema.type)) {
+      const hasNull = jsonSchema.type.includes('null')
+      const nonNullTypes = jsonSchema.type.filter((type) => type !== 'null')
+
+      if (nonNullTypes.length === 0) {
+        result.type = 'null'
+      } else {
+        result.anyOf = nonNullTypes.map((type) => ({ type }))
+        if (hasNull) {
+          result.nullable = true
+        }
+      }
+    } else {
+      result.type = jsonSchema.type
+    }
+  }
+
+  if (Array.isArray(jsonSchema.enum)) {
+    result.enum = jsonSchema.enum
+  }
+
+  if (isRecord(jsonSchema.properties)) {
+    result.properties = Object.entries(jsonSchema.properties).reduce<Record<string, unknown>>(
+      (acc, [key, value]) => {
+        acc[key] = convertJSONSchemaToGoogleOpenAPISchema(value, false)
+        return acc
+      },
+      {},
+    )
+  }
+
+  if (jsonSchema.items) {
+    result.items = Array.isArray(jsonSchema.items)
+      ? jsonSchema.items.map((item) => convertJSONSchemaToGoogleOpenAPISchema(item, false))
+      : convertJSONSchemaToGoogleOpenAPISchema(jsonSchema.items, false)
+  }
+
+  if (Array.isArray(jsonSchema.allOf)) {
+    result.allOf = jsonSchema.allOf.map((item) =>
+      convertJSONSchemaToGoogleOpenAPISchema(item, false),
+    )
+  }
+
+  if (Array.isArray(jsonSchema.anyOf)) {
+    const hasNullSchema = jsonSchema.anyOf.some(
+      (schema) => isRecord(schema) && schema.type === 'null',
+    )
+
+    if (hasNullSchema) {
+      const nonNullSchemas = jsonSchema.anyOf.filter(
+        (schema) => !(isRecord(schema) && schema.type === 'null'),
+      )
+
+      if (nonNullSchemas.length === 1) {
+        const converted = convertJSONSchemaToGoogleOpenAPISchema(nonNullSchemas[0], false)
+        if (converted) {
+          result.nullable = true
+          Object.assign(result, converted)
+        }
+      } else {
+        result.anyOf = nonNullSchemas.map((item) =>
+          convertJSONSchemaToGoogleOpenAPISchema(item, false),
+        )
+        result.nullable = true
+      }
+    } else {
+      result.anyOf = jsonSchema.anyOf.map((item) =>
+        convertJSONSchemaToGoogleOpenAPISchema(item, false),
+      )
+    }
+  }
+
+  if (Array.isArray(jsonSchema.oneOf)) {
+    result.oneOf = jsonSchema.oneOf.map((item) =>
+      convertJSONSchemaToGoogleOpenAPISchema(item, false),
+    )
+  }
+
+  if (typeof jsonSchema.minLength === 'number') {
+    result.minLength = jsonSchema.minLength
+  }
+
+  return result
+}
+
+function buildGoogleCacheCreateToolPayload({
+  toolContract,
+}: {
+  toolContract?: SerializableFunctionToolContract | null
+}): {
+  tools?: Tool[]
+  toolConfig?: ToolConfig
+} {
+  if (!toolContract || toolContract.tools.length === 0) {
+    return {}
+  }
+
+  return {
+    tools: [
+      {
+        functionDeclarations: toolContract.tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          parameters: convertJSONSchemaToGoogleOpenAPISchema(tool.inputSchema) as
+            | FunctionDeclarationSchema
+            | undefined,
+        })),
+      },
+    ],
+    // Keep toolConfig request-owned for now. ATR may switch toolChoice across
+    // steps (`required` on step 0, `auto` later), so cache creation should own
+    // the function schema but not freeze a mismatched live toolChoice.
+    toolConfig: undefined,
   }
 }
 
@@ -243,11 +419,13 @@ export async function createGoogleCache(
     modelName,
     systemPrompt,
     messagesToCache,
+    toolContract,
     ttlSeconds = DEFAULT_CACHE_TTL_SECONDS,
   } = config
 
   try {
     const cacheManager = new GoogleAICacheManager(apiKey)
+    const cacheToolPayload = buildGoogleCacheCreateToolPayload({ toolContract })
 
     // Build contents array for caching
     // Note: systemInstruction is separate from contents
@@ -266,6 +444,7 @@ export async function createGoogleCache(
         parts: [{ text: systemPrompt }],
       },
       contents,
+      ...cacheToolPayload,
       ttlSeconds,
     })
 

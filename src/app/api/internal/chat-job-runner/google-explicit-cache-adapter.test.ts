@@ -119,7 +119,7 @@ describe('prepareGoogleExplicitCache', () => {
     })
   })
 
-  it('disables explicit cache before request build when the invocation can attach tools', async () => {
+  it('disables explicit cache before request build when a tool-capable invocation lacks a cacheable tool contract', async () => {
     const { prepareGoogleExplicitCache } = await import('./google-explicit-cache-adapter')
 
     resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
@@ -198,15 +198,20 @@ describe('prepareGoogleExplicitCache', () => {
     })
   })
 
-  it('preserves a tool contract in the canonical cache request seam without changing runtime behavior yet', async () => {
+  it('uses explicit cache for tool-capable turns once a cacheable tool contract exists', async () => {
     const { prepareGoogleExplicitCache } = await import('./google-explicit-cache-adapter')
 
     resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
+    createGoogleCacheMock.mockResolvedValueOnce({
+      success: true,
+      cacheName: 'cache-tools-1',
+      cachedTokenCount: 4096,
+    })
 
     const result = await prepareGoogleExplicitCache({
       apiKey: 'sk-test',
       modelName: 'gemini-2.5-flash',
-      systemPrompt: 'FINAL',
+      systemPrompt: 'FINAL\n\nExperimental',
       recentMessages: [
         { role: 'assistant', content: 'Older context' },
         { role: 'user', content: 'Last message' },
@@ -233,27 +238,55 @@ describe('prepareGoogleExplicitCache', () => {
       timings: {},
     })
 
-    expect(createGoogleCacheMock).not.toHaveBeenCalled()
-    expect(result.requestContract).toMatchObject({
-      canonicalRequest: {
-        toolContract: {
-          tools: [{ name: 'fetch_source_range' }],
+    expect(createGoogleCacheMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: 'sk-test',
+        modelName: 'gemini-2.5-flash',
+        systemPrompt: 'FINAL\n\nExperimental',
+        messagesToCache: [{ role: 'assistant', content: 'Older context' }],
+        toolContract: expect.objectContaining({
+          tools: expect.arrayContaining([expect.objectContaining({ name: 'fetch_source_range' })]),
           toolChoice: { type: 'required' },
+        }),
+        ttlSeconds: 20,
+      }),
+    )
+    expect(result).toMatchObject({
+      googleExplicitCacheEnabled: true,
+      googleCacheResult: {
+        success: true,
+        cacheName: 'cache-tools-1',
+        cachedTokenCount: 4096,
+      },
+      disabledForToolUsePreflight: false,
+      streamRequestOverride: {
+        messages: [{ role: 'user', content: 'Last message' }],
+        providerOptions: {
+          google: {
+            cachedContent: 'cache-tools-1',
+          },
         },
       },
-      cacheCreateInput: {
-        toolContract: {
-          tools: [{ name: 'fetch_source_range' }],
-          toolChoice: { type: 'required' },
+      requestContract: {
+        canonicalRequest: {
+          toolContract: {
+            tools: [{ name: 'fetch_source_range' }],
+            toolChoice: { type: 'required' },
+          },
         },
-      },
-      liveRequestTail: {
-        toolContract: {
-          tools: [{ name: 'fetch_source_range' }],
-          toolChoice: { type: 'required' },
+        cacheCreateInput: {
+          toolContract: {
+            tools: [{ name: 'fetch_source_range' }],
+            toolChoice: { type: 'required' },
+          },
+        },
+        liveRequestTail: {
+          toolContract: {
+            tools: [{ name: 'fetch_source_range' }],
+            toolChoice: { type: 'required' },
+          },
         },
       },
     })
-    expect(result.disabledForToolUsePreflight).toBe(true)
   })
 })

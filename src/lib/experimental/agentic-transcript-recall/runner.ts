@@ -35,7 +35,7 @@ type ExperimentalAgenticTranscriptRecallWrapperResult<TStreamRequest> = {
   streamTextSettings?: ExperimentalAgenticTranscriptRecallStreamSettings
 }
 
-function buildExperimentalInstruction({
+export function buildExperimentalInstruction({
   maxToolCalls,
   fetchAvailable,
   expandAvailable,
@@ -98,6 +98,19 @@ function buildExperimentalInstruction({
   }
 
   return instructions.join('\n')
+}
+
+function hasGoogleCachedContent(streamRequest: ExperimentalStreamRequest): boolean {
+  const providerOptions =
+    streamRequest.providerOptions && typeof streamRequest.providerOptions === 'object'
+      ? (streamRequest.providerOptions as Record<string, unknown>)
+      : null
+  const googleOptions =
+    providerOptions?.google && typeof providerOptions.google === 'object'
+      ? (providerOptions.google as Record<string, unknown>)
+      : null
+
+  return typeof googleOptions?.cachedContent === 'string' && googleOptions.cachedContent.length > 0
 }
 
 export function prepareExperimentalAgenticTranscriptRecallRequest<
@@ -298,21 +311,26 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
   const fetchAvailable = FETCH_SOURCE_RANGE_TOOL_NAME in tools
   const expandAvailable = EXPAND_SOURCE_RANGE_TOOL_NAME in tools
 
-  const augmentedSystem = [
-    streamRequest.system,
-    buildExperimentalInstruction({
-      maxToolCalls: runtimeConfig.maxToolCalls,
-      fetchAvailable,
-      expandAvailable,
-    }),
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)
-    .join('\n\n')
-
-  const wrappedStreamRequest: TStreamRequest = {
-    ...streamRequest,
-    system: augmentedSystem,
-  }
+  const wrappedStreamRequest: TStreamRequest = hasGoogleCachedContent(streamRequest)
+    ? ({
+        ...streamRequest,
+        // Google cachedContent owns the full system prefix for the request.
+        // Do not attach a second live system instruction on top of it.
+        system: undefined,
+      } as TStreamRequest)
+    : ({
+        ...streamRequest,
+        system: [
+          streamRequest.system,
+          buildExperimentalInstruction({
+            maxToolCalls: runtimeConfig.maxToolCalls,
+            fetchAvailable,
+            expandAvailable,
+          }),
+        ]
+          .filter((value): value is string => typeof value === 'string' && value.length > 0)
+          .join('\n\n'),
+      } as TStreamRequest)
 
   const streamTextSettings: ExperimentalAgenticTranscriptRecallStreamSettings = {
     tools,

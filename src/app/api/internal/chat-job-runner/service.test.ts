@@ -17,6 +17,9 @@ const createGoogleCacheMock = vi.fn()
 const createAnthropicMessageBatchMock = vi.fn()
 const retrieveAnthropicMessageBatchMock = vi.fn()
 const retrieveAnthropicBatchResultMock = vi.fn()
+const resolveAgenticTranscriptRecallRuntimeConfigMock = vi.fn()
+const deriveAgenticTranscriptRecallSourceHintsMock = vi.fn()
+const loadAgenticTranscriptRecallSourceMapMock = vi.fn()
 const extractTextFromAnthropicBatchMessageMock = vi.fn((message: { content?: unknown[] }) =>
   (message.content ?? [])
     .map((part) =>
@@ -107,6 +110,18 @@ vi.mock('@/lib/chat/bilingual-context', () => ({
   applyBilingualContext: vi.fn(async ({ messages }) => messages),
   isBilingualEnabled: vi.fn(async () => false),
 }))
+vi.mock('@/lib/experimental/agentic-transcript-recall/config', () => ({
+  resolveAgenticTranscriptRecallRuntimeConfig: (...args: unknown[]) =>
+    resolveAgenticTranscriptRecallRuntimeConfigMock(...args),
+}))
+vi.mock('@/lib/experimental/agentic-transcript-recall/source-hints', () => ({
+  deriveAgenticTranscriptRecallSourceHints: (...args: unknown[]) =>
+    deriveAgenticTranscriptRecallSourceHintsMock(...args),
+}))
+vi.mock('@/lib/experimental/agentic-transcript-recall/source-map', () => ({
+  loadAgenticTranscriptRecallSourceMap: (...args: unknown[]) =>
+    loadAgenticTranscriptRecallSourceMapMock(...args),
+}))
 vi.mock('@/lib/chat/translation-trigger', () => ({
   triggerMessageTranslation: vi.fn(),
 }))
@@ -146,10 +161,15 @@ class MockAPICallError extends Error {
   }
 }
 
-vi.mock('ai', () => ({
-  streamText: (...args: unknown[]) => streamTextMock(...args),
-  APICallError: MockAPICallError,
-}))
+vi.mock('ai', async () => {
+  const actual = await vi.importActual<typeof import('ai')>('ai')
+
+  return {
+    ...actual,
+    streamText: (...args: unknown[]) => streamTextMock(...args),
+    APICallError: MockAPICallError,
+  }
+})
 streamTextMock.mockResolvedValue({
   textStream: [],
   finishReason: Promise.resolve('stop'),
@@ -170,6 +190,59 @@ function buildValidPayload(overrides: Record<string, unknown> = {}) {
     turnId: null,
     isRegeneration: false,
     regenerateAssistantMessageId: null,
+    ...overrides,
+  }
+}
+
+function buildAgenticTranscriptRecallRuntimeConfig(overrides: Record<string, unknown> = {}) {
+  return {
+    configured: true,
+    accountDefaultEnabled: false,
+    preferenceSource: 'chat_override',
+    globallyEnabled: true,
+    providerSupported: true,
+    providerAllowed: true,
+    enabled: true,
+    skipReason: null,
+    maxToolCalls: 2,
+    maxMessagesPerCall: 12,
+    maxTotalMessages: 12,
+    providerAllowlist: ['google'],
+    ...overrides,
+  }
+}
+
+function buildAgenticTranscriptRecallSourceHints(overrides: Record<string, unknown> = {}) {
+  return {
+    rawContextStartOrdinal: 21,
+    cutoffOrdinal: 20,
+    hints: [
+      {
+        kind: 'summary',
+        label: 'summary',
+        startSeq: 1,
+        endSeq: 10,
+        preview: 'Older promise context',
+      },
+    ],
+    ...overrides,
+  }
+}
+
+function buildAgenticTranscriptRecallSourceMap(overrides: Record<string, unknown> = {}) {
+  return {
+    rawContextStartOrdinal: 21,
+    cutoffOrdinal: 20,
+    directFetchRanges: [
+      {
+        kind: 'summary',
+        label: 'summary',
+        startSeq: 1,
+        endSeq: 10,
+        preview: 'Older promise context',
+      },
+    ],
+    navigationParents: [],
     ...overrides,
   }
 }
@@ -259,6 +332,9 @@ describe('processChatJobs', () => {
     createAnthropicMessageBatchMock.mockReset()
     retrieveAnthropicMessageBatchMock.mockReset()
     retrieveAnthropicBatchResultMock.mockReset()
+    resolveAgenticTranscriptRecallRuntimeConfigMock.mockReset()
+    deriveAgenticTranscriptRecallSourceHintsMock.mockReset()
+    loadAgenticTranscriptRecallSourceMapMock.mockReset()
     extractTextFromAnthropicBatchMessageMock.mockClear()
     createAdminClientMock.mockReset()
     createAdminClientMock.mockImplementation(() =>
@@ -321,6 +397,19 @@ describe('processChatJobs', () => {
     })
     retrieveAnthropicBatchResultMock.mockResolvedValue(null)
     loadGenerationTranscriptMock.mockResolvedValue([{ role: 'user', content: 'Hello' }])
+    resolveAgenticTranscriptRecallRuntimeConfigMock.mockReturnValue(
+      buildAgenticTranscriptRecallRuntimeConfig({
+        configured: false,
+        preferenceSource: 'account_default',
+        globallyEnabled: false,
+        enabled: false,
+        skipReason: 'disabled_by_global_flag',
+      }),
+    )
+    deriveAgenticTranscriptRecallSourceHintsMock.mockReturnValue(
+      buildAgenticTranscriptRecallSourceHints({ hints: [] }),
+    )
+    loadAgenticTranscriptRecallSourceMapMock.mockResolvedValue(null)
   })
 
   afterEach(() => {
@@ -1130,6 +1219,112 @@ describe('processChatJobs', () => {
     )
   })
 
+  it('uses google explicit cache for ATR tool-capable turns without compatibility retry', async () => {
+    const supabase = createChatJobRunnerSupabaseMock({
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    decryptSecretMock.mockResolvedValue('sk-test')
+    parseChatJobPayloadMock.mockReturnValue(
+      buildValidPayload({
+        requestId: 'req-google-explicit-cache-tools',
+        provider: 'google',
+        modelName: 'gemini-2.5-flash',
+      }),
+    )
+    resolveAgenticTranscriptRecallRuntimeConfigMock.mockReturnValue(
+      buildAgenticTranscriptRecallRuntimeConfig(),
+    )
+    deriveAgenticTranscriptRecallSourceHintsMock.mockReturnValue(
+      buildAgenticTranscriptRecallSourceHints(),
+    )
+    loadAgenticTranscriptRecallSourceMapMock.mockResolvedValue(
+      buildAgenticTranscriptRecallSourceMap(),
+    )
+    buildMemoryPlanMock.mockResolvedValueOnce({
+      mode: 'summary_window',
+      promptBlocks: [
+        {
+          role: 'system',
+          content: 'CTX',
+          cachePreference: 'prefer-cache',
+          stability: 'static',
+        },
+      ],
+      fallbackSystemPrompt: 'CTX',
+      fallbackMessages: [
+        { role: 'assistant', content: '좋아. 내가 지킬게.' },
+        { role: 'user', content: '지난번에 한 약속 정확히 다시 말해줘.' },
+      ],
+      staticSystemPrompt: 'CTX',
+      dynamicContext: null,
+      ragInfo: null,
+    })
+    resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
+    createGoogleCacheMock.mockResolvedValueOnce({
+      success: true,
+      cacheName: 'cache-tools-1',
+      cachedTokenCount: 2048,
+    })
+    streamTextMock.mockResolvedValue({
+      textStream: ['cached tool answer'],
+      finishReason: Promise.resolve('stop'),
+      providerMetadata: Promise.resolve({}),
+      usage: Promise.resolve({ inputTokens: 10, outputTokens: 20, totalTokens: 30 }),
+    })
+    claimPendingJobMock.mockResolvedValueOnce({
+      id: 'job-google-explicit-cache-tools',
+      payload: { ok: true },
+    })
+    claimPendingJobMock.mockResolvedValueOnce(null)
+
+    const { processChatJobs } = await import('./service')
+    const result = await processChatJobs(1)
+
+    expect(result.results[0]).toMatchObject({
+      jobId: 'job-google-explicit-cache-tools',
+      status: 'success',
+    })
+    const call = streamTextMock.mock.calls[0]?.[0] as {
+      system?: string
+      providerOptions?: Record<string, unknown>
+      tools?: Record<string, unknown>
+      prepareStep?: unknown
+    }
+    expect(call.system).toBeUndefined()
+    expect((call.providerOptions?.google as { cachedContent?: string })?.cachedContent).toBe(
+      'cache-tools-1',
+    )
+    expect(call.tools).toHaveProperty('fetch_source_range')
+    expect(typeof call.prepareStep).toBe('function')
+
+    const latest = supabase.messages[supabase.messages.length - 1]
+    expect(latest).toMatchObject({
+      role: 'assistant',
+      content: 'cached tool answer',
+    })
+    expect(latest.debug_info).toMatchObject({
+      googleCache: {
+        featureEnabled: true,
+        cacheCreated: true,
+        compatibilityRetryAttempted: false,
+        compatibilityRetrySucceeded: false,
+        disabledForToolUsePreflight: false,
+        disabledForCompatibilityRetry: false,
+      },
+      experimental: {
+        agenticTranscriptRecall: {
+          enabled: true,
+          wrapperUsed: true,
+          toolAvailable: true,
+          toolChoicePreflight: 'required',
+          toolChoiceApplied: true,
+        },
+      },
+    })
+  })
+
   it('uses the uncached google core path when explicit cache is disabled', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       rpc: { get_decrypted_secret: () => decryptSecretMock() },
@@ -1227,7 +1422,7 @@ describe('processChatJobs', () => {
     })
   })
 
-  it('retries Google explicit-cache requests without cache after a tool conflict', async () => {
+  it('retries cached Google tool-capable turns without cache after a provider compatibility conflict', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       rpc: { get_decrypted_secret: () => decryptSecretMock() },
     })
@@ -1238,8 +1433,17 @@ describe('processChatJobs', () => {
       buildValidPayload({
         requestId: 'req-google-cache-retry',
         provider: 'google',
-        modelName: 'gemini-1.5-flash',
+        modelName: 'gemini-2.5-flash',
       }),
+    )
+    resolveAgenticTranscriptRecallRuntimeConfigMock.mockReturnValue(
+      buildAgenticTranscriptRecallRuntimeConfig(),
+    )
+    deriveAgenticTranscriptRecallSourceHintsMock.mockReturnValue(
+      buildAgenticTranscriptRecallSourceHints(),
+    )
+    loadAgenticTranscriptRecallSourceMapMock.mockResolvedValue(
+      buildAgenticTranscriptRecallSourceMap(),
     )
     buildMemoryPlanMock.mockResolvedValueOnce({
       mode: 'summary_window',
@@ -1265,8 +1469,8 @@ describe('processChatJobs', () => {
       ],
       fallbackSystemPrompt: 'CTX',
       fallbackMessages: [
-        { role: 'assistant', content: 'previous turn' },
-        { role: 'user', content: 'latest user message' },
+        { role: 'assistant', content: '좋아. 내가 지킬게.' },
+        { role: 'user', content: '지난번에 한 약속 정확히 다시 말해줘.' },
       ],
       staticSystemPrompt: 'CTX',
       dynamicContext: null,
@@ -1318,24 +1522,26 @@ describe('processChatJobs', () => {
 
     const firstCall = streamTextMock.mock.calls[0]?.[0] as {
       system?: string
-      messages?: Array<{ role: string; content: string }>
       providerOptions?: Record<string, unknown>
+      tools?: Record<string, unknown>
+      prepareStep?: unknown
     }
     const secondCall = streamTextMock.mock.calls[1]?.[0] as {
       system?: string
-      messages?: Array<{ role: string; content: string }>
       providerOptions?: Record<string, unknown>
+      tools?: Record<string, unknown>
+      prepareStep?: unknown
     }
 
-    expect(firstCall.messages).toEqual([{ role: 'user', content: 'latest user message' }])
+    expect(firstCall.system).toBeUndefined()
     expect((firstCall.providerOptions?.google as { cachedContent?: string })?.cachedContent).toBe(
       'cache-1',
     )
-    expect(secondCall.system).toBe('CTX')
-    expect(secondCall.messages).toEqual([
-      { role: 'assistant', content: 'previous turn' },
-      { role: 'user', content: 'latest user message' },
-    ])
+    expect(firstCall.tools).toHaveProperty('fetch_source_range')
+    expect(typeof firstCall.prepareStep).toBe('function')
+    expect(secondCall.system).toContain('Experimental Transcript Recall')
+    expect(secondCall.tools).toHaveProperty('fetch_source_range')
+    expect(typeof secondCall.prepareStep).toBe('function')
     expect(
       (secondCall.providerOptions?.google as { cachedContent?: string } | undefined)?.cachedContent,
     ).toBeUndefined()

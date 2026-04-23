@@ -187,6 +187,63 @@ describe('usage-debug helpers', () => {
       })
     })
 
+    it('includes google compatibility retry metrics when present', () => {
+      const result = buildChatDebugInfo({
+        requestId: 'req-google-retry',
+        finalSystemPrompt: 'SYSTEM',
+        recentMessages: [],
+        anthropicConversationMessages: null,
+        anthropicPlaceholderAdded: false,
+        promptCache: null,
+        totalInputTokens: 0,
+        anthropicCache: null,
+        anthropicCacheCreationInputTokens: null,
+        anthropicCacheReadInputTokens: null,
+        staticPromptTokens: 0,
+        dynamicContext: null,
+        dynamicContextTokens: 0,
+        googleExplicitCacheEnabled: false,
+        googleCacheResult: null,
+        googleCacheDecision: { enabled: true, minTokens: 1024 },
+        rawResponse: 'raw',
+        processedResponse: 'processed',
+        apiKeyId: 'key-google',
+        provider: 'google',
+        modelName: 'gemini-2.5-flash',
+        finishReason: 'stop',
+        usage: {
+          promptTokens: 10,
+          completionTokens: 20,
+          totalTokens: 30,
+          cachedInputTokens: null,
+          reasoningTokens: null,
+        },
+        sanitizedMessageCount: 1,
+        ragInfo: null,
+        actualPayload: null,
+        debugMetrics: {
+          google_explicit_cache_compatibility_retry_attempted: true,
+          google_explicit_cache_compatibility_retry_succeeded: true,
+          google_explicit_cache_compatibility_retry_reason:
+            'cached content is not compatible with function calling',
+          google_explicit_cache_disabled_for_compatibility_retry: true,
+        },
+      })
+
+      expect(result).toMatchObject({
+        googleCache: {
+          featureEnabled: false,
+          cacheCreated: false,
+          minTokens: 1024,
+          meetsMinTokens: true,
+          compatibilityRetryAttempted: true,
+          compatibilityRetrySucceeded: true,
+          compatibilityRetryReason: 'cached content is not compatible with function calling',
+          disabledForCompatibilityRetry: true,
+        },
+      })
+    })
+
     it('includes experimental transcript recall metrics when provided', () => {
       const result = buildChatDebugInfo({
         requestId: 'req-3',

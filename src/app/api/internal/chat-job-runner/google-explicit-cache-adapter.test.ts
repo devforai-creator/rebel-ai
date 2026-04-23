@@ -246,7 +246,7 @@ describe('prepareGoogleExplicitCache', () => {
         messagesToCache: [{ role: 'assistant', content: 'Older context' }],
         toolContract: expect.objectContaining({
           tools: expect.arrayContaining([expect.objectContaining({ name: 'fetch_source_range' })]),
-          toolChoice: { type: 'required' },
+          toolChoice: { type: 'auto' },
         }),
         ttlSeconds: 20,
       }),
@@ -264,6 +264,7 @@ describe('prepareGoogleExplicitCache', () => {
         providerOptions: {
           google: {
             cachedContent: 'cache-tools-1',
+            rebelCachedContentOwnsRequestContract: true,
           },
         },
       },
@@ -277,7 +278,7 @@ describe('prepareGoogleExplicitCache', () => {
         cacheCreateInput: {
           toolContract: {
             tools: [{ name: 'fetch_source_range' }],
-            toolChoice: { type: 'required' },
+            toolChoice: { type: 'auto' },
           },
         },
         liveRequestTail: {

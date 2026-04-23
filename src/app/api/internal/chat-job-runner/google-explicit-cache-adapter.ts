@@ -132,6 +132,7 @@ export async function prepareGoogleExplicitCache({
         providerOptions: buildGoogleCachedProviderOptions({
           providerOptions: requestContract.liveRequestTail.providerOptions,
           cacheName: googleCacheResult.cacheName,
+          cachedContentOwnsRequestContract: hasCacheableToolContract,
         }),
       }
       cacheDebugInfo = {

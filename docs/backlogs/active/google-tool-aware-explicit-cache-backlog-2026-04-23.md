@@ -195,6 +195,10 @@ Execution notes:
 - `2026-04-23`: `npm run verify` passed locally
 - result: `206 passed | 5 skipped` test files
 - result: `1797 passed | 54 skipped` tests
+- `2026-04-23`: follow-up fix switched cached Google tool turns to cache-owned
+  `AUTO` tool mode and stripped live `system/tools/toolConfig` at the Google
+  model seam; targeted regression tests, `npx tsc --noEmit`, and
+  `npm run format:check` passed locally
 - close-out decision: keep this queue active until the current changes are
   deployed and `npm run ops:smoke:active` is run against the active deployment
 - archive only after that deploy smoke confirms the runner/internal-route path

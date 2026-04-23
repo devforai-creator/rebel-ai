@@ -18,15 +18,19 @@
  * @see https://ai.google.dev/api/caching
  */
 
-import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
+import type { JSONValue, SharedV2ProviderOptions } from '@ai-sdk/provider'
 import {
   GoogleAICacheManager,
   type CachedContent,
+  FunctionCallingMode,
   type FunctionDeclarationSchema,
   type Tool,
   type ToolConfig,
 } from '@google/generative-ai/server'
-import type { SerializableFunctionToolContract } from './function-tool-contract'
+import type {
+  SerializableFunctionToolChoice,
+  SerializableFunctionToolContract,
+} from './function-tool-contract'
 import { resolveProviderCacheMode } from './cache-mode'
 
 /**
@@ -49,6 +53,8 @@ const MIN_TOKENS_PRO = 4096
 /** Default cache TTL in seconds (matches 부엉's strategy) */
 const DEFAULT_CACHE_TTL_SECONDS = 20
 const GOOGLE_CACHE_DEBUG_ENABLED = process.env.GOOGLE_CACHE_DEBUG === 'true'
+const GOOGLE_CACHED_CONTENT_OWNS_REQUEST_CONTRACT_PROVIDER_OPTION =
+  'rebelCachedContentOwnsRequestContract'
 
 function logGoogleCacheDebug(...args: unknown[]): void {
   if (GOOGLE_CACHE_DEBUG_ENABLED) {
@@ -79,6 +85,31 @@ function getCachedTokenCount(cache: CachedContent): number {
   return usageMetadata.totalTokenCount
 }
 
+function getGoogleProviderOptions(
+  providerOptions: SharedV2ProviderOptions | undefined,
+): Record<string, unknown> | null {
+  const googleOptions = providerOptions?.google
+
+  return googleOptions && typeof googleOptions === 'object'
+    ? (googleOptions as Record<string, unknown>)
+    : null
+}
+
+function normalizeGoogleCacheCreateToolContract(
+  toolContract?: SerializableFunctionToolContract | null,
+): SerializableFunctionToolContract | null {
+  if (!toolContract || toolContract.tools.length === 0) {
+    return toolContract ?? null
+  }
+
+  return {
+    ...toolContract,
+    // Cached Google tool turns keep function calling in AUTO mode. The live
+    // request must not mutate toolConfig when cachedContent owns the contract.
+    toolChoice: { type: 'auto' },
+  }
+}
+
 export function splitGoogleConversationMessagesForExplicitCache(
   messages: GoogleConversationMessage[],
 ): {
@@ -94,16 +125,59 @@ export function splitGoogleConversationMessagesForExplicitCache(
 export function buildGoogleCachedProviderOptions({
   providerOptions,
   cacheName,
+  cachedContentOwnsRequestContract = false,
 }: {
   providerOptions: SharedV2ProviderOptions | undefined
   cacheName: string
+  cachedContentOwnsRequestContract?: boolean
 }): SharedV2ProviderOptions | undefined {
+  const googleOptions = getGoogleProviderOptions(providerOptions)
+
   return {
     ...(providerOptions ?? {}),
     google: {
-      ...((providerOptions?.google as Record<string, unknown>) || {}),
+      ...(googleOptions ?? {}),
       cachedContent: cacheName,
+      ...(cachedContentOwnsRequestContract
+        ? { [GOOGLE_CACHED_CONTENT_OWNS_REQUEST_CONTRACT_PROVIDER_OPTION]: true }
+        : {}),
     },
+  }
+}
+
+export function googleCachedContentOwnsRequestContract(
+  providerOptions: SharedV2ProviderOptions | undefined,
+): boolean {
+  const googleOptions = getGoogleProviderOptions(providerOptions)
+
+  return (
+    !!googleOptions &&
+    typeof googleOptions.cachedContent === 'string' &&
+    googleOptions.cachedContent.length > 0 &&
+    googleOptions[GOOGLE_CACHED_CONTENT_OWNS_REQUEST_CONTRACT_PROVIDER_OPTION] === true
+  )
+}
+
+export function stripGoogleCachedRequestContractMarker(
+  providerOptions: SharedV2ProviderOptions | undefined,
+): SharedV2ProviderOptions | undefined {
+  const googleOptions = getGoogleProviderOptions(providerOptions)
+
+  if (
+    !googleOptions ||
+    !(GOOGLE_CACHED_CONTENT_OWNS_REQUEST_CONTRACT_PROVIDER_OPTION in googleOptions)
+  ) {
+    return providerOptions
+  }
+
+  const {
+    [GOOGLE_CACHED_CONTENT_OWNS_REQUEST_CONTRACT_PROVIDER_OPTION]: _marker,
+    ...sanitizedGoogleOptions
+  } = googleOptions
+
+  return {
+    ...(providerOptions ?? {}),
+    google: sanitizedGoogleOptions as Record<string, JSONValue>,
   }
 }
 
@@ -119,6 +193,7 @@ export function buildGoogleExplicitCacheRequestContract({
   toolContract?: SerializableFunctionToolContract | null
 }): GoogleExplicitCacheRequestContract {
   const normalizedToolContract = toolContract ?? null
+  const cacheCreateToolContract = normalizeGoogleCacheCreateToolContract(normalizedToolContract)
   const { messagesToCache, lastMessage } = splitGoogleConversationMessagesForExplicitCache(messages)
 
   return {
@@ -131,13 +206,46 @@ export function buildGoogleExplicitCacheRequestContract({
     cacheCreateInput: {
       systemPrompt,
       messagesToCache,
-      toolContract: normalizedToolContract,
+      toolContract: cacheCreateToolContract,
     },
     liveRequestTail: {
       messages: lastMessage ? [lastMessage] : [],
       providerOptions,
       toolContract: normalizedToolContract,
     },
+  }
+}
+
+function buildGoogleCacheToolConfig(
+  toolChoice?: SerializableFunctionToolChoice,
+): ToolConfig | undefined {
+  switch (toolChoice?.type) {
+    case 'none':
+      return {
+        functionCallingConfig: {
+          mode: FunctionCallingMode.NONE,
+        },
+      }
+    case 'required':
+      return {
+        functionCallingConfig: {
+          mode: FunctionCallingMode.ANY,
+        },
+      }
+    case 'tool':
+      return {
+        functionCallingConfig: {
+          mode: FunctionCallingMode.ANY,
+          allowedFunctionNames: [toolChoice.toolName],
+        },
+      }
+    case 'auto':
+    default:
+      return {
+        functionCallingConfig: {
+          mode: FunctionCallingMode.AUTO,
+        },
+      }
   }
 }
 
@@ -295,10 +403,7 @@ function buildGoogleCacheCreateToolPayload({
         })),
       },
     ],
-    // Keep toolConfig request-owned for now. ATR may switch toolChoice across
-    // steps (`required` on step 0, `auto` later), so cache creation should own
-    // the function schema but not freeze a mismatched live toolChoice.
-    toolConfig: undefined,
+    toolConfig: buildGoogleCacheToolConfig(toolContract.toolChoice),
   }
 }
 

@@ -3,6 +3,7 @@ import { streamText } from 'ai'
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from '@/lib/chat/delivery-mode'
+import { googleCachedContentOwnsRequestContract } from '@/lib/llm/google-cache'
 import { ANTHROPIC_INTERLEAVED_THINKING_BETA, getProviderOptions } from '@/lib/llm/provider-options'
 import { resolveInvocationSamplingOptions } from '@/lib/llm/invocation-sampling'
 import { normalizeProviderError } from '@/lib/llm/provider-error'
@@ -506,19 +507,43 @@ export async function requestProviderStage({
           logDebug,
         })
         finalStreamRequest = experimentalResult.streamRequest
-        experimentalStreamTextSettings =
+        const experimentalStreamTextSettingsCandidate = experimentalResult.streamTextSettings
+        const googleCachedToolContractOwnsRequest =
+          provider === 'google' &&
+          googleCachedContentOwnsRequestContract(
+            finalStreamRequest.providerOptions as SharedV2ProviderOptions | undefined,
+          )
+        const experimentalToolsAvailable = !!experimentalStreamTextSettingsCandidate?.tools
+        const shouldApplyRequiredFirstToolStep =
           atrToolChoiceDecision?.toolChoice === 'required' &&
-          experimentalResult.streamTextSettings?.tools
-            ? {
-                ...experimentalResult.streamTextSettings,
-                prepareStep: buildRequiredFirstToolStepOverride(
-                  experimentalResult.streamTextSettings.prepareStep,
-                ),
-              }
-            : experimentalResult.streamTextSettings
+          experimentalToolsAvailable &&
+          !googleCachedToolContractOwnsRequest
+        experimentalStreamTextSettings = shouldApplyRequiredFirstToolStep
+          ? {
+              ...experimentalStreamTextSettingsCandidate,
+              prepareStep: buildRequiredFirstToolStepOverride(
+                experimentalStreamTextSettingsCandidate?.prepareStep,
+              ),
+            }
+          : experimentalStreamTextSettingsCandidate
         debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied'] =
+          shouldApplyRequiredFirstToolStep
+
+        if (
+          provider === 'google' &&
+          googleCachedToolContractOwnsRequest &&
           atrToolChoiceDecision?.toolChoice === 'required' &&
-          !!experimentalResult.streamTextSettings?.tools
+          experimentalToolsAvailable
+        ) {
+          logDebug(
+            '[Agentic Transcript Recall] Keeping Google cached tool turn in AUTO mode because cachedContent owns tool config',
+            {
+              jobId,
+              provider,
+              modelName,
+            },
+          )
+        }
 
         if (
           provider === 'anthropic' &&

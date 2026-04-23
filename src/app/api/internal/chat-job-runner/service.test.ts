@@ -1296,8 +1296,15 @@ describe('processChatJobs', () => {
     expect((call.providerOptions?.google as { cachedContent?: string })?.cachedContent).toBe(
       'cache-tools-1',
     )
+    expect(
+      (
+        call.providerOptions?.google as {
+          rebelCachedContentOwnsRequestContract?: boolean
+        }
+      )?.rebelCachedContentOwnsRequestContract,
+    ).toBe(true)
     expect(call.tools).toHaveProperty('fetch_source_range')
-    expect(typeof call.prepareStep).toBe('function')
+    expect(call.prepareStep).toBeUndefined()
 
     const latest = supabase.messages[supabase.messages.length - 1]
     expect(latest).toMatchObject({
@@ -1319,7 +1326,7 @@ describe('processChatJobs', () => {
           wrapperUsed: true,
           toolAvailable: true,
           toolChoicePreflight: 'required',
-          toolChoiceApplied: true,
+          toolChoiceApplied: false,
         },
       },
     })
@@ -1537,8 +1544,15 @@ describe('processChatJobs', () => {
     expect((firstCall.providerOptions?.google as { cachedContent?: string })?.cachedContent).toBe(
       'cache-1',
     )
+    expect(
+      (
+        firstCall.providerOptions?.google as {
+          rebelCachedContentOwnsRequestContract?: boolean
+        }
+      )?.rebelCachedContentOwnsRequestContract,
+    ).toBe(true)
     expect(firstCall.tools).toHaveProperty('fetch_source_range')
-    expect(typeof firstCall.prepareStep).toBe('function')
+    expect(firstCall.prepareStep).toBeUndefined()
     expect(secondCall.system).toContain('Experimental Transcript Recall')
     expect(secondCall.tools).toHaveProperty('fetch_source_range')
     expect(typeof secondCall.prepareStep).toBe('function')

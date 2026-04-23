@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest'
 import {
   buildGoogleCachedProviderOptions,
   buildGoogleExplicitCacheRequestContract,
+  googleCachedContentOwnsRequestContract,
   getGoogleCacheMinTokens,
   shouldCreateGoogleCache,
   resolveGoogleCacheDecision,
@@ -14,6 +15,11 @@ const mockCreate = vi.fn()
 
 vi.mock('@google/generative-ai/server', () => {
   return {
+    FunctionCallingMode: {
+      AUTO: 'AUTO',
+      ANY: 'ANY',
+      NONE: 'NONE',
+    },
     GoogleAICacheManager: class MockGoogleAICacheManager {
       create = mockCreate
     },
@@ -223,7 +229,10 @@ describe('google-cache', () => {
         cacheCreateInput: {
           systemPrompt: 'FINAL',
           messagesToCache: [{ role: 'assistant', content: 'Older context' }],
-          toolContract,
+          toolContract: {
+            ...toolContract,
+            toolChoice: { type: 'auto' },
+          },
         },
         liveRequestTail: {
           messages: [{ role: 'user', content: 'Last message' }],
@@ -251,6 +260,27 @@ describe('google-cache', () => {
           safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }],
         },
       })
+    })
+
+    it('marks tool-aware cached requests when cachedContent owns the live request contract', () => {
+      const providerOptions = buildGoogleCachedProviderOptions({
+        providerOptions: {
+          google: {
+            safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }],
+          },
+        },
+        cacheName: 'cachedContents/tools',
+        cachedContentOwnsRequestContract: true,
+      })
+
+      expect(providerOptions).toEqual({
+        google: {
+          cachedContent: 'cachedContents/tools',
+          rebelCachedContentOwnsRequestContract: true,
+          safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }],
+        },
+      })
+      expect(googleCachedContentOwnsRequestContract(providerOptions)).toBe(true)
     })
   })
 
@@ -506,7 +536,11 @@ describe('google-cache', () => {
                 ],
               },
             ],
-            toolConfig: undefined,
+            toolConfig: {
+              functionCallingConfig: {
+                mode: 'ANY',
+              },
+            },
           }),
         )
       })

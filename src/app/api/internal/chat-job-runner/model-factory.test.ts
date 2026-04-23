@@ -50,7 +50,74 @@ describe('buildLanguageModel', () => {
 
     expect(createGoogleGenerativeAIMock).toHaveBeenCalledWith({ apiKey: 'g-key' })
     expect(googleFactory).toHaveBeenCalledWith('gemini-2.0-flash')
-    expect(model).toBe(googleModel)
+    expect(model).not.toBe(googleModel)
+  })
+
+  it('strips live system and tool config when cached Google content owns the request contract', async () => {
+    const doStream = vi.fn(async (params) => params)
+    const googleModel = {
+      specificationVersion: 'v2',
+      provider: 'google',
+      modelId: 'gemini-2.0-flash',
+      supportedUrls: {},
+      doGenerate: vi.fn(),
+      doStream,
+    } as unknown as LanguageModel
+    const googleFactory = vi.fn(() => googleModel)
+    createGoogleGenerativeAIMock.mockReturnValue(googleFactory)
+    const { buildLanguageModel } = await import('./model-factory')
+
+    const model = buildLanguageModel({
+      provider: 'google',
+      modelName: 'gemini-2.0-flash',
+      apiKey: 'g-key',
+      serviceTier: 'standard',
+    }) as LanguageModel & {
+      doStream: (params: Record<string, unknown>) => Promise<unknown>
+    }
+
+    await model.doStream({
+      prompt: [
+        { role: 'system', content: 'cached system prefix' },
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'latest user message' }],
+        },
+      ],
+      tools: [
+        {
+          type: 'function',
+          name: 'fetch_source_range',
+          description: 'Fetch older transcript evidence.',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+      toolChoice: { type: 'required' },
+      providerOptions: {
+        google: {
+          cachedContent: 'cachedContents/abc123',
+          rebelCachedContentOwnsRequestContract: true,
+          safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }],
+        },
+      },
+    })
+
+    expect(doStream).toHaveBeenCalledWith({
+      prompt: [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'latest user message' }],
+        },
+      ],
+      tools: undefined,
+      toolChoice: undefined,
+      providerOptions: {
+        google: {
+          cachedContent: 'cachedContents/abc123',
+          safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }],
+        },
+      },
+    })
   })
 
   it('builds openai model with service tier', async () => {

@@ -1415,6 +1415,7 @@ describe('requestProviderStage', () => {
         providerOptions: {
           google: {
             cachedContent: 'cache-tools-1',
+            rebelCachedContentOwnsRequestContract: true,
           },
         },
       },
@@ -1438,6 +1439,7 @@ describe('requestProviderStage', () => {
         providerOptions: {
           google: {
             cachedContent: 'cache-tools-1',
+            rebelCachedContentOwnsRequestContract: true,
           },
         },
       },
@@ -1488,6 +1490,7 @@ describe('requestProviderStage', () => {
         providerOptions: {
           google: {
             cachedContent: 'cache-tools-1',
+            rebelCachedContentOwnsRequestContract: true,
           },
         },
         tools: {
@@ -1495,6 +1498,10 @@ describe('requestProviderStage', () => {
         },
       }),
     )
+    const streamRequest = streamTextMock.mock.calls[0]?.[0] as {
+      prepareStep?: unknown
+    }
+    expect(streamRequest.prepareStep).toBeUndefined()
     expect(result).toMatchObject({
       status: 'streaming',
       googleExplicitCacheEnabled: true,
@@ -1513,6 +1520,7 @@ describe('requestProviderStage', () => {
       google_explicit_cache_disabled_for_compatibility_retry: false,
       experimental_agentic_transcript_recall_wrapper_used: true,
       experimental_agentic_transcript_recall_fallback_to_standard: false,
+      experimental_agentic_transcript_recall_tool_choice_applied: false,
     })
   })
 

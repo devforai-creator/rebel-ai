@@ -11,9 +11,7 @@ const BASE_ARGS = {
     stability: 'static' | 'sealed' | 'live'
   }>,
   recentMessages: [] as Array<{ role: 'user' | 'assistant'; content: string }>,
-  googleCacheResult: null,
-  messagesToCacheForGoogle: [] as Array<{ role: 'user' | 'assistant'; content: string }>,
-  lastMessageForGoogle: null,
+  googleExplicitCache: null,
 }
 
 describe('buildStreamPayloadPlan', () => {
@@ -189,15 +187,34 @@ describe('buildStreamPayloadPlan', () => {
         { role: 'user', content: 'old message' },
         { role: 'assistant', content: 'last response' },
       ],
-      googleCacheResult: {
-        success: true,
-        cacheName: 'cache-name',
-        cachedTokenCount: 400,
-        ttl: '20s',
-        expireTime: '2026-02-10T00:00:00.000Z',
+      googleExplicitCache: {
+        googleExplicitCacheEnabled: true,
+        googleCacheDecision: { enabled: true, minTokens: 1024 },
+        googleCacheResult: {
+          success: true,
+          cacheName: 'cache-name',
+          cachedTokenCount: 400,
+          ttl: '20s',
+          expireTime: '2026-02-10T00:00:00.000Z',
+        },
+        disabledForToolUsePreflight: false,
+        disabledForCompatibilityRetry: false,
+        streamRequestOverride: {
+          messages: [{ role: 'assistant', content: 'last response' }],
+          providerOptions: {
+            google: {
+              cachedContent: 'cache-name',
+              safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }],
+            },
+          },
+        },
+        cacheDebugInfo: {
+          systemPrompt: 'FINAL',
+          cacheName: 'cache-name',
+          cachedTokenCount: 400,
+          messagesToCache: [{ role: 'user', content: 'old message' }],
+        },
       },
-      messagesToCacheForGoogle: [{ role: 'user', content: 'old message' }],
-      lastMessageForGoogle: { role: 'assistant', content: 'last response' },
       providerOptions,
     })
 
@@ -241,9 +258,7 @@ describe('buildStreamPayloadPlan', () => {
       anthropicCache: null,
       anthropicConversationMessages: [],
       recentMessages: [{ role: 'user', content: 'recent user' }],
-      googleCacheResult: { success: false, error: 'cache failed' },
-      messagesToCacheForGoogle: [],
-      lastMessageForGoogle: null,
+      googleExplicitCache: null,
       providerOptions,
     })
 
@@ -270,9 +285,7 @@ describe('buildStreamPayloadPlan', () => {
         { role: 'assistant', content: 'Older context' },
         { role: 'user', content: 'Last message' },
       ],
-      googleCacheResult: null,
-      messagesToCacheForGoogle: [{ role: 'assistant', content: 'Older context' }],
-      lastMessageForGoogle: { role: 'user', content: 'Last message' },
+      googleExplicitCache: null,
       providerOptions,
     })
 

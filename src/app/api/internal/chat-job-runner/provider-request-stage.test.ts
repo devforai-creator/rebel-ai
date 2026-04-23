@@ -216,7 +216,7 @@ describe('requestProviderStage', () => {
       status: 'streaming',
       promptCache: null,
       anthropicCache: null,
-      googleExplicitCacheEnabled: true,
+      googleExplicitCacheEnabled: false,
       googleCacheDecision: null,
       googleCacheResult: null,
       actualPayload: expect.objectContaining({
@@ -1294,13 +1294,24 @@ describe('requestProviderStage', () => {
     })
     expect(buildStreamPayloadPlanMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        googleCacheResult: {
-          success: true,
-          cacheName: 'cache-1',
-          cachedTokenCount: 2048,
-        },
-        messagesToCacheForGoogle: [{ role: 'user', content: 'Older context' }],
-        lastMessageForGoogle: { role: 'user', content: 'Last message' },
+        googleExplicitCache: expect.objectContaining({
+          googleExplicitCacheEnabled: true,
+          googleCacheDecision: { enabled: true, minTokens: 1024 },
+          googleCacheResult: {
+            success: true,
+            cacheName: 'cache-1',
+            cachedTokenCount: 2048,
+          },
+          streamRequestOverride: expect.objectContaining({
+            messages: [{ role: 'user', content: 'Last message' }],
+          }),
+          cacheDebugInfo: {
+            systemPrompt: 'FINAL',
+            cacheName: 'cache-1',
+            cachedTokenCount: 2048,
+            messagesToCache: [{ role: 'user', content: 'Older context' }],
+          },
+        }),
       }),
     )
     expect(timings).toEqual(
@@ -1401,7 +1412,12 @@ describe('requestProviderStage', () => {
     expect(createGoogleCacheMock).not.toHaveBeenCalled()
     expect(buildStreamPayloadPlanMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        googleCacheResult: null,
+        googleExplicitCache: expect.objectContaining({
+          googleExplicitCacheEnabled: false,
+          googleCacheDecision: { enabled: true, minTokens: 1024 },
+          googleCacheResult: null,
+          disabledForToolUsePreflight: true,
+        }),
       }),
     )
     expect(streamTextMock).toHaveBeenCalledWith(
@@ -1424,6 +1440,147 @@ describe('requestProviderStage', () => {
     })
     expect(context.debugMetrics).toMatchObject({
       google_explicit_cache_disabled_for_tool_use_preflight: true,
+      google_explicit_cache_disabled_for_compatibility_retry: false,
+      experimental_agentic_transcript_recall_wrapper_used: true,
+      experimental_agentic_transcript_recall_fallback_to_standard: false,
+    })
+  })
+
+  it('keeps google ATR tool-capable turns on the uncached core path when explicit cache is off', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const payload = buildPayload({
+      provider: 'google',
+      modelName: 'gemini-2.5-flash',
+    })
+    const context = buildContext({
+      recentMessages: [
+        { role: 'assistant', content: 'Older context' },
+        { role: 'user', content: 'Last message' },
+      ],
+      agenticTranscriptRecall: {
+        configured: true,
+        accountDefaultEnabled: false,
+        preferenceSource: 'chat_override',
+        globallyEnabled: true,
+        providerSupported: true,
+        providerAllowed: true,
+        enabled: true,
+        skipReason: null,
+        maxToolCalls: 2,
+        maxMessagesPerCall: 12,
+        maxTotalMessages: 12,
+        providerAllowlist: ['google'],
+      },
+      agenticTranscriptRecallSourceHints: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Older context',
+          },
+        ],
+      },
+      agenticTranscriptRecallSourceMap: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Older context',
+          },
+        ],
+        navigationParents: [],
+      },
+      debugMetrics: {},
+    })
+
+    isGoogleExplicitCacheEnabledMock.mockReturnValueOnce(false)
+    resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
+    buildStreamPayloadPlanMock.mockReturnValueOnce({
+      strategy: 'default',
+      streamRequest: {
+        system: 'FINAL',
+        messages: [
+          { role: 'assistant', content: 'Older context' },
+          { role: 'user', content: 'Last message' },
+        ],
+      },
+      actualPayload: {
+        provider: 'google',
+        strategy: 'default',
+        systemMessages: [{ role: 'system', content: 'FINAL' }],
+        conversationMessages: [
+          { role: 'assistant', content: 'Older context' },
+          { role: 'user', content: 'Last message' },
+        ],
+      },
+    })
+    prepareExperimentalAgenticTranscriptRecallRequestMock.mockReturnValueOnce({
+      streamRequest: {
+        system: 'FINAL\n\nExperimental',
+        messages: [
+          { role: 'assistant', content: 'Older context' },
+          { role: 'user', content: 'Last message' },
+        ],
+      },
+      streamTextSettings: {
+        tools: {
+          fetch_source_range: {},
+        },
+      },
+    })
+
+    const result = await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-google-tools-off',
+      payload,
+      context,
+      timings: {},
+    })
+
+    expect(createGoogleCacheMock).not.toHaveBeenCalled()
+    expect(buildStreamPayloadPlanMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        googleExplicitCache: expect.objectContaining({
+          googleExplicitCacheEnabled: false,
+          googleCacheDecision: { enabled: true, minTokens: 1024 },
+          googleCacheResult: null,
+          disabledForToolUsePreflight: false,
+          disabledForCompatibilityRetry: false,
+          streamRequestOverride: null,
+        }),
+      }),
+    )
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: 'FINAL\n\nExperimental',
+        messages: [
+          { role: 'assistant', content: 'Older context' },
+          { role: 'user', content: 'Last message' },
+        ],
+        tools: {
+          fetch_source_range: {},
+        },
+      }),
+    )
+    expect(result).toMatchObject({
+      status: 'streaming',
+      googleExplicitCacheEnabled: false,
+      googleCacheDecision: { enabled: true, minTokens: 1024 },
+      googleCacheResult: null,
+      actualPayload: expect.objectContaining({
+        strategy: 'default',
+      }),
+    })
+    expect(context.debugMetrics).toMatchObject({
+      google_explicit_cache_disabled_for_tool_use_preflight: false,
       google_explicit_cache_disabled_for_compatibility_retry: false,
       experimental_agentic_transcript_recall_wrapper_used: true,
       experimental_agentic_transcript_recall_fallback_to_standard: false,
@@ -1477,7 +1634,12 @@ describe('requestProviderStage', () => {
     expect(createGoogleCacheMock).not.toHaveBeenCalled()
     expect(buildStreamPayloadPlanMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        googleCacheResult: null,
+        googleExplicitCache: expect.objectContaining({
+          googleExplicitCacheEnabled: false,
+          googleCacheDecision: { enabled: true, minTokens: 1024 },
+          googleCacheResult: null,
+          disabledForCompatibilityRetry: true,
+        }),
       }),
     )
     expect(result).toMatchObject({

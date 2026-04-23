@@ -1124,6 +1124,103 @@ describe('processChatJobs', () => {
     )
   })
 
+  it('uses the uncached google core path when explicit cache is disabled', async () => {
+    const supabase = createChatJobRunnerSupabaseMock({
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    decryptSecretMock.mockResolvedValue('sk-test')
+    parseChatJobPayloadMock.mockReturnValue(
+      buildValidPayload({
+        requestId: 'req-google-cache-off',
+        provider: 'google',
+        modelName: 'gemini-1.5-flash',
+      }),
+    )
+    buildMemoryPlanMock.mockResolvedValueOnce({
+      mode: 'summary_window',
+      promptBlocks: [
+        {
+          role: 'system',
+          content: 'CTX',
+          cachePreference: 'prefer-cache',
+          stability: 'static',
+        },
+        {
+          role: 'assistant',
+          content: 'previous turn',
+          cachePreference: 'avoid-cache',
+          stability: 'live',
+        },
+        {
+          role: 'user',
+          content: 'latest user message',
+          cachePreference: 'avoid-cache',
+          stability: 'live',
+        },
+      ],
+      fallbackSystemPrompt: 'CTX',
+      fallbackMessages: [
+        { role: 'assistant', content: 'previous turn' },
+        { role: 'user', content: 'latest user message' },
+      ],
+      staticSystemPrompt: 'CTX',
+      dynamicContext: null,
+      ragInfo: null,
+    })
+    isGoogleExplicitCacheEnabledMock.mockReturnValueOnce(false)
+    resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
+    streamTextMock.mockResolvedValue({
+      textStream: ['uncached answer'],
+      finishReason: Promise.resolve('stop'),
+      providerMetadata: Promise.resolve({}),
+      usage: Promise.resolve({ inputTokens: 20, outputTokens: 10, totalTokens: 30 }),
+    })
+    claimPendingJobMock.mockResolvedValueOnce({
+      id: 'job-google-cache-off',
+      payload: { ok: true },
+    })
+    claimPendingJobMock.mockResolvedValueOnce(null)
+
+    const { processChatJobs } = await import('./service')
+    const result = await processChatJobs(1)
+
+    expect(result.results[0]).toMatchObject({
+      jobId: 'job-google-cache-off',
+      status: 'success',
+    })
+    expect(createGoogleCacheMock).not.toHaveBeenCalled()
+    const call = streamTextMock.mock.calls[0]?.[0] as {
+      system?: string
+      messages?: Array<{ role: string; content: string }>
+      providerOptions?: Record<string, unknown>
+    }
+    expect(call.system).toBe('CTX')
+    expect(call.messages).toEqual([
+      { role: 'assistant', content: 'previous turn' },
+      { role: 'user', content: 'latest user message' },
+    ])
+    expect(
+      (call.providerOptions?.google as { cachedContent?: string } | undefined)?.cachedContent,
+    ).toBeUndefined()
+
+    const latest = supabase.messages[supabase.messages.length - 1]
+    expect(latest).toMatchObject({
+      role: 'assistant',
+      content: 'uncached answer',
+    })
+    expect(latest.debug_info).toMatchObject({
+      googleCache: {
+        featureEnabled: false,
+        cacheCreated: false,
+        meetsMinTokens: true,
+        disabledForToolUsePreflight: false,
+        disabledForCompatibilityRetry: false,
+      },
+    })
+  })
+
   it('retries Google explicit-cache requests without cache after a tool conflict', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       rpc: { get_decrypted_secret: () => decryptSecretMock() },

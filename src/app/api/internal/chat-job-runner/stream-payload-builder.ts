@@ -4,9 +4,9 @@ import type { SanitizedMessage } from '@/lib/chat-summaries'
 import type { MemoryPromptBlock } from '@/lib/chat-memory'
 import { buildAnthropicCacheControl } from '@/lib/llm/provider-options'
 import type { AnthropicCacheDecision } from '@/lib/llm/prompt-cache'
-import type { CreateGoogleCacheResult } from '@/lib/llm/google-cache'
 import type { LlmProvider } from '@/types/database.types'
 import type { ChatRunnerActualPayload } from './usage-debug'
+import type { GoogleExplicitCachePreparation } from './google-explicit-cache-adapter'
 
 type ConversationMessage = { role: 'user' | 'assistant'; content: string }
 
@@ -130,9 +130,7 @@ type BuildStreamPayloadPlanArgs = {
   anthropicConversationMessages: ConversationMessage[]
   promptBlocks: MemoryPromptBlock[]
   recentMessages: SanitizedMessage[]
-  googleCacheResult: CreateGoogleCacheResult | null
-  messagesToCacheForGoogle: ConversationMessage[]
-  lastMessageForGoogle: ConversationMessage | null
+  googleExplicitCache: GoogleExplicitCachePreparation | null
   providerOptions?: SharedV2ProviderOptions
 }
 
@@ -151,9 +149,7 @@ export function buildStreamPayloadPlan({
   anthropicConversationMessages,
   promptBlocks,
   recentMessages,
-  googleCacheResult,
-  messagesToCacheForGoogle,
-  lastMessageForGoogle,
+  googleExplicitCache,
   providerOptions,
 }: BuildStreamPayloadPlanArgs): StreamPayloadPlan {
   if (provider === 'anthropic') {
@@ -264,31 +260,24 @@ export function buildStreamPayloadPlan({
     providerOptions,
   })
 
-  if (provider === 'google' && googleCacheResult?.success && lastMessageForGoogle) {
+  if (provider === 'google' && googleExplicitCache?.streamRequestOverride) {
     return {
       strategy: 'google-explicit-cache',
-      streamRequest: {
-        messages: [lastMessageForGoogle],
-        providerOptions: {
-          ...(providerOptions ?? {}),
-          google: {
-            ...((providerOptions?.google as Record<string, unknown>) || {}),
-            cachedContent: googleCacheResult.cacheName,
-          },
-        },
-      },
+      streamRequest: googleExplicitCache.streamRequestOverride,
       actualPayload: {
         ...defaultPlan.actualPayload,
         strategy: 'google-explicit-cache',
-        cache: {
-          systemPrompt: finalSystemPrompt,
-          cacheName: googleCacheResult.cacheName,
-          cachedTokenCount: googleCacheResult.cachedTokenCount,
-          messagesToCache: messagesToCacheForGoogle.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        },
+        cache: googleExplicitCache.cacheDebugInfo
+          ? {
+              systemPrompt: googleExplicitCache.cacheDebugInfo.systemPrompt,
+              cacheName: googleExplicitCache.cacheDebugInfo.cacheName,
+              cachedTokenCount: googleExplicitCache.cacheDebugInfo.cachedTokenCount,
+              messagesToCache: googleExplicitCache.cacheDebugInfo.messagesToCache.map((m) => ({
+                role: m.role,
+                content: m.content,
+              })),
+            }
+          : undefined,
       },
     }
   }

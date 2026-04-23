@@ -1,0 +1,148 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
+
+const createGoogleCacheMock = vi.fn()
+const resolveGoogleCacheDecisionMock = vi.fn()
+const isGoogleExplicitCacheEnabledMock = vi.fn()
+
+vi.mock('@/lib/llm/google-cache', () => ({
+  createGoogleCache: (...args: unknown[]) => createGoogleCacheMock(...args),
+  resolveGoogleCacheDecision: (...args: unknown[]) => resolveGoogleCacheDecisionMock(...args),
+  isGoogleExplicitCacheEnabled: (...args: unknown[]) => isGoogleExplicitCacheEnabledMock(...args),
+}))
+
+describe('prepareGoogleExplicitCache', () => {
+  beforeEach(() => {
+    createGoogleCacheMock.mockReset()
+    resolveGoogleCacheDecisionMock.mockReset()
+    isGoogleExplicitCacheEnabledMock.mockReset()
+
+    resolveGoogleCacheDecisionMock.mockReturnValue({ enabled: false, minTokens: null })
+    isGoogleExplicitCacheEnabledMock.mockReturnValue(true)
+  })
+
+  it('creates a cached stream-request override when explicit cache succeeds', async () => {
+    const { prepareGoogleExplicitCache } = await import('./google-explicit-cache-adapter')
+    const providerOptions: SharedV2ProviderOptions = {
+      google: { safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }] },
+    }
+
+    resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
+    createGoogleCacheMock.mockResolvedValueOnce({
+      success: true,
+      cacheName: 'cache-1',
+      cachedTokenCount: 2048,
+    })
+
+    const result = await prepareGoogleExplicitCache({
+      apiKey: 'sk-test',
+      modelName: 'gemini-2.5-flash',
+      systemPrompt: 'FINAL',
+      recentMessages: [
+        { role: 'assistant', content: 'Older context' },
+        { role: 'user', content: 'Last message' },
+      ],
+      providerOptions,
+      toolCapableInvocation: false,
+      jobId: 'job-google',
+      timings: {},
+    })
+
+    expect(createGoogleCacheMock).toHaveBeenCalledWith({
+      apiKey: 'sk-test',
+      modelName: 'gemini-2.5-flash',
+      systemPrompt: 'FINAL',
+      messagesToCache: [{ role: 'assistant', content: 'Older context' }],
+      ttlSeconds: 20,
+    })
+    expect(result).toMatchObject({
+      googleExplicitCacheEnabled: true,
+      googleCacheDecision: { enabled: true, minTokens: 1024 },
+      googleCacheResult: {
+        success: true,
+        cacheName: 'cache-1',
+        cachedTokenCount: 2048,
+      },
+      disabledForToolUsePreflight: false,
+      disabledForCompatibilityRetry: false,
+      streamRequestOverride: {
+        messages: [{ role: 'user', content: 'Last message' }],
+        providerOptions: {
+          google: {
+            cachedContent: 'cache-1',
+            safetySettings: [{ category: 'HARM', threshold: 'BLOCK_NONE' }],
+          },
+        },
+      },
+      cacheDebugInfo: {
+        systemPrompt: 'FINAL',
+        cacheName: 'cache-1',
+        cachedTokenCount: 2048,
+        messagesToCache: [{ role: 'assistant', content: 'Older context' }],
+      },
+    })
+  })
+
+  it('disables explicit cache before request build when the invocation can attach tools', async () => {
+    const { prepareGoogleExplicitCache } = await import('./google-explicit-cache-adapter')
+
+    resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
+
+    const result = await prepareGoogleExplicitCache({
+      apiKey: 'sk-test',
+      modelName: 'gemini-2.5-flash',
+      systemPrompt: 'FINAL',
+      recentMessages: [
+        { role: 'assistant', content: 'Older context' },
+        { role: 'user', content: 'Last message' },
+      ],
+      providerOptions: undefined,
+      toolCapableInvocation: true,
+      jobId: 'job-google-tools',
+      timings: {},
+    })
+
+    expect(createGoogleCacheMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      googleExplicitCacheEnabled: false,
+      googleCacheDecision: { enabled: true, minTokens: 1024 },
+      googleCacheResult: null,
+      disabledForToolUsePreflight: true,
+      disabledForCompatibilityRetry: false,
+      streamRequestOverride: null,
+      cacheDebugInfo: null,
+    })
+  })
+
+  it('disables explicit cache when compatibility retry forces uncached behavior', async () => {
+    const { prepareGoogleExplicitCache } = await import('./google-explicit-cache-adapter')
+
+    resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
+
+    const result = await prepareGoogleExplicitCache({
+      apiKey: 'sk-test',
+      modelName: 'gemini-2.5-flash',
+      systemPrompt: 'FINAL',
+      recentMessages: [
+        { role: 'assistant', content: 'Older context' },
+        { role: 'user', content: 'Last message' },
+      ],
+      providerOptions: undefined,
+      toolCapableInvocation: false,
+      disableGoogleExplicitCache: true,
+      jobId: 'job-google-retry',
+      timings: {},
+    })
+
+    expect(createGoogleCacheMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      googleExplicitCacheEnabled: false,
+      googleCacheDecision: { enabled: true, minTokens: 1024 },
+      googleCacheResult: null,
+      disabledForToolUsePreflight: false,
+      disabledForCompatibilityRetry: true,
+      streamRequestOverride: null,
+      cacheDebugInfo: null,
+    })
+  })
+})

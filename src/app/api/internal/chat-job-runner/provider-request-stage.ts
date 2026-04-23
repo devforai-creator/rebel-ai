@@ -3,12 +3,6 @@ import { streamText } from 'ai'
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from '@/lib/chat/delivery-mode'
-import {
-  createGoogleCache,
-  isGoogleExplicitCacheEnabled,
-  resolveGoogleCacheDecision,
-  type CreateGoogleCacheResult,
-} from '@/lib/llm/google-cache'
 import { ANTHROPIC_INTERLEAVED_THINKING_BETA, getProviderOptions } from '@/lib/llm/provider-options'
 import { resolveInvocationSamplingOptions } from '@/lib/llm/invocation-sampling'
 import { normalizeProviderError } from '@/lib/llm/provider-error'
@@ -22,12 +16,15 @@ import { prepareExperimentalAgenticTranscriptRecallRequest } from '@/lib/experim
 import { decideAgenticTranscriptRecallToolChoice } from '@/lib/experimental/agentic-transcript-recall/tool-choice-gate'
 import { submitAnthropicBatchJob } from './anthropic-batch-orchestrator'
 import type { LoadedChatJobExecutionContext } from './execution-context'
+import {
+  prepareGoogleExplicitCache,
+  type GoogleExplicitCachePreparation,
+} from './google-explicit-cache-adapter'
 import { buildLanguageModel } from './model-factory'
 import { buildStreamPayloadPlan } from './stream-payload-builder'
 import type { ChatRunnerActualPayload } from './usage-debug'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
-type GoogleCacheDecision = ReturnType<typeof resolveGoogleCacheDecision>
 type ExperimentalPrepareStep = NonNullable<
   NonNullable<
     ReturnType<typeof prepareExperimentalAgenticTranscriptRecallRequest>['streamTextSettings']
@@ -66,9 +63,9 @@ function willExperimentalAgenticTranscriptRecallAttachTools({
 type ProviderRequestArtifacts = {
   promptCache: PromptCacheDecision | null
   anthropicCache: AnthropicCacheDecision | null
-  googleExplicitCacheEnabled: boolean
-  googleCacheDecision: GoogleCacheDecision | null
-  googleCacheResult: CreateGoogleCacheResult | null
+  googleExplicitCacheEnabled: GoogleExplicitCachePreparation['googleExplicitCacheEnabled']
+  googleCacheDecision: GoogleExplicitCachePreparation['googleCacheDecision']
+  googleCacheResult: GoogleExplicitCachePreparation['googleCacheResult']
   actualPayload: ChatRunnerActualPayload | null
 }
 
@@ -257,25 +254,6 @@ export async function requestProviderStage({
         })
       : null
 
-  const allMessagesForGoogle = provider === 'google' ? recentMessages : []
-  const messagesToCacheForGoogle =
-    provider === 'google' && allMessagesForGoogle.length > 1
-      ? allMessagesForGoogle.slice(0, -1)
-      : []
-  const lastMessageForGoogle =
-    provider === 'google' && allMessagesForGoogle.length > 0
-      ? allMessagesForGoogle[allMessagesForGoogle.length - 1]
-      : null
-
-  const googleCacheDecision =
-    provider === 'google'
-      ? resolveGoogleCacheDecision({
-          modelName,
-          systemPrompt: finalSystemPrompt,
-          messagesToCache: messagesToCacheForGoogle,
-        })
-      : null
-
   const hasOlderSourceHints =
     !!agenticTranscriptRecallSourceHints && agenticTranscriptRecallSourceHints.hints.length > 0
   const hasToolCapableSourceMap = willExperimentalAgenticTranscriptRecallAttachTools({
@@ -311,73 +289,6 @@ export async function requestProviderStage({
   debugMetrics['anthropic_thinking_disabled_for_required_tool_choice'] =
     provider === 'anthropic' ? false : null
 
-  const googleExplicitCacheConfigured = isGoogleExplicitCacheEnabled()
-  const googleExplicitCacheDisabledForToolUsePreflight =
-    provider === 'google' &&
-    googleExplicitCacheConfigured &&
-    !disableGoogleExplicitCache &&
-    agenticTranscriptRecall.enabled &&
-    hasToolCapableSourceMap
-
-  debugMetrics['google_explicit_cache_disabled_for_tool_use_preflight'] =
-    provider === 'google' ? googleExplicitCacheDisabledForToolUsePreflight : null
-  debugMetrics['google_explicit_cache_disabled_for_compatibility_retry'] =
-    provider === 'google' ? disableGoogleExplicitCache : null
-
-  const googleExplicitCacheEnabled =
-    googleExplicitCacheConfigured &&
-    !disableGoogleExplicitCache &&
-    !googleExplicitCacheDisabledForToolUsePreflight
-  let googleCacheResult: CreateGoogleCacheResult | null = null
-  if (
-    provider === 'google' &&
-    googleExplicitCacheEnabled &&
-    googleCacheDecision?.enabled &&
-    lastMessageForGoogle
-  ) {
-    const googleCacheCreateStart = performance.now()
-    googleCacheResult = await createGoogleCache({
-      apiKey: decryptedApiKey,
-      modelName,
-      systemPrompt: finalSystemPrompt,
-      messagesToCache: messagesToCacheForGoogle,
-      ttlSeconds: 20,
-    })
-    timings['7c_google_cache_create'] = performance.now() - googleCacheCreateStart
-
-    if (googleCacheResult.success) {
-      logDebug('[Chat Job Runner] Google cache created', {
-        cacheName: googleCacheResult.cacheName,
-        cachedTokenCount: googleCacheResult.cachedTokenCount,
-        modelName,
-      })
-    } else {
-      console.warn(
-        '[Chat Job Runner] Google cache creation failed, falling back to normal request',
-        {
-          error: googleCacheResult.error,
-          code: googleCacheResult.code,
-          modelName,
-        },
-      )
-    }
-  }
-
-  if (provider === 'google' && googleExplicitCacheDisabledForToolUsePreflight) {
-    logDebug('[Chat Job Runner] Google explicit cache disabled before request build', {
-      jobId,
-      modelName,
-      reason: 'tool-compatible invocation',
-    })
-  }
-
-  if (provider === 'google' && disableGoogleExplicitCache) {
-    logDebug('[Chat Job Runner] Google explicit cache disabled for compatibility retry', {
-      jobId,
-      modelName,
-    })
-  }
-
   const model = buildLanguageModel({
     provider,
     modelName,
@@ -391,6 +302,28 @@ export async function requestProviderStage({
     promptCacheRetention: promptCache?.retention,
     reasoningEffort: apiKeyData.reasoning_effort,
   })
+  const googleExplicitCache =
+    provider === 'google'
+      ? await prepareGoogleExplicitCache({
+          apiKey: decryptedApiKey,
+          modelName,
+          systemPrompt: finalSystemPrompt,
+          recentMessages,
+          providerOptions,
+          toolCapableInvocation: agenticTranscriptRecall.enabled && hasToolCapableSourceMap,
+          disableGoogleExplicitCache,
+          jobId,
+          timings,
+          logDebug,
+        })
+      : null
+  const googleExplicitCacheEnabled = googleExplicitCache?.googleExplicitCacheEnabled ?? false
+  const googleCacheDecision = googleExplicitCache?.googleCacheDecision ?? null
+  const googleCacheResult = googleExplicitCache?.googleCacheResult ?? null
+  debugMetrics['google_explicit_cache_disabled_for_tool_use_preflight'] =
+    provider === 'google' ? (googleExplicitCache?.disabledForToolUsePreflight ?? false) : null
+  debugMetrics['google_explicit_cache_disabled_for_compatibility_retry'] =
+    provider === 'google' ? (googleExplicitCache?.disabledForCompatibilityRetry ?? false) : null
   const anthropicOptions =
     provider === 'anthropic' &&
     providerOptions?.anthropic &&
@@ -443,9 +376,7 @@ export async function requestProviderStage({
       anthropicConversationMessages,
       promptBlocks,
       recentMessages,
-      googleCacheResult,
-      messagesToCacheForGoogle,
-      lastMessageForGoogle,
+      googleExplicitCache,
       providerOptions,
     })
 
@@ -462,18 +393,6 @@ export async function requestProviderStage({
           hasDynamicContext: !!dynamicContext,
         })
       }
-    }
-
-    if (
-      streamPayloadPlan.strategy === 'google-explicit-cache' &&
-      googleCacheResult?.success &&
-      lastMessageForGoogle
-    ) {
-      logDebug('[Chat Job Runner] Google explicit caching enabled', {
-        cacheName: googleCacheResult.cacheName,
-        cachedTokenCount: googleCacheResult.cachedTokenCount,
-        lastMessageRole: lastMessageForGoogle.role,
-      })
     }
 
     actualPayload = streamPayloadPlan.actualPayload

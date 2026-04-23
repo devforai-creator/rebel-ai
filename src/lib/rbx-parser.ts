@@ -12,7 +12,6 @@ import JSZip from 'jszip'
 import { RbxManifestSchema } from '@/types/rbx.types'
 import type { RbxParseResult, RbxAssetFile } from '@/types/rbx.types'
 import {
-  MAX_DECOMPRESSED_BYTES,
   MAX_ASSET_COUNT,
   MAX_MANIFEST_BYTES,
   MAX_SINGLE_ASSET_BYTES,

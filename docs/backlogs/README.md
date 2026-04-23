@@ -15,9 +15,9 @@ Use it to answer two questions quickly:
 ## Current Entry Point
 
 - Active backlog:
-  [google-cache-boundary-backlog-2026-04-23.md](./active/google-cache-boundary-backlog-2026-04-23.md)
+  [google-tool-aware-explicit-cache-backlog-2026-04-23.md](./active/google-tool-aware-explicit-cache-backlog-2026-04-23.md)
 - Most recently archived backlog:
-  [explicit-memory-v0-backlog-2026-04-22.md](./archive/2026/explicit-memory-v0-backlog-2026-04-22.md)
+  [google-cache-boundary-backlog-2026-04-23.md](./archive/2026/google-cache-boundary-backlog-2026-04-23.md)
 
 ## Working Rules
 

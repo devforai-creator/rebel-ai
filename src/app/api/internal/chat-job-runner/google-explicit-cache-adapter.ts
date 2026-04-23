@@ -122,7 +122,7 @@ export async function prepareGoogleExplicitCache({
       systemPrompt: requestContract.cacheCreateInput.systemPrompt,
       messagesToCache: requestContract.cacheCreateInput.messagesToCache,
       toolContract: requestContract.cacheCreateInput.toolContract,
-      ttlSeconds: 20,
+      ttlSeconds: 60,
     })
     timings['7c_google_cache_create'] = performance.now() - googleCacheCreateStart
 

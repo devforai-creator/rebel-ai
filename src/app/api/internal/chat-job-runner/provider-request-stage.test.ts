@@ -1304,7 +1304,7 @@ describe('requestProviderStage', () => {
       systemPrompt: 'FINAL',
       messagesToCache: [{ role: 'user', content: 'Older context' }],
       toolContract: null,
-      ttlSeconds: 20,
+      ttlSeconds: 60,
     })
     expect(buildStreamPayloadPlanMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1467,7 +1467,7 @@ describe('requestProviderStage', () => {
         toolContract: expect.objectContaining({
           tools: expect.arrayContaining([expect.objectContaining({ name: 'fetch_source_range' })]),
         }),
-        ttlSeconds: 20,
+        ttlSeconds: 60,
       }),
     )
     expect(buildStreamPayloadPlanMock).toHaveBeenCalledWith(

@@ -51,7 +51,7 @@ const MIN_TOKENS_FLASH = 1024
 const MIN_TOKENS_PRO = 4096
 
 /** Default cache TTL in seconds (matches 부엉's strategy) */
-const DEFAULT_CACHE_TTL_SECONDS = 20
+const DEFAULT_CACHE_TTL_SECONDS = 60
 const GOOGLE_CACHE_DEBUG_ENABLED = process.env.GOOGLE_CACHE_DEBUG === 'true'
 const GOOGLE_CACHED_CONTENT_OWNS_REQUEST_CONTRACT_PROVIDER_OPTION =
   'rebelCachedContentOwnsRequestContract'

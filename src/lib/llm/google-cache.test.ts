@@ -370,12 +370,12 @@ describe('google-cache', () => {
         })
       })
 
-      it('uses default TTL of 20 seconds when not specified', async () => {
+      it('uses default TTL of 60 seconds when not specified', async () => {
         vi.spyOn(console, 'log').mockImplementation(() => {})
 
         mockCreate.mockResolvedValue({
           name: 'cachedContents/default-ttl',
-          ttl: '20s',
+          ttl: '60s',
         })
 
         const configWithoutTtl: GoogleCacheConfig = {
@@ -391,7 +391,7 @@ describe('google-cache', () => {
         // Verify the default TTL was passed to the API
         expect(mockCreate).toHaveBeenCalledWith(
           expect.objectContaining({
-            ttlSeconds: 20,
+            ttlSeconds: 60,
           }),
         )
       })

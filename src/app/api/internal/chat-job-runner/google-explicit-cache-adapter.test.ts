@@ -60,7 +60,7 @@ describe('prepareGoogleExplicitCache', () => {
       systemPrompt: 'FINAL',
       messagesToCache: [{ role: 'assistant', content: 'Older context' }],
       toolContract: null,
-      ttlSeconds: 20,
+      ttlSeconds: 60,
     })
     expect(result).toMatchObject({
       googleExplicitCacheEnabled: true,
@@ -248,7 +248,7 @@ describe('prepareGoogleExplicitCache', () => {
           tools: expect.arrayContaining([expect.objectContaining({ name: 'fetch_source_range' })]),
           toolChoice: { type: 'auto' },
         }),
-        ttlSeconds: 20,
+        ttlSeconds: 60,
       }),
     )
     expect(result).toMatchObject({

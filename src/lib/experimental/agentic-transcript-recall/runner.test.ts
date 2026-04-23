@@ -204,6 +204,12 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
     expect(result.streamRequest.system).toContain(
       'Use summaries and recent raw context by default.',
     )
+    expect(result.streamRequest.system).toContain(
+      'Treat transcript recall as bounded selection, not numeric transcription.',
+    )
+    expect(result.streamRequest.system).toContain(
+      'Direct fetch ids available for this reply: R1=[Summary 1-2].',
+    )
     expect(result.streamRequest.system).toContain('fetch_source_range')
     expect(result.streamRequest.system).not.toContain('expand_source_range')
     expect(result.streamTextSettings?.stopWhen).toBeDefined()
@@ -254,6 +260,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
       experimental_agentic_transcript_recall_tool_fetch_count: 1,
       experimental_agentic_transcript_recall_tool_block_count: 0,
       experimental_agentic_transcript_recall_tool_total_messages_fetched: 2,
+      experimental_agentic_transcript_recall_tool_last_range_id: 'R1',
       experimental_agentic_transcript_recall_tool_last_start_seq: 1,
       experimental_agentic_transcript_recall_tool_last_end_seq: 2,
       experimental_agentic_transcript_recall_tool_last_reason: 'Need the original wording.',
@@ -308,6 +315,9 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
     expect(result.streamRequest.system).toContain('expand_source_range')
     expect(result.streamRequest.system).toContain(
       'No `fetch_source_range` tool is available for this reply.',
+    )
+    expect(result.streamRequest.system).toContain(
+      'Expandable parent ids available for this reply: P1=[Meta Summary 1-40].',
     )
     expect(result.streamTextSettings?.tools).toMatchObject({
       expand_source_range: expect.any(Object),
@@ -449,6 +459,12 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
     expect(result.streamRequest.system).toContain(
       'If the likely evidence sits inside a surfaced parent range and the best child range is unclear, expand first.',
     )
+    expect(result.streamRequest.system).toContain(
+      'Direct fetch ids available for this reply: R1=[Summary 291-300].',
+    )
+    expect(result.streamRequest.system).toContain(
+      'Expandable parent ids available for this reply: P1=[Meta Summary 201-300].',
+    )
   })
 
   it('returns blocked tool results for invalid recall requests without failing the wrapper', async () => {
@@ -521,6 +537,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
       experimental_agentic_transcript_recall_tool_call_count: 1,
       experimental_agentic_transcript_recall_tool_fetch_count: 0,
       experimental_agentic_transcript_recall_tool_block_count: 1,
+      experimental_agentic_transcript_recall_tool_last_range_id: 'R9',
       experimental_agentic_transcript_recall_tool_last_block_reason: 'range_id_not_available',
     })
   })
@@ -615,6 +632,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
       experimental_agentic_transcript_recall_tool_call_count: 2,
       experimental_agentic_transcript_recall_tool_fetch_count: 0,
       experimental_agentic_transcript_recall_tool_block_count: 2,
+      experimental_agentic_transcript_recall_tool_last_range_id: 'R5',
       experimental_agentic_transcript_recall_tool_last_block_reason: 'max_tool_calls_exceeded',
     })
   })
@@ -724,6 +742,7 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
     expect(debugMetrics).toMatchObject({
       experimental_agentic_transcript_recall_expand_available: true,
       experimental_agentic_transcript_recall_expand_call_count: 1,
+      experimental_agentic_transcript_recall_expand_last_parent_id: 'P1',
       experimental_agentic_transcript_recall_expand_last_parent_start_seq: 1,
       experimental_agentic_transcript_recall_expand_last_parent_end_seq: 4,
       experimental_agentic_transcript_recall_expand_last_reason: 'Need smaller child ranges first.',

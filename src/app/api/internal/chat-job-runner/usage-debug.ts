@@ -73,6 +73,7 @@ type AgenticTranscriptRecallDebugInfo = {
   toolAvailable: boolean | null
   expandAvailable: boolean | null
   expandCallCount: number | null
+  expandLastParentId: string | null
   expandLastParentStartSeq: number | null
   expandLastParentEndSeq: number | null
   expandLastReason: string | null
@@ -82,6 +83,7 @@ type AgenticTranscriptRecallDebugInfo = {
   toolFetchCount: number | null
   toolBlockCount: number | null
   toolTotalMessagesFetched: number | null
+  toolLastRangeId: string | null
   toolLastStartSeq: number | null
   toolLastEndSeq: number | null
   toolLastReason: string | null
@@ -204,6 +206,10 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     debugMetrics,
     'experimental_agentic_transcript_recall_expand_call_count',
   )
+  const expandLastParentId = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_expand_last_parent_id',
+  )
   const expandLastParentStartSeq = readNumberMetric(
     debugMetrics,
     'experimental_agentic_transcript_recall_expand_last_parent_start_seq',
@@ -239,6 +245,10 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
   const toolTotalMessagesFetched = readNumberMetric(
     debugMetrics,
     'experimental_agentic_transcript_recall_tool_total_messages_fetched',
+  )
+  const toolLastRangeId = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_last_range_id',
   )
   const toolLastStartSeq = readNumberMetric(
     debugMetrics,
@@ -304,6 +314,7 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     toolAvailable,
     expandAvailable,
     expandCallCount,
+    expandLastParentId,
     expandLastParentStartSeq,
     expandLastParentEndSeq,
     expandLastReason,
@@ -313,6 +324,7 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     toolFetchCount,
     toolBlockCount,
     toolTotalMessagesFetched,
+    toolLastRangeId,
     toolLastStartSeq,
     toolLastEndSeq,
     toolLastReason,
@@ -346,6 +358,7 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     toolAvailable,
     expandAvailable,
     expandCallCount,
+    expandLastParentId,
     expandLastParentStartSeq,
     expandLastParentEndSeq,
     expandLastReason,
@@ -355,6 +368,7 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     toolFetchCount,
     toolBlockCount,
     toolTotalMessagesFetched,
+    toolLastRangeId,
     toolLastStartSeq,
     toolLastEndSeq,
     toolLastReason,

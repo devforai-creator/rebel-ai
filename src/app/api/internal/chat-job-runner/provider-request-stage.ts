@@ -209,10 +209,12 @@ function buildGoogleCachedSystemPromptForAgenticTranscriptRecall({
   systemPrompt,
   toolContract,
   maxToolCalls,
+  sourceMap,
 }: {
   systemPrompt: string
   toolContract: SerializableFunctionToolContract | null
   maxToolCalls: number
+  sourceMap: LoadedChatJobExecutionContext['agenticTranscriptRecallSourceMap']
 }): string {
   if (!toolContract || toolContract.tools.length === 0) {
     return systemPrompt
@@ -223,6 +225,7 @@ function buildGoogleCachedSystemPromptForAgenticTranscriptRecall({
     maxToolCalls,
     fetchAvailable: toolNames.has(FETCH_SOURCE_RANGE_TOOL_NAME),
     expandAvailable: toolNames.has(EXPAND_SOURCE_RANGE_TOOL_NAME),
+    sourceMap,
   })
 
   return [systemPrompt, instruction]
@@ -334,6 +337,7 @@ export async function requestProviderStage({
           systemPrompt: finalSystemPrompt,
           toolContract: googleToolContract,
           maxToolCalls: agenticTranscriptRecall.maxToolCalls,
+          sourceMap: agenticTranscriptRecallSourceMap,
         })
       : finalSystemPrompt
 

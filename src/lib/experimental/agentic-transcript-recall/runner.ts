@@ -35,14 +35,71 @@ type ExperimentalAgenticTranscriptRecallWrapperResult<TStreamRequest> = {
   streamTextSettings?: ExperimentalAgenticTranscriptRecallStreamSettings
 }
 
+function formatSourceRangeLabel({
+  kind,
+  label,
+  startSeq,
+  endSeq,
+}: Pick<
+  AgenticTranscriptRecallSourceMap['directFetchRanges'][number],
+  'kind' | 'label' | 'startSeq' | 'endSeq'
+>): string {
+  if (kind === 'summary') {
+    const summaryLabel =
+      label === 'meta_summary'
+        ? 'Meta Summary'
+        : label === 'super_meta_summary'
+          ? 'Super Meta Summary'
+          : 'Summary'
+
+    return `[${summaryLabel} ${startSeq}-${endSeq}]`
+  }
+
+  return `[${startSeq}-${endSeq}]`
+}
+
+function buildSelectionInventoryInstruction({
+  sourceMap,
+  fetchAvailable,
+  expandAvailable,
+}: {
+  sourceMap: AgenticTranscriptRecallSourceMap | null
+  fetchAvailable: boolean
+  expandAvailable: boolean
+}): string[] {
+  if (!sourceMap) {
+    return []
+  }
+
+  const lines: string[] = []
+
+  if (fetchAvailable && sourceMap.directFetchRanges.length > 0) {
+    const directFetchInventory = sourceMap.directFetchRanges
+      .map((range) => `${range.rangeId}=${formatSourceRangeLabel(range)}`)
+      .join(', ')
+    lines.push(`Direct fetch ids available for this reply: ${directFetchInventory}.`)
+  }
+
+  if (expandAvailable && sourceMap.navigationParents.length > 0) {
+    const parentInventory = sourceMap.navigationParents
+      .map((entry) => `${entry.parentRange.parentId}=${formatSourceRangeLabel(entry.parentRange)}`)
+      .join(', ')
+    lines.push(`Expandable parent ids available for this reply: ${parentInventory}.`)
+  }
+
+  return lines
+}
+
 export function buildExperimentalInstruction({
   maxToolCalls,
   fetchAvailable,
   expandAvailable,
+  sourceMap,
 }: {
   maxToolCalls: number
   fetchAvailable: boolean
   expandAvailable: boolean
+  sourceMap: AgenticTranscriptRecallSourceMap | null
 }): string {
   const instructions = [
     '=== Experimental Transcript Recall ===',
@@ -55,7 +112,7 @@ export function buildExperimentalInstruction({
 
   if (expandAvailable) {
     instructions.push(
-      'Use `expand_source_range` when the likely evidence sits inside a surfaced older parent range such as `[Meta Summary 1-100]` but the right child range is still unclear.',
+      'Use `expand_source_range` when the likely evidence sits inside one surfaced older parent id such as `P1=[Meta Summary 1-100]` but the right child range is still unclear.',
     )
   }
 
@@ -68,8 +125,8 @@ export function buildExperimentalInstruction({
   if (fetchAvailable) {
     instructions.push(
       expandAvailable
-        ? 'Only call `fetch_source_range` for a directly surfaced small range such as `[1-10]`, or for a bounded child range returned by `expand_source_range`.'
-        : 'Only call `fetch_source_range` for a directly surfaced small range such as `[1-10]` that is available for this reply.',
+        ? 'Only call `fetch_source_range` with one surfaced `rangeId` such as `R1`, or with one child `rangeId` returned by `expand_source_range`.'
+        : 'Only call `fetch_source_range` with one surfaced `rangeId` such as `R1` that is available for this reply.',
       'Use `fetch_source_range` when exact older source detail matters more than broad continuity, especially for wording, sequence, promises, boundaries, turning points, or contradiction checks.',
       'Do not use this tool for recent raw messages that are already visible in the conversation context.',
       'Use fetched transcript lines as the raw evidence for exact wording, exact sequencing, and concrete older scene detail.',
@@ -87,7 +144,7 @@ export function buildExperimentalInstruction({
   if (expandAvailable) {
     instructions.push(
       'Do not treat `expand_source_range` output as raw evidence. Expansion only narrows the search space; fetched transcript lines are the raw evidence.',
-      'Do not merge sibling child ranges into a larger fetch. If expansion returns `281-290` and `291-300`, you must fetch one exact child range at a time.',
+      'Do not merge sibling child ranges into a larger fetch. If expansion returns child ids such as `R3` and `R4`, you must fetch one exact child id at a time.',
       fetchAvailable
         ? `You may call \`expand_source_range\` at most 1 time and \`fetch_source_range\` at most ${maxToolCalls} time for this reply. If the summaries and facts are sufficient, answer without calling either tool.`
         : 'You may call `expand_source_range` at most 1 time for this reply. Use it only to narrow the search space, not as raw evidence.',
@@ -96,6 +153,15 @@ export function buildExperimentalInstruction({
       'If the user asks about the first or beginning of an older event, inspect the earliest relevant child range first.',
     )
   }
+
+  instructions.push(
+    'Treat transcript recall as bounded selection, not numeric transcription. Choose one surfaced `rangeId` or `parentId`; do not retype coordinates or invent ids.',
+    ...buildSelectionInventoryInstruction({
+      sourceMap,
+      fetchAvailable,
+      expandAvailable,
+    }),
+  )
 
   return instructions.join('\n')
 }
@@ -139,6 +205,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
   debugMetrics['experimental_agentic_transcript_recall_tool_available'] = false
   debugMetrics['experimental_agentic_transcript_recall_expand_available'] = false
   debugMetrics['experimental_agentic_transcript_recall_expand_call_count'] = 0
+  debugMetrics['experimental_agentic_transcript_recall_expand_last_parent_id'] = null
   debugMetrics['experimental_agentic_transcript_recall_expand_last_parent_start_seq'] = null
   debugMetrics['experimental_agentic_transcript_recall_expand_last_parent_end_seq'] = null
   debugMetrics['experimental_agentic_transcript_recall_expand_last_reason'] = null
@@ -148,6 +215,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
   debugMetrics['experimental_agentic_transcript_recall_tool_fetch_count'] = 0
   debugMetrics['experimental_agentic_transcript_recall_tool_block_count'] = 0
   debugMetrics['experimental_agentic_transcript_recall_tool_total_messages_fetched'] = 0
+  debugMetrics['experimental_agentic_transcript_recall_tool_last_range_id'] = null
   debugMetrics['experimental_agentic_transcript_recall_tool_last_start_seq'] = null
   debugMetrics['experimental_agentic_transcript_recall_tool_last_end_seq'] = null
   debugMetrics['experimental_agentic_transcript_recall_tool_last_reason'] = null
@@ -175,6 +243,8 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
       async execute(input) {
         debugMetrics['experimental_agentic_transcript_recall_expand_call_count'] =
           Number(debugMetrics['experimental_agentic_transcript_recall_expand_call_count'] ?? 0) + 1
+        debugMetrics['experimental_agentic_transcript_recall_expand_last_parent_id'] =
+          input.parentId
         debugMetrics['experimental_agentic_transcript_recall_expand_last_parent_start_seq'] = null
         debugMetrics['experimental_agentic_transcript_recall_expand_last_parent_end_seq'] = null
         debugMetrics['experimental_agentic_transcript_recall_expand_last_reason'] = input.reason
@@ -200,6 +270,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
 
           logDebug('[Agentic Transcript Recall] Expanded transcript source parent range', {
             chatId,
+            parentId: executionResult.result.parentId,
             parentStartSeq: executionResult.result.parentStartSeq,
             parentEndSeq: executionResult.result.parentEndSeq,
             childRangeCount: executionResult.result.childRangeCount,
@@ -210,6 +281,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
 
           logDebug('[Agentic Transcript Recall] Blocked transcript source parent expansion', {
             chatId,
+            parentId: executionResult.result.parentId,
             parentStartSeq: executionResult.result.parentStartSeq,
             parentEndSeq: executionResult.result.parentEndSeq,
             blockReason: executionResult.result.blockReason,
@@ -228,6 +300,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
       async execute(input) {
         debugMetrics['experimental_agentic_transcript_recall_tool_call_count'] =
           Number(debugMetrics['experimental_agentic_transcript_recall_tool_call_count'] ?? 0) + 1
+        debugMetrics['experimental_agentic_transcript_recall_tool_last_range_id'] = input.rangeId
         debugMetrics['experimental_agentic_transcript_recall_tool_last_start_seq'] = null
         debugMetrics['experimental_agentic_transcript_recall_tool_last_end_seq'] = null
         debugMetrics['experimental_agentic_transcript_recall_tool_last_reason'] = input.reason
@@ -262,6 +335,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
 
             logDebug('[Agentic Transcript Recall] Fetched transcript source range', {
               chatId,
+              rangeId: executionResult.result.rangeId,
               startSeq: executionResult.result.startSeq,
               endSeq: executionResult.result.endSeq,
               messageCount: executionResult.result.messageCount,
@@ -275,6 +349,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
 
             logDebug('[Agentic Transcript Recall] Blocked transcript source range request', {
               chatId,
+              rangeId: executionResult.result.rangeId,
               startSeq: executionResult.result.startSeq,
               endSeq: executionResult.result.endSeq,
               blockReason: executionResult.result.blockReason,
@@ -332,6 +407,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
             maxToolCalls: runtimeConfig.maxToolCalls,
             fetchAvailable,
             expandAvailable,
+            sourceMap,
           }),
         ]
           .filter((value): value is string => typeof value === 'string' && value.length > 0)

@@ -118,7 +118,7 @@ Evidence:
 
 ### P0-3. Reframe Runner Prompt And Debug Around Selection
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 
@@ -132,6 +132,15 @@ Acceptance notes:
 - debug info remains useful for diagnosing ATR mistakes after the schema switch
 - no prompt/tool mismatch is introduced for requests that expose only one of the
   two ATR tools
+
+Evidence:
+
+- `src/lib/experimental/agentic-transcript-recall/runner.ts`
+- `src/lib/experimental/agentic-transcript-recall/runner.test.ts`
+- `src/app/api/internal/chat-job-runner/provider-request-stage.ts`
+- `src/app/api/internal/chat-job-runner/provider-request-stage.test.ts`
+- `src/app/api/internal/chat-job-runner/usage-debug.ts`
+- `src/app/api/internal/chat-job-runner/usage-debug.test.ts`
 
 ### P0-4. Verify The Bounded Contract Still Holds
 

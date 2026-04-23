@@ -175,7 +175,7 @@ Evidence:
 
 ### P0-4. Verify Deployment Safety And Decide Queue Close-Out
 
-Status: `pending`
+Status: `in_progress`
 
 Primary scope:
 
@@ -189,6 +189,16 @@ Acceptance notes:
   as an undocumented forever path
 - if deployment verification is needed after rollout, note the exact smoke-check
   requirement before archiving this queue
+
+Execution notes:
+
+- `2026-04-23`: `npm run verify` passed locally
+- result: `206 passed | 5 skipped` test files
+- result: `1797 passed | 54 skipped` tests
+- close-out decision: keep this queue active until the current changes are
+  deployed and `npm run ops:smoke:active` is run against the active deployment
+- archive only after that deploy smoke confirms the runner/internal-route path
+  remains healthy
 
 ## Explicitly Parked
 

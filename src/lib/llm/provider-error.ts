@@ -2,6 +2,7 @@ type ProviderErrorCategory =
   | 'rate_limit'
   | 'quota'
   | 'auth'
+  | 'cache_miss'
   | 'context_length'
   | 'content_filter'
   | 'unknown'
@@ -155,6 +156,26 @@ export function normalizeProviderError({
       technicalMessage: message,
       providerCode: parsed.code,
       retryable: false,
+      recognized: true,
+    }
+  }
+
+  if (
+    provider === 'google' &&
+    includesAny(message, [
+      'cachedcontent not found',
+      'cached content not found',
+      'cached_content not found',
+      'cached-content not found',
+    ])
+  ) {
+    return {
+      category: 'cache_miss',
+      userMessage:
+        'Google cached context was unavailable or expired for this request. Please try again.',
+      technicalMessage: message,
+      providerCode: parsed.code,
+      retryable: true,
       recognized: true,
     }
   }

@@ -77,6 +77,30 @@ describe('normalizeProviderError', () => {
     })
   })
 
+  it('classifies google cached content misses separately from auth failures', () => {
+    const result = normalizeProviderError({
+      provider: 'google',
+      error: {
+        statusCode: 403,
+        responseBody: JSON.stringify({
+          error: {
+            status: 'PERMISSION_DENIED',
+            message: 'CachedContent not found (or permission denied)',
+          },
+        }),
+      },
+    })
+
+    expect(result).toMatchObject({
+      category: 'cache_miss',
+      technicalMessage: 'CachedContent not found (or permission denied)',
+      retryable: true,
+      recognized: true,
+    })
+    expect(result.userMessage).toContain('cached context')
+    expect(result.userMessage).not.toContain('Authentication')
+  })
+
   it('classifies context window failures from upstream messages', () => {
     const result = normalizeProviderError({
       provider: 'anthropic',

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkUserRateLimit } from '@/lib/chat/rate-limiter'
 import { translateMessageForUser, type TranslationResult } from '@/lib/chat/translation-service'
+import { createPublicTranslationRouteResponse } from '@/lib/chat/translation-route-response'
 import {
   createApiErrorResponse,
   parseJsonRequest,
@@ -71,24 +72,5 @@ export async function POST(request: Request) {
     return createApiErrorResponse('Failed to translate message', 500)
   }
 
-  switch (translationResult.status) {
-    case 'missing_profile':
-      return createApiErrorResponse('Configuration error', 400)
-    case 'missing_api_key':
-      return createApiErrorResponse('Translation not configured', 400)
-    case 'invalid_api_key':
-      return createApiErrorResponse('Invalid API key configuration', 400)
-    case 'vault_error':
-      return createApiErrorResponse('Failed to decrypt API key', 500)
-    case 'save_error':
-      console.error('[Translate] Update failed:', translationResult.error)
-      return createApiErrorResponse('Failed to save translation', 500)
-    case 'translation_error':
-      console.error('[Translate] Translation failed:', translationResult.error)
-      return createApiErrorResponse('Failed to translate message', 500)
-    case 'success':
-      return Response.json({ success: true, content_en: translationResult.content })
-    default:
-      return createApiErrorResponse('Failed to translate message', 500)
-  }
+  return createPublicTranslationRouteResponse(translationResult)
 }

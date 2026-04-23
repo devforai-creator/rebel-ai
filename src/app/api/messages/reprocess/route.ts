@@ -1,10 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import { checkUserRateLimit } from '@/lib/chat/rate-limiter'
-import { CHAT_REPROCESS_LIMITS } from '@/lib/chat/runtime-limits'
-import { streamText, type LanguageModel } from 'ai'
-import { createLanguageModelFromSecretConfig } from '@/lib/llm/language-model-access'
+import { reprocessAssistantMessageForUser } from '@/lib/chat/reprocess-service'
 import {
   SUPPORT_TIER_FEATURES,
   withSupportTierHeaders as withSupportTierHeadersBase,
@@ -36,14 +33,6 @@ function createReprocessJsonResponse(body: unknown, init?: ResponseInit) {
   })
 }
 
-function buildReprocessedMessageUpdate(content: string) {
-  return {
-    content,
-    // Invalidate stale derived bilingual cache whenever the canonical text changes.
-    content_en: null,
-  }
-}
-
 export async function POST(request: Request) {
   const supabase = await createClient()
   const {
@@ -68,180 +57,42 @@ export async function POST(request: Request) {
   }
   const { messageId } = parsed.data
 
-  // 1. Fetch the message to reprocess
-  const { data: message, error: messageError } = await supabase
-    .from('messages')
-    .select('id, chat_id, role, content, user_id')
-    .eq('id', messageId)
-    .single()
-
-  if (messageError || !message) {
-    return createReprocessTextResponse('Message not found', { status: 404 })
-  }
-
-  if (message.user_id !== user.id) {
-    return createReprocessTextResponse('Forbidden', { status: 403 })
-  }
-
-  if (message.role !== 'assistant') {
-    return createReprocessTextResponse('Only assistant messages can be reprocessed', {
-      status: 400,
-    })
-  }
-
-  // 2. Fetch user's reprocess settings from profiles
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('reprocess_prompt, reprocess_api_key_id')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || !profile) {
-    return createReprocessTextResponse('Profile not found', { status: 404 })
-  }
-
-  if (!profile.reprocess_prompt || !profile.reprocess_api_key_id) {
-    return createReprocessTextResponse(
-      'Reprocess settings not configured. Please set prompt and API key in settings.',
-      { status: 400 },
-    )
-  }
-
-  const resolvedConfig = await resolveActiveLlmConfigForUser({
+  const result = await reprocessAssistantMessageForUser({
     supabase,
     userId: user.id,
-    apiKeyId: profile.reprocess_api_key_id,
-    defaultModelMode: 'lightweight',
+    messageId,
+    getAdminClient: createAdminClient,
   })
 
-  if (resolvedConfig.status === 'missing_api_key') {
-    return createReprocessTextResponse('API key not found or inactive', { status: 400 })
-  }
-
-  if (resolvedConfig.status === 'unsupported_provider') {
-    return createReprocessTextResponse('Unsupported provider', { status: 400 })
-  }
-
-  // 4. Decrypt API key from Vault (requires admin client)
-  const adminSupabase = createAdminClient()
-  let model: LanguageModel
-  try {
-    model = await createLanguageModelFromSecretConfig({
-      supabase: adminSupabase,
-      config: resolvedConfig.config,
-      requester: user.id,
-      logPrefix: '[Reprocess]',
-    })
-  } catch {
-    return createReprocessTextResponse('Failed to decrypt API key', { status: 500 })
-  }
-
-  // 6. Stream text and update message in DB.
-  // This experimental rewrite path updates the canonical message text in place, but intentionally
-  // does not rebuild summaries/facts. Those derived memory artifacts are maintained separately by
-  // the main queued chat pipeline and explicit regeneration flows.
-  try {
-    const stream = await streamText({
-      model,
-      system: profile.reprocess_prompt,
-      messages: [{ role: 'user', content: message.content }],
-    })
-
-    let fullText = ''
-    let lastUpdateAt = 0
-    let updateInFlight: Promise<void> | null = null
-    let updateError: Error | null = null
-    let queuedUpdateContent: string | null = null
-
-    const enqueueMessageUpdate = (content: string) => {
-      if (updateError) {
-        return
-      }
-      if (updateInFlight) {
-        queuedUpdateContent = content
-        return
-      }
-
-      const contentSnapshot = content
-      updateInFlight = (async () => {
-        const { error: messageUpdateError } = await supabase
-          .from('messages')
-          .update(buildReprocessedMessageUpdate(contentSnapshot))
-          .eq('id', messageId)
-          .eq('user_id', user.id)
-
-        if (messageUpdateError) {
-          throw new Error(`Failed to update message content: ${messageUpdateError.message}`)
-        }
-      })()
-        .catch((error) => {
-          updateError = error instanceof Error ? error : new Error(String(error))
-        })
-        .finally(() => {
-          updateInFlight = null
-          if (queuedUpdateContent && !updateError) {
-            const nextContent = queuedUpdateContent
-            queuedUpdateContent = null
-            enqueueMessageUpdate(nextContent)
-          } else {
-            queuedUpdateContent = null
-          }
-        })
-    }
-
-    const flushMessageUpdates = async () => {
-      if (updateError) {
-        throw updateError
-      }
-      while (updateInFlight) {
-        await updateInFlight
-        if (updateError) {
-          throw updateError
-        }
-      }
-    }
-
-    for await (const chunk of stream.textStream) {
-      if (updateError) {
-        throw updateError
-      }
-      fullText += chunk
-      const now = Date.now()
-
-      // Update DB every 200ms
-      if (now - lastUpdateAt >= CHAT_REPROCESS_LIMITS.streamUpdateIntervalMs) {
-        enqueueMessageUpdate(fullText)
-        lastUpdateAt = now
-      }
-    }
-
-    enqueueMessageUpdate(fullText)
-    await flushMessageUpdates()
-
-    // Final update with complete text
-    const { error: finalUpdateError } = await supabase
-      .from('messages')
-      .update({
-        ...buildReprocessedMessageUpdate(fullText),
-        model_used: resolvedConfig.config.modelName,
+  switch (result.status) {
+    case 'message_not_found':
+      return createReprocessTextResponse('Message not found', { status: 404 })
+    case 'forbidden':
+      return createReprocessTextResponse('Forbidden', { status: 403 })
+    case 'not_assistant':
+      return createReprocessTextResponse('Only assistant messages can be reprocessed', {
+        status: 400,
       })
-      .eq('id', messageId)
-      .eq('user_id', user.id)
-
-    if (finalUpdateError) {
-      console.error('[Reprocess] Final update failed:', finalUpdateError)
+    case 'profile_not_found':
+      return createReprocessTextResponse('Profile not found', { status: 404 })
+    case 'settings_not_configured':
+      return createReprocessTextResponse(
+        'Reprocess settings not configured. Please set prompt and API key in settings.',
+        { status: 400 },
+      )
+    case 'api_key_not_found':
+      return createReprocessTextResponse('API key not found or inactive', { status: 400 })
+    case 'unsupported_provider':
+      return createReprocessTextResponse('Unsupported provider', { status: 400 })
+    case 'decrypt_failed':
+      return createReprocessTextResponse('Failed to decrypt API key', { status: 500 })
+    case 'save_failed':
       return createReprocessTextResponse('Failed to save reprocessed message', { status: 500 })
-    }
-
-    // Update api_keys.last_used_at
-    await supabase
-      .from('api_keys')
-      .update({ last_used_at: new Date().toISOString() })
-      .eq('id', resolvedConfig.config.apiKeyId)
-
-    return createReprocessJsonResponse({ success: true, content: fullText })
-  } catch (error) {
-    console.error('[Reprocess] Streaming failed:', error)
-    return createReprocessTextResponse('Failed to reprocess message', { status: 500 })
+    case 'reprocess_failed':
+      return createReprocessTextResponse('Failed to reprocess message', { status: 500 })
+    case 'success':
+      return createReprocessJsonResponse({ success: true, content: result.content })
+    default:
+      return createReprocessTextResponse('Failed to reprocess message', { status: 500 })
   }
 }

@@ -134,7 +134,7 @@ Acceptance notes:
 
 ### P0-3. Tighten Secondary Invocation Ownership
 
-Status: `pending`
+Status: `completed`
 
 Primary scope:
 
@@ -147,6 +147,12 @@ Acceptance notes:
 - wrappers and triggers are visibly thinner than invocation cores
 - each secondary surface has one obvious owner for LLM invocation
 - secondary surfaces stay outside the maintained core chat success path
+- summary invocation ownership moved behind
+  [summary-generation-service.ts](../../../src/lib/chat-memory/summary-generation-service.ts)
+- reprocess invocation ownership moved behind
+  [reprocess-service.ts](../../../src/lib/chat/reprocess-service.ts)
+- translation route response mapping moved behind
+  [translation-route-response.ts](../../../src/lib/chat/translation-route-response.ts)
 
 ### P0-4. Decide The Next Feature Queue
 

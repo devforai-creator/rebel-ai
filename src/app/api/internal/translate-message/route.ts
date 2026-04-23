@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { translateMessageForUser, type TranslationResult } from '@/lib/chat/translation-service'
+import { createInternalTranslationRouteResponse } from '@/lib/chat/translation-route-response'
 import {
   createApiErrorResponse,
   createUnexpectedRouteErrorResponse,
@@ -72,28 +73,12 @@ export async function POST(req: Request) {
       messageContent: message.content,
       trimOutput: true,
     })
-
-    switch (translationResult.status) {
-      case 'missing_profile':
-      case 'missing_api_key':
-        logTranslateRouteDebug('[Translate] No translation API key configured for user:', userId)
-        return Response.json({ success: true, skipped: true, reason: 'no_api_key' })
-      case 'invalid_api_key':
-        console.error('[Translate] API key not found or inactive:', translationResult.apiKeyId)
-        return createApiErrorResponse('Invalid configuration', 400)
-      case 'save_error':
-        console.error('[Translate] Failed to save translation:', translationResult.error)
-        return createApiErrorResponse('Failed to save translation', 500)
-      case 'vault_error':
-      case 'translation_error':
-        console.error('[Translate] Error:', translationResult.error)
-        return createApiErrorResponse('Translation failed', 500)
-      case 'success':
-        logTranslateRouteDebug('[Translate] Successfully translated message:', messageId)
-        return Response.json({ success: true, content_en: translationResult.content })
-      default:
-        return createApiErrorResponse('Translation failed', 500)
-    }
+    return createInternalTranslationRouteResponse({
+      result: translationResult,
+      userId,
+      messageId,
+      logDebug: logTranslateRouteDebug,
+    })
   } catch (error) {
     return createUnexpectedRouteErrorResponse('[Translate] Error:', error, {
       message: 'Translation failed',

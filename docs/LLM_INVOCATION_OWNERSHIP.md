@@ -296,6 +296,21 @@ Still intentionally local:
 - queued chat runner secret/model setup
 - embeddings client setup
 
+## P0-3 Outcome
+
+Secondary invocation ownership is now clearer at the boundary:
+
+- translation keeps [translation-service.ts](../src/lib/chat/translation-service.ts)
+  as the invocation owner, while route-specific response mapping moved into
+  [translation-route-response.ts](../src/lib/chat/translation-route-response.ts)
+- summary route entry now delegates invocation ownership to
+  [summary-generation-service.ts](../src/lib/chat-memory/summary-generation-service.ts)
+- reprocess route entry now delegates invocation ownership to
+  [reprocess-service.ts](../src/lib/chat/reprocess-service.ts)
+
+That keeps wrappers and triggers visibly thinner without coupling the first-class
+queued chat runner to secondary-path semantics.
+
 ## Explicitly Out Of Scope For This Queue
 
 These provider calls exist, but they are not part of the current ownership

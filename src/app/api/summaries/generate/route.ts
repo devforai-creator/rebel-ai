@@ -1,11 +1,6 @@
 import { NextRequest } from 'next/server'
-import type { LanguageModel } from 'ai'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { hasMemoryUpdateWork, updateMemoryState } from '@/lib/chat-memory'
-import { normalizeChatModelConfig } from '@/lib/chat/model-config'
-import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
-import { createLanguageModelFromSecretConfig } from '@/lib/llm/language-model-access'
-import type { ApiServiceTier } from '@/types/database.types'
+import { generateSummariesForChat } from '@/lib/chat-memory/summary-generation-service'
 import {
   createApiErrorResponse,
   createUnexpectedRouteErrorResponse,
@@ -95,148 +90,47 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 3. Verify chat ownership with admin client (bypasses RLS)
     const supabase = createAdminClient()
+    const result = await generateSummariesForChat({
+      supabase,
+      chatId,
+      userId,
+      provider,
+      modelName,
+      apiKeyId,
+      regenerate: normalizedRegenerate,
+    })
 
-    type ChatOwnership = {
-      id: string
-      user_id: string
-      model_config: unknown
+    switch (result.status) {
+      case 'chat_not_found':
+        return createApiErrorResponse('Chat not found', 404)
+      case 'forbidden':
+        return createApiErrorResponse('Forbidden', 403)
+      case 'summary_generation_failed':
+        return createApiErrorResponse('Summary generation failed', 500)
+      case 'skipped_no_work':
+        return Response.json({
+          success: true,
+          skipped: true,
+          message: 'No summary generation work pending',
+        })
+      case 'api_key_not_found':
+        return createApiErrorResponse('API key not found', 404)
+      case 'api_key_not_available':
+        return createApiErrorResponse('API key not available', 403)
+      case 'api_key_misconfigured':
+        return createApiErrorResponse('API key misconfigured', 500)
+      case 'unsupported_provider':
+        return createApiErrorResponse(`Unsupported provider: ${result.provider}`, 400)
+      case 'missing_model_name':
+        return createApiErrorResponse('Model name missing', 400)
+      case 'decrypt_failed':
+        return createApiErrorResponse('Failed to decrypt API key', 500)
+      case 'success':
+        return Response.json({ success: true, message: 'Summary generation completed' })
+      default:
+        return createApiErrorResponse('Summary generation failed', 500)
     }
-
-    const { data: chat, error: chatError } = await supabase
-      .from('chats')
-      .select('id, user_id, model_config')
-      .eq('id', chatId)
-      .single<ChatOwnership>()
-
-    if (chatError || !chat) {
-      console.error('[Summaries API] Chat not found:', chatError?.message)
-      return createApiErrorResponse('Chat not found', 404)
-    }
-
-    if (chat.user_id !== userId) {
-      console.error(
-        `[Summaries API] Ownership violation: user ${userId} attempted to access chat ${chatId} owned by ${chat.user_id}`,
-      )
-      return createApiErrorResponse('Forbidden', 403)
-    }
-
-    const modelConfig = normalizeChatModelConfig(chat.model_config)
-    let hasWork
-    try {
-      hasWork = await hasMemoryUpdateWork({
-        supabase,
-        chatId,
-        regenerate: normalizedRegenerate,
-        modelConfig,
-      })
-    } catch (error) {
-      console.error('[Summaries API] Failed to inspect summary work:', error)
-      return createApiErrorResponse('Summary generation failed', 500)
-    }
-
-    if (!hasWork) {
-      return Response.json({
-        success: true,
-        skipped: true,
-        message: 'No summary generation work pending',
-      })
-    }
-
-    // 4. Retrieve and decrypt API key (server-side only)
-    type ApiKeyRow = {
-      id: string
-      user_id: string
-      provider: string
-      model_preference: string | null
-      vault_secret_name: string
-      is_active: boolean
-      service_tier: ApiServiceTier
-    }
-
-    const { data: apiKeyRow, error: apiKeyError } = await supabase
-      .from('api_keys')
-      .select('id, user_id, provider, model_preference, vault_secret_name, is_active, service_tier')
-      .eq('id', apiKeyId)
-      .single<ApiKeyRow>()
-
-    if (apiKeyError || !apiKeyRow) {
-      console.error('[Summaries API] API key lookup failed:', apiKeyError?.message)
-      return createApiErrorResponse('API key not found', 404)
-    }
-
-    if (apiKeyRow.user_id !== userId || !apiKeyRow.is_active) {
-      console.error('[Summaries API] API key ownership or status invalid', {
-        apiKeyId,
-        expectedUser: userId,
-        owner: apiKeyRow.user_id,
-        isActive: apiKeyRow.is_active,
-      })
-      return createApiErrorResponse('API key not available', 403)
-    }
-
-    if (!apiKeyRow.vault_secret_name) {
-      console.error('[Summaries API] API key missing vault secret reference', { apiKeyId })
-      return createApiErrorResponse('API key misconfigured', 500)
-    }
-
-    const resolvedProvider = provider === apiKeyRow.provider ? provider : apiKeyRow.provider
-    if (resolvedProvider !== provider) {
-      console.warn('[Summaries API] Provider mismatch detected, falling back to stored provider', {
-        payloadProvider: provider,
-        storedProvider: apiKeyRow.provider,
-      })
-    }
-
-    if (!isKnownLLMProvider(resolvedProvider)) {
-      return createApiErrorResponse(`Unsupported provider: ${resolvedProvider}`, 400)
-    }
-
-    const resolvedModelName = modelName || apiKeyRow.model_preference || ''
-
-    if (!resolvedModelName) {
-      return createApiErrorResponse('Model name missing', 400)
-    }
-
-    // 5. Create model
-    let model: LanguageModel
-    try {
-      model = await createLanguageModelFromSecretConfig({
-        supabase,
-        requester: userId,
-        config: {
-          provider: resolvedProvider,
-          modelName: resolvedModelName,
-          serviceTier: apiKeyRow.service_tier,
-          vaultSecretName: apiKeyRow.vault_secret_name,
-        },
-        logPrefix: '[Summaries API]',
-      })
-    } catch {
-      return createApiErrorResponse('Failed to decrypt API key', 500)
-    }
-
-    // 6. Generate summaries (direct execution)
-    // Note: Not using after() - unstable on Vercel due to early container termination after HTTP response
-    // Execute directly with await to ensure completion while maintaining HTTP connection
-    try {
-      await updateMemoryState({
-        supabase,
-        chatId,
-        userId,
-        model,
-        provider: resolvedProvider,
-        modelName: resolvedModelName,
-        regenerate: normalizedRegenerate,
-        modelConfig,
-      })
-    } catch (error) {
-      console.error('[Summaries API] Summary generation failed:', error)
-      return createApiErrorResponse('Summary generation failed', 500)
-    }
-
-    return Response.json({ success: true, message: 'Summary generation completed' })
   } catch (error) {
     return createUnexpectedRouteErrorResponse('[Summaries API] Unexpected error:', error)
   }

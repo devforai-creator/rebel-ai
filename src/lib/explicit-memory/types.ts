@@ -30,3 +30,17 @@ export type ProposeMemoryWriteInput = {
   sourceEndSeq: number
   supersedesStatement?: string
 }
+export type MemoryProposalToolResult =
+  | {
+      action: 'propose'
+      scope: ExplicitMemoryScope
+      kind: ExplicitMemoryKind
+      statement: string
+      sourceStartSeq: number
+      sourceEndSeq: number
+      reason: string
+    }
+  | {
+      action: 'skip'
+      reason: string
+    }

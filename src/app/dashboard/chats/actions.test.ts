@@ -48,6 +48,7 @@ function buildSupabase({
   personas,
   turns,
   messages,
+  summaries,
 }: {
   user: { id: string } | null
   chats?: Array<Record<string, unknown>>
@@ -55,6 +56,7 @@ function buildSupabase({
   personas?: Array<Record<string, unknown>>
   turns?: Array<Record<string, unknown>>
   messages?: Array<Record<string, unknown>>
+  summaries?: Array<Record<string, unknown>>
 }) {
   const supabase = createSupabaseMock({
     tables: {
@@ -81,6 +83,14 @@ function buildSupabase({
       messages: {
         rows: messages ?? [],
         primaryKeys: ['id'],
+      },
+      chat_summaries: {
+        rows: summaries ?? [],
+        primaryKeys: ['id'],
+        transformInsert: (row, current) => ({
+          id: `summary-${current.length + 1}`,
+          ...row,
+        }),
       },
     },
   })
@@ -159,6 +169,10 @@ function getTurnRows(supabase: ReturnType<typeof buildSupabase>) {
 
 function getMessageRows(supabase: ReturnType<typeof buildSupabase>) {
   return supabase.state.messages as Array<Record<string, unknown>>
+}
+
+function getSummaryRows(supabase: ReturnType<typeof buildSupabase>) {
+  return supabase.state.chatSummaries as Array<Record<string, unknown>>
 }
 
 describe('dashboard chats actions', () => {
@@ -430,5 +444,84 @@ describe('dashboard chats actions', () => {
       },
     ])
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/characters/char-1')
+  })
+
+  it('imports RebelAI fallback summary status from extension metadata', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      characters: [{ id: 'char-1', user_id: 'user-1', name: 'Scout' }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    hoistedMocks.parseRisuChatJsonMock.mockReturnValue({
+      data: {
+        _rebelai: {
+          summaries: [
+            {
+              level: 0,
+              start_seq: 1,
+              end_seq: 10,
+              summary: 'Locally compressed fallback',
+              summary_status: 'fallback',
+              token_count: null,
+            },
+            {
+              level: 1,
+              start_seq: 1,
+              end_seq: 20,
+              summary: 'Imported summary with unknown legacy status',
+              summary_status: 'legacy',
+              token_count: 42,
+            },
+          ],
+          facts: [],
+        },
+      },
+    })
+    hoistedMocks.getMessageCountMock.mockReturnValue(1)
+    hoistedMocks.fromRisuFormatMock.mockReturnValue([
+      {
+        id: 'imported-1',
+        role: 'user',
+        content: 'Hello',
+        created_at: '2026-04-14T00:00:00.000Z',
+        model_used: null,
+        prompt_tokens: null,
+        completion_tokens: null,
+      },
+    ])
+    hoistedMocks.buildTurnGraphForMessagesMock.mockReturnValue({
+      turns: [{ id: 'turn-1', chat_id: 'chat-1', user_message_id: 'msg-1' }],
+      messages: [{ id: 'msg-1', chat_id: 'chat-1', role: 'user', content: 'Hello' }],
+    })
+    const { importChat } = await import('./actions')
+
+    await expect(importChat('char-1', '{"data":{}}')).resolves.toEqual({
+      success: true,
+      chatId: 'chat-1',
+      messageCount: 1,
+    })
+
+    expect(getSummaryRows(supabase)).toEqual([
+      expect.objectContaining({
+        chat_id: 'chat-1',
+        user_id: 'user-1',
+        level: 0,
+        start_seq: 1,
+        end_seq: 10,
+        summary: 'Locally compressed fallback',
+        summary_status: 'fallback',
+        token_count: null,
+      }),
+      expect.objectContaining({
+        chat_id: 'chat-1',
+        user_id: 'user-1',
+        level: 1,
+        start_seq: 1,
+        end_seq: 20,
+        summary: 'Imported summary with unknown legacy status',
+        summary_status: 'ok',
+        token_count: 42,
+      }),
+    ])
   })
 })

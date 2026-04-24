@@ -9,6 +9,7 @@ import { createChatTurn } from '@/lib/chat/turns'
 import { parseRisuChatJson, fromRisuFormat, getMessageCount } from '@/lib/chat/risu-converter'
 import { buildOperatorDefaultChatModelConfig } from '@/lib/chat/model-config'
 import type { ChatImportResult } from '@/types/risu-chat'
+import type { ChatSummaryInsert } from '@/types/database.types'
 import { getCharacterGreetingOptions } from './new/greeting-options'
 
 export async function createChat({
@@ -277,13 +278,14 @@ export async function importChat(
   if (rebelaiExtension) {
     // Restore summaries
     if (rebelaiExtension.summaries?.length > 0) {
-      const summariesToInsert = rebelaiExtension.summaries.map((s) => ({
+      const summariesToInsert: ChatSummaryInsert[] = rebelaiExtension.summaries.map((s) => ({
         chat_id: newChat.id,
         user_id: user.id,
         level: s.level,
         start_seq: s.start_seq,
         end_seq: s.end_seq,
         summary: s.summary,
+        summary_status: s.summary_status === 'fallback' ? 'fallback' : 'ok',
         token_count: s.token_count,
       }))
 

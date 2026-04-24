@@ -60,11 +60,7 @@ export async function createHigherLevelSummary({
     retentionPreference: '24h',
   })
 
-  const {
-    summaryText,
-    summaryStatus = 'ok',
-    tokenCount,
-  } = await generateSummaryWithFallback({
+  const { summaryText, summaryStatus, tokenCount } = await generateSummaryWithFallback({
     model,
     provider,
     systemPrompt,

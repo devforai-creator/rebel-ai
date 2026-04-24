@@ -1,7 +1,7 @@
 # Explicit Memory V0 Backlog
 
 Updated: 2026-04-22
-Status: Archived (Parked)
+Status: Active
 
 Parking note:
 

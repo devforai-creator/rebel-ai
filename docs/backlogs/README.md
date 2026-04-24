@@ -18,7 +18,7 @@ Use it to answer two questions quickly:
 ## Current Entry Point
 
 - Active backlog:
-  [fallback-summary-status-backlog-2026-04-24.md](./active/fallback-summary-status-backlog-2026-04-24.md)
+  [suu-host-overflow-backlog-2026-04-25.md](./active/suu-host-overflow-backlog-2026-04-25.md)
 - Most recently parked backlog:
   [explicit-memory-v0-backlog-2026-04-22.md](./parked/2026/explicit-memory-v0-backlog-2026-04-22.md)
 - Most recently archived backlog:

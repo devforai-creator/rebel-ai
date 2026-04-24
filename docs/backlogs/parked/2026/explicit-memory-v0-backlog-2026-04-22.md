@@ -1,14 +1,30 @@
 # Explicit Memory V0 Backlog
 
-Updated: 2026-04-22
-Status: Active
+Updated: 2026-04-25
+Status: Parked
 
 Parking note:
 
 - drafted on `2026-04-22` as a possible next-step design queue after recent ATR
   hardening
-- intentionally parked the same day without implementation because ATR has only
+- initially parked the same day without implementation because ATR has only
   recently crossed into the current heuristic/tool-choice hardening phase
+- briefly unparked between `2026-04-24` and `2026-04-25` for a partial
+  implementation cycle, then re-parked on `2026-04-25` to free the single
+  active slot for the SUU host overflow tutoring-mode work
+- partial implementation state at re-park time:
+  - **P0-1 (artifact and storage boundary)**: type contract landed in
+    `src/lib/explicit-memory/types.ts` (`ExplicitMemoryEntry`,
+    `ExplicitMemoryScope`, `ExplicitMemoryKind`, `ExplicitMemoryStatus`).
+    Storage boundary, migration, and persistence layer are not yet in.
+  - **P0-2 (proposal tool and admission logic)**: tool I/O types landed in the
+    same file (`ProposeMemoryWriteInput`, `MemoryProposalToolResult`).
+    Server-side validation, dedupe, conflict handling, and the actual tool
+    wiring are not yet in.
+  - **P0-3, P0-4**: untouched.
+- next pickup should resume P0-1 from storage boundary + migration onward, and
+  P0-2 from server-side admission/dedupe logic onward; the existing types do
+  not need to be re-introduced
 - revisit only after ATR behavior, telemetry, and operating confidence feel
   stable enough to absorb a second persistent memory layer
 

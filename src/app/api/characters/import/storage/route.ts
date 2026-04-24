@@ -32,7 +32,7 @@ const EnqueueImportStorageSchema = z.object({
   path: z.string().min(1),
   fileName: z.string().min(1),
   fileType: z.string().nullish(),
-  fileSize: z.number().int().positive().optional(),
+  fileSize: z.number().int().positive(),
   uploadTicket: z.string().min(1),
 })
 
@@ -199,7 +199,7 @@ async function enqueueImportUpload({
   path: string
   fileName: string
   fileType: string | null
-  fileSize?: number
+  fileSize: number
   uploadTicket: string
 }) {
   if (!isImportUploadPath(path, userId)) {
@@ -230,7 +230,7 @@ async function enqueueImportUpload({
     claims.path !== path ||
     claims.fileName !== fileName ||
     claims.fileType !== fileType ||
-    claims.fileSize !== (fileSize ?? claims.fileSize)
+    claims.fileSize !== fileSize
   ) {
     if (claims.userId === userId && isImportUploadPath(claims.path, userId)) {
       await cleanupStagedUpload(supabase, claims.path)
@@ -239,9 +239,9 @@ async function enqueueImportUpload({
     return createApiErrorResponse('Invalid upload reference', 403)
   }
 
-  // Early size gate — client reports fileSize, runner re-checks after download.
+  // Early size gate — request and storage metadata must both match the signed ticket.
   // This catches obvious over-limit uploads before we even enqueue.
-  if (fileSize && fileSize > MAX_IMPORT_UPLOAD_BYTES) {
+  if (fileSize > MAX_IMPORT_UPLOAD_BYTES) {
     await cleanupStagedUpload(supabase, path)
     return Response.json(
       {
@@ -249,6 +249,17 @@ async function enqueueImportUpload({
       },
       { status: 413 },
     )
+  }
+
+  const stagedUpload = await inspectStagedUpload(supabase, path)
+  if (!stagedUpload.ok) {
+    await cleanupStagedUpload(supabase, path)
+    return stagedUpload.response
+  }
+
+  if (stagedUpload.size !== claims.fileSize) {
+    await cleanupStagedUpload(supabase, path)
+    return createApiErrorResponse('Invalid upload reference', 403)
   }
 
   const activeImportCheck = await inspectActiveImportJobs(supabase, userId)
@@ -299,6 +310,38 @@ async function enqueueImportUpload({
     jobId: job.id,
     status: job.status,
   })
+}
+
+async function inspectStagedUpload(supabase: RouteSupabaseClient, path: string) {
+  const { data, error } = await supabase.storage.from(IMPORT_UPLOAD_BUCKET).info(path)
+
+  if (error || typeof data?.size !== 'number' || !Number.isFinite(data.size)) {
+    console.error('[Character Import][storage] Failed to inspect staged upload:', {
+      path,
+      error,
+    })
+    return {
+      ok: false as const,
+      response: createApiErrorResponse('Invalid upload reference', 403),
+    }
+  }
+
+  if (data.size > MAX_IMPORT_UPLOAD_BYTES) {
+    return {
+      ok: false as const,
+      response: Response.json(
+        {
+          error: `File size (${(data.size / 1024 / 1024).toFixed(1)}MB) exceeds the ${MAX_IMPORT_UPLOAD_MB}MB server limit. Self-hosters can raise NEXT_PUBLIC_IMPORT_MAX_UPLOAD_MB.`,
+        },
+        { status: 413 },
+      ),
+    }
+  }
+
+  return {
+    ok: true as const,
+    size: data.size,
+  }
 }
 
 async function cleanupStagedUpload(supabase: RouteSupabaseClient, path: string): Promise<void> {

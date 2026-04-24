@@ -69,6 +69,9 @@ type Fixture = {
   signedUploadUrl?: string
   signedUploadToken?: string
   insertedJobId?: string
+  stagedUploadSize?: number
+  stagedUploadError?: DbError | null
+  stagedUploadMissingSize?: boolean
 }
 
 type Predicate<T> = (row: T) => boolean
@@ -153,6 +156,7 @@ class RouteSupabaseMock {
   readonly jobs: ImportJobRow[]
   readonly insertPayloads: Array<Omit<ImportJobRow, 'id' | 'status'>> = []
   readonly signedUploadRequests: Array<{ bucket: string; path: string; upsert?: boolean }> = []
+  readonly infoRequests: Array<{ bucket: string; path: string }> = []
 
   constructor(readonly fixture: Fixture) {
     this.jobs = [...(fixture.jobs ?? [])]
@@ -189,6 +193,20 @@ class RouteSupabaseMock {
         this.removedBuckets.push(bucket)
         this.removedPaths.push(...paths)
         return { data: [], error: this.fixture.cleanupError ?? null }
+      },
+      info: async (path: string) => {
+        this.infoRequests.push({ bucket, path })
+
+        if (this.fixture.stagedUploadError) {
+          return { data: null, error: this.fixture.stagedUploadError }
+        }
+
+        return {
+          data: this.fixture.stagedUploadMissingSize
+            ? { name: path }
+            : { name: path, size: this.fixture.stagedUploadSize ?? 1024 },
+          error: null,
+        }
       },
     }),
   }
@@ -486,6 +504,32 @@ describe('POST /api/characters/import/storage', () => {
     expect(supabase.removedPaths).toEqual([])
   })
 
+  it('requires enqueue payloads to include the signed file size', async () => {
+    const response = await POST(
+      buildRequest({
+        action: 'enqueue',
+        path: 'user-1/imports/new-file.rbx',
+        fileName: 'new-file.rbx',
+        fileType: 'application/octet-stream',
+        uploadTicket: createImportUploadTicket({
+          userId: 'user-1',
+          path: 'user-1/imports/new-file.rbx',
+          fileName: 'new-file.rbx',
+          fileType: 'application/octet-stream',
+          fileSize: 1024,
+          expiresAt: Date.now() + 5 * 60 * 1000,
+        }),
+      }) as never,
+    )
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: 'Invalid request body',
+      code: 'invalid_request',
+    })
+    expect(createClientMock).not.toHaveBeenCalled()
+  })
+
   it('returns 403 and cleans up the staged upload when the upload ticket is expired', async () => {
     const supabase = createSupabaseMock({
       user: { id: 'user-1' },
@@ -581,6 +625,23 @@ describe('POST /api/characters/import/storage', () => {
     expect(body.error).toContain('exceeds the 100MB server limit')
     expect(supabase.removedBuckets).toEqual([IMPORT_UPLOAD_BUCKET])
     expect(supabase.removedPaths).toEqual(['user-1/imports/new-file.rbx'])
+  })
+
+  it('returns 403 and cleans up when the staged upload size does not match the ticket', async () => {
+    const supabase = createSupabaseMock({
+      user: { id: 'user-1' },
+      stagedUploadSize: 2048,
+    })
+
+    const response = await POST(buildRequest(buildEnqueueRequestBody()) as never)
+
+    expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({ error: 'Invalid upload reference' })
+    expect(supabase.infoRequests).toEqual([
+      { bucket: IMPORT_UPLOAD_BUCKET, path: 'user-1/imports/new-file.rbx' },
+    ])
+    expect(supabase.removedPaths).toEqual(['user-1/imports/new-file.rbx'])
+    expect(supabase.insertPayloads).toEqual([])
   })
 
   it('returns 409 and deletes the staged upload when the user already has an active import at enqueue time', async () => {

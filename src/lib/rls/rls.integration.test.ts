@@ -234,6 +234,26 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
     await cleanupTestData()
   })
 
+  describe('profiles table RLS', () => {
+    it('does not allow users to grant themselves admin privileges', async () => {
+      const attempt = await testData.userA.client
+        .from('profiles')
+        .update({ is_admin: true })
+        .eq('id', testData.userA.id)
+
+      expect(attempt.error).toBeTruthy()
+
+      const { data, error } = await adminClient
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', testData.userA.id)
+        .single()
+
+      expect(error).toBeNull()
+      expect(data?.is_admin).toBe(false)
+    })
+  })
+
   describe('characters table RLS', () => {
     it('user can see their own private characters', async () => {
       const { data, error } = await testData.userA.client

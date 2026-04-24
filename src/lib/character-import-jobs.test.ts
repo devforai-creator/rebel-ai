@@ -29,6 +29,9 @@ type JobUpdateCall = {
 }
 
 type SupabaseFixture = {
+  infoError?: { message: string } | null
+  infoSize?: number
+  infoSizeMissing?: boolean
   downloadError?: { message: string } | null
   removeError?: { message: string } | null
   bufferByteLength?: number
@@ -39,6 +42,7 @@ function createSupabaseMock(fixture: SupabaseFixture = {}) {
   const calls = {
     jobUpdates: [] as JobUpdateCall[],
     removedPaths: [] as string[][],
+    infoPaths: [] as string[],
     downloadPaths: [] as string[],
   }
 
@@ -66,6 +70,23 @@ function createSupabaseMock(fixture: SupabaseFixture = {}) {
         }
 
         return {
+          info: vi.fn((path: string) => {
+            calls.infoPaths.push(path)
+
+            if (fixture.infoError) {
+              return Promise.resolve({
+                data: null,
+                error: fixture.infoError,
+              })
+            }
+
+            return Promise.resolve({
+              data: fixture.infoSizeMissing
+                ? { name: path }
+                : { name: path, size: fixture.infoSize ?? bufferByteLength },
+              error: null,
+            })
+          }),
           download: vi.fn((path: string) => {
             calls.downloadPaths.push(path)
             if (fixture.downloadError) {
@@ -210,6 +231,7 @@ describe('character-import-jobs', () => {
     )
 
     expect(result).toEqual({ status: 'success' })
+    expect(mock.calls.infoPaths).toEqual(['user-1/imports/file.rbx'])
     expect(parseRbxArchiveMock).toHaveBeenCalledTimes(1)
     expect(importRbxMock).toHaveBeenCalledWith({
       userId: 'user-1',
@@ -266,6 +288,38 @@ describe('character-import-jobs', () => {
       payload: expect.objectContaining({
         status: 'error',
         error_message: 'Storage unavailable',
+      }),
+    })
+    expect(mock.calls.removedPaths).toContainEqual(['user-1/imports/file.rbx'])
+  })
+
+  it('marks the job as error before download when storage metadata is oversized', async () => {
+    process.env.NEXT_PUBLIC_IMPORT_MAX_UPLOAD_MB = '10'
+    const { processCharacterImportJob } = await loadModule()
+    const mock = createSupabaseMock({
+      infoSize: 11 * 1024 * 1024,
+      bufferByteLength: 8,
+    })
+
+    await processCharacterImportJob(
+      {
+        jobId: 'job-1',
+        userId: 'user-1',
+        storagePath: 'user-1/imports/file.rbx',
+        fileName: 'file.rbx',
+      },
+      mock.client as never,
+    )
+
+    expect(mock.calls.infoPaths).toEqual(['user-1/imports/file.rbx'])
+    expect(mock.calls.downloadPaths).toEqual([])
+    expect(parseRbxArchiveMock).not.toHaveBeenCalled()
+    expect(importRbxMock).not.toHaveBeenCalled()
+    expect(mock.calls.jobUpdates.at(-1)).toMatchObject({
+      id: 'job-1',
+      payload: expect.objectContaining({
+        status: 'error',
+        error_message: expect.stringContaining('exceeds the 10MB limit'),
       }),
     })
     expect(mock.calls.removedPaths).toContainEqual(['user-1/imports/file.rbx'])

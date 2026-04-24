@@ -65,6 +65,12 @@ export async function parseRbxArchive(
   if (!manifestFile) {
     throw new Error(`Invalid .rbx file: ${MANIFEST_FILE} not found in archive`)
   }
+  assertZipEntrySize(
+    manifestFile,
+    limits.maxManifestBytes,
+    MANIFEST_FILE,
+    limits.maxManifestBytes / 1024 / 1024,
+  )
 
   let manifestJson: unknown
   try {
@@ -169,6 +175,12 @@ type ExtractionLimits = {
   maxManifestBytes: number
 }
 
+type ZipEntrySizeMetadata = JSZip.JSZipObject & {
+  _data?: {
+    uncompressedSize?: number
+  }
+}
+
 /**
  * Extract all asset files from a directory within the ZIP archive.
  * Enforces per-asset, total decompressed size, and file count limits.
@@ -210,34 +222,85 @@ async function extractDirectoryAssets(
     )
   }
 
-  // 3. Decompress sequentially with budget enforcement
-  const assets: RbxAssetFile[] = []
+  // 3. Validate declared uncompressed sizes before any entry allocates memory.
+  const declaredEntries = entries.map((entry) => ({
+    ...entry,
+    declaredSize: getDeclaredUncompressedSize(entry.file),
+  }))
+  const allEntriesHaveDeclaredSizes = declaredEntries.every((entry) => entry.declaredSize !== null)
+  let declaredBytes = 0
 
-  for (const { fileName, file } of entries) {
-    const data = await file.async('uint8array')
+  for (const { fileName, declaredSize } of declaredEntries) {
+    if (declaredSize === null) continue
 
-    if (data.byteLength > MAX_SINGLE_ASSET_BYTES) {
-      throw new Error(
-        `Asset "${fileName}" is ${(data.byteLength / 1024 / 1024).toFixed(1)}MB — ` +
-          `exceeds ${(MAX_SINGLE_ASSET_BYTES / 1024 / 1024).toFixed(0)}MB per-asset limit`,
-      )
-    }
+    assertAssetSize(fileName, declaredSize)
 
-    budget.totalBytes += data.byteLength
-    budget.totalFiles += 1
-
-    if (budget.totalBytes > limits.maxDecompressedBytes) {
+    declaredBytes += declaredSize
+    if (budget.totalBytes + declaredBytes > limits.maxDecompressedBytes) {
       throw new Error(
         `Total decompressed size exceeds ${formatMbLimit(limits.maxDecompressedMb)}MB limit. ` +
           'This archive is too large for web import. ' +
           'Self-hosters can raise NEXT_PUBLIC_IMPORT_MAX_DECOMPRESSED_MB.',
       )
     }
+  }
+
+  if (allEntriesHaveDeclaredSizes) {
+    budget.totalBytes += declaredBytes
+    budget.totalFiles += declaredEntries.length
+  }
+
+  // 4. Decompress sequentially with budget enforcement
+  const assets: RbxAssetFile[] = []
+
+  for (const { fileName, file } of declaredEntries) {
+    const data = await file.async('uint8array')
+
+    assertAssetSize(fileName, data.byteLength)
+
+    if (!allEntriesHaveDeclaredSizes) {
+      budget.totalBytes += data.byteLength
+      budget.totalFiles += 1
+
+      if (budget.totalBytes > limits.maxDecompressedBytes) {
+        throw new Error(
+          `Total decompressed size exceeds ${formatMbLimit(limits.maxDecompressedMb)}MB limit. ` +
+            'This archive is too large for web import. ' +
+            'Self-hosters can raise NEXT_PUBLIC_IMPORT_MAX_DECOMPRESSED_MB.',
+        )
+      }
+    }
 
     assets.push({ fileName, data })
   }
 
   return assets
+}
+
+function getDeclaredUncompressedSize(file: JSZip.JSZipObject): number | null {
+  const size = (file as ZipEntrySizeMetadata)._data?.uncompressedSize
+  return typeof size === 'number' && Number.isFinite(size) && size >= 0 ? size : null
+}
+
+function assertZipEntrySize(
+  file: JSZip.JSZipObject,
+  maxBytes: number,
+  fileName: string,
+  maxMb: number,
+) {
+  const declaredSize = getDeclaredUncompressedSize(file)
+  if (declaredSize === null || declaredSize <= maxBytes) return
+
+  throw new Error(`Invalid .rbx file: ${fileName} exceeds ${formatMbLimit(maxMb)}MB limit`)
+}
+
+function assertAssetSize(fileName: string, byteLength: number) {
+  if (byteLength <= MAX_SINGLE_ASSET_BYTES) return
+
+  throw new Error(
+    `Asset "${fileName}" is ${(byteLength / 1024 / 1024).toFixed(1)}MB — ` +
+      `exceeds ${(MAX_SINGLE_ASSET_BYTES / 1024 / 1024).toFixed(0)}MB per-asset limit`,
+  )
 }
 
 function resolveExtractionLimits(overrides?: {

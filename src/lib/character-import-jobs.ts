@@ -69,6 +69,21 @@ export async function processCharacterImportJob(
     .eq('id', payload.jobId)
 
   try {
+    const stagedUpload = await supabase.storage.from(IMPORT_UPLOAD_BUCKET).info(payload.storagePath)
+    if (
+      stagedUpload.error ||
+      typeof stagedUpload.data?.size !== 'number' ||
+      !Number.isFinite(stagedUpload.data.size)
+    ) {
+      throw new Error(stagedUpload.error?.message || 'Failed to inspect uploaded file')
+    }
+
+    if (stagedUpload.data.size > MAX_IMPORT_UPLOAD_BYTES) {
+      throw new Error(
+        `File size (${(stagedUpload.data.size / 1024 / 1024).toFixed(1)}MB) exceeds the ${MAX_IMPORT_UPLOAD_MB}MB limit`,
+      )
+    }
+
     const download = await supabase.storage.from(IMPORT_UPLOAD_BUCKET).download(payload.storagePath)
     if (download.error || !download.data) {
       throw new Error(download.error?.message || 'Failed to read uploaded file')

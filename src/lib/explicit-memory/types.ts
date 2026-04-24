@@ -22,3 +22,11 @@ export type ExplicitMemoryEntry = {
   createdAt: string
   lastUsedAt: string | null
 }
+export type ProposeMemoryWriteInput = {
+  scope: ExplicitMemoryScope
+  kind: ExplicitMemoryKind
+  statement: string
+  sourceStartSeq: number
+  sourceEndSeq: number
+  supersedesStatement?: string
+}

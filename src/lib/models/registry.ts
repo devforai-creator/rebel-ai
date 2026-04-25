@@ -1,6 +1,17 @@
 import type { Provider } from '@/types/database.types'
 import type { ModelDefinition, ModelPricingTier, ProviderDefaults } from './types'
 
+const OPENAI_GPT55_PRICING: ModelPricingTier[] = [
+  {
+    rates: {
+      input: 5,
+      output: 30,
+      cachedInput: 0.5, // 90% discount on cached inputs
+      reasoning: 30,
+    },
+  },
+]
+
 const OPENAI_GPT54_PRICING: ModelPricingTier[] = [
   {
     rates: {
@@ -230,6 +241,18 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
   // OpenAI (GPT)
   // ===========================================================================
   {
+    id: 'gpt-5.5',
+    provider: 'openai',
+    displayName: 'GPT-5.5',
+    pricing: OPENAI_GPT55_PRICING,
+    features: {
+      promptCaching: 'extended',
+      reasoning: true,
+    },
+    uiVisible: true,
+    uiOrder: 1,
+  },
+  {
     id: 'gpt-5.4',
     provider: 'openai',
     displayName: 'GPT-5.4',
@@ -239,7 +262,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
       reasoning: true,
     },
     uiVisible: true,
-    uiOrder: 1,
+    uiOrder: 2,
   },
   {
     id: 'gpt-5.2',
@@ -251,7 +274,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
       reasoning: true,
     },
     uiVisible: true,
-    uiOrder: 2,
+    uiOrder: 3,
   },
   {
     id: 'gpt-5.1-chat-latest',
@@ -264,7 +287,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
       reasoning: true,
     },
     uiVisible: true,
-    uiOrder: 3,
+    uiOrder: 4,
   },
   {
     id: 'gpt-5.1',
@@ -277,7 +300,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
       reasoning: true,
     },
     uiVisible: true,
-    uiOrder: 4,
+    uiOrder: 5,
   },
   {
     id: 'gpt-5',
@@ -289,7 +312,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
       reasoning: true,
     },
     uiVisible: true,
-    uiOrder: 5,
+    uiOrder: 6,
   },
   {
     id: 'gpt-4.1',
@@ -299,7 +322,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
       promptCaching: 'standard',
     },
     uiVisible: true,
-    uiOrder: 6,
+    uiOrder: 7,
   },
   {
     id: 'gpt-4o',
@@ -466,7 +489,7 @@ export const PROVIDER_DEFAULTS: Record<Provider, ProviderDefaults> = {
     lightweightModel: 'gemini-2.0-flash-exp',
   },
   openai: {
-    defaultModel: 'gpt-5.1-chat-latest',
+    defaultModel: 'gpt-5.5',
     lightweightModel: 'gpt-4o-mini',
   },
   anthropic: {

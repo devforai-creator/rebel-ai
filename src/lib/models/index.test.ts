@@ -144,7 +144,7 @@ describe('Model Registry', () => {
   describe('getDefaultModelForProvider', () => {
     it('returns default model for each provider', () => {
       expect(getDefaultModelForProvider('google')).toBe('gemini-2.5-flash')
-      expect(getDefaultModelForProvider('openai')).toBe('gpt-5.1-chat-latest')
+      expect(getDefaultModelForProvider('openai')).toBe('gpt-5.5')
       expect(getDefaultModelForProvider('anthropic')).toBe('claude-haiku-4-5')
       expect(getDefaultModelForProvider('deepseek')).toBe('deepseek-v4-flash')
     })
@@ -265,7 +265,7 @@ describe('Model Registry', () => {
     it('appears first in UI model list', () => {
       const ids = listUiModelIdsByProvider('openai')
 
-      expect(ids[0]).toBe('gpt-5.4')
+      expect(ids[0]).toBe('gpt-5.5')
     })
   })
 

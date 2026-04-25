@@ -450,7 +450,7 @@ describe('POST /api/summaries/generate', () => {
         {
           ...validBody,
           provider: 'deepseek',
-          modelName: 'deepseek-chat',
+          modelName: 'deepseek-v4-flash',
         },
         'Bearer summary-secret',
       ),
@@ -458,7 +458,7 @@ describe('POST /api/summaries/generate', () => {
 
     expect(response.status).toBe(200)
     expect(createDeepSeekMock).toHaveBeenCalledWith({ apiKey: 'sk-test' })
-    expect(deepSeekModelFactoryMock).toHaveBeenCalledWith('deepseek-chat')
+    expect(deepSeekModelFactoryMock).toHaveBeenCalledWith('deepseek-v4-flash')
   })
 
   it('uses openrouter provider model creation', async () => {

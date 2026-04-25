@@ -130,16 +130,6 @@ const CLAUDE_HAIKU_PRICING: ModelPricingTier[] = [
   },
 ]
 
-const DEEPSEEK_CHAT_PRICING: ModelPricingTier[] = [
-  {
-    rates: {
-      input: 0.28, // $0.28/M (cache miss)
-      output: 0.42, // $0.42/M
-      cachedInput: 0.028, // $0.028/M (cache hit) - 10x cheaper
-    },
-  },
-]
-
 const DEEPSEEK_V4_FLASH_PRICING: ModelPricingTier[] = [
   {
     rates: {
@@ -400,28 +390,12 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
   // DeepSeek
   // ===========================================================================
   {
-    id: 'deepseek-chat',
-    provider: 'deepseek',
-    displayName: 'DeepSeek Chat',
-    pricing: DEEPSEEK_CHAT_PRICING,
-    uiVisible: true,
-    uiOrder: 1,
-  },
-  {
-    id: 'deepseek-reasoner',
-    provider: 'deepseek',
-    displayName: 'DeepSeek Reasoner',
-    pricing: DEEPSEEK_CHAT_PRICING,
-    uiVisible: true,
-    uiOrder: 2,
-  },
-  {
     id: 'deepseek-v4-flash',
     provider: 'deepseek',
     displayName: 'DeepSeek V4 Flash',
     pricing: DEEPSEEK_V4_FLASH_PRICING,
     uiVisible: true,
-    uiOrder: 3,
+    uiOrder: 1,
   },
   {
     id: 'deepseek-v4-pro',
@@ -429,7 +403,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
     displayName: 'DeepSeek V4 Pro',
     pricing: DEEPSEEK_V4_PRO_PRICING,
     uiVisible: true,
-    uiOrder: 4,
+    uiOrder: 2,
   },
   // ===========================================================================
   // OpenRouter

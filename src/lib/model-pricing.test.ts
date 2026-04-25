@@ -255,10 +255,10 @@ describe('estimateUsageCost', () => {
   })
 
   describe('DeepSeek models', () => {
-    it('should calculate cached input at 10% of input rate', () => {
+    it('should calculate cached input at 20% of input rate', () => {
       const params: UsageCostParams = {
         provider: 'deepseek',
-        modelName: 'deepseek-chat',
+        modelName: 'deepseek-v4-flash',
         promptTokens: 100000,
         completionTokens: 10000,
         cachedInputTokens: 80000,
@@ -266,14 +266,14 @@ describe('estimateUsageCost', () => {
       const result = estimateUsageCost(params)
       expect(result).not.toBeNull()
 
-      // Input rate: $0.28/M, Cached rate: $0.028/M (10% of input)
+      // Input rate: $0.14/M, Cached rate: $0.028/M (20% of input)
       // Fresh input: 100000 - 80000 = 20000 tokens
-      // Fresh cost: (20000 / 1M) * 0.28 = $0.0056
+      // Fresh cost: (20000 / 1M) * 0.14 = $0.0028
       // Cached cost: (80000 / 1M) * 0.028 = $0.00224
-      // Output cost: (10000 / 1M) * 0.42 = $0.0042
-      expect(result!.promptCost).toBeCloseTo(0.0056, 6)
+      // Output cost: (10000 / 1M) * 0.28 = $0.0028
+      expect(result!.promptCost).toBeCloseTo(0.0028, 6)
       expect(result!.cachedInputCost).toBeCloseTo(0.00224, 6)
-      expect(result!.completionCost).toBeCloseTo(0.0042, 6)
+      expect(result!.completionCost).toBeCloseTo(0.0028, 6)
     })
   })
 

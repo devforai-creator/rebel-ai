@@ -375,7 +375,7 @@ describe('translateMessageForUser', () => {
           user_id: 'user-1',
           is_active: true,
           provider: 'deepseek',
-          model_preference: 'deepseek-chat',
+          model_preference: 'deepseek-v4-flash',
           vault_secret_name: 'vault-key',
           service_tier: 'standard',
         },

@@ -167,13 +167,13 @@ describe('buildLanguageModel', () => {
 
     const model = buildLanguageModel({
       provider: 'deepseek',
-      modelName: 'deepseek-chat',
+      modelName: 'deepseek-v4-flash',
       apiKey: 'd-key',
       serviceTier: 'standard',
     })
 
     expect(createDeepSeekMock).toHaveBeenCalledWith({ apiKey: 'd-key' })
-    expect(deepseekFactory).toHaveBeenCalledWith('deepseek-chat')
+    expect(deepseekFactory).toHaveBeenCalledWith('deepseek-v4-flash')
     expect(model).toBe(deepseekModel)
   })
 

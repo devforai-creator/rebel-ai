@@ -140,6 +140,26 @@ const DEEPSEEK_CHAT_PRICING: ModelPricingTier[] = [
   },
 ]
 
+const DEEPSEEK_V4_FLASH_PRICING: ModelPricingTier[] = [
+  {
+    rates: {
+      input: 0.14, // $0.14/M (cache miss)
+      output: 0.28, // $0.28/M
+      cachedInput: 0.028, // $0.028/M (cache hit) - 5x cheaper
+    },
+  },
+]
+
+const DEEPSEEK_V4_PRO_PRICING: ModelPricingTier[] = [
+  {
+    rates: {
+      input: 1.74, // $1.74/M (cache miss)
+      output: 3.48, // $3.48/M
+      cachedInput: 0.145, // $0.145/M (cache hit) - almost 10x cheaper
+    },
+  },
+]
+
 const OPENROUTER_GLM5_PRICING: ModelPricingTier[] = [
   {
     rates: {
@@ -395,7 +415,22 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
     uiVisible: true,
     uiOrder: 2,
   },
-
+  {
+    id: 'deepseek-v4-flash',
+    provider: 'deepseek',
+    displayName: 'DeepSeek V4 Flash',
+    pricing: DEEPSEEK_V4_FLASH_PRICING,
+    uiVisible: true,
+    uiOrder: 3,
+  },
+  {
+    id: 'deepseek-v4-pro',
+    provider: 'deepseek',
+    displayName: 'DeepSeek V4 Pro',
+    pricing: DEEPSEEK_V4_PRO_PRICING,
+    uiVisible: true,
+    uiOrder: 4,
+  },
   // ===========================================================================
   // OpenRouter
   // ===========================================================================
@@ -465,7 +500,7 @@ export const PROVIDER_DEFAULTS: Record<Provider, ProviderDefaults> = {
     lightweightModel: 'claude-3-5-haiku-latest',
   },
   deepseek: {
-    defaultModel: 'deepseek-chat',
+    defaultModel: 'deepseek-v4-flash',
   },
   openrouter: {
     defaultModel: 'z-ai/glm-5',

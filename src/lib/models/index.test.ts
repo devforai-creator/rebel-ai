@@ -146,7 +146,7 @@ describe('Model Registry', () => {
       expect(getDefaultModelForProvider('google')).toBe('gemini-2.5-flash')
       expect(getDefaultModelForProvider('openai')).toBe('gpt-5.1-chat-latest')
       expect(getDefaultModelForProvider('anthropic')).toBe('claude-haiku-4-5')
-      expect(getDefaultModelForProvider('deepseek')).toBe('deepseek-chat')
+      expect(getDefaultModelForProvider('deepseek')).toBe('deepseek-v4-flash')
     })
 
     it('returns lightweight model when requested', () => {
@@ -161,7 +161,9 @@ describe('Model Registry', () => {
 
     it('falls back to default when lightweight not defined', () => {
       // DeepSeek has no lightweight model defined
-      expect(getDefaultModelForProvider('deepseek', { lightweight: true })).toBe('deepseek-chat')
+      expect(getDefaultModelForProvider('deepseek', { lightweight: true })).toBe(
+        'deepseek-v4-flash',
+      )
     })
   })
 

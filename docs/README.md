@@ -29,6 +29,7 @@ Keep human-facing docs short and directional. Exact runtime behavior should come
 - [CHAT_RUNTIME_TUNING.md](./CHAT_RUNTIME_TUNING.md): supported chat and runner tuning knobs
 - [DB_CHANGE_WORKFLOW.md](./DB_CHANGE_WORKFLOW.md): database migration and schema workflow
 - [GOOGLE_CACHE_BOUNDARY.md](./GOOGLE_CACHE_BOUNDARY.md): boundary contract for keeping Google explicit cache removable from the supported Google chat/tool path
+- [SECURITY_AUDIT_DECISIONS.md](./SECURITY_AUDIT_DECISIONS.md): maintainer log for `npm audit` and Dependabot advisories that fall outside the CI auto-block policy
 
 ## Reference (Not Exact Source Of Truth)
 

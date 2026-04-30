@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import type { ChatMemoryConfig } from '@/lib/chat/model-config'
 import ChatSummariesPanel, {
+  formatFallbackSummaryNotice,
   getEmptyStateText,
   getMemoryDescription,
   getNextMemoryCheckpoint,
@@ -18,6 +19,7 @@ vi.mock('./hooks', () => ({
         start_seq: 1,
         end_seq: 100,
         summary: 'Meta summary content',
+        summary_status: 'fallback',
         created_at: '2026-04-20T00:00:00.000Z',
       },
     ],
@@ -99,6 +101,31 @@ describe('ChatSummariesPanel memory stats copy', () => {
     expect(getEmptyStateText(memoryConfig)).toContain('after 14 messages')
   })
 
+  it('formats fallback summary counts and ranges for collapsed memory review', () => {
+    expect(
+      formatFallbackSummaryNotice([
+        {
+          id: 'summary-1',
+          level: 0,
+          start_seq: 1,
+          end_seq: 10,
+          summary: 'Fallback summary',
+          summary_status: 'fallback',
+          created_at: '2026-04-20T00:00:00.000Z',
+        },
+        {
+          id: 'summary-2',
+          level: 0,
+          start_seq: 11,
+          end_seq: 20,
+          summary: 'Good summary',
+          summary_status: 'ok',
+          created_at: '2026-04-20T00:00:00.000Z',
+        },
+      ]),
+    ).toBe('1 (1-10)')
+  })
+
   it('starts summary sections collapsed by default', () => {
     const html = renderToStaticMarkup(
       <ChatSummariesPanel
@@ -114,7 +141,9 @@ describe('ChatSummariesPanel memory stats copy', () => {
       />,
     )
 
-    expect(html).toContain('Meta Summary (1)')
+    expect(html).toContain('Meta Summary (1 · 1 fallback)')
+    expect(html).toContain('Fallback summaries:')
+    expect(html).toContain('1 (1-100)')
     expect(html).toContain('Episodic Memory (1)')
     expect(html).toContain('▶')
     expect(html).not.toContain('Meta summary content')

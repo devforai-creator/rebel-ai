@@ -34,6 +34,7 @@ function formatTimestamp(value: string | null): string | null {
 type CollapsibleMemorySectionProps = {
   title: string
   count: number
+  countDetail?: string | null
   collapsed: boolean
   onToggle: () => void
   description?: ReactNode
@@ -44,6 +45,7 @@ type CollapsibleMemorySectionProps = {
 function CollapsibleMemorySection({
   title,
   count,
+  countDetail,
   collapsed,
   onToggle,
   description,
@@ -57,7 +59,8 @@ function CollapsibleMemorySection({
         className="flex w-full items-center justify-between text-sm font-semibold text-gray-800 transition-colors hover:text-gray-600 dark:text-gray-200 dark:hover:text-gray-400"
       >
         <span>
-          {title} ({count})
+          {title} ({count}
+          {countDetail ? ` · ${countDetail}` : ''})
         </span>
         <span className="text-lg">{collapsed ? '▶' : '▼'}</span>
       </button>
@@ -118,10 +121,15 @@ export function SummaryMemorySection({
     return null
   }
 
+  const fallbackCount = summaries.filter((summary) => summary.summary_status === 'fallback').length
+
   return (
     <CollapsibleMemorySection
       title={title}
       count={summaries.length}
+      countDetail={
+        fallbackCount > 0 ? `${fallbackCount} fallback${fallbackCount === 1 ? '' : 's'}` : null
+      }
       collapsed={collapsed}
       onToggle={onToggle}
       description={description}

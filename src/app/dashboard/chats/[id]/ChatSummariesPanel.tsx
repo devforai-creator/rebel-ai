@@ -81,6 +81,24 @@ function formatSummaryWarningTimestamp(value: string | null): string | null {
   }).format(date)
 }
 
+export function formatFallbackSummaryNotice(summaries: SummaryEntry[]): string | null {
+  const fallbackSummaries = summaries
+    .filter((summary) => summary.summary_status === 'fallback')
+    .sort((a, b) => a.level - b.level || a.start_seq - b.start_seq)
+
+  if (fallbackSummaries.length === 0) {
+    return null
+  }
+
+  const displayedRanges = fallbackSummaries
+    .slice(0, 3)
+    .map((summary) => `${summary.start_seq}-${summary.end_seq}`)
+  const remainingCount = fallbackSummaries.length - displayedRanges.length
+  const remainingLabel = remainingCount > 0 ? `, +${remainingCount} more` : ''
+
+  return `${fallbackSummaries.length} (${displayedRanges.join(', ')}${remainingLabel})`
+}
+
 export default function ChatSummariesPanel({
   chatId,
   summaries: initialSummaries,
@@ -209,6 +227,7 @@ export default function ChatSummariesPanel({
     () => resolveVisibleSummaryWarning(summaryWarning, [...summaries, ...facts]),
     [facts, summaries, summaryWarning],
   )
+  const fallbackSummaryNotice = useMemo(() => formatFallbackSummaryNotice(summaries), [summaries])
   const summaryWarningTimestamp = formatSummaryWarningTimestamp(
     visibleSummaryWarning?.timestamp ?? null,
   )
@@ -275,6 +294,11 @@ export default function ChatSummariesPanel({
                 Next memory checkpoint: <span className="font-medium">{nextCheckpoint}</span>{' '}
                 messages
               </p>
+              {fallbackSummaryNotice ? (
+                <p className="mt-1 text-amber-700 dark:text-amber-300">
+                  <span className="font-medium">Fallback summaries:</span> {fallbackSummaryNotice}
+                </p>
+              ) : null}
             </div>
             <Button
               onClick={() => void refreshStats()}

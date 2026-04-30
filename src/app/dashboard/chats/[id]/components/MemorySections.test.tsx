@@ -36,7 +36,7 @@ describe('SummaryMemorySection', () => {
       />,
     )
 
-    expect(html).toContain('Meta Summary (1)')
+    expect(html).toContain('Meta Summary (1 · 1 fallback)')
     expect(html).toContain('Summary note')
     expect(html).toContain('Conversation summary')
     expect(html).toContain('Fallback')

@@ -1,13 +1,13 @@
 # SUU Host Overflow Escape Hatch Backlog
 
-Updated: 2026-04-25
+Updated: 2026-04-29
 Status: Active
 
 Parking note:
 
 - drafted on `2026-04-25` after diagnosing a mobile viewport overflow caused by
   an `image_display` SUU card with hardcoded `width: "30em"` in the
-  `Aoi Kaoru combined.rbx` package
+  `*** combined.rbx` package
 - briefly parked on `2026-04-25` because this work is opt-in defense for an
   issue that is originally the RBX/SUU card author's responsibility, not a
   regression in RebelAI itself, so SLA is loose
@@ -54,7 +54,7 @@ It is not:
 
 ## Why This Queue Exists
 
-Mobile users hitting a `Aoi Kaoru combined.rbx`-style card see the entire
+Mobile users hitting a `*** combined.rbx`-style card see the entire
 message bubble blow past the viewport. Text in the same bubble gets clipped
 because `break-words` cannot rescue a parent that has already been stretched
 by a sibling SUU card with intrinsic `width: 30em` (~480px).
@@ -153,7 +153,7 @@ message bubble itself stays inside the viewport.
 
 ### P0-1. Add `hostOverflow` Prop In SUU
 
-Status: `pending`
+Status: `completed` (2026-04-25, SUU 70636e5)
 
 Primary scope:
 
@@ -168,7 +168,7 @@ Acceptance notes:
 
 ### P0-2. Add Tests Proving Isolation Stays Locked
 
-Status: `pending`
+Status: `completed` (2026-04-26, SUU 74c6080)
 
 Primary scope:
 
@@ -185,7 +185,7 @@ Acceptance notes:
 
 ### P0-3. Update SUU Spec And Docs
 
-Status: `pending`
+Status: `completed` (2026-04-28, SUU 9ddbfb5)
 
 Primary scope:
 
@@ -200,7 +200,7 @@ Acceptance notes:
 
 ### P0-4. Build And Bump SUU
 
-Status: `pending`
+Status: `completed` (2026-04-29, SUU 31f2af7)
 
 Primary scope:
 
@@ -224,7 +224,7 @@ Primary scope:
 
 Acceptance notes:
 
-- mobile rendering of `Aoi Kaoru combined.rbx` no longer pushes the message
+- mobile rendering of `*** combined.rbx` no longer pushes the message
   bubble past the viewport
 - text in the same bubble word-wraps normally
 - the SUU card itself is reachable via local horizontal scroll inside its

@@ -342,6 +342,7 @@ function renderWithInlineUiCard(
         card={match.cardJson}
         assets={match.assets}
         state={match.state}
+        // Use "auto"; "visible" has no effect because contain:paint still clips
         hostOverflow="auto"
         onAction={onAction}
         onError={(errors) => console.warn('[UGCRenderer] Inline validation errors:', errors)}
@@ -446,6 +447,7 @@ function renderContentWithEmotionImages(
               card={imageDisplayJson}
               assets={imgAssetMap}
               state={buildImageDisplayState(renderTarget)}
+              // Use "auto"; "visible" has no effect because contain:paint still clips
               hostOverflow="auto"
               onError={(errors) => console.warn('[image_display] UGCRenderer errors:', errors)}
             />

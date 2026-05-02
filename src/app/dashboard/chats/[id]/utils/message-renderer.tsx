@@ -342,6 +342,7 @@ function renderWithInlineUiCard(
         card={match.cardJson}
         assets={match.assets}
         state={match.state}
+        hostOverflow="auto"
         onAction={onAction}
         onError={(errors) => console.warn('[UGCRenderer] Inline validation errors:', errors)}
       />,
@@ -445,6 +446,7 @@ function renderContentWithEmotionImages(
               card={imageDisplayJson}
               assets={imgAssetMap}
               state={buildImageDisplayState(renderTarget)}
+              hostOverflow="auto"
               onError={(errors) => console.warn('[image_display] UGCRenderer errors:', errors)}
             />
           </ImageDisplayErrorBoundary>,

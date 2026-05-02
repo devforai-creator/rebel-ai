@@ -1,7 +1,7 @@
 # SUU Host Overflow Escape Hatch Backlog
 
 Updated: 2026-05-03
-Status: Active (P0-5 rejected, paint clip open)
+Status: Active (P0-5 completed via hostOverflow=auto, P0-6 pending)
 
 Parking note:
 
@@ -23,6 +23,11 @@ Parking note:
   effect because `contain: paint` on the SUU container clips wide cards
   regardless of `overflow`. See "## 2026-05-03 Update" section for the full
   finding.
+- on `2026-05-03` (follow-up, same day), tested the untried `hostOverflow="auto"`
+  permutation. Result: SUU container becomes its own scroll container, sidestepping
+  the `contain: paint` clip. P0-5 closed with `hostOverflow="auto"` at both call
+  sites, no host wrapper. The `hostOverflow` API is justified — the prescription
+  just used the wrong value.
 
 ## 2026-05-03 Update — Hypothesis Falsified By Measurement
 
@@ -104,6 +109,61 @@ both the cascade break and the paint clip immediately, instead of after a
 week of SUU API + release flow work. Future backlogs of this shape (host
 absorbs untrusted-content overflow) should include a small measurement step
 before locking in the prescription.
+
+### Follow-up: hostOverflow=auto closes P0-5
+
+After the revert and the cascade-fix commit, a quick test of the untried
+`hostOverflow="auto"` permutation was run on the same viewport. Result:
+the SUU container becomes its own scroll container and the wide card is
+reachable via touch / wheel pan inside the card area. No host wrapper is
+needed.
+
+Why `"auto"` works where `"visible"` did not:
+
+- `overflow: visible` tells the container to render content outside its
+  box; `contain: paint` then forbids that painting, so the card is
+  silently clipped
+- `overflow: auto` keeps the scroll inside the container's box, so
+  `contain: paint` does not conflict — what is painted at any scroll
+  offset stays within the box
+
+Decision update:
+
+- P0-5 closed with `hostOverflow="auto"` at both call sites in
+  `message-renderer.tsx`; no wrapper. Commit: `Enable in-card scroll for
+wide SUU cards via hostOverflow=auto`.
+- The earlier "revert and consider removing the prop" path is no longer
+  pursued. The `hostOverflow` API is justified — it just needed the right
+  value.
+- `page.tsx` `min-w-0` fix remains a separate, independent layout fix and
+  is still valid on its own.
+
+Updated acceptance criteria:
+
+| Original P0-5 acceptance note                | Outcome                                                              |
+| -------------------------------------------- | -------------------------------------------------------------------- |
+| bubble does not push past viewport on mobile | met by `page.tsx` min-w-0 fix                                        |
+| text in same bubble word-wraps normally      | met by `page.tsx` fix                                                |
+| card reachable via local horizontal scroll   | met by `hostOverflow="auto"` (scroll inside SUU container, not host) |
+| smaller-than-viewport card unchanged         | trivially met                                                        |
+
+Updated status:
+
+- P0-5: **completed** (2026-05-03)
+- P0-6: re-opened to `pending`. Smoke check should now assert
+  `hostOverflow="auto"` prop presence at both call sites.
+- Deferred-for-later RBX import normalization: still good defensive hygiene
+  for cards that hardcode unreasonable widths, but no longer blocking the
+  user-visible bug.
+
+### Second meta lesson
+
+The first prescription used `hostOverflow="visible"` because the backlog
+author imagined the host wrapper as the scroll container. The simpler shape
+(`hostOverflow="auto"`, no wrapper) was not even on the considered-alternatives
+table. Future backlogs that gate behavior on a small enum prop should
+explicitly enumerate the prop's values and reason about each one before
+choosing — the unconsidered value can be the right one.
 
 ---
 
@@ -304,34 +364,48 @@ Acceptance notes:
 
 ### P0-5. Apply Wrapper And Prop In RebelAI
 
-Status: `rejected` (2026-05-03)
+Status: `completed` (2026-05-03, via `hostOverflow="auto"` instead of the
+originally prescribed wrapper + `"visible"`)
 
-Originally specified scope (reverted):
+Originally specified scope:
 
 - update `message-renderer.tsx` two call sites to wrap `UGCRenderer` and pass
   `hostOverflow="visible"`
 - bump `@safe-ugc-ui/react` dependency in RebelAI `package.json`
 
-Outcome: the `package.json` bump landed on `2026-04-29`
-(commit `abadae2`). The `message-renderer.tsx` wrapper + `hostOverflow`
-change was implemented during tutoring on `2026-05-03`, then reverted the
-same day after runtime DOM measurement showed it had zero user-visible
-effect. See "## 2026-05-03 Update" above.
+Final implemented scope:
 
-The actual user-visible fix was unrelated to this prescription and shipped
-as a separate one-line commit: `min-w-0` added to
-`src/app/dashboard/chats/[id]/page.tsx:189`. SUU 3.0.0 stays installed but
-unused on the RebelAI side until a paint hatch is added to SUU or the
-wide-card problem is solved at import time.
+- `package.json` bumped to `@safe-ugc-ui/react@3.0.0` (commit `abadae2`,
+  2026-04-29)
+- `message-renderer.tsx` two call sites pass `hostOverflow="auto"`. No host
+  wrapper. (commit `Enable in-card scroll for wide SUU cards via
+hostOverflow=auto`, 2026-05-03)
+- separate independent layout fix: `min-w-0` added to
+  `src/app/dashboard/chats/[id]/page.tsx:189` (commit `Fix mobile bubble
+overflow with min-w-0 on chat flex container`, 2026-05-03)
+
+Why the prescription changed: see "## 2026-05-03 Update" above. Short
+version — `"visible"` plus a host wrapper was insufficient because
+`contain: paint` clipped the wide card regardless. `"auto"` keeps the
+scroll inside the SUU container's own box, where `contain: paint` does
+not conflict.
 
 ### P0-6. Add A Smoke Or Visual Check
 
-Status: `deferred` (2026-05-03)
+Status: `pending` (re-opened 2026-05-03 after P0-5 closed via `auto`)
 
-The originally planned smoke check would assert wrapper presence at both
-call sites. Since the wrapper is reverted, this check has nothing to
-assert. Re-scope once the paint hatch direction is decided (SUU API
-extension, RBX import normalization, or author guidance).
+Primary scope (revised):
+
+- minimal regression coverage that asserts `hostOverflow="auto"` is passed
+  to both `UGCRenderer` call sites in `message-renderer.tsx`
+- if a future refactor removes the prop or flips it back to `"visible"`,
+  the test fails loudly
+
+Acceptance notes:
+
+- assertion is on the prop value at the render call sites, not on rendered
+  DOM (since SUU itself owns the rendered container behavior)
+- can be co-located with the existing `message-renderer.test.tsx`
 
 ## Tutoring Mode Notes
 
@@ -367,11 +441,10 @@ Concept areas this task is good for practicing:
   in the host)
 - normalization of card-author width units inside RebelAI's import path (could
   be a separate, future backlog if RBX import ever needs to defensively rewrite
-  hardcoded `em`/`px` widths). **Promoted to recommended next path on
-  2026-05-03**: the wide-card paint clip discovered during P0-5 execution
-  cannot be solved on the current SUU API surface, so the cleanest
-  remaining path is host-side normalization at import time. New backlog
-  needed.
+  hardcoded `em`/`px` widths). Status as of 2026-05-03 (after `auto`
+  follow-up): no longer urgent — the user-visible bug is resolved. Still
+  good defensive hygiene for cards that hardcode unreasonable widths or
+  units that fight responsive behavior. Keep as deferred.
 - a host-side wrapper utility component in RebelAI to DRY the wrapping pattern
-  if more SUU call sites appear later (no longer relevant since the wrapper
-  itself is reverted)
+  if more SUU call sites appear later (no longer relevant — the final shape
+  uses no wrapper)

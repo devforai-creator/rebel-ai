@@ -1,7 +1,7 @@
 # SUU Host Overflow Escape Hatch Backlog
 
-Updated: 2026-04-29
-Status: Active
+Updated: 2026-05-03
+Status: Active (P0-5 rejected, paint clip open)
 
 Parking note:
 
@@ -16,6 +16,96 @@ Parking note:
 - being executed in **tutoring mode**: the maintainer types the implementation,
   AI gives hints/review only, then the diff goes through external code review
   (Codex) before merging
+- on `2026-05-03`, runtime DOM measurement during P0-5 execution falsified the
+  prescribed shape: the user-visible viewport bug was a separate `min-w-0` flex
+  cascade issue at `page.tsx:189`, fixed in a one-line commit independent of
+  SUU. The wrapper + `hostOverflow="visible"` change had zero user-visible
+  effect because `contain: paint` on the SUU container clips wide cards
+  regardless of `overflow`. See "## 2026-05-03 Update" section for the full
+  finding.
+
+## 2026-05-03 Update — Hypothesis Falsified By Measurement
+
+While executing P0-5 in tutoring mode, the maintainer applied the prescribed
+wrapper + `hostOverflow="visible"` exactly as specified, but runtime DOM
+measurement on a viewport ≈ 452px showed:
+
+- bubble width 483px (still overflowed viewport)
+- wrapper `scrollWidth` 449px (no horizontal scroll triggered)
+- card intrinsic width 480px (`width: 30em`) but visually clipped to wrapper
+  width
+
+A diagnostic walked the parent chain from the wrapper upward and located the
+actual cascade break: `src/app/dashboard/chats/[id]/page.tsx:189` had
+`min-h-0` but was missing `min-w-0`. With `min-width: auto` defaulting on the
+flex item, the chain could not propagate the viewport constraint when wide
+content was inside.
+
+Adding `min-w-0` at that single site fixed the bubble overflow and text
+word-wrap. The wrapper + `hostOverflow="visible"` change in
+`message-renderer.tsx` had zero user-visible effect, before or after the
+cascade fix.
+
+### Why the prescription was insufficient
+
+The prescription assumed `hostOverflow="visible"` + a host-side
+`overflow-x: auto` wrapper would produce local horizontal scroll for
+oversized cards. Two CSS containment behaviors break this:
+
+- `contain: layout` on the SUU container hides inner overflow from the
+  wrapper's `scrollWidth` calculation, so the wrapper does not see the 480px
+  card and never triggers `overflow-x: auto`
+- `contain: paint` clips painting to the SUU container's own box regardless
+  of the `overflow` value, so the card's right side is silently invisible
+  even when `overflow: visible` is set
+
+The current `@safe-ugc-ui/react@3.0.0` `hostOverflow` prop only unlocks the
+`overflow` key. `contain` defaults remain locked
+(`node_modules/@safe-ugc-ui/react/dist/index.js:12`,
+`node_modules/@safe-ugc-ui/react/dist/index.d.ts:51`). So the prescribed
+shape cannot deliver the third acceptance note (card reachable via
+horizontal scroll) on the current SUU API surface.
+
+### Decisions
+
+- `page.tsx` `min-w-0` shipped as a separate commit (`Fix mobile bubble
+overflow with min-w-0 on chat flex container`); this is the actual
+  user-visible fix and is independent of SUU.
+- The `message-renderer.tsx` wrapper + `hostOverflow="visible"` change is
+  reverted. It has no user-visible effect on the current SUU API and would
+  need a different shape if/when SUU exposes a paint hatch. Re-introducing
+  it is trivial when that arrives.
+- SUU 3.0.0 stays. The `hostOverflow` API is not wrong (it does unlock
+  `overflow` exactly as documented). It is just insufficient alone for the
+  wide-card paint case.
+- The wide-card paint clip remains an open issue. See "Deferred For Later"
+  for the recommended next path (RBX import-side width normalization).
+
+### Acceptance criteria revisited
+
+| Original P0-5 acceptance note                | Outcome                                          |
+| -------------------------------------------- | ------------------------------------------------ |
+| bubble does not push past viewport on mobile | met by `page.tsx` min-w-0 fix, not by SUU change |
+| text in same bubble word-wraps normally      | met by `page.tsx` fix (same root cause)          |
+| card reachable via local horizontal scroll   | NOT met. `contain: paint` still clips. open.     |
+| smaller-than-viewport card unchanged         | trivially met (wrapper reverted)                 |
+
+### Status updates
+
+- P0-5: rejected. Prescribed change reverted from RebelAI; actual fix landed
+  at `page.tsx:189` (separate commit).
+- P0-6: deferred. The smoke check would only assert wrapper presence, but
+  the wrapper is reverted. Re-scope when paint hatch direction is decided.
+
+### Meta lesson
+
+Runtime DOM measurement on the first day of execution would have surfaced
+both the cascade break and the paint clip immediately, instead of after a
+week of SUU API + release flow work. Future backlogs of this shape (host
+absorbs untrusted-content overflow) should include a small measurement step
+before locking in the prescription.
+
+---
 
 This document is the execution backlog draft for adding a narrow
 host-controlled escape hatch to the SUU `UGCContainer` so that RebelAI can
@@ -214,36 +304,34 @@ Acceptance notes:
 
 ### P0-5. Apply Wrapper And Prop In RebelAI
 
-Status: `pending`
+Status: `rejected` (2026-05-03)
 
-Primary scope:
+Originally specified scope (reverted):
 
 - update `message-renderer.tsx` two call sites to wrap `UGCRenderer` and pass
   `hostOverflow="visible"`
 - bump `@safe-ugc-ui/react` dependency in RebelAI `package.json`
 
-Acceptance notes:
+Outcome: the `package.json` bump landed on `2026-04-29`
+(commit `abadae2`). The `message-renderer.tsx` wrapper + `hostOverflow`
+change was implemented during tutoring on `2026-05-03`, then reverted the
+same day after runtime DOM measurement showed it had zero user-visible
+effect. See "## 2026-05-03 Update" above.
 
-- mobile rendering of `*** combined.rbx` no longer pushes the message
-  bubble past the viewport
-- text in the same bubble word-wraps normally
-- the SUU card itself is reachable via local horizontal scroll inside its
-  wrapper
-- a smaller-than-viewport SUU card renders unchanged
+The actual user-visible fix was unrelated to this prescription and shipped
+as a separate one-line commit: `min-w-0` added to
+`src/app/dashboard/chats/[id]/page.tsx:189`. SUU 3.0.0 stays installed but
+unused on the RebelAI side until a paint hatch is added to SUU or the
+wide-card problem is solved at import time.
 
 ### P0-6. Add A Smoke Or Visual Check
 
-Status: `pending`
+Status: `deferred` (2026-05-03)
 
-Primary scope:
-
-- minimal regression coverage for the wrapper, either as a snapshot or a
-  rendered-DOM unit test
-
-Acceptance notes:
-
-- the wrapper class/style is asserted at both render call sites
-- if a future refactor removes the wrapper, the test fails loudly
+The originally planned smoke check would assert wrapper presence at both
+call sites. Since the wrapper is reverted, this check has nothing to
+assert. Re-scope once the paint hatch direction is decided (SUU API
+extension, RBX import normalization, or author guidance).
 
 ## Tutoring Mode Notes
 
@@ -270,11 +358,20 @@ Concept areas this task is good for practicing:
 ## Deferred For Later
 
 - a richer SUU prop family for other isolation keys (no current motivation,
-  YAGNI)
+  YAGNI). Note as of 2026-05-03 there is now a known motivation: the
+  wide-card paint clip case requires a `contain` override channel. This is
+  still deferred because exposing `contain` overrides reopens the SUU
+  isolation contract and needs a separate threat model before any API
+  shape is chosen.
 - automatic mobile detection inside SUU (rejected by design — UX policy lives
   in the host)
 - normalization of card-author width units inside RebelAI's import path (could
   be a separate, future backlog if RBX import ever needs to defensively rewrite
-  hardcoded `em`/`px` widths)
+  hardcoded `em`/`px` widths). **Promoted to recommended next path on
+  2026-05-03**: the wide-card paint clip discovered during P0-5 execution
+  cannot be solved on the current SUU API surface, so the cleanest
+  remaining path is host-side normalization at import time. New backlog
+  needed.
 - a host-side wrapper utility component in RebelAI to DRY the wrapping pattern
-  if more SUU call sites appear later
+  if more SUU call sites appear later (no longer relevant since the wrapper
+  itself is reverted)

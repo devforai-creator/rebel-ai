@@ -186,7 +186,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
           <Suspense fallback={<LorebookPanelFallback />}>
             <LorebookPanelLoader chatId={chat.id} characterId={chat.character_id} />
           </Suspense>
-          <div className="flex flex-1 min-h-0">
+          <div className="flex flex-1 min-w-0 min-h-0">
             <ChatInterface
               chatId={chat.id}
               initialMessages={initialMessages}

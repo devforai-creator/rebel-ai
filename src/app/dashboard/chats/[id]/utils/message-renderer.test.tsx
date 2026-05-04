@@ -8,12 +8,14 @@ vi.mock('@safe-ugc-ui/react', () => ({
     card: string
     state: Record<string, unknown>
     assets?: Record<string, string>
+    hostOverflow?: 'hidden' | 'visible' | 'auto' | 'scroll'
   }) => {
     return React.createElement('div', {
       'data-testid': 'ugc-renderer',
       'data-state': JSON.stringify(props.state),
       'data-card': props.card,
       'data-assets': props.assets ? JSON.stringify(props.assets) : undefined,
+      'data-host-overflow': props.hostOverflow,
     })
   },
 }))
@@ -349,6 +351,8 @@ describe('renderMessageContent with inline ui_card', () => {
 
     // UGCRenderer should be rendered (mocked as div with data-testid)
     expect(html).toContain('data-testid="ugc-renderer"')
+    // 'auto' specifically: 'visible' is silently clipped by contain: paint on the SUU container
+    expect(html).toContain('data-host-overflow="auto"')
     // Before-bracket text should be rendered
     expect(html).toContain('Dragon appears!')
   })
@@ -649,6 +653,8 @@ describe('renderMessageContent with inline ui_card', () => {
       expect(html).toContain('data-testid="ugc-renderer"')
       expect(html).toContain('@assets/emotion')
       expect(html).toContain('https://cdn/happy.png')
+      // 'auto' specifically: 'visible' is silently clipped by contain: paint on the SUU container
+      expect(html).toContain('data-host-overflow="auto"')
       // Should NOT contain hardcoded next/image
       expect(html).not.toContain('width="400"')
     })

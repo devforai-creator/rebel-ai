@@ -1,7 +1,7 @@
 # SUU Host Overflow Escape Hatch Backlog
 
-Updated: 2026-05-03
-Status: Active (P0-5 completed via hostOverflow=auto, P0-6 pending)
+Updated: 2026-05-05
+Status: Completed (all P0 items done)
 
 Parking note:
 
@@ -392,7 +392,7 @@ not conflict.
 
 ### P0-6. Add A Smoke Or Visual Check
 
-Status: `pending` (re-opened 2026-05-03 after P0-5 closed via `auto`)
+Status: `completed` (2026-05-05)
 
 Primary scope (revised):
 

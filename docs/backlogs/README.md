@@ -18,7 +18,7 @@ Use it to answer two questions quickly:
 ## Current Entry Point
 
 - Active backlog:
-  There is no active backlog right now.
+  [memory-structure-inspector-backlog-2026-05-08.md](./active/memory-structure-inspector-backlog-2026-05-08.md)
 - Most recently parked backlog:
   [explicit-memory-v0-backlog-2026-04-22.md](./parked/2026/explicit-memory-v0-backlog-2026-04-22.md)
 - Most recently archived backlog:

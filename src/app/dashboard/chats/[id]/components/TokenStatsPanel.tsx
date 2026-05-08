@@ -159,10 +159,10 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
             className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
           >
             <option value="summary_window">
-              {isDeveloper ? '메모리: 안전 기본' : '메모리: 기본'}
+              {isDeveloper ? '메모리: Summary fallback' : '메모리: Summary'}
             </option>
             <option value="prefix_live_blocks">
-              {isDeveloper ? '메모리: 운영 기본' : '메모리: Prefix'}
+              {isDeveloper ? '메모리: Prefix core' : '메모리: Prefix 기본'}
             </option>
           </select>
           <select
@@ -234,10 +234,10 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                   className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white max-w-[180px]"
                 >
                   <option value="summary_window">
-                    {isDeveloper ? '안전 기본 메모리' : '기본 메모리'}
+                    {isDeveloper ? '메모리: Summary fallback' : '메모리: Summary'}
                   </option>
                   <option value="prefix_live_blocks">
-                    {isDeveloper ? '운영 기본 메모리' : 'Prefix 메모리'}
+                    {isDeveloper ? '메모리: Prefix core' : '메모리: Prefix 기본'}
                   </option>
                 </select>
                 <select

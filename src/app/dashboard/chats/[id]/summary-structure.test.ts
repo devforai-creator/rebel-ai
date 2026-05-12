@@ -77,4 +77,23 @@ describe('buildSummaryStructure', () => {
     expect(result.metaNodes[1].children.map((child) => child.id)).toEqual(['chunk-1'])
     expect(result.looseChunks).toEqual([])
   })
+
+  it('explains a 250-message memory structure with meta nodes and loose chunks', () => {
+    const summaries = [
+      createSummary({ id: 'meta-1', level: 1, startSeq: 1, endSeq: 100 }),
+      createSummary({ id: 'meta-2', level: 1, startSeq: 101, endSeq: 200 }),
+      createSummary({ id: 'chunk-1', level: 0, startSeq: 1, endSeq: 10 }),
+      createSummary({ id: 'chunk-2', level: 0, startSeq: 101, endSeq: 110 }),
+      createSummary({ id: 'chunk-3', level: 0, startSeq: 201, endSeq: 210 }),
+      createSummary({ id: 'chunk-4', level: 0, startSeq: 211, endSeq: 220 }),
+      createSummary({ id: 'chunk-5', level: 0, startSeq: 221, endSeq: 230 }),
+    ]
+
+    const result = buildSummaryStructure(summaries)
+
+    expect(result.metaNodes.map((node) => node.summary.id)).toEqual(['meta-1', 'meta-2'])
+    expect(result.metaNodes[0].children.map((child) => child.id)).toEqual(['chunk-1'])
+    expect(result.metaNodes[1].children.map((child) => child.id)).toEqual(['chunk-2'])
+    expect(result.looseChunks.map((chunk) => chunk.id)).toEqual(['chunk-3', 'chunk-4', 'chunk-5'])
+  })
 })

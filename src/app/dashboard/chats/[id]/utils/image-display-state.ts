@@ -1,6 +1,6 @@
 import { resolveAssetTag, resolveAssetUrl, type CharacterAsset } from '@/lib/asset-resolver'
 
-type EmotionResolutionSource = 'image_command' | 'asset_tag' | 'asset_url_map'
+type EmotionResolutionSource = 'image_command' | 'asset_tag'
 
 export type EmotionRenderTarget = {
   rawTag: string
@@ -216,26 +216,7 @@ export function resolveEmotionRenderTarget(options: {
     }
   }
 
-  const resolvedFromUrlMap = options.assetUrlMap
-    ? resolveAssetUrl(rawTag, options.assetUrlMap)
-    : undefined
-  if (!resolvedFromUrlMap) {
-    return null
-  }
-
-  const asset = findAssetByResolvedUrl(
-    resolvedFromUrlMap,
-    options.characterAssets,
-    options.assetUrlMap,
-    options.storageBaseUrl,
-  )
-
-  return {
-    rawTag,
-    resolvedUrl: resolvedFromUrlMap,
-    resolvedBy: 'asset_url_map',
-    ...(asset ? { asset } : {}),
-  }
+  return null
 }
 
 export function buildImageDisplayState(target: EmotionRenderTarget): Record<string, unknown> {

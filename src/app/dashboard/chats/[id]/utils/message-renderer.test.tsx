@@ -728,6 +728,56 @@ describe('renderMessageContent with inline ui_card', () => {
       expect(state.runtime.image.canonicalName).toBe('Choi Yoo-jin worried')
     })
 
+    it('uses signed assetUrlMap URLs for prefix-random image variants', () => {
+      const signedUrl = 'https://signed.test/normal_surprised_1.png'
+      const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.99)
+      const assets = [
+        {
+          id: 'surprised-0',
+          display_name: 'normal_surprised_0',
+          canonical_name: 'normal_surprised_0',
+          file_name: 'normal_surprised.png',
+          storage_path: 'private/normal_surprised.png',
+          metadata: { aliases: ['normal_surprised_0'] },
+        },
+        {
+          id: 'surprised-1',
+          display_name: 'normal_surprised_1',
+          canonical_name: 'normal_surprised_1',
+          file_name: 'normal_surprised_1.png',
+          storage_path: 'private/normal_surprised_1.png',
+          metadata: { aliases: ['normal_surprised_1'] },
+        },
+      ] as Parameters<typeof renderMessageContent>[1]
+
+      try {
+        const state = parseRendererState(
+          renderWithImageDisplay(
+            '![normal_surprised](asset:normal_surprised)',
+            {},
+            validImageDisplay,
+            assets,
+            {
+              normal_surprised_1: signedUrl,
+              'normal_surprised_1.png': signedUrl,
+            },
+          ),
+        )
+
+        expect(state.runtime.image.rawTag).toBe('normal_surprised')
+        expect(state.runtime.image.resolvedUrl).toBe(signedUrl)
+        expect(state.runtime.image.resolvedBy).toBe('asset_tag')
+        expect(state.runtime.image.asset).toEqual({
+          id: 'surprised-1',
+          fileName: 'normal_surprised_1.png',
+          displayName: 'normal_surprised_1',
+          canonicalName: 'normal_surprised_1',
+        })
+      } finally {
+        randomSpy.mockRestore()
+      }
+    })
+
     it('injects minimal runtime state when only image command resolution is available', () => {
       const assetUrl = 'https://cdn/mood.png'
       const state = parseRendererState(

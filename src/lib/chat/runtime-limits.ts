@@ -18,6 +18,9 @@ export const CHAT_REPROCESS_LIMITS = {
 
 export const CHAT_RUNNER_LIMITS = {
   maxTotalInputTokens: 150_000,
+  // Keep this below chat-job-runner route maxDuration so provider stalls are
+  // handled by runner error flow instead of platform termination.
+  providerStreamTimeoutMs: 240_000,
 } as const
 
 export const CHAT_RATE_LIMITS = {

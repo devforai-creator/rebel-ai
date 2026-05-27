@@ -5,6 +5,7 @@ import {
   CHAT_DELIVERY_MODE_STREAMING,
 } from '@/lib/chat/delivery-mode'
 import { CHAT_JOB_PAYLOAD_VERSION, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
+import { CHAT_RUNNER_LIMITS } from '@/lib/chat/runtime-limits'
 import { createChatJobRunnerSupabaseMock } from '@/tests/mocks/supabase'
 import type { LoadedChatJobExecutionContext } from './execution-context'
 
@@ -219,12 +220,15 @@ describe('requestProviderStage', () => {
       anthropic_thinking_effort: null,
       anthropic_interleaved_thinking_requested: null,
     })
-    expect(streamTextMock).toHaveBeenCalledWith({
-      model: { kind: 'model' },
-      temperature: 0.7,
-      system: 'FINAL',
-      messages: [{ role: 'user', content: 'Hello' }],
-    })
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: { kind: 'model' },
+        temperature: 0.7,
+        system: 'FINAL',
+        messages: [{ role: 'user', content: 'Hello' }],
+        abortSignal: expect.any(AbortSignal),
+      }),
+    )
     expect(result).toMatchObject({
       status: 'streaming',
       promptCache: null,
@@ -237,6 +241,26 @@ describe('requestProviderStage', () => {
         strategy: 'default',
       }),
     })
+  })
+
+  it('sets a provider stream abort timeout below the route execution limit', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout')
+
+    try {
+      await requestProviderStage({
+        supabase: createChatJobRunnerSupabaseMock() as never,
+        jobId: 'job-timeout-signal',
+        payload: buildPayload(),
+        context: buildContext(),
+        timings: {},
+      })
+      expect(timeoutSpy).toHaveBeenCalledWith(CHAT_RUNNER_LIMITS.providerStreamTimeoutMs)
+    } finally {
+      timeoutSpy.mockRestore()
+    }
+
+    expect(CHAT_RUNNER_LIMITS.providerStreamTimeoutMs).toBeLessThan(300_000)
   })
 
   it('records anthropic adaptive-thinking request metrics when anthropic options are present', async () => {
@@ -1146,12 +1170,15 @@ describe('requestProviderStage', () => {
       logDebug,
     })
 
-    expect(streamTextMock).toHaveBeenCalledWith({
-      model: { kind: 'model' },
-      temperature: 0.7,
-      system: 'FINAL',
-      messages: [{ role: 'user', content: 'Hello' }],
-    })
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: { kind: 'model' },
+        temperature: 0.7,
+        system: 'FINAL',
+        messages: [{ role: 'user', content: 'Hello' }],
+        abortSignal: expect.any(AbortSignal),
+      }),
+    )
     expect(context.debugMetrics).toMatchObject({
       experimental_agentic_transcript_recall_wrapper_used: true,
       experimental_agentic_transcript_recall_fallback_to_standard: true,

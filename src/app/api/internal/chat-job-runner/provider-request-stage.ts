@@ -3,6 +3,7 @@ import { streamText } from 'ai'
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from '@/lib/chat/delivery-mode'
+import { CHAT_RUNNER_LIMITS } from '@/lib/chat/runtime-limits'
 import { googleCachedContentOwnsRequestContract } from '@/lib/llm/google-cache'
 import { ANTHROPIC_INTERLEAVED_THINKING_BETA, getProviderOptions } from '@/lib/llm/provider-options'
 import { resolveInvocationSamplingOptions } from '@/lib/llm/invocation-sampling'
@@ -591,6 +592,7 @@ export async function requestProviderStage({
     }
 
     let stream: Awaited<ReturnType<typeof streamText>>
+    const providerAbortSignal = AbortSignal.timeout(CHAT_RUNNER_LIMITS.providerStreamTimeoutMs)
 
     try {
       stream = await streamText({
@@ -598,6 +600,7 @@ export async function requestProviderStage({
         ...samplingOptions,
         ...finalStreamRequest,
         ...experimentalStreamTextSettings,
+        abortSignal: providerAbortSignal,
       })
     } catch (error) {
       const usedExperimentalInvocation =
@@ -625,6 +628,7 @@ export async function requestProviderStage({
         model,
         ...samplingOptions,
         ...standardStreamRequest,
+        abortSignal: providerAbortSignal,
       })
     }
 

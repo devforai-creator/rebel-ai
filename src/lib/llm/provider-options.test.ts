@@ -190,6 +190,11 @@ describe('getAnthropicMinCacheTokens', () => {
     expect(getAnthropicMinCacheTokens('claude-opus-4-7')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.opus)
   })
 
+  it('returns the lower Opus 4.8 minimum tokens and supports dotted aliases', () => {
+    expect(getAnthropicMinCacheTokens('claude-opus-4-8')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.opus48)
+    expect(getAnthropicMinCacheTokens('claude-opus-4.8')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.opus48)
+  })
+
   it('returns legacy opus minimum tokens', () => {
     expect(getAnthropicMinCacheTokens('claude-opus-4-1')).toBe(
       ANTHROPIC_CACHE_MIN_TOKENS.opusLegacy,
@@ -203,6 +208,8 @@ describe('getAnthropicMinCacheTokens', () => {
 
 describe('supportsAnthropicAdaptiveThinking', () => {
   it('supports current adaptive-thinking Anthropic models and aliases', () => {
+    expect(supportsAnthropicAdaptiveThinking('claude-opus-4-8')).toBe(true)
+    expect(supportsAnthropicAdaptiveThinking('claude-opus-4.8')).toBe(true)
     expect(supportsAnthropicAdaptiveThinking('claude-opus-4-7')).toBe(true)
     expect(supportsAnthropicAdaptiveThinking('claude-opus-4.7')).toBe(true)
     expect(supportsAnthropicAdaptiveThinking('claude-opus-4-6')).toBe(true)

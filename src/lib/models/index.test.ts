@@ -79,6 +79,13 @@ describe('Model Registry', () => {
       expect(model?.id).toBe('claude-opus-4-7')
     })
 
+    it('finds Claude Opus 4.8 by alias', () => {
+      const model = findModelDefinition({ modelName: 'claude-opus-4.8' })
+
+      expect(model).not.toBeNull()
+      expect(model?.id).toBe('claude-opus-4-8')
+    })
+
     it('is case-insensitive', () => {
       const model = findModelDefinition({ modelName: 'GPT-5.2' })
 
@@ -168,16 +175,16 @@ describe('Model Registry', () => {
   })
 
   describe('Anthropic model registration', () => {
-    it('lists Claude Opus 4.7 first in the Anthropic UI model list', () => {
+    it('lists Claude Opus 4.8 first in the Anthropic UI model list', () => {
       const ids = listUiModelIdsByProvider('anthropic')
 
-      expect(ids[0]).toBe('claude-opus-4-7')
+      expect(ids[0]).toBe('claude-opus-4-8')
     })
 
-    it('has flat Opus 4.7 pricing', () => {
+    it('has flat Opus 4.8 pricing', () => {
       const tiers = getModelPricingTiers({
         provider: 'anthropic',
-        modelName: 'claude-opus-4-7',
+        modelName: 'claude-opus-4-8',
       })
 
       expect(tiers).not.toBeNull()

@@ -24,7 +24,13 @@ describe('chat delivery modes', () => {
     expect(isChatDeliveryMode('batch')).toBe(false)
   })
 
-  it('only enables Anthropic Batch chat for Opus 4.5, 4.6, and 4.7', () => {
+  it('only enables Anthropic Batch chat for Opus 4.5, 4.6, 4.7, and 4.8', () => {
+    expect(
+      isAnthropicBatchChatSupported({
+        provider: 'anthropic',
+        modelName: 'claude-opus-4-8',
+      }),
+    ).toBe(true)
     expect(
       isAnthropicBatchChatSupported({
         provider: 'anthropic',

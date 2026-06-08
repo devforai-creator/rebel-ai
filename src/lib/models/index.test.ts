@@ -195,6 +195,36 @@ describe('Model Registry', () => {
     })
   })
 
+  describe('Gemini 3.5 Flash registration', () => {
+    it('is found by exact ID', () => {
+      const model = findModelDefinition({ modelName: 'gemini-3.5-flash' })
+
+      expect(model).not.toBeNull()
+      expect(model?.id).toBe('gemini-3.5-flash')
+      expect(model?.provider).toBe('google')
+    })
+
+    it('has correct standard pricing', () => {
+      const tiers = getModelPricingTiers({
+        provider: 'google',
+        modelName: 'gemini-3.5-flash',
+      })
+
+      expect(tiers).not.toBeNull()
+      expect(tiers).toHaveLength(1)
+      expect(tiers![0].rates.input).toBe(1.5)
+      expect(tiers![0].rates.output).toBe(9)
+      expect(tiers![0].rates.cachedInput).toBe(0.15)
+    })
+
+    it('appears first in the Google UI model list without changing the default model', () => {
+      const ids = listUiModelIdsByProvider('google')
+
+      expect(ids[0]).toBe('gemini-3.5-flash')
+      expect(getDefaultModelForProvider('google')).toBe('gemini-2.5-flash')
+    })
+  })
+
   describe('hasExtendedOpenAICacheRetention', () => {
     it('returns true for GPT-5.x models with extended caching', () => {
       expect(hasExtendedOpenAICacheRetention('gpt-5.2')).toBe(true)

@@ -3,6 +3,29 @@ import { estimateUsageCost, type UsageCostParams } from './model-pricing'
 
 describe('estimateUsageCost', () => {
   describe('Google Gemini models', () => {
+    describe('gemini-3.5-flash', () => {
+      it('should calculate cached input at 10% of input rate', () => {
+        const params: UsageCostParams = {
+          provider: 'google',
+          modelName: 'gemini-3.5-flash',
+          promptTokens: 10000,
+          completionTokens: 1000,
+          cachedInputTokens: 8000,
+        }
+        const result = estimateUsageCost(params)
+        expect(result).not.toBeNull()
+
+        // Input rate: $1.50/M, Cached rate: $0.15/M
+        // Fresh input: 10000 - 8000 = 2000 tokens
+        // Fresh cost: (2000 / 1M) * 1.5 = $0.003
+        // Cached cost: (8000 / 1M) * 0.15 = $0.0012
+        // Output cost: (1000 / 1M) * 9 = $0.009
+        expect(result!.promptCost).toBeCloseTo(0.003, 6)
+        expect(result!.cachedInputCost).toBeCloseTo(0.0012, 6)
+        expect(result!.completionCost).toBeCloseTo(0.009, 6)
+      })
+    })
+
     describe('gemini-3-pro-preview', () => {
       it('should calculate cached input at 10% of input rate for tier 1', () => {
         const params: UsageCostParams = {

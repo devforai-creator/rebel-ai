@@ -26,12 +26,12 @@ export const PROVIDER_CATALOG: Record<Provider, ProviderCatalogEntry> = {
     recommended: true,
     supportsLLM: true,
     apiKeyRule: {
-      placeholder: 'AIzaSyA... (39자)',
-      hint: 'Google Cloud Console → API Keys → AIza로 시작하는 39자 키',
-      description: 'Google API 키는 "AIza"로 시작하는 39자리 문자열이어야 합니다.',
-      docsUrl: 'https://makersuite.google.com/app/apikey',
-      pattern: /^AIza[0-9A-Za-z_\-]{30,60}$/,
-      maxLength: 60,
+      placeholder: 'AIza... 또는 Google AI Studio API 키',
+      hint: 'Google AI Studio → API Keys에서 발급한 Gemini API 키',
+      description: 'Google API 키는 공백 없는 영숫자/하이픈/언더스코어 문자열이어야 합니다.',
+      docsUrl: 'https://ai.google.dev/gemini-api/docs/api-key',
+      pattern: /^(?!sk-|sk-ant-|sk-or-|pa-)[0-9A-Za-z_\-]{20,200}$/,
+      maxLength: 200,
     },
   },
   openai: {

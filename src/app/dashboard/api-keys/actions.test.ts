@@ -392,6 +392,40 @@ describe('api key actions', () => {
     })
   })
 
+  it('accepts Google API keys that do not use the legacy AIza prefix', async () => {
+    const adminSupabase = createAdminSupabase()
+    const supabase = buildSupabase()
+    createAdminClientMock.mockReturnValue(adminSupabase)
+    createClientMock.mockResolvedValue(supabase)
+    const { createApiKey } = await import('./actions')
+
+    const result = await createApiKey(
+      INITIAL_STATE,
+      buildApiKeyFormData({
+        provider: 'google',
+        api_key: 'AQ1234567890abcdefghijklmnopqrstu',
+      }),
+    )
+
+    expect(result).toEqual({
+      error: null,
+      success: true,
+      warning: null,
+      rollbackFailed: false,
+      cleanupReference: null,
+    })
+    expect(adminSupabase.rpc).toHaveBeenCalledWith('create_secret', {
+      secret_name: expect.stringMatching(
+        /^apikey_11111111-1111-1111-1111-111111111111_[a-z0-9]+_google$/,
+      ),
+      secret_value: 'AQ1234567890abcdefghijklmnopqrstu',
+      requester: '11111111-1111-1111-1111-111111111111',
+    })
+    expect(supabase.state.insertPayloads[0]).toMatchObject({
+      provider: 'google',
+    })
+  })
+
   it('deletes the Vault secret when metadata persistence fails', async () => {
     const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
     const adminSupabase = createAdminSupabase()

@@ -27,12 +27,17 @@ describe('providerRules', () => {
     it('accepts valid Google API keys', () => {
       expect(pattern.test('AIzaSyA1234567890abcdefghijklmnopqrstu')).toBe(true)
       expect(pattern.test('AIzaSyB_abc-123_XYZ-789_abcdefghijklmn')).toBe(true)
+      expect(pattern.test('AQ1234567890abcdefghijklmnopqrstu')).toBe(true)
+      expect(pattern.test('GEMINI_1234567890abcdef-xyz')).toBe(true)
     })
 
     it('rejects invalid Google API keys', () => {
-      expect(pattern.test('sk-1234567890')).toBe(false) // Wrong prefix
+      expect(pattern.test('sk-1234567890abcdefghijklmn')).toBe(false) // OpenAI-like prefix
+      expect(pattern.test('sk-ant-api03-1234567890abcdef')).toBe(false) // Anthropic-like prefix
+      expect(pattern.test('sk-or-v1-1234567890abcdefghijklmn')).toBe(false) // OpenRouter-like prefix
+      expect(pattern.test('pa-1234567890abcdefghijklmn')).toBe(false) // Voyage-like prefix
       expect(pattern.test('AIza123')).toBe(false) // Too short
-      expect(pattern.test('AIZA1234567890abcdefghijklmnopqrstuv')).toBe(false) // Wrong case
+      expect(pattern.test('AQ1234567890abcdef$')).toBe(false) // Invalid character
     })
   })
 

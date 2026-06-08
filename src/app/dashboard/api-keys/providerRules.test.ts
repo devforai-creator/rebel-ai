@@ -27,7 +27,7 @@ describe('providerRules', () => {
     it('accepts valid Google API keys', () => {
       expect(pattern.test('AIzaSyA1234567890abcdefghijklmnopqrstu')).toBe(true)
       expect(pattern.test('AIzaSyB_abc-123_XYZ-789_abcdefghijklmn')).toBe(true)
-      expect(pattern.test('AQ1234567890abcdefghijklmnopqrstu')).toBe(true)
+      expect(pattern.test('AQ.Ab81234567890abcdefghijklmnopqrstu')).toBe(true)
       expect(pattern.test('GEMINI_1234567890abcdef-xyz')).toBe(true)
     })
 

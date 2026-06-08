@@ -403,7 +403,7 @@ describe('api key actions', () => {
       INITIAL_STATE,
       buildApiKeyFormData({
         provider: 'google',
-        api_key: 'AQ1234567890abcdefghijklmnopqrstu',
+        api_key: 'AQ.Ab81234567890abcdefghijklmnopqrstu',
       }),
     )
 
@@ -418,7 +418,7 @@ describe('api key actions', () => {
       secret_name: expect.stringMatching(
         /^apikey_11111111-1111-1111-1111-111111111111_[a-z0-9]+_google$/,
       ),
-      secret_value: 'AQ1234567890abcdefghijklmnopqrstu',
+      secret_value: 'AQ.Ab81234567890abcdefghijklmnopqrstu',
       requester: '11111111-1111-1111-1111-111111111111',
     })
     expect(supabase.state.insertPayloads[0]).toMatchObject({

@@ -175,10 +175,23 @@ describe('Model Registry', () => {
   })
 
   describe('Anthropic model registration', () => {
-    it('lists Claude Opus 4.8 first in the Anthropic UI model list', () => {
+    it('lists Claude Fable 5 first in the Anthropic UI model list', () => {
       const ids = listUiModelIdsByProvider('anthropic')
 
-      expect(ids[0]).toBe('claude-opus-4-8')
+      expect(ids[0]).toBe('claude-fable-5')
+    })
+
+    it('has flat Fable 5 pricing', () => {
+      const tiers = getModelPricingTiers({
+        provider: 'anthropic',
+        modelName: 'claude-fable-5',
+      })
+
+      expect(tiers).not.toBeNull()
+      expect(tiers).toHaveLength(1)
+      expect(tiers![0].rates.input).toBe(10)
+      expect(tiers![0].rates.output).toBe(50)
+      expect(tiers![0].rates.cachedInput).toBe(1)
     })
 
     it('has flat Opus 4.8 pricing', () => {

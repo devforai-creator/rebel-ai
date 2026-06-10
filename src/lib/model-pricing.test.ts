@@ -171,6 +171,24 @@ describe('estimateUsageCost', () => {
   })
 
   describe('Anthropic models', () => {
+    it('should calculate Claude Fable 5 pricing correctly', () => {
+      const params: UsageCostParams = {
+        provider: 'anthropic',
+        modelName: 'claude-fable-5',
+        promptTokens: 2000,
+        completionTokens: 500,
+        cachedInputTokens: 8000,
+      }
+      const result = estimateUsageCost(params)
+      expect(result).not.toBeNull()
+
+      // Anthropic reports promptTokens as uncached input.
+      // Fable 5: Input $10/M, Cache hit $1/M, Output $50/M.
+      expect(result!.promptCost).toBeCloseTo(0.02, 6)
+      expect(result!.cachedInputCost).toBeCloseTo(0.008, 6)
+      expect(result!.completionCost).toBeCloseTo(0.025, 6)
+    })
+
     it('should use uncached input tokens directly (Anthropic-specific behavior)', () => {
       // Anthropic AI SDK returns inputTokens as uncached only (already excludes cached)
       const params: UsageCostParams = {

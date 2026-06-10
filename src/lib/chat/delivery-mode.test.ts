@@ -24,7 +24,13 @@ describe('chat delivery modes', () => {
     expect(isChatDeliveryMode('batch')).toBe(false)
   })
 
-  it('only enables Anthropic Batch chat for Opus 4.5, 4.6, 4.7, and 4.8', () => {
+  it('only enables Anthropic Batch chat for Fable 5 and supported Opus models', () => {
+    expect(
+      isAnthropicBatchChatSupported({
+        provider: 'anthropic',
+        modelName: 'claude-fable-5',
+      }),
+    ).toBe(true)
     expect(
       isAnthropicBatchChatSupported({
         provider: 'anthropic',

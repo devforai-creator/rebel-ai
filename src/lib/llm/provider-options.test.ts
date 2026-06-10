@@ -144,6 +144,22 @@ describe('getProviderOptions', () => {
     })
   })
 
+  it('omits legacy interleaved thinking beta for Claude Fable 5', () => {
+    const options = getProviderOptions('anthropic', {
+      modelName: 'claude-fable-5',
+      reasoningEffort: 'medium',
+    })
+
+    expect(options).toEqual({
+      anthropic: {
+        thinking: {
+          type: 'adaptive',
+        },
+        effort: 'medium',
+      },
+    })
+  })
+
   it('does not enable adaptive thinking for unsupported anthropic models', () => {
     const options = getProviderOptions('anthropic', {
       modelName: 'claude-opus-4-5',
@@ -181,6 +197,14 @@ describe('getAnthropicMinCacheTokens', () => {
     )
   })
 
+  it('returns Fable and Mythos minimum tokens', () => {
+    expect(getAnthropicMinCacheTokens('claude-fable-5')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.fable)
+    expect(getAnthropicMinCacheTokens('claude-mythos-5')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.mythos)
+    expect(getAnthropicMinCacheTokens('claude-mythos-preview')).toBe(
+      ANTHROPIC_CACHE_MIN_TOKENS.mythosPreview,
+    )
+  })
+
   it('returns sonnet minimum tokens', () => {
     expect(getAnthropicMinCacheTokens('claude-3-7-sonnet')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.sonnet)
   })
@@ -208,6 +232,8 @@ describe('getAnthropicMinCacheTokens', () => {
 
 describe('supportsAnthropicAdaptiveThinking', () => {
   it('supports current adaptive-thinking Anthropic models and aliases', () => {
+    expect(supportsAnthropicAdaptiveThinking('claude-fable-5')).toBe(true)
+    expect(supportsAnthropicAdaptiveThinking('claude-mythos-5')).toBe(true)
     expect(supportsAnthropicAdaptiveThinking('claude-opus-4-8')).toBe(true)
     expect(supportsAnthropicAdaptiveThinking('claude-opus-4.8')).toBe(true)
     expect(supportsAnthropicAdaptiveThinking('claude-opus-4-7')).toBe(true)

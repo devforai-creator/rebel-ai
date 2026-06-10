@@ -60,7 +60,10 @@ export function getProviderOptions(
         overrides?.reasoningEffort && overrides.reasoningEffort !== 'none'
           ? overrides.reasoningEffort
           : DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT,
-      anthropicBeta: [ANTHROPIC_INTERLEAVED_THINKING_BETA],
+    }
+
+    if (!usesBuiltInAnthropicInterleavedThinking(overrides?.modelName)) {
+      anthropicOptions.anthropicBeta = [ANTHROPIC_INTERLEAVED_THINKING_BETA]
     }
 
     options.anthropic = anthropicOptions
@@ -83,6 +86,10 @@ export function supportsAnthropicAdaptiveThinking(modelName?: string | null): bo
     return true
   }
 
+  if (normalized.includes('claude-fable-5') || normalized.includes('claude-mythos-5')) {
+    return true
+  }
+
   const opusMatch = normalized.match(/claude-opus-4-(\d+)/)
   if (opusMatch && Number(opusMatch[1]) >= 6) {
     return true
@@ -94,6 +101,15 @@ export function supportsAnthropicAdaptiveThinking(modelName?: string | null): bo
   }
 
   return false
+}
+
+function usesBuiltInAnthropicInterleavedThinking(modelName?: string | null): boolean {
+  if (typeof modelName !== 'string') {
+    return false
+  }
+
+  const normalized = modelName.trim().toLowerCase().replaceAll('.', '-')
+  return normalized.includes('claude-fable-5') || normalized.includes('claude-mythos-5')
 }
 
 /**
@@ -121,6 +137,9 @@ export function buildAnthropicCacheControl(
  * family-wide value.
  */
 export const ANTHROPIC_CACHE_MIN_TOKENS: Record<string, number> = {
+  fable: 512, // Fable 5
+  mythos: 512, // Mythos 5
+  mythosPreview: 2048, // Mythos Preview
   opus48: 1024, // Opus 4.8
   opus: 4096, // Opus 4.5/4.6/4.7
   opusLegacy: 1024, // Opus 4/4.1/3
@@ -134,6 +153,15 @@ export const ANTHROPIC_CACHE_MIN_TOKENS: Record<string, number> = {
  */
 export function getAnthropicMinCacheTokens(modelName: string): number {
   const normalized = modelName.toLowerCase().replaceAll('.', '-')
+  if (normalized.includes('fable-5')) {
+    return ANTHROPIC_CACHE_MIN_TOKENS.fable
+  }
+  if (normalized.includes('mythos-preview')) {
+    return ANTHROPIC_CACHE_MIN_TOKENS.mythosPreview
+  }
+  if (normalized.includes('mythos-5')) {
+    return ANTHROPIC_CACHE_MIN_TOKENS.mythos
+  }
   if (normalized.includes('haiku-4-5')) {
     return ANTHROPIC_CACHE_MIN_TOKENS.haiku
   }

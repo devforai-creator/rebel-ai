@@ -17,17 +17,33 @@ describe('global-system-prompt', () => {
       )
     })
 
-    it('contains critical constraint about not controlling user character', () => {
-      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('ABSOLUTE RULE')
+    it('contains critical constraint about preserving user character sovereignty', () => {
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Critical Constraint: Sovereign User Character')
       expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain(
-        "NEVER write, describe, or assume anything about the user's character",
+        "Never decide the user's voluntary actions, dialogue, thoughts, feelings, choices, consent, or reactions",
       )
     })
 
     it('contains forbidden actions list', () => {
       expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('FORBIDDEN')
       expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain("Writing the user character's dialogue")
-      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain("Describing the user character's actions")
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain(
+        'Describing voluntary actions the user did not state',
+      )
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain(
+        'Forcing the user character to follow, touch, accept, confess, fight, flee, or participate',
+      )
+    })
+
+    it('contains narrative initiative guidance', () => {
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Narrative Initiative and Story Momentum')
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Active World, Sovereign User')
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Bounded Initiative')
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Scene Momentum Rule')
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Natural Social and Romantic Progression')
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain(
+        "NPCs may initiate social or romantic developments, but the user's acceptance, rejection, desire, and response belong entirely to the user",
+      )
     })
 
     it('contains response structure guidance', () => {
@@ -38,10 +54,15 @@ describe('global-system-prompt', () => {
     })
 
     it('contains style guidelines for pacing', () => {
-      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Short user input')
-      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Detailed user input')
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain(
+        'User input length is a signal, not a strict limit',
+      )
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain(
+        'Brief input during an emotional, romantic, tense, or uncertain moment',
+      )
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Detailed input')
       expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Action scenes')
-      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Emotional moments')
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Emotional scenes')
     })
   })
 

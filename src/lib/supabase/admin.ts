@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { serverSupabaseRealtimeOptions } from '@/lib/supabase/server-realtime'
 import type { Database } from '@/types/database.types'
 
 /**
@@ -25,6 +26,7 @@ export function createAdminClient(): SupabaseClient<Database> {
   }
 
   return createClient<Database>(url, serviceRoleKey, {
+    ...serverSupabaseRealtimeOptions,
     auth: {
       persistSession: false,
       autoRefreshToken: false,

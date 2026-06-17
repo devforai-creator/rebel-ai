@@ -1,6 +1,7 @@
 import { createServerClient, type SetAllCookies } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { AuthError, type SupabaseClient } from '@supabase/supabase-js'
+import { serverSupabaseRealtimeOptions } from '@/lib/supabase/server-realtime'
 import type { Database } from '@/types/database.types'
 
 const AUTH_RETRY_ATTEMPTS = 3
@@ -37,6 +38,7 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      ...serverSupabaseRealtimeOptions,
       cookies: {
         getAll() {
           return request.cookies.getAll()

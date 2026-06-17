@@ -3,6 +3,7 @@ import 'server-only'
 import { createServerClient, type SetAllCookies } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { serverSupabaseRealtimeOptions } from '@/lib/supabase/server-realtime'
 import type { Database } from '@/types/database.types'
 
 type AppSupabaseClient = SupabaseClient<Database>
@@ -17,6 +18,7 @@ export async function createClient(): Promise<AppSupabaseClient> {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      ...serverSupabaseRealtimeOptions,
       cookies: {
         getAll() {
           return cookieStore.getAll()

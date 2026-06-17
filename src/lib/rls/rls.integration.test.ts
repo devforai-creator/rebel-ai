@@ -13,6 +13,7 @@
 import { randomUUID } from 'node:crypto'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { beforeAll, afterAll, describe, it, expect } from 'vitest'
+import { serverSupabaseRealtimeOptions } from '@/lib/supabase/server-realtime'
 
 // Skip all tests if RLS test env is not configured
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -64,6 +65,7 @@ async function createTestUser(email: string, password: string): Promise<TestUser
 
   // Create a client with anon key (simulates real user access with RLS)
   const userClient = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
+    ...serverSupabaseRealtimeOptions,
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -113,6 +115,7 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
 
     // Initialize admin client (service role bypasses RLS)
     adminClient = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
+      ...serverSupabaseRealtimeOptions,
       auth: {
         autoRefreshToken: false,
         persistSession: false,

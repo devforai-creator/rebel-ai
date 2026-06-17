@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { serverSupabaseRealtimeOptions } from '@/lib/supabase/server-realtime'
 import type { Database } from '@/types/database.types'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -21,6 +22,7 @@ describe.skipIf(shouldSkip)('Service health RPC boundary', () => {
     if (shouldSkip) return
 
     adminClient = createClient<Database>(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
+      ...serverSupabaseRealtimeOptions,
       auth: {
         persistSession: false,
         autoRefreshToken: false,
@@ -28,6 +30,7 @@ describe.skipIf(shouldSkip)('Service health RPC boundary', () => {
     })
 
     authenticatedClient = createClient<Database>(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
+      ...serverSupabaseRealtimeOptions,
       auth: {
         persistSession: false,
         autoRefreshToken: false,

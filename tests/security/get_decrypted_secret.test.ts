@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { randomUUID } from 'node:crypto'
+import { serverSupabaseRealtimeOptions } from '@/lib/supabase/server-realtime'
 import type { Database } from '@/types/database.types'
 
 import 'dotenv/config'
@@ -35,13 +36,16 @@ if (missingKeys.length > 0) {
 
     beforeAll(async () => {
       adminClient = createClient<Database>(supabaseUrl, serviceRoleKey, {
+        ...serverSupabaseRealtimeOptions,
         auth: {
           persistSession: false,
           autoRefreshToken: false,
         },
       })
 
-      authenticatedClient = createClient<Database>(supabaseUrl, anonKey)
+      authenticatedClient = createClient<Database>(supabaseUrl, anonKey, {
+        ...serverSupabaseRealtimeOptions,
+      })
 
       const { data, error } = await adminClient.auth.admin.createUser({
         email: tempEmail,

@@ -199,6 +199,16 @@ const OPENROUTER_GLM51_PRICING: ModelPricingTier[] = [
   },
 ]
 
+const OPENROUTER_GLM52_PRICING: ModelPricingTier[] = [
+  {
+    rates: {
+      input: 1.4, // $1.40/M via OpenRouter
+      output: 4.4, // $4.40/M
+      cachedInput: 0.26, // $0.26/M cache reads
+    },
+  },
+]
+
 export const MODEL_REGISTRY: readonly ModelDefinition[] = [
   // ===========================================================================
   // Google (Gemini)
@@ -477,12 +487,23 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
   // OpenRouter
   // ===========================================================================
   {
+    id: 'z-ai/glm-5.2',
+    provider: 'openrouter',
+    displayName: 'GLM-5.2',
+    pricing: OPENROUTER_GLM52_PRICING,
+    features: {
+      reasoning: true,
+    },
+    uiVisible: true,
+    uiOrder: 1,
+  },
+  {
     id: 'z-ai/glm-5.1',
     provider: 'openrouter',
     displayName: 'GLM-5.1',
     pricing: OPENROUTER_GLM51_PRICING,
     uiVisible: true,
-    uiOrder: 1,
+    uiOrder: 2,
   },
   {
     id: 'z-ai/glm-5',
@@ -490,7 +511,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
     displayName: 'GLM-5',
     pricing: OPENROUTER_GLM5_PRICING,
     uiVisible: true,
-    uiOrder: 2,
+    uiOrder: 3,
   },
 
   // ===========================================================================

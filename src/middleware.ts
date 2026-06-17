@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient, type SetAllCookies } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { AuthError, type SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database.types'
@@ -7,6 +7,7 @@ const AUTH_RETRY_ATTEMPTS = 3
 const AUTH_RETRY_BASE_DELAY_MS = 200
 type SupabaseServerClient = SupabaseClient<Database>
 type GetUserResult = Awaited<ReturnType<SupabaseServerClient['auth']['getUser']>>
+type SupabaseCookiesToSet = Parameters<SetAllCookies>[0]
 
 export async function middleware(request: NextRequest) {
   // Skip middleware for Vercel's screenshot bot (generates deployment thumbnails)
@@ -40,7 +41,7 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll()
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: SupabaseCookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({
             request,

@@ -1,11 +1,12 @@
 import 'server-only'
 
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient, type SetAllCookies } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import type { Database } from '@/types/database.types'
 
 type AppSupabaseClient = SupabaseClient<Database>
+type SupabaseCookiesToSet = Parameters<SetAllCookies>[0]
 
 export async function createClient(): Promise<AppSupabaseClient> {
   const cookieStore = await cookies()
@@ -20,7 +21,7 @@ export async function createClient(): Promise<AppSupabaseClient> {
         getAll() {
           return cookieStore.getAll()
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: SupabaseCookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options),

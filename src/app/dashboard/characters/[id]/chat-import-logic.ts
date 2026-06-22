@@ -7,7 +7,6 @@ type ChatImportActionResult = {
 
 type TextFileLike = {
   name: string
-  text: () => Promise<string>
 }
 
 export function deriveChatImportTitle(fileName: string) {
@@ -31,18 +30,18 @@ export function getChatImportErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Failed to read file'
 }
 
-export async function submitChatImport({
+export async function submitChatImport<TFile extends TextFileLike>({
   characterId,
   selectedFile,
   chatTitle,
   importChatImpl,
 }: {
   characterId: string
-  selectedFile: TextFileLike | null
+  selectedFile: TFile | null
   chatTitle: string
   importChatImpl: (
     characterId: string,
-    content: string,
+    file: TFile,
     title?: string,
   ) => Promise<ChatImportActionResult>
 }) {
@@ -54,8 +53,7 @@ export async function submitChatImport({
   }
 
   try {
-    const content = await selectedFile.text()
-    const result = await importChatImpl(characterId, content, chatTitle || undefined)
+    const result = await importChatImpl(characterId, selectedFile, chatTitle || undefined)
 
     if (!result.success) {
       return {

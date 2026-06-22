@@ -40,10 +40,9 @@ describe('chat-import-logic', () => {
     })
   })
 
-  it('returns action failures and file-read failures', async () => {
+  it('returns import failures and transport failures', async () => {
     const file = {
       name: 'hero_chat.json',
-      text: vi.fn().mockResolvedValue('[]'),
     }
 
     await expect(
@@ -66,14 +65,13 @@ describe('chat-import-logic', () => {
         characterId: 'char-1',
         selectedFile: {
           name: 'hero_chat.json',
-          text: vi.fn().mockRejectedValue(new Error('cannot read file')),
         },
         chatTitle: '',
-        importChatImpl: vi.fn(),
+        importChatImpl: vi.fn().mockRejectedValue(new Error('cannot upload file')),
       }),
     ).resolves.toEqual({
       ok: false,
-      error: 'cannot read file',
+      error: 'cannot upload file',
     })
   })
 
@@ -89,7 +87,6 @@ describe('chat-import-logic', () => {
         characterId: 'char-1',
         selectedFile: {
           name: 'hero_chat.json',
-          text: vi.fn().mockResolvedValue('[{\"role\":\"user\"}]'),
         },
         chatTitle: '',
         importChatImpl,
@@ -102,6 +99,12 @@ describe('chat-import-logic', () => {
       },
     })
 
-    expect(importChatImpl).toHaveBeenCalledWith('char-1', '[{"role":"user"}]', undefined)
+    expect(importChatImpl).toHaveBeenCalledWith(
+      'char-1',
+      {
+        name: 'hero_chat.json',
+      },
+      undefined,
+    )
   })
 })

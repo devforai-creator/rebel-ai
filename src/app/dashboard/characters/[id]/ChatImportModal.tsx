@@ -8,8 +8,8 @@ import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
-import { importChat } from '@/app/dashboard/chats/actions'
 import { deriveChatImportTitle, submitChatImport } from './chat-import-logic'
+import { importCharacterChat } from './character-chats-client'
 
 interface Props {
   characterId: string
@@ -47,7 +47,7 @@ export default function ChatImportModal({ characterId, characterName, isOpen, on
       characterId,
       selectedFile,
       chatTitle,
-      importChatImpl: importChat,
+      importChatImpl: importCharacterChat,
     })
 
     setIsLoading(false)

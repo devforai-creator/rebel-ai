@@ -1,5 +1,6 @@
 import { createApiError } from '@/lib/http/api-contract'
 import type { CharacterChat } from './character-detail-types'
+import type { ChatImportResult } from '@/types/risu-chat'
 
 export type CharacterChatsPage = {
   chats: CharacterChat[]
@@ -45,6 +46,40 @@ export async function fetchCharacterChatExport(
   }
 }
 
+export async function importCharacterChat(
+  characterId: string,
+  file: File,
+  title?: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ChatImportResult> {
+  const formData = new FormData()
+  formData.set('file', file)
+  if (title?.trim()) {
+    formData.set('title', title.trim())
+  }
+
+  const response = await fetchImpl(`/api/characters/${characterId}/chats/import`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  const data = (await response.json().catch(() => null)) as Partial<ChatImportResult> | null
+  if (!response.ok) {
+    return {
+      success: false,
+      error: typeof data?.error === 'string' ? data.error : 'Import failed',
+    }
+  }
+
+  return {
+    success: data?.success === true,
+    chatId: typeof data?.chatId === 'string' ? data.chatId : undefined,
+    messageCount: typeof data?.messageCount === 'number' ? data.messageCount : undefined,
+    error: typeof data?.error === 'string' ? data.error : undefined,
+    warnings: Array.isArray(data?.warnings) ? data.warnings.filter(isString) : undefined,
+  }
+}
+
 export function getExportFilename(contentDisposition: string | null) {
   if (!contentDisposition) {
     return 'chat_export.json'
@@ -60,4 +95,8 @@ export function getExportFilename(contentDisposition: string | null) {
   } catch {
     return match[1]
   }
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string'
 }

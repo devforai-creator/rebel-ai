@@ -7,7 +7,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ChatImportModal from './ChatImportModal'
 import NewChatButton from './NewChatButton'
-import { importChat } from '@/app/dashboard/chats/actions'
+import { importCharacterChat } from './character-chats-client'
 
 const { pushMock, refreshMock } = vi.hoisted(() => ({
   pushMock: vi.fn(),
@@ -29,8 +29,8 @@ vi.mock('next/link', () => ({
   ),
 }))
 
-vi.mock('@/app/dashboard/chats/actions', () => ({
-  importChat: vi.fn(),
+vi.mock('./character-chats-client', () => ({
+  importCharacterChat: vi.fn(),
 }))
 
 describe('ChatImportModal', () => {
@@ -48,7 +48,7 @@ describe('ChatImportModal', () => {
   it('imports a chat file and offers navigation to the imported chat', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()
-    vi.mocked(importChat).mockResolvedValue({
+    vi.mocked(importCharacterChat).mockResolvedValue({
       success: true,
       chatId: 'chat-42',
       messageCount: 7,
@@ -74,7 +74,11 @@ describe('ChatImportModal', () => {
     await user.click(screen.getByRole('button', { name: 'Import' }))
 
     await waitFor(() => {
-      expect(importChat).toHaveBeenCalledWith('char-1', '{"chat":true}', 'Imported session')
+      expect(importCharacterChat).toHaveBeenCalledWith(
+        'char-1',
+        expect.objectContaining({ name: 'guide_chat.json' }),
+        'Imported session',
+      )
       expect(onClose).toHaveBeenCalledTimes(1)
       expect(refreshMock).not.toHaveBeenCalled()
     })
@@ -92,7 +96,7 @@ describe('ChatImportModal', () => {
   it('surfaces import failures and resets local state on cancel', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()
-    vi.mocked(importChat).mockResolvedValue({
+    vi.mocked(importCharacterChat).mockResolvedValue({
       success: false,
       error: 'Malformed export',
     })

@@ -334,8 +334,6 @@ export async function importChat(
     }
   }
 
-  revalidatePath(`/dashboard/characters/${characterId}`)
-
   return {
     success: true,
     chatId: newChat.id,

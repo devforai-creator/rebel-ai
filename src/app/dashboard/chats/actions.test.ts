@@ -384,7 +384,7 @@ describe('dashboard chats actions', () => {
     })
   })
 
-  it('imports a chat, stores generated turns/messages, and revalidates the character page', async () => {
+  it('imports a chat and stores generated turns/messages without refreshing the character page', async () => {
     const supabase = buildSupabase({
       user: { id: 'user-1' },
       characters: [{ id: 'char-1', user_id: 'user-1', name: 'Scout' }],
@@ -443,7 +443,7 @@ describe('dashboard chats actions', () => {
         content: 'Hello',
       },
     ])
-    expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/characters/char-1')
+    expect(revalidatePathMock).not.toHaveBeenCalledWith('/dashboard/characters/char-1')
   })
 
   it('imports RebelAI fallback summary status from extension metadata', async () => {

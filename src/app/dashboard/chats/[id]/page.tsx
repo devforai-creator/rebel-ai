@@ -20,6 +20,7 @@ import { isLLMProvider } from '@/lib/api-keys/provider-utils'
 import { loadProjectedChatWindow } from '@/lib/chat/turns'
 import type { Persona } from '@/types/database.types'
 import { CHAT_RUNTIME_API_KEY_OPTION_COLUMNS } from '../api-key-options'
+import { pickChatCharacterMetadata, stripInitialMessageDebugInfo } from './rsc-payload'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -142,7 +143,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
     }),
   ])
 
-  const initialMessages = initialWindow.messages
+  const initialMessages = stripInitialMessageDebugInfo(initialWindow.messages)
   const historyCursor = initialWindow.nextCursor
   const normalizedModelConfig = normalizeChatModelConfig(chat.model_config)
 
@@ -198,7 +199,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
               character={{
                 name: character?.name || 'AI',
                 avatar_url: characterAvatarUrl,
-                metadata: character?.metadata || null,
+                metadata: pickChatCharacterMetadata(character?.metadata ?? null),
               }}
               initialHistoryCursor={historyCursor}
               hasMoreHistory={initialWindow.hasMore}

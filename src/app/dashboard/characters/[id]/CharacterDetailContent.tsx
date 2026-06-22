@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { CHARACTER_CHAT_PAGE_SIZE } from '@/lib/chat/constants'
 import CharacterDetailView from './CharacterDetailView'
 import type { CharacterDetail } from './character-detail-types'
+import { toCharacterChatPreview } from '../character-chat-preview'
 
 const CHARACTER_CHAT_FIELDS = `
   id,
@@ -56,18 +57,9 @@ export default async function CharacterDetailContent({ character, userId }: Prop
 
   const selectedModuleIds = characterModules.map((cm) => cm.module_id)
 
-  // 마지막 메시지만 추출해서 클라이언트에 전달
-  const chatsWithLastMessage = chats.slice(0, CHARACTER_CHAT_PAGE_SIZE).map((chat) => {
-    const messages = (chat as { messages?: Array<{ content: string; role: string }> }).messages
-    const lastMessage = messages?.[0] ?? null
-    return {
-      id: chat.id,
-      title: chat.title,
-      updated_at: chat.updated_at,
-      created_at: chat.created_at,
-      lastMessage,
-    }
-  })
+  const chatsWithLastMessage = chats
+    .slice(0, CHARACTER_CHAT_PAGE_SIZE)
+    .map((chat) => toCharacterChatPreview(chat))
   const hasMoreChats = chats.length > CHARACTER_CHAT_PAGE_SIZE
   const nextChatCursor = hasMoreChats
     ? (chatsWithLastMessage[chatsWithLastMessage.length - 1]?.updated_at ?? null)

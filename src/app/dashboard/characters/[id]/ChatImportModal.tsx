@@ -58,7 +58,6 @@ export default function ChatImportModal({ characterId, characterName, isOpen, on
     }
 
     onClose()
-    router.refresh()
     setPendingImportedChat(result.pendingImportedChat)
   }
 

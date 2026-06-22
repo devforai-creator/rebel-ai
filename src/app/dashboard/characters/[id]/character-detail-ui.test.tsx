@@ -76,7 +76,7 @@ describe('ChatImportModal', () => {
     await waitFor(() => {
       expect(importChat).toHaveBeenCalledWith('char-1', '{"chat":true}', 'Imported session')
       expect(onClose).toHaveBeenCalledTimes(1)
-      expect(refreshMock).toHaveBeenCalledTimes(1)
+      expect(refreshMock).not.toHaveBeenCalled()
     })
 
     expect(await screen.findByText('Open imported chat?')).toBeTruthy()

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { CHARACTER_CHAT_PAGE_SIZE } from '@/lib/chat/constants'
+import { toCharacterChatPreview } from '@/app/dashboard/characters/character-chat-preview'
 
 export async function GET(
   request: Request,
@@ -59,17 +60,7 @@ export async function GET(
   const hasMore = rawChats.length > CHARACTER_CHAT_PAGE_SIZE
   const trimmedChats = hasMore ? rawChats.slice(0, CHARACTER_CHAT_PAGE_SIZE) : rawChats
 
-  // 마지막 메시지만 추출
-  const chats = trimmedChats.map((chat) => {
-    const messages = (chat as { messages?: Array<{ content: string; role: string }> }).messages
-    return {
-      id: chat.id,
-      title: chat.title,
-      updated_at: chat.updated_at,
-      created_at: chat.created_at,
-      lastMessage: messages?.[0] ?? null,
-    }
-  })
+  const chats = trimmedChats.map((chat) => toCharacterChatPreview(chat))
 
   const nextCursor = hasMore ? (chats[chats.length - 1]?.updated_at ?? null) : null
 

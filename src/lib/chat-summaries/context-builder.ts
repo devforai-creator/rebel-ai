@@ -59,9 +59,9 @@ async function loadRagCandidateFactCount({
  * Filters out summaries that are fully covered by higher-level summaries.
  * Higher level (meta → super meta) entries take precedence over lower levels.
  */
-export function filterRedundantChunks(
-  summaries: Array<Pick<ChatSummary, 'level' | 'start_seq' | 'end_seq' | 'summary'>>,
-): Array<Pick<ChatSummary, 'level' | 'start_seq' | 'end_seq' | 'summary'>> {
+export function filterRedundantChunks<
+  T extends Pick<ChatSummary, 'level' | 'start_seq' | 'end_seq' | 'summary'>,
+>(summaries: T[]): T[] {
   if (summaries.length === 0) {
     return summaries
   }
@@ -73,7 +73,7 @@ export function filterRedundantChunks(
     return b.level - a.level
   })
 
-  const retained: Array<Pick<ChatSummary, 'level' | 'start_seq' | 'end_seq' | 'summary'>> = []
+  const retained: T[] = []
   const coverage: Array<{ start: number; end: number; level: number }> = []
 
   for (const summary of sortedByPriority) {

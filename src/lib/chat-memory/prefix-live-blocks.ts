@@ -4,10 +4,7 @@ import {
   SUMMARY_GROUP_SIZE,
   SUMMARY_LEVEL_CHUNK,
   SUMMARY_LEVEL_META,
-  SUMMARY_LEVEL_SUPER_META,
-  META_SUMMARY_CONTEXT_ROLLOVER_MESSAGES,
 } from '@/lib/chat-summaries/config'
-import { filterRedundantChunks } from '@/lib/chat-summaries/context-builder'
 import { getLastSummaryEnd, getMessageCount } from '@/lib/chat-summaries/db-helpers'
 import {
   areChunksSequential,
@@ -26,6 +23,7 @@ import type {
   MemoryPromptBlock,
   UpdateMemoryStateOptions,
 } from './types'
+import { selectPrefixPromptSummaries } from './prefix-summary-selection'
 
 type SummaryRow = Pick<ChatSummary, 'level' | 'start_seq' | 'end_seq' | 'summary'>
 type FactRow = {
@@ -104,42 +102,7 @@ export async function buildPrefixLiveBlocksMemoryPlan({
       console.error('[chat-memory] Failed to load prefix summaries:', summaryError.message)
     } else {
       const summaryRows = (summaries ?? []) as SummaryRow[]
-      const metaRolloverCutoff = visibleSummaryEnd - META_SUMMARY_CONTEXT_ROLLOVER_MESSAGES
-      const chunkRangeKeys = new Set(
-        summaryRows
-          .filter((row) => row.level === SUMMARY_LEVEL_CHUNK)
-          .map((row) => `${row.start_seq}-${row.end_seq}`),
-      )
-      const filtered = filterRedundantChunks(
-        summaryRows.filter((row) => {
-          if (row.level === SUMMARY_LEVEL_SUPER_META) {
-            return false
-          }
-
-          if (row.level !== SUMMARY_LEVEL_META) {
-            return true
-          }
-
-          const summarySpan = row.end_seq - row.start_seq + 1
-          const hasChunkCoverage = Array.from(
-            { length: Math.ceil(summarySpan / CHUNK_SIZE) },
-            (_, index) => {
-              const start = row.start_seq + index * CHUNK_SIZE
-              const end = Math.min(start + CHUNK_SIZE - 1, row.end_seq)
-              return chunkRangeKeys.has(`${start}-${end}`)
-            },
-          ).every(Boolean)
-
-          if (!hasChunkCoverage) {
-            return true
-          }
-
-          return (
-            summarySpan < META_SUMMARY_CONTEXT_ROLLOVER_MESSAGES ||
-            row.end_seq <= metaRolloverCutoff
-          )
-        }),
-      )
+      const filtered = selectPrefixPromptSummaries(summaryRows, visibleSummaryEnd)
       const summarySegments = filtered.length > 0 ? formatSummarySegments(filtered) : []
 
       if (summarySegments.length > 0) {

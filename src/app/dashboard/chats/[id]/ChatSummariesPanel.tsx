@@ -114,7 +114,6 @@ export default function ChatSummariesPanel({
     summaries,
     facts,
     messageCount,
-    currentLatestSequence,
     editingSummaryId,
     summaryEditContent,
     setSummaryEditContent,
@@ -175,69 +174,19 @@ export default function ChatSummariesPanel({
     return buildSummaryPromptStatuses(summaries, promptSummaryIds)
   }, [memoryConfig.mode, summaries])
 
-  const rawMessageWindow = useMemo(
-    () =>
-      memoryConfig.mode === 'summary_window'
-        ? CHAT_CONTEXT_WINDOW
-        : memoryConfig.retainTailMessages,
-    [memoryConfig.mode, memoryConfig.retainTailMessages],
-  )
-
-  const summaryCutoff = useMemo(
-    () => Math.max(currentLatestSequence - rawMessageWindow, 0),
-    [currentLatestSequence, rawMessageWindow],
-  )
-
   // Disable super meta summaries from context preview
   const superMetaSummaries = useMemo((): SummaryEntry[] => {
     return []
   }, [])
 
-  const metaSummaries = useMemo(() => {
-    if (summaryCutoff <= 0) {
-      return []
-    }
-    const filtered = summaries
-      .filter((summary) => summary.level === 1 && summary.end_seq <= summaryCutoff)
-      .sort((a, b) => a.start_seq - b.start_seq)
-
-    if (superMetaSummaries.length === 0) {
-      return filtered
-    }
-
-    return filtered.filter(
-      (meta) =>
-        !superMetaSummaries.some(
-          (superMeta) => meta.start_seq >= superMeta.start_seq && meta.end_seq <= superMeta.end_seq,
-        ),
-    )
-  }, [summaries, summaryCutoff, superMetaSummaries])
-
-  const higherLevelCoverage = useMemo(() => {
-    if (summaryCutoff <= 0) {
-      return []
-    }
-    return [...superMetaSummaries, ...metaSummaries].map((summary) => ({
-      start: summary.start_seq,
-      end: summary.end_seq,
-    }))
-  }, [superMetaSummaries, metaSummaries, summaryCutoff])
-
-  const visibleChunkSummaries = useMemo(() => {
-    if (summaryCutoff <= 0) {
-      return []
-    }
-    return chunkSummaries.filter(
-      (chunk) =>
-        chunk.end_seq <= summaryCutoff &&
-        !higherLevelCoverage.some(
-          (range) => chunk.start_seq >= range.start && chunk.end_seq <= range.end,
-        ),
-    )
-  }, [chunkSummaries, higherLevelCoverage, summaryCutoff])
+  const metaSummaries = useMemo(
+    () =>
+      summaries.filter((summary) => summary.level === 1).sort((a, b) => a.start_seq - b.start_seq),
+    [summaries],
+  )
 
   const hasSummaries =
-    superMetaSummaries.length > 0 || metaSummaries.length > 0 || visibleChunkSummaries.length > 0
+    superMetaSummaries.length > 0 || metaSummaries.length > 0 || chunkSummaries.length > 0
   const hasMemoryEntries = hasSummaries || facts.length > 0
   const modeLabel = getMemoryModeLabel(memoryConfig)
   const memoryDescription = getMemoryDescription(memoryConfig)
@@ -412,7 +361,7 @@ export default function ChatSummariesPanel({
 
         <SummaryMemorySection
           title="Chunk Summary"
-          summaries={visibleChunkSummaries}
+          summaries={chunkSummaries}
           collapsed={isChunkCollapsed}
           onToggle={() => setIsChunkCollapsed((current) => !current)}
           className="mt-8 space-y-4"

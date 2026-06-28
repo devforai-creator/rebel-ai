@@ -22,6 +22,15 @@ vi.mock('./hooks', () => ({
         summary_status: 'fallback',
         created_at: '2026-04-20T00:00:00.000Z',
       },
+      {
+        id: 'summary-2',
+        level: 0,
+        start_seq: 1,
+        end_seq: 10,
+        summary: 'Covered chunk content',
+        summary_status: 'ok',
+        created_at: '2026-04-20T00:00:00.000Z',
+      },
     ],
     facts: [
       {
@@ -148,6 +157,7 @@ describe('ChatSummariesPanel memory stats copy', () => {
     expect(html).toContain('▶')
     expect(html).not.toContain('Meta summary content')
     expect(html).not.toContain('Fact content')
+    expect(html).toContain('Chunk Summary (1)')
   })
 
   it('shows a visible memory warning banner when the latest assistant recorded a summary failure', () => {

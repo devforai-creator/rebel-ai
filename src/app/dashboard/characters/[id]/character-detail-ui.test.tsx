@@ -144,7 +144,9 @@ describe('NewChatButton', () => {
 })
 
 describe('CharacterDetailView', () => {
-  it('does not prefetch chat detail routes from the chat history list', () => {
+  it('does not prefetch chat detail routes while preserving list interactions', async () => {
+    const user = userEvent.setup()
+
     render(
       <CharacterDetailView
         character={{
@@ -177,6 +179,14 @@ describe('CharacterDetailView', () => {
     expect(screen.getByRole('link', { name: /Session one/ }).getAttribute('data-prefetch')).toBe(
       'false',
     )
+
+    await user.click(screen.getByRole('button', { name: 'Import Chat' }))
+    expect(screen.getByText('Click to select JSON file')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(screen.getByText('Delete "Session one"?')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
   })
 })
 

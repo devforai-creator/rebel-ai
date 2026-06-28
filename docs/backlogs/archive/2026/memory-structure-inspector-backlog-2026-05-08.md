@@ -1,6 +1,8 @@
 # Memory Structure Inspector Backlog
 
 Created: 2026-05-08
+Updated: 2026-06-28
+Status: Complete — ready to archive after the final copy change is committed
 
 This is the execution backlog for reshaping the dashboard memory panel around
 the current long-term memory doctrine.
@@ -9,7 +11,7 @@ The working direction is:
 
 - treat `prefix_live_blocks + summaries + ATR` as the first-class long-chat
   path
-- keep `summary_window` as maintained legacy compatibility unless a later
+- keep `summary_window` as a maintained compatibility fallback unless a later
   policy decision retires it
 - change the dashboard memory panel from a context-preview surface into a
   memory-structure inspector
@@ -17,7 +19,44 @@ The working direction is:
 This backlog is intentionally split into multiple sessions. Do not try to land
 all of it in one change.
 
-## Current Problem
+## 2026-06-28 Progress Update
+
+The core inspector work is complete:
+
+- the Prefix prompt-selection rule now lives in a shared, client-safe pure
+  module instead of being duplicated between runtime and UI
+- all stored meta and chunk summaries remain reachable from the panel
+- the dashboard renders one `Summary Structure` tree with meta parents,
+  expandable child chunks, and a separate loose-chunk group
+- summary rows display mutually exclusive `In prompt`, `Covered`, or `Stored`
+  badges in Prefix mode
+- edit, delete, regenerate, fallback, and collapsed-section behavior remain
+  available
+- the 250-message rollover case is covered across grouping, prompt selection,
+  status calculation, rendering, and child expansion tests
+
+Relevant delivery commits:
+
+- `5b9886b` `Extract prefix summary selection policy`
+- `aba96fa` `Add summary prompt status model`
+- `6974977` `Show prefix prompt status badges`
+- `881533e` `Fix client-safe summary selection boundary`
+- `8399f99` `Show all stored memory summaries`
+- `318ba25` `Render summary memory as inspector tree`
+- `de237b9` `Show stored and covered memory statuses`
+- `abf3d89` `Cover 250-message inspector rollover`
+
+The implementation and policy decisions are complete:
+
+- lazy loading is deferred until measured summary or fact volume justifies its
+  additional API, loading-state, and realtime complexity
+- regular-user memory labels remain neutral (`Summary` and `Prefix`), while
+  developer labels retain the explicit `fallback` and `core` support tiers
+- `summary_window` remains a named compatibility mode and is not presented as
+  `Legacy` in user-facing copy
+- full retirement or hiding of `summary_window` belongs in a separate backlog
+
+## Original Problem
 
 The dashboard summary panel still behaves like a preview of summaries that are
 eligible for the current prompt context. That was useful for the older
@@ -63,17 +102,33 @@ decision explicitly approves that migration/removal.
 - implementing lazy loading before the tree data model is settled
 - changing database schema
 
-## Open Decisions
+## Resolved Decisions
 
-These should be decided before or during the relevant implementation phase:
+- `prefix_live_blocks` is the maintainer/operator first-class mode; the generic
+  compatibility default remains `summary_window` for now
+- `summary_window` remains visible and maintained as fallback compatibility; it
+  is not removed by this backlog
+- the inspector does not keep a separate context-preview section; row badges
+  communicate prompt-selection status
+- status badges describe the summary artifact itself, not every representation
+  of its source range; a `Stored` summary can overlap messages that are still
+  present as live/raw transcript
+- the core inspector keeps the existing eager loader until measured volume
+  justifies a more complex loading boundary
+- regular-user settings use neutral `Summary` and `Prefix` labels rather than
+  claiming that either mode is the universal default
+- developer settings keep `Summary fallback` and `Prefix core`, while
+  user-facing copy does not label the maintained `summary_window` mode as
+  `Legacy`
+- the `Summary Window` and `Prefix` panel names remain because they identify
+  supported modes rather than obsolete UI concepts
 
-- should new chats default to `prefix_live_blocks` everywhere, or is that
-  already sufficiently true through current config defaults?
-- should `summary_window` remain visible in settings, be labeled legacy, or be
-  hidden for new chats?
-- should the memory panel keep any explicit "context preview" section, or only
-  show context status badges inside the inspector?
-- when lazy loading is introduced, should initial load include:
+## Deferred Follow-up Decisions
+
+These are not blockers for this backlog. Revisit them only after measured data
+volume or latency demonstrates a need for lazy loading:
+
+- if lazy loading is introduced later, should initial load include:
   - only counts and high-level ranges,
   - all meta summaries but lazy child chunks,
   - or even meta summaries lazily by range/page?
@@ -102,10 +157,14 @@ Meta Summary 101-200      Stored
   Chunk Summary 191-200   In prompt
 
 Loose Chunks
-  Chunk Summary 201-210   In prompt
-  Chunk Summary 211-220   In prompt
-  Chunk Summary 221-230   In prompt
+  Chunk Summary 201-210   Stored
+  Chunk Summary 211-220   Stored
+  Chunk Summary 221-230   Stored
 ```
+
+The loose-chunk labels above describe whether each summary artifact is selected
+for the prompt. Its underlying source messages may still be present in the
+live/raw transcript.
 
 Exact status labels may change, but the important shift is:
 
@@ -116,6 +175,8 @@ Exact status labels may change, but the important shift is:
 ## Session Plan
 
 ### Session 1: Confirm Memory Policy
+
+Status: Completed.
 
 Goal: make the operating policy explicit before touching UI behavior.
 
@@ -134,6 +195,8 @@ Acceptance:
 - no UI tree work is blocked by ambiguity about `summary_window`
 
 ### Session 2: Define Inspector Data Model
+
+Status: Completed.
 
 Goal: design a pure in-memory model before changing rendering.
 
@@ -159,6 +222,8 @@ Acceptance:
 
 ### Session 3: Render Tree With Existing Eager Data
 
+Status: Completed on 2026-06-28.
+
 Goal: change the UI shape while keeping the current server loading strategy.
 
 Tasks:
@@ -176,6 +241,8 @@ Acceptance:
 - covered child chunks can be inspected by expanding their parent
 
 ### Session 4: Align Prefix Rollover Status
+
+Status: Completed on 2026-06-28.
 
 Goal: make status badges match `prefix_live_blocks` context behavior.
 
@@ -197,6 +264,9 @@ Acceptance:
 - the panel does not imply that a hidden meta row is lost or invalid
 
 ### Session 5: Decide Lazy Loading Policy
+
+Status: Completed on 2026-06-28. Lazy loading is deferred until measured volume
+justifies the added complexity.
 
 Goal: decide the loading boundary after the tree model exists.
 
@@ -221,6 +291,8 @@ Acceptance:
 
 ### Session 6: Implement Lazy Loading If Approved
 
+Status: Skipped. Session 5 chose to retain eager loading for now.
+
 Goal: reduce initial memory panel payload without weakening inspectability.
 
 Tasks:
@@ -239,6 +311,8 @@ Acceptance:
 
 ### Session 7: Legacy Cleanup Pass
 
+Status: Completed on 2026-06-28.
+
 Goal: keep `summary_window` compatibility deliberate and bounded.
 
 Tasks:
@@ -250,19 +324,22 @@ Tasks:
 
 Acceptance:
 
-- legacy support is explicit rather than accidental
-- no first-class UI concept is named after the old summary-window behavior
+- compatibility support is explicit rather than accidental
+- regular-user copy does not misidentify Prefix as the universal default
+- `Summary Window` appears only as the name of the maintained compatibility
+  mode, not as the organizing concept for the Prefix-first inspector
 
-## Suggested ATD-Friendly Slices
+## Completed ATD-Friendly Slices
 
-Use these as smaller tutoring sessions:
+The 2026-06-28 tutoring sessions covered:
 
 - explain `summaryCutoff` in `ChatSummariesPanel.tsx`
-- explain `filterRedundantChunks` in `context-builder.ts`
+- extract the prompt-selection rule and move its shared filter into a
+  client-safe pure module
 - trace the rollover test in `prefix-live-blocks.test.ts`
 - write one pure helper test for "meta contains chunks"
-- add one status badge without changing tree structure
-- rename one UI label from context-preview language to inspector language
+- add prompt, covered, and stored status badges
+- replace context-preview filtering with an inspector tree
 
 ## Verification Guidance
 

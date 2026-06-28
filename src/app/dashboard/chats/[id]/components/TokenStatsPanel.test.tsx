@@ -49,11 +49,12 @@ describe('TokenStatsPanel', () => {
     expect(html).toContain('Usage')
   })
 
-  it('labels prefix memory as the default user-facing mode', () => {
+  it('uses neutral user-facing memory mode labels', () => {
     const html = renderToStaticMarkup(<TokenStatsPanel {...baseProps} usageStatsEnabled={false} />)
 
     expect(html).toContain('메모리: Summary')
-    expect(html).toContain('메모리: Prefix 기본')
+    expect(html).toContain('메모리: Prefix')
+    expect(html).not.toContain('메모리: Prefix 기본')
   })
 
   it('labels memory support tiers for developers', () => {

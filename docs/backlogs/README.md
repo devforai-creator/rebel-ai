@@ -17,12 +17,11 @@ Use it to answer two questions quickly:
 
 ## Current Entry Point
 
-- Active backlog:
-  [memory-structure-inspector-backlog-2026-05-08.md](./active/memory-structure-inspector-backlog-2026-05-08.md)
+- Active backlog: none
 - Most recently parked backlog:
-  [explicit-memory-v0-backlog-2026-04-22.md](./parked/2026/explicit-memory-v0-backlog-2026-04-22.md)
+  [memory-inspector-lazy-loading-followup-2026-06-28.md](./parked/2026/memory-inspector-lazy-loading-followup-2026-06-28.md)
 - Most recently archived backlog:
-  [suu-host-overflow-backlog-2026-04-25.md](./archive/2026/suu-host-overflow-backlog-2026-04-25.md)
+  [memory-structure-inspector-backlog-2026-05-08.md](./archive/2026/memory-structure-inspector-backlog-2026-05-08.md)
 
 ## Working Rules
 

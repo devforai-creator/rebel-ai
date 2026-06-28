@@ -162,7 +162,7 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
               {isDeveloper ? '메모리: Summary fallback' : '메모리: Summary'}
             </option>
             <option value="prefix_live_blocks">
-              {isDeveloper ? '메모리: Prefix core' : '메모리: Prefix 기본'}
+              {isDeveloper ? '메모리: Prefix core' : '메모리: Prefix'}
             </option>
           </select>
           <select
@@ -237,7 +237,7 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                     {isDeveloper ? '메모리: Summary fallback' : '메모리: Summary'}
                   </option>
                   <option value="prefix_live_blocks">
-                    {isDeveloper ? '메모리: Prefix core' : '메모리: Prefix 기본'}
+                    {isDeveloper ? '메모리: Prefix core' : '메모리: Prefix'}
                   </option>
                 </select>
                 <select

@@ -63,6 +63,7 @@ export default function CharacterCard({ character, isStarter = false }: Props) {
         {/* 캐릭터 헤더 (클릭 가능) */}
         <Link
           href={`/dashboard/characters/${character.id}`}
+          prefetch={false}
           className="block p-6 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
         >
           <div className="flex items-start gap-4 mb-4">

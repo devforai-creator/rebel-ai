@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import Button, { buttonClassName } from '@/app/dashboard/components/Button'
@@ -169,6 +169,7 @@ export default function CharacterDetailView({
                 <SurfaceCard key={chat.id} tone="subtle" padding="none" className="overflow-hidden">
                   <Link
                     href={`/dashboard/chats/${chat.id}`}
+                    prefetch={false}
                     className="block p-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
                     <div className="flex items-center justify-between">

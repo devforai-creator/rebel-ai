@@ -27,8 +27,20 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('next/link', () => ({
-  default: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-    <a href={typeof href === 'string' ? href : '#'} {...props}>
+  default: ({
+    href,
+    children,
+    prefetch,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href: string
+    prefetch?: boolean
+  }) => (
+    <a
+      href={typeof href === 'string' ? href : '#'}
+      data-prefetch={prefetch === false ? 'false' : undefined}
+      {...props}
+    >
       {children}
     </a>
   ),
@@ -55,6 +67,22 @@ vi.mock('@/hooks/useUserResources', () => ({
 }))
 
 describe('CharacterCard', () => {
+  it('does not prefetch character detail routes from the character list', () => {
+    render(
+      <CharacterCard
+        character={{
+          id: 'char-1',
+          name: 'Guide',
+          created_at: '2026-04-12T00:00:00.000Z',
+          visibility: 'private',
+          avatar_url: null,
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('link', { name: /Guide/ }).getAttribute('data-prefetch')).toBe('false')
+  })
+
   it('renders the shared destructive action for deletable characters', () => {
     const html = renderToStaticMarkup(
       <CharacterCard

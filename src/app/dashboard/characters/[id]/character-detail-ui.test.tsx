@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ChatImportModal from './ChatImportModal'
+import CharacterDetailView from './CharacterDetailView'
 import NewChatButton from './NewChatButton'
 import { importCharacterChat } from './character-chats-client'
 
@@ -22,8 +23,20 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('next/link', () => ({
-  default: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-    <a href={typeof href === 'string' ? href : '#'} {...props}>
+  default: ({
+    href,
+    children,
+    prefetch,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href: string
+    prefetch?: boolean
+  }) => (
+    <a
+      href={typeof href === 'string' ? href : '#'}
+      data-prefetch={prefetch === false ? 'false' : undefined}
+      {...props}
+    >
       {children}
     </a>
   ),
@@ -127,6 +140,43 @@ describe('NewChatButton', () => {
     expect(html).toContain('/dashboard/chats/new?character=char-1')
     expect(html).toContain('bg-blue-600')
     expect(html).toContain('새 채팅 시작')
+  })
+})
+
+describe('CharacterDetailView', () => {
+  it('does not prefetch chat detail routes from the chat history list', () => {
+    render(
+      <CharacterDetailView
+        character={{
+          id: 'char-1',
+          name: 'Guide',
+          description: null,
+          system_prompt: 'Guide the user',
+          greeting_message: null,
+          avatar_url: null,
+          visibility: 'private',
+          created_at: '2026-04-12T00:00:00.000Z',
+        }}
+        chats={[
+          {
+            id: 'chat-1',
+            title: 'Session one',
+            created_at: '2026-04-12T00:00:00.000Z',
+            updated_at: '2026-04-12T01:00:00.000Z',
+            lastMessage: null,
+          },
+        ]}
+        isStarter={false}
+        modules={[]}
+        initialModuleIds={[]}
+        hasMoreChats={false}
+        initialChatCursor={null}
+      />,
+    )
+
+    expect(screen.getByRole('link', { name: /Session one/ }).getAttribute('data-prefetch')).toBe(
+      'false',
+    )
   })
 })
 

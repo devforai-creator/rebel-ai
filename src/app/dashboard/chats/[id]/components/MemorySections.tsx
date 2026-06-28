@@ -1,11 +1,11 @@
 'use client'
 
 import React from 'react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import Button from '@/app/dashboard/components/Button'
 import { surfaceCardClassName } from '@/app/dashboard/components/SurfaceCard'
 import type { FactEntry, SummaryEntry } from '../hooks/useChatSummariesState'
-import type { SummaryPromptStatus } from '../summary-structure'
+import type { SummaryPromptStatus, SummaryStructure } from '../summary-structure'
 
 const LEVEL_LABEL: Record<number, string> = {
   2: 'Super Meta Summary',
@@ -56,14 +56,18 @@ function CollapsibleMemorySection({
   return (
     <section className={className ?? 'mt-6 space-y-4'}>
       <button
+        type="button"
         onClick={onToggle}
+        aria-expanded={!collapsed}
         className="flex w-full items-center justify-between text-sm font-semibold text-gray-800 transition-colors hover:text-gray-600 dark:text-gray-200 dark:hover:text-gray-400"
       >
         <span>
           {title} ({count}
           {countDetail ? ` · ${countDetail}` : ''})
         </span>
-        <span className="text-lg">{collapsed ? '▶' : '▼'}</span>
+        <span className="text-lg" aria-hidden="true">
+          {collapsed ? '▶' : '▼'}
+        </span>
       </button>
       {!collapsed && description ? (
         <div className="mb-3 space-y-2 text-xs text-gray-600 dark:text-gray-400">{description}</div>
@@ -73,17 +77,7 @@ function CollapsibleMemorySection({
   )
 }
 
-type SummaryMemorySectionProps = {
-  title: string
-  summaries: SummaryEntry[]
-  collapsed: boolean
-  onToggle: () => void
-  description?: ReactNode
-  className?: string
-  listClassName?: string
-  cardClassName?: string
-  regenerateButtonClassName: string
-  editorRows: number
+type SummaryMemoryInteractionProps = {
   editingSummaryId: string | null
   summaryEditContent: string
   onChangeSummaryEditContent: (value: string) => void
@@ -96,17 +90,23 @@ type SummaryMemorySectionProps = {
   promptStatuses?: Readonly<Record<string, SummaryPromptStatus>>
 }
 
-export function SummaryMemorySection({
-  title,
-  summaries,
-  collapsed,
-  onToggle,
-  description,
-  className,
-  listClassName = 'space-y-3',
-  cardClassName = surfaceCardClassName({
-    className: 'dark:bg-gray-900',
-  }),
+type SummaryMemoryCardProps = SummaryMemoryInteractionProps & {
+  summary: SummaryEntry
+  cardClassName: string
+  regenerateButtonClassName: string
+  editorRows: number
+}
+
+const DEFAULT_SUMMARY_CARD_CLASS_NAME = surfaceCardClassName({
+  className: 'dark:bg-gray-900',
+})
+
+const SUMMARY_REGENERATE_BUTTON_CLASS_NAME =
+  'text-purple-600 hover:text-purple-700 dark:text-purple-300 disabled:opacity-50'
+
+function SummaryMemoryCard({
+  summary,
+  cardClassName,
   regenerateButtonClassName,
   editorRows,
   editingSummaryId,
@@ -119,111 +119,211 @@ export function SummaryMemorySection({
   onRegenerate,
   onDelete,
   promptStatuses,
-}: SummaryMemorySectionProps) {
-  if (summaries.length === 0) {
+}: SummaryMemoryCardProps) {
+  const formattedTimestamp = formatTimestamp(summary.created_at)
+  const isEditing = editingSummaryId === summary.id
+
+  return (
+    <article className={cardClassName}>
+      <div className="mb-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span>
+            {LEVEL_LABEL[summary.level] ?? 'Summary'} · {`${summary.start_seq}-${summary.end_seq}`}
+            {formattedTimestamp ? ` · ${formattedTimestamp}` : null}
+          </span>
+          {summary.summary_status === 'fallback' ? (
+            <span
+              className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+              title="Local fallback summary"
+            >
+              Fallback
+            </span>
+          ) : null}
+          {promptStatuses?.[summary.id] === 'in_prompt' ? (
+            <span
+              className="rounded border border-blue-300 bg-blue-50 px-1.5 py-0.5 font-medium text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200"
+              title="Included in the current prompt"
+            >
+              In prompt
+            </span>
+          ) : null}
+        </div>
+        {!isEditing ? (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => onStartEdit(summary.id, summary.summary)}
+              className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
+              title="Edit"
+            >
+              ✏️
+            </button>
+            <button
+              type="button"
+              onClick={() => onRegenerate(summary.id)}
+              disabled={regeneratingSummaryId === summary.id}
+              className={regenerateButtonClassName}
+              title="Regenerate summary"
+            >
+              {regeneratingSummaryId === summary.id ? '⟳' : '♻️'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete(summary.id)}
+              className="text-red-600 hover:text-red-700 dark:text-red-400"
+              title="Delete"
+            >
+              🗑️
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      {isEditing ? (
+        <div className="space-y-2">
+          <textarea
+            value={summaryEditContent}
+            onChange={(event) => onChangeSummaryEditContent(event.target.value)}
+            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            rows={editorRows}
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <Button onClick={() => onSaveEdit(summary.id)} size="sm">
+              Save
+            </Button>
+            <Button onClick={onCancelEdit} variant="secondary" size="sm">
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="whitespace-pre-line text-sm leading-5 text-gray-800 dark:text-gray-200">
+          {summary.summary}
+        </p>
+      )}
+    </article>
+  )
+}
+
+type SummaryMemoryTreeSectionProps = SummaryMemoryInteractionProps & {
+  structure: SummaryStructure
+  collapsed: boolean
+  onToggle: () => void
+}
+
+export function SummaryMemoryTreeSection({
+  structure,
+  collapsed,
+  onToggle,
+  ...interactionProps
+}: SummaryMemoryTreeSectionProps) {
+  const [expandedMetaIds, setExpandedMetaIds] = useState<Set<string>>(() => new Set())
+  const structuredSummaries = structure.metaNodes.flatMap((node) => [
+    node.summary,
+    ...node.children,
+  ])
+  const allSummaries = [...structuredSummaries, ...structure.looseChunks]
+
+  if (allSummaries.length === 0) {
     return null
   }
 
-  const fallbackCount = summaries.filter((summary) => summary.summary_status === 'fallback').length
+  const fallbackCount = allSummaries.filter(
+    (summary) => summary.summary_status === 'fallback',
+  ).length
+
+  function toggleMetaChildren(summaryId: string) {
+    setExpandedMetaIds((current) => {
+      const next = new Set(current)
+      if (next.has(summaryId)) {
+        next.delete(summaryId)
+      } else {
+        next.add(summaryId)
+      }
+      return next
+    })
+  }
 
   return (
     <CollapsibleMemorySection
-      title={title}
-      count={summaries.length}
+      title="Summary Structure"
+      count={allSummaries.length}
       countDetail={
         fallbackCount > 0 ? `${fallbackCount} fallback${fallbackCount === 1 ? '' : 's'}` : null
       }
       collapsed={collapsed}
       onToggle={onToggle}
-      description={description}
-      className={className}
+      className="mt-6 space-y-4"
     >
-      <ul className={listClassName}>
-        {summaries.map((summary) => {
-          const formattedTimestamp = formatTimestamp(summary.created_at)
-          const isEditing = editingSummaryId === summary.id
+      <ul className="space-y-5">
+        {structure.metaNodes.map((node) => {
+          const childrenExpanded = expandedMetaIds.has(node.summary.id)
+          const childContainerId = `summary-children-${node.summary.id}`
 
           return (
-            <li key={summary.id} className={cardClassName}>
-              <div className="mb-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <span>
-                    {LEVEL_LABEL[summary.level] ?? 'Summary'} ·{' '}
-                    {`${summary.start_seq}-${summary.end_seq}`}
-                    {formattedTimestamp ? ` · ${formattedTimestamp}` : null}
-                  </span>
-                  {summary.summary_status === 'fallback' ? (
-                    <span
-                      className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
-                      title="Local fallback summary"
-                    >
-                      Fallback
-                    </span>
-                  ) : null}
-                  {promptStatuses?.[summary.id] === 'in_prompt' ? (
-                    <span
-                      className="rounded border border-blue-300 bg-blue-50 px-1.5 py-0.5 font-medium text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200"
-                      title="Included in the current prompt"
-                    >
-                      In prompt
-                    </span>
+            <li key={node.summary.id} className="space-y-3">
+              <SummaryMemoryCard
+                summary={node.summary}
+                cardClassName={DEFAULT_SUMMARY_CARD_CLASS_NAME}
+                regenerateButtonClassName={SUMMARY_REGENERATE_BUTTON_CLASS_NAME}
+                editorRows={5}
+                {...interactionProps}
+              />
+              {node.children.length > 0 ? (
+                <div className="ml-3 border-l border-gray-200 pl-3 dark:border-gray-700">
+                  <button
+                    type="button"
+                    onClick={() => toggleMetaChildren(node.summary.id)}
+                    aria-expanded={childrenExpanded}
+                    aria-controls={childContainerId}
+                    className="flex w-full items-center justify-between py-1 text-xs font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                  >
+                    <span>Chunk Summaries ({node.children.length})</span>
+                    <span aria-hidden="true">{childrenExpanded ? '▼' : '▶'}</span>
+                  </button>
+                  {childrenExpanded ? (
+                    <ul id={childContainerId} className="mt-2 space-y-3">
+                      {node.children.map((child) => (
+                        <li key={child.id}>
+                          <SummaryMemoryCard
+                            summary={child}
+                            cardClassName={DEFAULT_SUMMARY_CARD_CLASS_NAME}
+                            regenerateButtonClassName={SUMMARY_REGENERATE_BUTTON_CLASS_NAME}
+                            editorRows={4}
+                            {...interactionProps}
+                          />
+                        </li>
+                      ))}
+                    </ul>
                   ) : null}
                 </div>
-                {!isEditing ? (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onStartEdit(summary.id, summary.summary)}
-                      className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                      title="Edit"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={() => onRegenerate(summary.id)}
-                      disabled={regeneratingSummaryId === summary.id}
-                      className={regenerateButtonClassName}
-                      title="Regenerate summary"
-                    >
-                      {regeneratingSummaryId === summary.id ? '⟳' : '♻️'}
-                    </button>
-                    <button
-                      onClick={() => onDelete(summary.id)}
-                      className="text-red-600 hover:text-red-700 dark:text-red-400"
-                      title="Delete"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-
-              {isEditing ? (
-                <div className="space-y-2">
-                  <textarea
-                    value={summaryEditContent}
-                    onChange={(event) => onChangeSummaryEditContent(event.target.value)}
-                    className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                    rows={editorRows}
-                    autoFocus
-                  />
-                  <div className="flex gap-2">
-                    <Button onClick={() => onSaveEdit(summary.id)} size="sm">
-                      Save
-                    </Button>
-                    <Button onClick={onCancelEdit} variant="secondary" size="sm">
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <p className="whitespace-pre-line text-sm leading-5 text-gray-800 dark:text-gray-200">
-                  {summary.summary}
-                </p>
-              )}
+              ) : null}
             </li>
           )
         })}
       </ul>
+
+      {structure.looseChunks.length > 0 ? (
+        <section className="mt-6 border-t border-gray-200 pt-4 dark:border-gray-700">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Loose Chunks ({structure.looseChunks.length})
+          </h3>
+          <ul className="space-y-3">
+            {structure.looseChunks.map((chunk) => (
+              <li key={chunk.id}>
+                <SummaryMemoryCard
+                  summary={chunk}
+                  cardClassName={DEFAULT_SUMMARY_CARD_CLASS_NAME}
+                  regenerateButtonClassName={SUMMARY_REGENERATE_BUTTON_CLASS_NAME}
+                  editorRows={4}
+                  {...interactionProps}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </CollapsibleMemorySection>
   )
 }

@@ -11,11 +11,11 @@ import { CHAT_CONTEXT_WINDOW } from '@/lib/chat-context-window'
 import type { ChatMemoryConfig } from '@/lib/chat/model-config'
 import { CHUNK_SIZE, SUMMARY_LEVEL_META } from '@/lib/chat-summaries/config'
 import { selectPrefixPromptSummaries } from '@/lib/chat-memory/prefix-summary-selection'
-import { FactMemorySection, SummaryMemorySection } from './components'
+import { FactMemorySection, SummaryMemoryTreeSection } from './components'
 import { useChatSummariesState } from './hooks'
 import type { FactEntry, SummaryEntry } from './hooks/useChatSummariesState'
 import { resolveVisibleSummaryWarning, type SummaryWarningInfo } from './summary-warning'
-import { buildSummaryPromptStatuses } from './summary-structure'
+import { buildSummaryPromptStatuses, buildSummaryStructure } from './summary-structure'
 
 interface ChatSummariesPanelProps {
   chatId: string
@@ -144,17 +144,11 @@ export default function ChatSummariesPanel({
   })
 
   // Collapse states for each section
-  const [isSuperMetaCollapsed, setIsSuperMetaCollapsed] = useState(true)
-  const [isMetaCollapsed, setIsMetaCollapsed] = useState(true)
-  const [isChunkCollapsed, setIsChunkCollapsed] = useState(true)
+  const [isSummaryStructureCollapsed, setIsSummaryStructureCollapsed] = useState(true)
   const [isFactsCollapsed, setIsFactsCollapsed] = useState(true)
   const [pendingDeleteSummaryId, setPendingDeleteSummaryId] = useState<string | null>(null)
 
-  const chunkSummaries = useMemo(
-    () =>
-      summaries.filter((summary) => summary.level === 0).sort((a, b) => a.start_seq - b.start_seq),
-    [summaries],
-  )
+  const summaryStructure = useMemo(() => buildSummaryStructure(summaries), [summaries])
 
   const promptStatuses = useMemo(() => {
     if (memoryConfig.mode !== 'prefix_live_blocks') {
@@ -174,19 +168,8 @@ export default function ChatSummariesPanel({
     return buildSummaryPromptStatuses(summaries, promptSummaryIds)
   }, [memoryConfig.mode, summaries])
 
-  // Disable super meta summaries from context preview
-  const superMetaSummaries = useMemo((): SummaryEntry[] => {
-    return []
-  }, [])
-
-  const metaSummaries = useMemo(
-    () =>
-      summaries.filter((summary) => summary.level === 1).sort((a, b) => a.start_seq - b.start_seq),
-    [summaries],
-  )
-
   const hasSummaries =
-    superMetaSummaries.length > 0 || metaSummaries.length > 0 || chunkSummaries.length > 0
+    summaryStructure.metaNodes.length > 0 || summaryStructure.looseChunks.length > 0
   const hasMemoryEntries = hasSummaries || facts.length > 0
   const modeLabel = getMemoryModeLabel(memoryConfig)
   const memoryDescription = getMemoryDescription(memoryConfig)
@@ -311,62 +294,10 @@ export default function ChatSummariesPanel({
           <EmptyState compact title="No long-term memory yet" description={emptyStateText} />
         )}
 
-        <SummaryMemorySection
-          title="Super Meta Summary"
-          summaries={superMetaSummaries}
-          collapsed={isSuperMetaCollapsed}
-          onToggle={() => setIsSuperMetaCollapsed((current) => !current)}
-          description={
-            <p>
-              Top-level record compressing 4 meta summaries. Quickly grasp key points even from
-              thousands of messages.
-            </p>
-          }
-          className="space-y-4"
-          regenerateButtonClassName="text-emerald-600 hover:text-emerald-700 dark:text-emerald-300 disabled:opacity-50"
-          editorRows={5}
-          editingSummaryId={editingSummaryId}
-          summaryEditContent={summaryEditContent}
-          onChangeSummaryEditContent={setSummaryEditContent}
-          regeneratingSummaryId={regeneratingSummaryId}
-          onStartEdit={startSummaryEdit}
-          onSaveEdit={(summaryId) => void saveSummaryEdit(summaryId)}
-          onCancelEdit={cancelSummaryEdit}
-          onRegenerate={(summaryId) => void handleRegenerateSummary(summaryId)}
-          onDelete={setPendingDeleteSummaryId}
-          promptStatuses={promptStatuses}
-        />
-
-        <SummaryMemorySection
-          title="Meta Summary"
-          summaries={metaSummaries}
-          collapsed={isMetaCollapsed}
-          onToggle={() => setIsMetaCollapsed((current) => !current)}
-          className="mt-6 space-y-4"
-          listClassName="space-y-4"
-          cardClassName="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900"
-          regenerateButtonClassName="text-purple-600 hover:text-purple-700 dark:text-purple-300 disabled:opacity-50"
-          editorRows={5}
-          editingSummaryId={editingSummaryId}
-          summaryEditContent={summaryEditContent}
-          onChangeSummaryEditContent={setSummaryEditContent}
-          regeneratingSummaryId={regeneratingSummaryId}
-          onStartEdit={startSummaryEdit}
-          onSaveEdit={(summaryId) => void saveSummaryEdit(summaryId)}
-          onCancelEdit={cancelSummaryEdit}
-          onRegenerate={(summaryId) => void handleRegenerateSummary(summaryId)}
-          onDelete={setPendingDeleteSummaryId}
-          promptStatuses={promptStatuses}
-        />
-
-        <SummaryMemorySection
-          title="Chunk Summary"
-          summaries={chunkSummaries}
-          collapsed={isChunkCollapsed}
-          onToggle={() => setIsChunkCollapsed((current) => !current)}
-          className="mt-8 space-y-4"
-          regenerateButtonClassName="text-purple-600 hover:text-purple-700 dark:text-purple-300 disabled:opacity-50"
-          editorRows={4}
+        <SummaryMemoryTreeSection
+          structure={summaryStructure}
+          collapsed={isSummaryStructureCollapsed}
+          onToggle={() => setIsSummaryStructureCollapsed((current) => !current)}
           editingSummaryId={editingSummaryId}
           summaryEditContent={summaryEditContent}
           onChangeSummaryEditContent={setSummaryEditContent}

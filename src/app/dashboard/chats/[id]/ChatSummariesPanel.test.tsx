@@ -150,14 +150,15 @@ describe('ChatSummariesPanel memory stats copy', () => {
       />,
     )
 
-    expect(html).toContain('Meta Summary (1 · 1 fallback)')
+    expect(html).toContain('Summary Structure (2 · 1 fallback)')
     expect(html).toContain('Fallback summaries:')
     expect(html).toContain('1 (1-100)')
     expect(html).toContain('Episodic Memory (1)')
     expect(html).toContain('▶')
     expect(html).not.toContain('Meta summary content')
     expect(html).not.toContain('Fact content')
-    expect(html).toContain('Chunk Summary (1)')
+    expect(html).not.toContain('Meta Summary (1')
+    expect(html).not.toContain('Chunk Summary (1)')
   })
 
   it('shows a visible memory warning banner when the latest assistant recorded a summary failure', () => {

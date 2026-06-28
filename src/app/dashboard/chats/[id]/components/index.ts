@@ -10,7 +10,7 @@ export { ChatComposer } from './ChatComposer'
 
 export { DebugModal } from './DebugModal'
 
-export { FactMemorySection, SummaryMemorySection } from './MemorySections'
+export { FactMemorySection, SummaryMemoryTreeSection } from './MemorySections'
 export { MessageActionBar } from './MessageActionBar'
 
 export { LorebookEntryRow } from './LorebookEntryRow'

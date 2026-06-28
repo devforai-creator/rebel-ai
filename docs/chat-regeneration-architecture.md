@@ -1,8 +1,9 @@
 # Chat Regeneration Architecture
 
-Updated: 2026-04-09
+Updated: 2026-06-28
 
-This document records the recommended architecture for chat message regeneration in RebelAI.
+This document records the implemented architecture and design rationale for chat message
+regeneration in RebelAI.
 
 The main decision is to stop treating regeneration as "delete the old assistant message and insert a new one" and instead treat it as "create a new assistant variant for the same turn and switch the active variant only after success".
 
@@ -27,31 +28,28 @@ Current regeneration behavior is split across the UI, chat API, and job runner:
 
 - The supported normal-send path now submits `userMessage` instead of a full client transcript.
 - Regeneration requests can target the latest assistant message by id without submitting transcript state.
-- The chat API still accepts a client-built `messages` array as a temporary compatibility path during migration.
-- The job runner generates a new assistant message row.
-- The post-generation pipeline deletes the old assistant message row for regeneration.
+- The chat API rejects the legacy client-built `messages` transcript payload.
+- The server validates the regeneration target against the latest active assistant turn in the database.
+- The job runner creates a new assistant variant and switches the active variant only after successful
+  finalization.
+- The previous assistant variant remains stored as superseded, and failed finalization restores the
+  previous active variant.
 
-This creates a model mismatch:
+## Original Problem
 
-- UI behavior treats regeneration as in-place replacement.
-- Persistence treats regeneration as deletion plus insertion.
-- Memory, summaries, translation, and debug data still depend on message identity and stable ordering.
+The original design had four structural problems.
 
-## Problem
+### 1. Regeneration was destructive
 
-The current design has four structural problems.
-
-### 1. Regeneration is destructive
-
-The original assistant response is removed too early.
+The original assistant response was removed too early.
 
 - If request validation fails, the UI can already be missing the original message.
 - If the job fails or times out, the original response may be hidden locally until refresh.
 - If persistence fails late, the system has already mixed old and new identities.
 
-### 2. The client transcript is treated as authoritative
+### 2. The client transcript was treated as authoritative
 
-The server currently trusts a client-built message array as generation context.
+The server trusted a client-built message array as generation context.
 
 That is risky because:
 
@@ -62,9 +60,9 @@ That is risky because:
 
 The database should be the source of truth for regeneration context.
 
-### 3. Message identity is not preserved
+### 3. Message identity was not preserved
 
-Current regeneration creates a new assistant message row and removes the old one.
+The old regeneration path created a new assistant message row and removed the old one.
 
 That breaks assumptions in surrounding systems:
 
@@ -73,9 +71,10 @@ That breaks assumptions in surrounding systems:
 - alternate-model selection reads prior assistant debug metadata
 - future features like response history and compare-view want stable lineage
 
-### 4. Sequence-based memory and summaries do not fit regeneration well
+### 4. Sequence-based memory and summaries did not fit regeneration well
 
-`messages.sequence` is an identity column, so deleting one assistant row and inserting another changes the shape of history.
+`messages.sequence` is an identity column, so deleting one assistant row and inserting another changed
+the shape of history.
 
 That matters because current summary and memory code uses:
 
@@ -193,7 +192,7 @@ These invariants should remain true after the refactor.
 
 ### Regenerate latest turn
 
-1. The client sends `chatId` and `targetAssistantMessageId`.
+1. The client sends `chatId` and `regenerateAssistantMessageId`.
 2. The server validates that:
    - the target belongs to the chat
    - the target is the active assistant for its turn
@@ -222,15 +221,12 @@ type SendChatRequest = {
 type RegenerateChatRequest = {
   chatId: string
   apiKeyId: string
-  targetAssistantMessageId: string
+  regenerateAssistantMessageId: string
 }
 ```
 
-Temporary compatibility:
-
-- The route may still accept `messages` while the migration is in progress.
-- The supported path should not require `messages` for either normal sends or regeneration.
-- Any reuse of payload transcripts in the runner should remain an optimization, not the source of truth.
+The legacy `messages` transcript request shape is unsupported. Requests that include it return a
+`400` response, and the server rebuilds generation context from persisted chat history.
 
 ### Server responsibility
 

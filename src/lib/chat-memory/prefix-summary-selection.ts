@@ -6,7 +6,7 @@ import {
   SUMMARY_LEVEL_META,
   SUMMARY_LEVEL_SUPER_META,
 } from '@/lib/chat-summaries/config'
-import { filterRedundantChunks } from '@/lib/chat-summaries/context-builder'
+import { filterRedundantChunks } from '@/lib/chat-summaries/summary-selection'
 
 export type PrefixSummarySelectionRow = Pick<
   ChatSummary,

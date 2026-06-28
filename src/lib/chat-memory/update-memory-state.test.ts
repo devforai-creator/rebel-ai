@@ -21,7 +21,7 @@ vi.mock('@/lib/chat-summaries', () => ({
   buildContext: (...args: unknown[]) => hoistedMocks.buildContextMock(...args),
 }))
 
-vi.mock('@/lib/chat-summaries/context-builder', () => ({
+vi.mock('@/lib/chat-summaries/summary-selection', () => ({
   filterRedundantChunks: (...args: unknown[]) => hoistedMocks.filterRedundantChunksMock(...args),
 }))
 

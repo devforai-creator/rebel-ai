@@ -33,6 +33,7 @@ describe('SummaryMemorySection', () => {
         onCancelEdit={vi.fn()}
         onRegenerate={vi.fn()}
         onDelete={vi.fn()}
+        promptStatuses={{ 'summary-1': 'in_prompt' }}
       />,
     )
 
@@ -41,6 +42,7 @@ describe('SummaryMemorySection', () => {
     expect(html).toContain('Conversation summary')
     expect(html).toContain('Fallback')
     expect(html).toContain('♻️')
+    expect(html).toContain('In prompt')
   })
 
   it('renders the edit textarea for the active summary entry', () => {

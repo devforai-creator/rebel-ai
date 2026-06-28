@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import Button from '@/app/dashboard/components/Button'
 import { surfaceCardClassName } from '@/app/dashboard/components/SurfaceCard'
 import type { FactEntry, SummaryEntry } from '../hooks/useChatSummariesState'
+import type { SummaryPromptStatus } from '../summary-structure'
 
 const LEVEL_LABEL: Record<number, string> = {
   2: 'Super Meta Summary',
@@ -92,6 +93,7 @@ type SummaryMemorySectionProps = {
   onCancelEdit: () => void
   onRegenerate: (summaryId: string) => void
   onDelete: (summaryId: string) => void
+  promptStatuses?: Readonly<Record<string, SummaryPromptStatus>>
 }
 
 export function SummaryMemorySection({
@@ -116,6 +118,7 @@ export function SummaryMemorySection({
   onCancelEdit,
   onRegenerate,
   onDelete,
+  promptStatuses,
 }: SummaryMemorySectionProps) {
   if (summaries.length === 0) {
     return null
@@ -155,6 +158,14 @@ export function SummaryMemorySection({
                       title="Local fallback summary"
                     >
                       Fallback
+                    </span>
+                  ) : null}
+                  {promptStatuses?.[summary.id] === 'in_prompt' ? (
+                    <span
+                      className="rounded border border-blue-300 bg-blue-50 px-1.5 py-0.5 font-medium text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200"
+                      title="Included in the current prompt"
+                    >
+                      In prompt
                     </span>
                   ) : null}
                 </div>

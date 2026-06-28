@@ -9,11 +9,13 @@ import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { CHAT_CONTEXT_WINDOW } from '@/lib/chat-context-window'
 import type { ChatMemoryConfig } from '@/lib/chat/model-config'
-import { CHUNK_SIZE } from '@/lib/chat-summaries/config'
+import { CHUNK_SIZE, SUMMARY_LEVEL_META } from '@/lib/chat-summaries/config'
+import { selectPrefixPromptSummaries } from '@/lib/chat-memory/prefix-summary-selection'
 import { FactMemorySection, SummaryMemorySection } from './components'
 import { useChatSummariesState } from './hooks'
 import type { FactEntry, SummaryEntry } from './hooks/useChatSummariesState'
 import { resolveVisibleSummaryWarning, type SummaryWarningInfo } from './summary-warning'
+import { buildSummaryPromptStatuses } from './summary-structure'
 
 interface ChatSummariesPanelProps {
   chatId: string
@@ -154,6 +156,24 @@ export default function ChatSummariesPanel({
       summaries.filter((summary) => summary.level === 0).sort((a, b) => a.start_seq - b.start_seq),
     [summaries],
   )
+
+  const promptStatuses = useMemo(() => {
+    if (memoryConfig.mode !== 'prefix_live_blocks') {
+      return undefined
+    }
+
+    const visibleSummaryEnd = summaries.reduce(
+      (latestEnd, summary) =>
+        summary.level === SUMMARY_LEVEL_META ? Math.max(latestEnd, summary.end_seq) : latestEnd,
+      0,
+    )
+
+    const promptSummaryIds = new Set(
+      selectPrefixPromptSummaries(summaries, visibleSummaryEnd).map((summary) => summary.id),
+    )
+
+    return buildSummaryPromptStatuses(summaries, promptSummaryIds)
+  }, [memoryConfig.mode, summaries])
 
   const rawMessageWindow = useMemo(
     () =>
@@ -365,6 +385,7 @@ export default function ChatSummariesPanel({
           onCancelEdit={cancelSummaryEdit}
           onRegenerate={(summaryId) => void handleRegenerateSummary(summaryId)}
           onDelete={setPendingDeleteSummaryId}
+          promptStatuses={promptStatuses}
         />
 
         <SummaryMemorySection
@@ -386,6 +407,7 @@ export default function ChatSummariesPanel({
           onCancelEdit={cancelSummaryEdit}
           onRegenerate={(summaryId) => void handleRegenerateSummary(summaryId)}
           onDelete={setPendingDeleteSummaryId}
+          promptStatuses={promptStatuses}
         />
 
         <SummaryMemorySection
@@ -405,6 +427,7 @@ export default function ChatSummariesPanel({
           onCancelEdit={cancelSummaryEdit}
           onRegenerate={(summaryId) => void handleRegenerateSummary(summaryId)}
           onDelete={setPendingDeleteSummaryId}
+          promptStatuses={promptStatuses}
         />
 
         <FactMemorySection

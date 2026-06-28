@@ -142,6 +142,7 @@ describe('SummaryMemoryTreeSection', () => {
     expect(html).not.toContain('Covered child content')
     expect(html).toContain('Loose Chunks (1)')
     expect(html).toContain('Loose chunk content')
+    expect(html).toContain('Stored')
   })
 })
 

@@ -95,6 +95,7 @@ type SummaryMemoryCardProps = SummaryMemoryInteractionProps & {
   cardClassName: string
   regenerateButtonClassName: string
   editorRows: number
+  coveredByParent?: boolean
 }
 
 const DEFAULT_SUMMARY_CARD_CLASS_NAME = surfaceCardClassName({
@@ -109,6 +110,7 @@ function SummaryMemoryCard({
   cardClassName,
   regenerateButtonClassName,
   editorRows,
+  coveredByParent = false,
   editingSummaryId,
   summaryEditContent,
   onChangeSummaryEditContent,
@@ -145,6 +147,22 @@ function SummaryMemoryCard({
               title="Included in the current prompt"
             >
               In prompt
+            </span>
+          ) : null}
+          {promptStatuses?.[summary.id] === 'stored' && coveredByParent ? (
+            <span
+              className="rounded border border-violet-300 bg-violet-50 px-1.5 py-0.5 font-medium text-violet-800 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-200"
+              title="Represented in the prompt by a parent summary"
+            >
+              Covered
+            </span>
+          ) : null}
+          {promptStatuses?.[summary.id] === 'stored' && !coveredByParent ? (
+            <span
+              className="rounded border border-gray-300 bg-gray-50 px-1.5 py-0.5 font-medium text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+              title="Stored for inspection but not included in the current prompt"
+            >
+              Stored
             </span>
           ) : null}
         </div>
@@ -291,6 +309,9 @@ export function SummaryMemoryTreeSection({
                             cardClassName={DEFAULT_SUMMARY_CARD_CLASS_NAME}
                             regenerateButtonClassName={SUMMARY_REGENERATE_BUTTON_CLASS_NAME}
                             editorRows={4}
+                            coveredByParent={
+                              interactionProps.promptStatuses?.[node.summary.id] === 'in_prompt'
+                            }
                             {...interactionProps}
                           />
                         </li>

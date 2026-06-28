@@ -47,6 +47,10 @@ describe('SummaryMemoryTreeSection interactions', () => {
         onCancelEdit={vi.fn()}
         onRegenerate={vi.fn()}
         onDelete={vi.fn()}
+        promptStatuses={{
+          'meta-1': 'in_prompt',
+          'chunk-1': 'stored',
+        }}
       />,
     )
 
@@ -58,5 +62,6 @@ describe('SummaryMemoryTreeSection interactions', () => {
 
     expect(childToggle.getAttribute('aria-expanded')).toBe('true')
     expect(screen.queryByText('Covered child content')).not.toBeNull()
+    expect(screen.queryByText('Covered')).not.toBeNull()
   })
 })

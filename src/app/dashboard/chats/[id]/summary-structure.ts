@@ -10,6 +10,8 @@ export type SummaryStructure = {
   looseChunks: SummaryEntry[]
 }
 
+export type SummaryPromptStatus = 'in_prompt' | 'stored'
+
 export function buildSummaryStructure(summaries: SummaryEntry[]): SummaryStructure {
   const metaSummaries = summaries.filter((summary) => summary.level === 1)
   const chunkSummaries = summaries.filter((summary) => summary.level === 0)
@@ -38,4 +40,16 @@ export function buildSummaryStructure(summaries: SummaryEntry[]): SummaryStructu
     metaNodes,
     looseChunks,
   }
+}
+
+export function buildSummaryPromptStatuses(
+  summaries: SummaryEntry[],
+  promptSummaryIds: ReadonlySet<string>,
+): Record<string, SummaryPromptStatus> {
+  const statuses: Record<string, SummaryPromptStatus> = {}
+
+  for (const summary of summaries) {
+    statuses[summary.id] = promptSummaryIds.has(summary.id) ? 'in_prompt' : 'stored'
+  }
+  return statuses
 }

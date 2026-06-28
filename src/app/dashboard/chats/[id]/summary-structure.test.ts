@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildSummaryStructure } from './summary-structure'
+import { buildSummaryPromptStatuses, buildSummaryStructure } from './summary-structure'
 
 function createSummary({
   id,
@@ -95,5 +95,23 @@ describe('buildSummaryStructure', () => {
     expect(result.metaNodes[0].children.map((child) => child.id)).toEqual(['chunk-1'])
     expect(result.metaNodes[1].children.map((child) => child.id)).toEqual(['chunk-2'])
     expect(result.looseChunks.map((chunk) => chunk.id)).toEqual(['chunk-3', 'chunk-4', 'chunk-5'])
+  })
+})
+
+describe('buildSummaryPromptStatuses', () => {
+  it('marks prompt summaries separately from stored summaries', () => {
+    const summaries = [
+      createSummary({ id: 'meta-1', level: 1, startSeq: 1, endSeq: 100 }),
+      createSummary({ id: 'meta-2', level: 1, startSeq: 101, endSeq: 200 }),
+      createSummary({ id: 'chunk-101', level: 0, startSeq: 101, endSeq: 110 }),
+    ]
+
+    const result = buildSummaryPromptStatuses(summaries, new Set(['meta-1', 'chunk-101']))
+
+    expect(result).toEqual({
+      'meta-1': 'in_prompt',
+      'meta-2': 'stored',
+      'chunk-101': 'in_prompt',
+    })
   })
 })

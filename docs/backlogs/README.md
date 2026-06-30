@@ -17,9 +17,10 @@ Use it to answer two questions quickly:
 
 ## Current Entry Point
 
-- Active backlog: none
+- Active backlog:
+  [recent-conversation-characters-backlog-2026-06-30.md](./active/recent-conversation-characters-backlog-2026-06-30.md)
 - Most recently parked backlog:
-  [memory-inspector-lazy-loading-followup-2026-06-28.md](./parked/2026/memory-inspector-lazy-loading-followup-2026-06-28.md)
+  [chat-response-variant-browser-followup-2026-06-30.md](./parked/2026/chat-response-variant-browser-followup-2026-06-30.md)
 - Most recently archived backlog:
   [memory-structure-inspector-backlog-2026-05-08.md](./archive/2026/memory-structure-inspector-backlog-2026-05-08.md)
 

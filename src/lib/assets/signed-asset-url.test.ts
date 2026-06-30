@@ -57,6 +57,39 @@ describe('createSignedAssetUrlMap', () => {
     })
   })
 
+  it('signs asset lists larger than the storage limit in batches of at most 1000', async () => {
+    const paths = Array.from({ length: 2453 }, (_, index) => `char-1/asset-${index}.webp`)
+    const { supabase, createSignedUrls } = createSupabaseMock((requestedPaths) => ({
+      data: requestedPaths.map((path) => ({
+        path,
+        signedUrl: `https://signed.test/${path}`,
+      })),
+      error: null,
+    }))
+
+    const result = await createSignedAssetUrlMap(supabase, 'character-assets', paths)
+
+    expect(createSignedUrls).toHaveBeenCalledTimes(3)
+    expect(createSignedUrls).toHaveBeenNthCalledWith(
+      1,
+      paths.slice(0, 1000),
+      PRIVATE_ASSET_URL_TTL_SECONDS,
+    )
+    expect(createSignedUrls).toHaveBeenNthCalledWith(
+      2,
+      paths.slice(1000, 2000),
+      PRIVATE_ASSET_URL_TTL_SECONDS,
+    )
+    expect(createSignedUrls).toHaveBeenNthCalledWith(
+      3,
+      paths.slice(2000),
+      PRIVATE_ASSET_URL_TTL_SECONDS,
+    )
+    expect(Object.keys(result)).toHaveLength(paths.length)
+    expect(result[paths[0]]).toBe(`https://signed.test/${paths[0]}`)
+    expect(result[paths.at(-1)!]).toBe(`https://signed.test/${paths.at(-1)!}`)
+  })
+
   it('falls back to per-path signing when the batch request fails', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const { supabase, createSignedUrls } = createSupabaseMock((paths) => {

@@ -15,6 +15,7 @@ type SignedAssetUrlStorage = {
 }
 
 export const PRIVATE_ASSET_URL_TTL_SECONDS = 60 * 60 * 24
+const SIGNED_ASSET_URL_BATCH_SIZE = 1000
 
 export async function createSignedAssetUrlMap(
   supabase: SignedAssetUrlStorage,
@@ -39,29 +40,35 @@ export async function createSignedAssetUrlMap(
   }
 
   const expiresIn = options?.expiresIn ?? PRIVATE_ASSET_URL_TTL_SECONDS
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .createSignedUrls(uniquePaths, expiresIn)
+  const urlMap: Record<string, string> = {}
 
-  if (error) {
-    console.error(options?.logContext ?? '[Assets] Failed to create signed URLs', {
-      bucket,
-      assetCount: uniquePaths.length,
-      error: error.message ?? 'Unknown error',
-    })
+  for (let offset = 0; offset < uniquePaths.length; offset += SIGNED_ASSET_URL_BATCH_SIZE) {
+    const pathBatch = uniquePaths.slice(offset, offset + SIGNED_ASSET_URL_BATCH_SIZE)
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrls(pathBatch, expiresIn)
 
-    if (uniquePaths.length === 1) {
-      return {}
+    if (error) {
+      console.error(options?.logContext ?? '[Assets] Failed to create signed URLs', {
+        bucket,
+        assetCount: pathBatch.length,
+        error: error.message ?? 'Unknown error',
+      })
+
+      if (pathBatch.length > 1) {
+        Object.assign(
+          urlMap,
+          await createFallbackSignedAssetUrlMap(supabase, bucket, pathBatch, {
+            expiresIn,
+            logContext: options?.logContext,
+          }),
+        )
+      }
+      continue
     }
 
-    return await createFallbackSignedAssetUrlMap(supabase, bucket, uniquePaths, {
-      expiresIn,
-      logContext: options?.logContext,
-    })
+    registerSignedUrlEntries(urlMap, pathBatch, data)
   }
-
-  const urlMap: Record<string, string> = {}
-  registerSignedUrlEntries(urlMap, uniquePaths, data)
 
   return urlMap
 }

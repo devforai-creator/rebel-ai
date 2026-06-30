@@ -95,6 +95,10 @@ export function supportsAnthropicAdaptiveThinking(modelName?: string | null): bo
     return true
   }
 
+  if (normalized.includes('claude-sonnet-5')) {
+    return true
+  }
+
   const sonnetMatch = normalized.match(/claude-sonnet-4-(\d+)/)
   if (sonnetMatch && Number(sonnetMatch[1]) >= 6) {
     return true
@@ -109,7 +113,11 @@ function usesBuiltInAnthropicInterleavedThinking(modelName?: string | null): boo
   }
 
   const normalized = modelName.trim().toLowerCase().replaceAll('.', '-')
-  return normalized.includes('claude-fable-5') || normalized.includes('claude-mythos-5')
+  return (
+    normalized.includes('claude-fable-5') ||
+    normalized.includes('claude-mythos-5') ||
+    normalized.includes('claude-sonnet-5')
+  )
 }
 
 /**

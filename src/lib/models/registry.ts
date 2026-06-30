@@ -151,6 +151,16 @@ const CLAUDE_SONNET_PRICING: ModelPricingTier[] = [
   },
 ]
 
+const CLAUDE_SONNET_5_PRICING: ModelPricingTier[] = [
+  {
+    rates: {
+      input: 2,
+      output: 10,
+      cachedInput: 0.2, // introductory pricing through 2026-08-31
+    },
+  },
+]
+
 const CLAUDE_HAIKU_PRICING: ModelPricingTier[] = [
   {
     rates: {
@@ -439,13 +449,21 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
     uiOrder: 5,
   },
   {
+    id: 'claude-sonnet-5',
+    provider: 'anthropic',
+    displayName: 'Claude Sonnet 5',
+    pricing: CLAUDE_SONNET_5_PRICING,
+    uiVisible: true,
+    uiOrder: 6,
+  },
+  {
     id: 'claude-sonnet-4-5',
     provider: 'anthropic',
     displayName: 'Claude Sonnet 4.5',
     aliases: ['claude-sonnet-4.5'],
     pricing: CLAUDE_SONNET_PRICING,
     uiVisible: true,
-    uiOrder: 6,
+    uiOrder: 7,
   },
   {
     id: 'claude-haiku-4-5',
@@ -454,7 +472,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
     aliases: ['claude-haiku-4.5'],
     pricing: CLAUDE_HAIKU_PRICING,
     uiVisible: true,
-    uiOrder: 7,
+    uiOrder: 8,
   },
   {
     id: 'claude-3-5-haiku-latest',

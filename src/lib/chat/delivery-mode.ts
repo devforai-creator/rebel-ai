@@ -33,6 +33,7 @@ export function isAnthropicBatchChatSupported({
   const normalized = modelName.toLowerCase()
   return (
     normalized.includes('claude-fable-5') ||
+    normalized.includes('claude-sonnet-5') ||
     normalized.includes('claude-opus-4-8') ||
     normalized.includes('claude-opus-4-7') ||
     normalized.includes('claude-opus-4-6') ||

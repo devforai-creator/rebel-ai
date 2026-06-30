@@ -24,11 +24,17 @@ describe('chat delivery modes', () => {
     expect(isChatDeliveryMode('batch')).toBe(false)
   })
 
-  it('only enables Anthropic Batch chat for Fable 5 and supported Opus models', () => {
+  it('only enables Anthropic Batch chat for supported current Claude models', () => {
     expect(
       isAnthropicBatchChatSupported({
         provider: 'anthropic',
         modelName: 'claude-fable-5',
+      }),
+    ).toBe(true)
+    expect(
+      isAnthropicBatchChatSupported({
+        provider: 'anthropic',
+        modelName: 'claude-sonnet-5',
       }),
     ).toBe(true)
     expect(

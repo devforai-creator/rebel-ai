@@ -210,6 +210,23 @@ describe('estimateUsageCost', () => {
       expect(result!.completionCost).toBeCloseTo(0.0075, 6)
     })
 
+    it('should calculate Claude Sonnet 5 introductory pricing correctly', () => {
+      const params: UsageCostParams = {
+        provider: 'anthropic',
+        modelName: 'claude-sonnet-5',
+        promptTokens: 2000,
+        completionTokens: 500,
+        cachedInputTokens: 8000,
+      }
+      const result = estimateUsageCost(params)
+      expect(result).not.toBeNull()
+
+      // Sonnet 5 introductory pricing: Input $2/M, Cache hit $0.20/M, Output $10/M.
+      expect(result!.promptCost).toBeCloseTo(0.004, 6)
+      expect(result!.cachedInputCost).toBeCloseTo(0.0016, 6)
+      expect(result!.completionCost).toBeCloseTo(0.005, 6)
+    })
+
     it('should apply 0.5x multiplier for Anthropic batch jobs', () => {
       const params: UsageCostParams = {
         provider: 'anthropic',

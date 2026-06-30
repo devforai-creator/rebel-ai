@@ -86,6 +86,14 @@ describe('Model Registry', () => {
       expect(model?.id).toBe('claude-opus-4-8')
     })
 
+    it('finds Claude Sonnet 5 by exact ID', () => {
+      const model = findModelDefinition({ modelName: 'claude-sonnet-5' })
+
+      expect(model).not.toBeNull()
+      expect(model?.provider).toBe('anthropic')
+      expect(model?.displayName).toBe('Claude Sonnet 5')
+    })
+
     it('is case-insensitive', () => {
       const model = findModelDefinition({ modelName: 'GPT-5.2' })
 
@@ -205,6 +213,19 @@ describe('Model Registry', () => {
       expect(tiers![0].rates.input).toBe(5)
       expect(tiers![0].rates.output).toBe(25)
       expect(tiers![0].rates.cachedInput).toBe(0.5)
+    })
+
+    it('has current introductory Sonnet 5 pricing', () => {
+      const tiers = getModelPricingTiers({
+        provider: 'anthropic',
+        modelName: 'claude-sonnet-5',
+      })
+
+      expect(tiers).not.toBeNull()
+      expect(tiers).toHaveLength(1)
+      expect(tiers![0].rates.input).toBe(2)
+      expect(tiers![0].rates.output).toBe(10)
+      expect(tiers![0].rates.cachedInput).toBe(0.2)
     })
   })
 

@@ -50,7 +50,7 @@ export function resolveChatDeliveryModeAdmission({
     return {
       status: 'error',
       response: createErrorResponse(
-        'Claude Batch mode is only supported for Anthropic Opus 4.5/4.6',
+        'Claude Batch mode is only supported for selected Anthropic models',
         400,
       ),
     }

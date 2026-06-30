@@ -160,6 +160,22 @@ describe('getProviderOptions', () => {
     })
   })
 
+  it('omits legacy interleaved thinking beta for Claude Sonnet 5', () => {
+    const options = getProviderOptions('anthropic', {
+      modelName: 'claude-sonnet-5',
+      reasoningEffort: 'medium',
+    })
+
+    expect(options).toEqual({
+      anthropic: {
+        thinking: {
+          type: 'adaptive',
+        },
+        effort: 'medium',
+      },
+    })
+  })
+
   it('does not enable adaptive thinking for unsupported anthropic models', () => {
     const options = getProviderOptions('anthropic', {
       modelName: 'claude-opus-4-5',
@@ -207,6 +223,7 @@ describe('getAnthropicMinCacheTokens', () => {
 
   it('returns sonnet minimum tokens', () => {
     expect(getAnthropicMinCacheTokens('claude-3-7-sonnet')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.sonnet)
+    expect(getAnthropicMinCacheTokens('claude-sonnet-5')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.sonnet)
   })
 
   it('returns opus 4.5+ minimum tokens', () => {
@@ -239,6 +256,7 @@ describe('supportsAnthropicAdaptiveThinking', () => {
     expect(supportsAnthropicAdaptiveThinking('claude-opus-4-7')).toBe(true)
     expect(supportsAnthropicAdaptiveThinking('claude-opus-4.7')).toBe(true)
     expect(supportsAnthropicAdaptiveThinking('claude-opus-4-6')).toBe(true)
+    expect(supportsAnthropicAdaptiveThinking('claude-sonnet-5')).toBe(true)
     expect(supportsAnthropicAdaptiveThinking('claude-sonnet-4-6')).toBe(true)
     expect(supportsAnthropicAdaptiveThinking('claude-mythos-preview')).toBe(true)
   })

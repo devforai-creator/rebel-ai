@@ -1646,7 +1646,7 @@ describe('POST /api/chat', () => {
     expect(findFetchCallByPathname('/api/internal/chat-job-runner/trigger')).toBeDefined()
   })
 
-  it('enqueues Anthropic Batch mode for supported Opus keys', async () => {
+  it('enqueues Anthropic Batch mode for supported Anthropic keys', async () => {
     process.env.ANTHROPIC_BATCH_CHAT_ENABLED = 'true'
     const supabase = createSupabaseMock(
       buildDefaultAuthenticatedFixture({
@@ -1657,7 +1657,7 @@ describe('POST /api/chat', () => {
             provider: 'anthropic',
             is_active: true,
             vault_secret_name: 'secret-key',
-            model_preference: 'claude-opus-4-5',
+            model_preference: 'claude-sonnet-5',
           },
         ],
       }),
@@ -1682,7 +1682,7 @@ describe('POST /api/chat', () => {
     })
     expect(supabase.chatJobs[0].payload).toMatchObject({
       provider: 'anthropic',
-      modelName: 'claude-opus-4-5',
+      modelName: 'claude-sonnet-5',
       deliveryMode: 'anthropic_batch',
     })
   })
@@ -1737,7 +1737,7 @@ describe('POST /api/chat', () => {
     await expectJsonError(
       response,
       400,
-      'Claude Batch mode is only supported for Anthropic Opus 4.5/4.6',
+      'Claude Batch mode is only supported for selected Anthropic models',
     )
     expect(supabase.messages).toHaveLength(0)
     expect(supabase.chatJobs).toHaveLength(0)

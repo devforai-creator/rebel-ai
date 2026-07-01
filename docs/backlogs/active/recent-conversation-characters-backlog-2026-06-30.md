@@ -107,7 +107,7 @@ Primary scope:
 
 #### P0-1. Design the migration on paper
 
-- [ ] Write down the column nullability, trigger events, eligible roles, backfill query, and rollback
+- [x] Write down the column nullability, trigger events, eligible roles, backfill query, and rollback
       behavior from the Recency Contract.
 - [x] Inspect every current message write path: normal user turns, assistant finalization,
       regeneration, chat import, greeting creation, and persistence rollback.
@@ -116,9 +116,9 @@ Primary scope:
 
 Done when:
 
-- [ ] the proposed SQL handles bulk imports whose rows are not inserted in timestamp order
-- [ ] a failed send that inserts and then deletes a message cannot leave a false recent timestamp
-- [ ] no application write path needs to remember to update `last_message_at` manually
+- [x] the proposed SQL handles bulk imports whose rows are not inserted in timestamp order
+- [x] a failed send that inserts and then deletes a message cannot leave a false recent timestamp
+- [x] no application write path needs to remember to update `last_message_at` manually
 
 Design notes:
 
@@ -130,6 +130,14 @@ Design notes:
 - Rollback: message deletion uses the same recalculation path, restoring the previous maximum or `null`.
 - Backfill: calculate `MAX(created_at)` from existing eligible messages per chat.
 - Function split: use a lightweight advance function for INSERT and a full recalculation function for DELETE and relevant UPDATE events.
+
+SQL sketch:
+
+- Add `chats.last_message_at timestamptz` as nullable with no default.
+- Backfill with `MAX(messages.created_at)` grouped by `chat_id`, considering only `user` and `assistant` messages.
+- On eligible message INSERT, advance the chat's `last_message_at` to the greater of the current value and `NEW.created_at`.
+- On eligible message DELETE, recalculate the deleted message's `OLD.chat_id` from the remaining eligible messages.
+- On UPDATE, ignore content/status-only changes. Recalculate when `chat_id`, `role`, or `created_at` changes. If `chat_id` changes, recalculate both `OLD.chat_id` and `NEW.chat_id`.
 
 #### P0-2. Add the column, backfill, trigger, and justified index
 

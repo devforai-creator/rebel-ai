@@ -53,6 +53,14 @@ describe('global-system-prompt', () => {
       expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Character Images')
     })
 
+    it('contains explicit character image token guidance', () => {
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('insert actual character image tokens frequently')
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain("Actually output the character's image command")
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain(
+        'prefer including an image command every few assistant responses',
+      )
+    })
+
     it('contains style guidelines for pacing', () => {
       expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain(
         'User input length is a signal, not a strict limit',
@@ -63,6 +71,14 @@ describe('global-system-prompt', () => {
       expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Detailed input')
       expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Action scenes')
       expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Emotional scenes')
+    })
+
+    it('contains response length contract guidance', () => {
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('Response Length Contract')
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain(
+        'do not answer in only one or two terse paragraphs',
+      )
+      expect(BASE_GLOBAL_SYSTEM_PROMPT).toContain('treat it as an emotional or pacing signal')
     })
   })
 

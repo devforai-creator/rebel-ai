@@ -166,7 +166,7 @@ describe('Model Registry', () => {
 
     it('returns lightweight model when requested', () => {
       expect(getDefaultModelForProvider('google', { lightweight: true })).toBe(
-        'gemini-2.0-flash-exp',
+        'gemini-3.1-flash-lite',
       )
       expect(getDefaultModelForProvider('openai', { lightweight: true })).toBe('gpt-4o-mini')
       expect(getDefaultModelForProvider('anthropic', { lightweight: true })).toBe(
@@ -256,6 +256,39 @@ describe('Model Registry', () => {
 
       expect(ids[0]).toBe('gemini-3.5-flash')
       expect(getDefaultModelForProvider('google')).toBe('gemini-2.5-flash')
+    })
+  })
+
+  describe('Gemini 3.1 Flash-Lite registration', () => {
+    it('is found by exact ID', () => {
+      const model = findModelDefinition({ modelName: 'gemini-3.1-flash-lite' })
+
+      expect(model).not.toBeNull()
+      expect(model?.id).toBe('gemini-3.1-flash-lite')
+      expect(model?.provider).toBe('google')
+    })
+
+    it('has correct standard pricing', () => {
+      const tiers = getModelPricingTiers({
+        provider: 'google',
+        modelName: 'gemini-3.1-flash-lite',
+      })
+
+      expect(tiers).not.toBeNull()
+      expect(tiers).toHaveLength(1)
+      expect(tiers![0].rates.input).toBe(0.25)
+      expect(tiers![0].rates.output).toBe(1.5)
+      expect(tiers![0].rates.cachedInput).toBe(0.025)
+    })
+
+    it('appears near the top of the Google UI model list and backs lightweight defaults', () => {
+      const ids = listUiModelIdsByProvider('google')
+
+      expect(ids[0]).toBe('gemini-3.5-flash')
+      expect(ids[1]).toBe('gemini-3.1-flash-lite')
+      expect(getDefaultModelForProvider('google', { lightweight: true })).toBe(
+        'gemini-3.1-flash-lite',
+      )
     })
   })
 

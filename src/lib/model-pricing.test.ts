@@ -26,6 +26,29 @@ describe('estimateUsageCost', () => {
       })
     })
 
+    describe('gemini-3.1-flash-lite', () => {
+      it('should calculate cached input at 10% of input rate', () => {
+        const params: UsageCostParams = {
+          provider: 'google',
+          modelName: 'gemini-3.1-flash-lite',
+          promptTokens: 10000,
+          completionTokens: 1000,
+          cachedInputTokens: 8000,
+        }
+        const result = estimateUsageCost(params)
+        expect(result).not.toBeNull()
+
+        // Input rate: $0.25/M, Cached rate: $0.025/M
+        // Fresh input: 10000 - 8000 = 2000 tokens
+        // Fresh cost: (2000 / 1M) * 0.25 = $0.0005
+        // Cached cost: (8000 / 1M) * 0.025 = $0.0002
+        // Output cost: (1000 / 1M) * 1.5 = $0.0015
+        expect(result!.promptCost).toBeCloseTo(0.0005, 6)
+        expect(result!.cachedInputCost).toBeCloseTo(0.0002, 6)
+        expect(result!.completionCost).toBeCloseTo(0.0015, 6)
+      })
+    })
+
     describe('gemini-3-pro-preview', () => {
       it('should calculate cached input at 10% of input rate for tier 1', () => {
         const params: UsageCostParams = {

@@ -19,6 +19,7 @@ Keep human-facing docs short and directional. Exact runtime behavior should come
 - [OPERATING_PLAN.md](./OPERATING_PLAN.md): maintainer operating note for current mode, support boundaries, and public-opening gates
 - [LONG_TERM_MEMORY_STRATEGY.md](./LONG_TERM_MEMORY_STRATEGY.md): active doctrine for long-chat memory direction, role split, and future planner/reranker target
 - [PROJECT_SCALING_HARDENING.md](./PROJECT_SCALING_HARDENING.md): design direction for keeping the repo maintainable as scope, complexity, and contributor surface area grow
+- [FEATURE_BURDEN_INVENTORY.md](./FEATURE_BURDEN_INVENTORY.md): first-pass inventory of feature surfaces that may be core, secondary, quarantined, parked, or removal candidates
 - [FIRST_CLASS_SMOKE_CHECKS.md](./FIRST_CLASS_SMOKE_CHECKS.md): repeatable operator verification
 - [MAINTAINER_RBX_IMPORT.md](./MAINTAINER_RBX_IMPORT.md): local-only maintainer runbook for oversized RBX imports
 - [FIRST_CLASS_PATH_MAP.md](./FIRST_CLASS_PATH_MAP.md): compact map of the
@@ -76,8 +77,8 @@ for the current queue and the archive split.
 - [backlogs/README.md](./backlogs/README.md): backlog structure, current entry
   point, and archive policy
 - current active queue:
-  [agentic-transcript-recall-id-contract-backlog-2026-04-23.md](./backlogs/active/agentic-transcript-recall-id-contract-backlog-2026-04-23.md)
+  [recent-conversation-characters-backlog-2026-06-30.md](./backlogs/active/recent-conversation-characters-backlog-2026-06-30.md)
 - most recently parked queue:
-  [explicit-memory-v0-backlog-2026-04-22.md](./backlogs/parked/2026/explicit-memory-v0-backlog-2026-04-22.md)
+  [character-saves-backlog-2026-07-03.md](./backlogs/parked/2026/character-saves-backlog-2026-07-03.md)
 - most recently archived queue:
-  [google-tool-aware-explicit-cache-backlog-2026-04-23.md](./backlogs/archive/2026/google-tool-aware-explicit-cache-backlog-2026-04-23.md)
+  [memory-structure-inspector-backlog-2026-05-08.md](./backlogs/archive/2026/memory-structure-inspector-backlog-2026-05-08.md)

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
 import { createChatJobRunnerSupabaseMock } from '@/tests/mocks/supabase'
+import { DEFAULT_OPENAI_TEXT_VERBOSITY } from '@/lib/llm/provider-options'
 
 const claimPendingJobMock = vi.fn()
 const parseChatJobPayloadMock = vi.fn()
@@ -2120,7 +2121,7 @@ describe('processChatJobs', () => {
     )
   })
 
-  it('omits temperature from chat generation requests by default', async () => {
+  it('omits temperature and sets low OpenAI text verbosity by default', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       rpc: { get_decrypted_secret: () => decryptSecretMock() },
     })
@@ -2151,6 +2152,11 @@ describe('processChatJobs', () => {
 
     const call = streamTextMock.mock.calls[0]?.[0] as Record<string, unknown>
     expect(call).not.toHaveProperty('temperature')
+    expect(call.providerOptions).toMatchObject({
+      openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+      },
+    })
   })
 
   it('passes active lorebook as extra dynamic context into memory planning', async () => {

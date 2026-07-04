@@ -3,6 +3,7 @@ import type { JSONValue, SharedV2ProviderOptions } from '@ai-sdk/provider'
 export type AnthropicCacheTTL = '5m' | '1h'
 export const DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT = 'high'
 export const ANTHROPIC_INTERLEAVED_THINKING_BETA = 'interleaved-thinking-2025-05-14'
+export const DEFAULT_OPENAI_TEXT_VERBOSITY = 'low'
 
 type ProviderOptionsInput = {
   modelName?: string | null
@@ -35,7 +36,9 @@ export function getProviderOptions(
   }
 
   if (provider === 'openai') {
-    const openaiOptions: Record<string, JSONValue> = {}
+    const openaiOptions: Record<string, JSONValue> = {
+      textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+    }
 
     if (overrides?.promptCacheKey) {
       openaiOptions.promptCacheKey = overrides.promptCacheKey

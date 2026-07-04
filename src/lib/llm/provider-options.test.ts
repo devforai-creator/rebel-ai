@@ -4,6 +4,7 @@ import {
   ANTHROPIC_CACHE_MIN_TOKENS,
   ANTHROPIC_INTERLEAVED_THINKING_BETA,
   DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT,
+  DEFAULT_OPENAI_TEXT_VERBOSITY,
   buildAnthropicCacheControl,
   getAnthropicMinCacheTokens,
   getProviderOptions,
@@ -31,14 +32,22 @@ describe('getProviderOptions', () => {
     })
   })
 
-  it('returns undefined for openai provider without prompt cache key', () => {
+  it('sets low text verbosity for openai provider by default', () => {
     const options = getProviderOptions('openai')
-    expect(options).toBeUndefined()
+    expect(options).toEqual({
+      openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+      },
+    })
   })
 
-  it('returns undefined for openai provider when prompt cache key is empty', () => {
+  it('sets low text verbosity for openai provider when prompt cache key is empty', () => {
     const options = getProviderOptions('openai', { promptCacheKey: '' })
-    expect(options).toBeUndefined()
+    expect(options).toEqual({
+      openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+      },
+    })
   })
 
   it('sets default openai prompt cache retention to 24h', () => {
@@ -48,6 +57,7 @@ describe('getProviderOptions', () => {
 
     expect(options).toEqual({
       openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
         promptCacheKey: 'cache-key',
         promptCacheRetention: '24h',
       },
@@ -62,6 +72,7 @@ describe('getProviderOptions', () => {
 
     expect(options).toEqual({
       openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
         promptCacheKey: 'cache-key',
         promptCacheRetention: 'in_memory',
       },
@@ -75,6 +86,7 @@ describe('getProviderOptions', () => {
 
     expect(options).toEqual({
       openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
         reasoningEffort: 'high',
       },
     })
@@ -85,15 +97,23 @@ describe('getProviderOptions', () => {
       reasoningEffort: 'none',
     })
 
-    expect(options).toBeUndefined()
+    expect(options).toEqual({
+      openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+      },
+    })
   })
 
-  it('omits reasoningEffort when null', () => {
+  it('omits reasoningEffort when null but keeps openai text verbosity', () => {
     const options = getProviderOptions('openai', {
       reasoningEffort: null,
     })
 
-    expect(options).toBeUndefined()
+    expect(options).toEqual({
+      openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+      },
+    })
   })
 
   it('combines reasoningEffort with prompt cache options', () => {
@@ -104,6 +124,7 @@ describe('getProviderOptions', () => {
 
     expect(options).toEqual({
       openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
         promptCacheKey: 'cache-key',
         promptCacheRetention: '24h',
         reasoningEffort: 'medium',

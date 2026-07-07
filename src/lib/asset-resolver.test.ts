@@ -94,16 +94,37 @@ describe('resolveAssetTag', () => {
     expect(resolveAssetTag('snow rim sad', context)?.asset.id).toBe('2')
   })
 
-  it('selects prefix variant deterministically when multiple variants exist', () => {
+  it('uses Math.random for prefix variants when no seed is provided', () => {
     const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.9) // pick last variant
 
-    const result = resolveAssetTag('sad', context)
+    try {
+      const result = resolveAssetTag('sad', context)
 
-    expect(result).toMatchObject({
-      asset: expect.objectContaining({ id: '4' }),
-      strategy: 'prefix',
-    })
-    randomSpy.mockRestore()
+      expect(result).toMatchObject({
+        asset: expect.objectContaining({ id: '4' }),
+        strategy: 'prefix',
+      })
+    } finally {
+      randomSpy.mockRestore()
+    }
+  })
+
+  it('uses randomSeed to keep prefix variants stable without calling Math.random', () => {
+    const randomSpy = vi.spyOn(Math, 'random')
+
+    try {
+      const first = resolveAssetTag('sad', { ...context, randomSeed: 'message-1' })
+      const second = resolveAssetTag('sad', { ...context, randomSeed: 'message-1' })
+
+      expect(first).toMatchObject({
+        asset: expect.objectContaining({ id: expect.stringMatching(/^[34]$/) }),
+        strategy: 'prefix',
+      })
+      expect(second?.asset.id).toBe(first?.asset.id)
+      expect(randomSpy).not.toHaveBeenCalled()
+    } finally {
+      randomSpy.mockRestore()
+    }
   })
 
   it('batch resolves tags and preserves original keys', () => {

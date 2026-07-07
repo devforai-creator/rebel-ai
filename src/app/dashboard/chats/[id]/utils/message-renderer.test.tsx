@@ -603,6 +603,7 @@ describe('renderMessageContent with inline ui_card', () => {
       display: Record<string, unknown> | null,
       assets: Parameters<typeof renderMessageContent>[1] = [],
       assetUrlMap?: Record<string, string>,
+      randomSeed?: string,
     ) {
       return renderMessageContent(
         content,
@@ -613,7 +614,7 @@ describe('renderMessageContent with inline ui_card', () => {
         undefined,
         undefined,
         undefined,
-        undefined,
+        randomSeed,
         undefined,
         undefined,
         undefined,
@@ -775,6 +776,58 @@ describe('renderMessageContent with inline ui_card', () => {
         })
       } finally {
         randomSpy.mockRestore()
+      }
+    })
+
+    it('keeps prefix-random image variants stable for the same message seed', () => {
+      const assets = [
+        {
+          id: 'surprised-0',
+          display_name: 'normal_surprised_0',
+          canonical_name: 'normal_surprised_0',
+          file_name: 'normal_surprised_0.png',
+          storage_path: 'private/normal_surprised_0.png',
+          metadata: { aliases: ['normal_surprised_0'] },
+        },
+        {
+          id: 'surprised-1',
+          display_name: 'normal_surprised_1',
+          canonical_name: 'normal_surprised_1',
+          file_name: 'normal_surprised_1.png',
+          storage_path: 'private/normal_surprised_1.png',
+          metadata: { aliases: ['normal_surprised_1'] },
+        },
+      ] as Parameters<typeof renderMessageContent>[1]
+      const assetUrlMap = {
+        normal_surprised_0: 'https://signed.test/normal_surprised_0.png',
+        'normal_surprised_0.png': 'https://signed.test/normal_surprised_0.png',
+        normal_surprised_1: 'https://signed.test/normal_surprised_1.png',
+        'normal_surprised_1.png': 'https://signed.test/normal_surprised_1.png',
+      }
+      const content = '![normal_surprised](asset:normal_surprised)'
+
+      const firstRandomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.01)
+      let firstState: ReturnType<typeof parseRendererState>
+      try {
+        firstState = parseRendererState(
+          renderWithImageDisplay(content, {}, validImageDisplay, assets, assetUrlMap, 'message-1'),
+        )
+        expect(firstRandomSpy).not.toHaveBeenCalled()
+      } finally {
+        firstRandomSpy.mockRestore()
+      }
+
+      const secondRandomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.99)
+      try {
+        const secondState = parseRendererState(
+          renderWithImageDisplay(content, {}, validImageDisplay, assets, assetUrlMap, 'message-1'),
+        )
+
+        expect(secondState.runtime.image.asset).toEqual(firstState.runtime.image.asset)
+        expect(secondState.runtime.image.resolvedUrl).toBe(firstState.runtime.image.resolvedUrl)
+        expect(secondRandomSpy).not.toHaveBeenCalled()
+      } finally {
+        secondRandomSpy.mockRestore()
       }
     })
 

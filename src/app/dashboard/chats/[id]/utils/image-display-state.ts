@@ -166,6 +166,7 @@ export function resolveEmotionRenderTarget(options: {
   assetUrlMap?: Record<string, string>
   imageCommandUrlMap?: Record<string, string>
   storageBaseUrl: string
+  randomSeed?: string
 }): EmotionRenderTarget | null {
   const rawTag = options.rawTag.trim()
   if (!rawTag) {
@@ -182,6 +183,7 @@ export function resolveEmotionRenderTarget(options: {
         assets: options.characterAssets,
         storageBaseUrl: options.storageBaseUrl,
         bucketName: 'character-assets',
+        randomSeed: options.randomSeed,
         getAssetUrl: (asset) =>
           resolveCharacterAssetUrl(asset, options.assetUrlMap, options.storageBaseUrl),
       })?.asset ??
@@ -204,6 +206,7 @@ export function resolveEmotionRenderTarget(options: {
     assets: options.characterAssets,
     storageBaseUrl: options.storageBaseUrl,
     bucketName: 'character-assets',
+    randomSeed: options.randomSeed,
     getAssetUrl: (asset) =>
       resolveCharacterAssetUrl(asset, options.assetUrlMap, options.storageBaseUrl),
   })

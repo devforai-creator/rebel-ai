@@ -48,6 +48,8 @@ export interface AssetResolutionContext {
   bucketName?: string
   /** Override runtime URL resolution for private or signed asset delivery. */
   getAssetUrl?: (asset: CharacterAsset) => string | null | undefined
+  /** Stable seed for prefix variant selection. Falls back to random selection when omitted. */
+  randomSeed?: string
 }
 
 export interface AssetResolutionResult {
@@ -114,7 +116,7 @@ export function resolveAssetTag(
   }
 
   // Strategy 3: Prefix match (for emotion variants)
-  const prefixMatch = findPrefixMatch(cleanTag, orderedAssets)
+  const prefixMatch = findPrefixMatch(cleanTag, orderedAssets, context.randomSeed)
   if (prefixMatch) {
     return {
       url: buildPublicUrl(prefixMatch, context),
@@ -247,7 +249,11 @@ function sortAssetsForResolution(assets: CharacterAsset[]): CharacterAsset[] {
  *
  * Randomly selects one variant if multiple matches found.
  */
-function findPrefixMatch(tag: string, assets: CharacterAsset[]): CharacterAsset | null {
+function findPrefixMatch(
+  tag: string,
+  assets: CharacterAsset[],
+  randomSeed?: string,
+): CharacterAsset | null {
   const variants: CharacterAsset[] = []
 
   for (const asset of assets) {
@@ -291,9 +297,22 @@ function findPrefixMatch(tag: string, assets: CharacterAsset[]): CharacterAsset 
     return null
   }
 
-  // Randomly select one variant (RisuAI behavior)
-  const randomIndex = Math.floor(Math.random() * variants.length)
+  // Randomly select one variant (RisuAI behavior), or make it stable for a message render.
+  const randomIndex = randomSeed
+    ? stableIndex(`${randomSeed}:${tag}`, variants.length)
+    : Math.floor(Math.random() * variants.length)
   return variants[randomIndex]
+}
+
+function stableIndex(seed: string, length: number): number {
+  let hash = 2166136261
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+
+  return (hash >>> 0) % length
 }
 
 /**

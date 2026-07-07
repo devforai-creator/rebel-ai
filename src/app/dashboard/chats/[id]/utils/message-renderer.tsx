@@ -203,7 +203,6 @@ export function renderMessageContent(
 
   const { processedContent } = prepareMessageContentForRendering(content)
   void screenWidth
-  void randomSeed
 
   if ((uiCard || uiCardRegistry) && moduleRegex) {
     const inlineResult = renderWithInlineUiCard(
@@ -218,6 +217,7 @@ export function renderMessageContent(
       storageBaseUrl,
       onUiCardAction,
       imageDisplay,
+      randomSeed,
     )
     if (inlineResult) return inlineResult
   }
@@ -229,6 +229,7 @@ export function renderMessageContent(
     imageCommandUrlMap,
     storageBaseUrl,
     imageDisplay,
+    randomSeed,
   )
 }
 
@@ -244,6 +245,7 @@ function renderWithInlineUiCard(
   storageBaseUrl: string,
   onAction: ((type: string, actionId: string, payload?: unknown) => void) | undefined,
   imageDisplay?: Record<string, unknown> | null,
+  randomSeed?: string,
 ): React.ReactNode | null {
   const allMatches = collectExtractRegexMatches(processedContent, moduleRegex)
   if (allMatches.length === 0) return null
@@ -331,6 +333,7 @@ function renderWithInlineUiCard(
             imageCommandUrlMap,
             storageBaseUrl,
             imageDisplay,
+            deriveSegmentRandomSeed(randomSeed, 'before', cursor),
           )}
         </React.Fragment>,
       )
@@ -363,6 +366,7 @@ function renderWithInlineUiCard(
           imageCommandUrlMap,
           storageBaseUrl,
           imageDisplay,
+          deriveSegmentRandomSeed(randomSeed, 'after', cursor),
         )}
       </React.Fragment>,
     )
@@ -378,6 +382,7 @@ function renderContentWithEmotionImages(
   imageCommandUrlMap: Record<string, string> | undefined,
   storageBaseUrl: string,
   imageDisplay?: Record<string, unknown> | null,
+  randomSeed?: string,
 ): React.ReactNode {
   const hasImageCommands = imageCommandUrlMap && Object.keys(imageCommandUrlMap).length > 0
   const hasAssets = characterAssets.length > 0
@@ -421,6 +426,7 @@ function renderContentWithEmotionImages(
       assetUrlMap,
       imageCommandUrlMap,
       storageBaseUrl,
+      randomSeed: buildImageResolutionSeed(randomSeed, match.index, emotionName),
     })
 
     if (renderTarget) {
@@ -482,4 +488,20 @@ function renderContentWithEmotionImages(
   }
 
   return parts.length > 0 ? parts : <div>{renderMarkdownSegment(processedContent, 'plain')}</div>
+}
+
+function deriveSegmentRandomSeed(
+  randomSeed: string | undefined,
+  segment: 'before' | 'after',
+  cursor: number,
+): string | undefined {
+  return randomSeed ? `${randomSeed}:${segment}:${cursor}` : undefined
+}
+
+function buildImageResolutionSeed(
+  randomSeed: string | undefined,
+  matchIndex: number,
+  rawTag: string,
+): string | undefined {
+  return randomSeed ? `${randomSeed}:${matchIndex}:${rawTag}` : undefined
 }

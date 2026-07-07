@@ -44,6 +44,74 @@ async function buildRbxZip(
   return zip.generateAsync({ type: 'arraybuffer' })
 }
 
+async function buildCompressedRbxZip(
+  manifest: unknown,
+  assets?: Record<string, Uint8Array>,
+): Promise<ArrayBuffer> {
+  const zip = new JSZip()
+  zip.file('manifest.json', JSON.stringify(manifest))
+
+  if (assets) {
+    for (const [name, data] of Object.entries(assets)) {
+      zip.file(`assets/${name}`, data)
+    }
+  }
+
+  return zip.generateAsync({
+    type: 'arraybuffer',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 9 },
+  })
+}
+
+function forgeZipDeclaredUncompressedSize(
+  buffer: ArrayBuffer,
+  fileName: string,
+  declaredSize: number,
+): ArrayBuffer {
+  const bytes = new Uint8Array(buffer.slice(0))
+  const view = new DataView(bytes.buffer)
+  const fileNameBytes = new TextEncoder().encode(fileName)
+
+  for (let offset = 0; offset <= bytes.length - 4; offset++) {
+    const signature = view.getUint32(offset, true)
+
+    if (signature === 0x04034b50) {
+      const nameLength = view.getUint16(offset + 26, true)
+      const extraLength = view.getUint16(offset + 28, true)
+      const nameOffset = offset + 30
+      if (matchesBytes(bytes, nameOffset, fileNameBytes)) {
+        view.setUint32(offset + 22, declaredSize, true)
+      }
+      offset = nameOffset + nameLength + extraLength - 1
+      continue
+    }
+
+    if (signature === 0x02014b50) {
+      const nameLength = view.getUint16(offset + 28, true)
+      const extraLength = view.getUint16(offset + 30, true)
+      const commentLength = view.getUint16(offset + 32, true)
+      const nameOffset = offset + 46
+      if (matchesBytes(bytes, nameOffset, fileNameBytes)) {
+        view.setUint32(offset + 24, declaredSize, true)
+      }
+      offset = nameOffset + nameLength + extraLength + commentLength - 1
+    }
+  }
+
+  return bytes.buffer
+}
+
+function matchesBytes(bytes: Uint8Array, offset: number, expected: Uint8Array): boolean {
+  if (offset + expected.length > bytes.length) return false
+
+  for (let i = 0; i < expected.length; i++) {
+    if (bytes[offset + i] !== expected[i]) return false
+  }
+
+  return true
+}
+
 const TINY_PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) // 8-byte PNG header (not a real image, but enough for parsing)
 
 // ============================================================================
@@ -439,6 +507,52 @@ describe('parseRbxArchive validation', () => {
 
     const result = await parseRbxArchive(buffer, { maxDecompressedMb: 1 })
     expect(result.characterAssets).toHaveLength(1)
+  })
+
+  it('enforces the decompressed-size limit even when ZIP headers underreport asset size', async () => {
+    const compressibleAsset = new Uint8Array(2_048)
+    const manifest = buildManifest({
+      assets: [{ file_name: 'bomb.png', asset_type: 'background' }],
+    })
+    const buffer = await buildCompressedRbxZip(manifest, {
+      'bomb.png': compressibleAsset,
+    })
+    const forgedBuffer = forgeZipDeclaredUncompressedSize(buffer, 'assets/bomb.png', 1)
+
+    await expect(parseRbxArchive(forgedBuffer, { maxDecompressedMb: 0.001 })).rejects.toThrow(
+      'Total decompressed size exceeds 0.001MB limit',
+    )
+  })
+
+  it('enforces the manifest-size limit even when ZIP headers underreport manifest size', async () => {
+    const oversizedManifest = buildManifest({
+      character: {
+        name: 'Forged Manifest',
+        system_prompt: 'x'.repeat(2_048),
+      },
+    })
+    const buffer = await buildCompressedRbxZip(oversizedManifest)
+    const forgedBuffer = forgeZipDeclaredUncompressedSize(buffer, 'manifest.json', 1)
+
+    await expect(parseRbxArchive(forgedBuffer, { maxManifestBytes: 1024 })).rejects.toThrow(
+      'manifest.json exceeds 0.001MB limit',
+    )
+  })
+
+  it('rejects assets whose declared uncompressed size exceeds the per-asset limit', async () => {
+    const manifest = buildManifest({
+      assets: [{ file_name: 'huge.png', asset_type: 'background' }],
+    })
+    const buffer = await buildRbxZip(manifest, {
+      'huge.png': TINY_PNG,
+    })
+    const forgedBuffer = forgeZipDeclaredUncompressedSize(
+      buffer,
+      'assets/huge.png',
+      21 * 1024 * 1024,
+    )
+
+    await expect(parseRbxArchive(forgedBuffer)).rejects.toThrow('exceeds 20MB per-asset limit')
   })
 
   it('supports trusted callers overriding the manifest-size limit', async () => {

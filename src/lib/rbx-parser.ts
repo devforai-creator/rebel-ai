@@ -74,14 +74,11 @@ export async function parseRbxArchive(
 
   let manifestJson: unknown
   try {
-    const manifestText = await manifestFile.async('text')
-    if (manifestText.length > limits.maxManifestBytes) {
-      throw new Error(
-        `Invalid .rbx file: ${MANIFEST_FILE} exceeds ${formatMbLimit(
-          limits.maxManifestBytes / 1024 / 1024,
-        )}MB limit`,
-      )
-    }
+    const manifestBytes = await readZipEntryBytes(manifestFile, MANIFEST_FILE, {
+      maxEntryBytes: limits.maxManifestBytes,
+      createEntryLimitError: () => createManifestSizeError(limits.maxManifestBytes),
+    })
+    const manifestText = new TextDecoder().decode(manifestBytes)
     manifestJson = JSON.parse(manifestText)
   } catch (err) {
     if (err instanceof Error && err.message.includes('exceeds')) throw err
@@ -146,7 +143,11 @@ export async function isRbxArchive(data: ArrayBuffer | Uint8Array): Promise<bool
     const manifestFile = zip.file(MANIFEST_FILE)
     if (!manifestFile) return false
 
-    const text = await manifestFile.async('text')
+    const manifestBytes = await readZipEntryBytes(manifestFile, MANIFEST_FILE, {
+      maxEntryBytes: MAX_MANIFEST_BYTES,
+      createEntryLimitError: () => createManifestSizeError(MAX_MANIFEST_BYTES),
+    })
+    const text = new TextDecoder().decode(manifestBytes)
     const json = JSON.parse(text)
     return json?.format === 'rbx'
   } catch {
@@ -222,12 +223,12 @@ async function extractDirectoryAssets(
     )
   }
 
-  // 3. Validate declared uncompressed sizes before any entry allocates memory.
+  // 3. Best-effort preflight using ZIP header sizes. These values are attacker
+  // controlled, so actual streamed byte counts are still enforced below.
   const declaredEntries = entries.map((entry) => ({
     ...entry,
     declaredSize: getDeclaredUncompressedSize(entry.file),
   }))
-  const allEntriesHaveDeclaredSizes = declaredEntries.every((entry) => entry.declaredSize !== null)
   let declaredBytes = 0
 
   for (const { fileName, declaredSize } of declaredEntries) {
@@ -237,44 +238,111 @@ async function extractDirectoryAssets(
 
     declaredBytes += declaredSize
     if (budget.totalBytes + declaredBytes > limits.maxDecompressedBytes) {
-      throw new Error(
-        `Total decompressed size exceeds ${formatMbLimit(limits.maxDecompressedMb)}MB limit. ` +
-          'This archive is too large for web import. ' +
-          'Self-hosters can raise NEXT_PUBLIC_IMPORT_MAX_DECOMPRESSED_MB.',
-      )
+      throw createTotalDecompressedSizeError(limits.maxDecompressedMb)
     }
   }
 
-  if (allEntriesHaveDeclaredSizes) {
-    budget.totalBytes += declaredBytes
-    budget.totalFiles += declaredEntries.length
-  }
-
-  // 4. Decompress sequentially with budget enforcement
+  // 4. Decompress sequentially with actual byte-count enforcement
   const assets: RbxAssetFile[] = []
 
   for (const { fileName, file } of declaredEntries) {
-    const data = await file.async('uint8array')
+    const data = await readZipEntryBytes(file, fileName, {
+      maxEntryBytes: MAX_SINGLE_ASSET_BYTES,
+      createEntryLimitError: (byteLength) => createAssetSizeError(fileName, byteLength),
+      budget,
+      totalMaxBytes: limits.maxDecompressedBytes,
+      totalMaxMb: limits.maxDecompressedMb,
+    })
 
-    assertAssetSize(fileName, data.byteLength)
-
-    if (!allEntriesHaveDeclaredSizes) {
-      budget.totalBytes += data.byteLength
-      budget.totalFiles += 1
-
-      if (budget.totalBytes > limits.maxDecompressedBytes) {
-        throw new Error(
-          `Total decompressed size exceeds ${formatMbLimit(limits.maxDecompressedMb)}MB limit. ` +
-            'This archive is too large for web import. ' +
-            'Self-hosters can raise NEXT_PUBLIC_IMPORT_MAX_DECOMPRESSED_MB.',
-        )
-      }
-    }
-
+    budget.totalFiles += 1
     assets.push({ fileName, data })
   }
 
   return assets
+}
+
+async function readZipEntryBytes(
+  file: JSZip.JSZipObject,
+  fileName: string,
+  options: {
+    maxEntryBytes: number
+    createEntryLimitError: (byteLength: number) => Error
+    budget?: ExtractionBudget
+    totalMaxBytes?: number
+    totalMaxMb?: number
+  },
+): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const chunks: Uint8Array[] = []
+    let entryBytes = 0
+    let settled = false
+    const stream = file.nodeStream('nodebuffer')
+
+    const fail = (error: Error) => {
+      if (settled) return
+      settled = true
+      stream.pause()
+      reject(error)
+    }
+
+    stream
+      .on('data', (chunk) => {
+        if (settled) return
+
+        let bytes: Uint8Array
+        try {
+          bytes = normalizeZipStreamChunk(chunk, fileName)
+        } catch (err) {
+          fail(err instanceof Error ? err : new Error(`Invalid .rbx file: ${fileName}`))
+          return
+        }
+
+        const nextEntryBytes = entryBytes + bytes.byteLength
+        if (nextEntryBytes > options.maxEntryBytes) {
+          fail(options.createEntryLimitError(nextEntryBytes))
+          return
+        }
+
+        if (
+          options.budget &&
+          options.totalMaxBytes !== undefined &&
+          options.totalMaxMb !== undefined &&
+          options.budget.totalBytes + bytes.byteLength > options.totalMaxBytes
+        ) {
+          fail(createTotalDecompressedSizeError(options.totalMaxMb))
+          return
+        }
+
+        entryBytes = nextEntryBytes
+        if (options.budget) {
+          options.budget.totalBytes += bytes.byteLength
+        }
+        chunks.push(bytes)
+      })
+      .on('error', (error) => {
+        fail(error)
+      })
+      .on('end', () => {
+        if (settled) return
+
+        settled = true
+        const data = new Uint8Array(entryBytes)
+        let offset = 0
+        for (const chunk of chunks) {
+          data.set(chunk, offset)
+          offset += chunk.byteLength
+        }
+        resolve(data)
+      })
+      .resume()
+  })
+}
+
+function normalizeZipStreamChunk(chunk: unknown, fileName: string): Uint8Array {
+  if (chunk instanceof Uint8Array) return chunk
+  if (Array.isArray(chunk)) return Uint8Array.from(chunk)
+
+  throw new Error(`Invalid .rbx file: ${fileName} could not be decompressed`)
 }
 
 function getDeclaredUncompressedSize(file: JSZip.JSZipObject): number | null {
@@ -297,9 +365,29 @@ function assertZipEntrySize(
 function assertAssetSize(fileName: string, byteLength: number) {
   if (byteLength <= MAX_SINGLE_ASSET_BYTES) return
 
-  throw new Error(
+  throw createAssetSizeError(fileName, byteLength)
+}
+
+function createAssetSizeError(fileName: string, byteLength: number) {
+  return new Error(
     `Asset "${fileName}" is ${(byteLength / 1024 / 1024).toFixed(1)}MB — ` +
       `exceeds ${(MAX_SINGLE_ASSET_BYTES / 1024 / 1024).toFixed(0)}MB per-asset limit`,
+  )
+}
+
+function createManifestSizeError(maxManifestBytes: number) {
+  return new Error(
+    `Invalid .rbx file: ${MANIFEST_FILE} exceeds ${formatMbLimit(
+      maxManifestBytes / 1024 / 1024,
+    )}MB limit`,
+  )
+}
+
+function createTotalDecompressedSizeError(maxDecompressedMb: number) {
+  return new Error(
+    `Total decompressed size exceeds ${formatMbLimit(maxDecompressedMb)}MB limit. ` +
+      'This archive is too large for web import. ' +
+      'Self-hosters can raise NEXT_PUBLIC_IMPORT_MAX_DECOMPRESSED_MB.',
   )
 }
 

@@ -199,8 +199,6 @@ export function renderMessageContent(
   isLatestMessage?: boolean,
   imageDisplay?: Record<string, unknown> | null,
 ): React.ReactNode {
-  const storageBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-
   const { processedContent } = prepareMessageContentForRendering(content)
   void screenWidth
 
@@ -214,7 +212,6 @@ export function renderMessageContent(
       isLatestMessage ? defaultVariables : undefined,
       characterAssets,
       imageCommandUrlMap,
-      storageBaseUrl,
       onUiCardAction,
       imageDisplay,
       randomSeed,
@@ -227,7 +224,6 @@ export function renderMessageContent(
     characterAssets,
     assetUrlMap,
     imageCommandUrlMap,
-    storageBaseUrl,
     imageDisplay,
     randomSeed,
   )
@@ -242,7 +238,6 @@ function renderWithInlineUiCard(
   defaultVariables: Record<string, unknown> | undefined,
   characterAssets: CharacterAsset[],
   imageCommandUrlMap: Record<string, string> | undefined,
-  storageBaseUrl: string,
   onAction: ((type: string, actionId: string, payload?: unknown) => void) | undefined,
   imageDisplay?: Record<string, unknown> | null,
   randomSeed?: string,
@@ -331,7 +326,6 @@ function renderWithInlineUiCard(
             characterAssets,
             assetUrlMap,
             imageCommandUrlMap,
-            storageBaseUrl,
             imageDisplay,
             deriveSegmentRandomSeed(randomSeed, 'before', cursor),
           )}
@@ -364,7 +358,6 @@ function renderWithInlineUiCard(
           characterAssets,
           assetUrlMap,
           imageCommandUrlMap,
-          storageBaseUrl,
           imageDisplay,
           deriveSegmentRandomSeed(randomSeed, 'after', cursor),
         )}
@@ -380,7 +373,6 @@ function renderContentWithEmotionImages(
   characterAssets: CharacterAsset[],
   assetUrlMap: Record<string, string> | undefined,
   imageCommandUrlMap: Record<string, string> | undefined,
-  storageBaseUrl: string,
   imageDisplay?: Record<string, unknown> | null,
   randomSeed?: string,
 ): React.ReactNode {
@@ -425,7 +417,6 @@ function renderContentWithEmotionImages(
       characterAssets,
       assetUrlMap,
       imageCommandUrlMap,
-      storageBaseUrl,
       randomSeed: buildImageResolutionSeed(randomSeed, match.index, emotionName),
     })
 

@@ -720,7 +720,9 @@ describe('renderMessageContent with inline ui_card', () => {
       ] as Parameters<typeof renderMessageContent>[1]
 
       const state = parseRendererState(
-        renderWithImageDisplay('<img="Choi Yoo-jin worried">', {}, validImageDisplay, assets),
+        renderWithImageDisplay('<img="Choi Yoo-jin worried">', {}, validImageDisplay, assets, {
+          'Choi Yoo-jin worried': 'https://signed.test/choi-yoo-jin-worried.png',
+        }),
       )
 
       expect(state.runtime.image.resolvedBy).toBe('asset_tag')

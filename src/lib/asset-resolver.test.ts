@@ -57,7 +57,7 @@ const baseAssets: AssetResolutionContext['assets'] = [
 
 const context: AssetResolutionContext = {
   assets: baseAssets,
-  storageBaseUrl: 'https://cdn.supabase.co',
+  getAssetUrl: (asset) => `https://signed.test/${asset.storage_path}?token=abc`,
 }
 
 describe('resolveAssetTag', () => {
@@ -76,7 +76,7 @@ describe('resolveAssetTag', () => {
     expect(result).toMatchObject({
       asset: expect.objectContaining({ id: '1' }),
       strategy: 'exact',
-      url: 'https://cdn.supabase.co/storage/v1/object/public/character-assets/user/Smile.webp',
+      url: 'https://signed.test/user/Smile.webp?token=abc',
     })
   })
 
@@ -136,12 +136,8 @@ describe('resolveAssetTag', () => {
   })
 
   it('returns null when assets are missing or tag is empty', () => {
-    expect(
-      resolveAssetTag('', { assets: [], storageBaseUrl: 'https://cdn.supabase.co' }),
-    ).toBeNull()
-    expect(
-      resolveAssetTag('missing', { assets: [], storageBaseUrl: 'https://cdn.supabase.co' }),
-    ).toBeNull()
+    expect(resolveAssetTag('', { assets: [] })).toBeNull()
+    expect(resolveAssetTag('missing', { assets: [] })).toBeNull()
   })
 
   it('matches dot-separated asset names to space/underscore tags', () => {
@@ -157,7 +153,7 @@ describe('resolveAssetTag', () => {
     ]
     const result = resolveAssetTag('<img="Yu Ha-min_paizuri hard">', {
       assets,
-      storageBaseUrl: 'https://cdn.supabase.co',
+      getAssetUrl: (asset) => `https://signed.test/${asset.storage_path}?token=abc`,
     })
 
     expect(result).toMatchObject({
@@ -169,10 +165,14 @@ describe('resolveAssetTag', () => {
   it('uses the injected asset URL resolver when provided', () => {
     const result = resolveAssetTag('Smile', {
       ...context,
-      getAssetUrl: (asset) => `https://signed.test/${asset.storage_path}?token=abc`,
+      getAssetUrl: (asset) => `https://custom-signed.test/${asset.storage_path}?token=abc`,
     })
 
-    expect(result?.url).toBe('https://signed.test/user/Smile.webp?token=abc')
+    expect(result?.url).toBe('https://custom-signed.test/user/Smile.webp?token=abc')
+  })
+
+  it('returns null for a matched asset when no runtime URL resolver is available', () => {
+    expect(resolveAssetTag('Smile', { assets: baseAssets })).toBeNull()
   })
 })
 

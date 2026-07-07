@@ -68,7 +68,7 @@ describe('computeClientRenderDiagnostics', () => {
     expect(result.unresolvedImageTagsRaw).toEqual([])
   })
 
-  it('treats prefix-resolved character assets as resolved in strict mode', () => {
+  it('treats prefix-resolved character assets without signed URLs as unresolved in strict mode', () => {
     const content = '<img="Yoona_thinking">'
     const assetUrlMap = {}
     const characterAssets = [
@@ -93,7 +93,12 @@ describe('computeClientRenderDiagnostics', () => {
       characterAssets,
     )
 
-    expect(result.unresolvedImageTags).toEqual([])
+    expect(result.unresolvedImageTags).toEqual([
+      {
+        original: '![Yoona_thinking](asset:Yoona_thinking)',
+        extractedName: 'Yoona_thinking',
+      },
+    ])
     expect(result.unresolvedImageTagsRaw).toEqual([
       {
         original: '![Yoona_thinking](asset:Yoona_thinking)',

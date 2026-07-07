@@ -26,19 +26,6 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return isRecord(value) ? value : undefined
 }
 
-function buildPublicCharacterAssetUrl(
-  storageBaseUrl: string,
-  storagePath: string | undefined,
-): string | undefined {
-  if (!storageBaseUrl || !storagePath) {
-    return undefined
-  }
-
-  const base = storageBaseUrl.replace(/\/$/, '')
-  const path = storagePath.replace(/^\//, '')
-  return `${base}/storage/v1/object/public/character-assets/${path}`
-}
-
 function getAssetCandidateKeys(asset: CharacterAsset): string[] {
   const keys = [asset.file_name, asset.display_name, asset.canonical_name]
   const aliases = Array.isArray(asset.metadata?.aliases)
@@ -51,7 +38,6 @@ function getAssetCandidateKeys(asset: CharacterAsset): string[] {
 function resolveCharacterAssetUrl(
   asset: CharacterAsset,
   assetUrlMap: Record<string, string> | undefined,
-  storageBaseUrl: string,
 ): string | undefined {
   if (assetUrlMap) {
     for (const candidate of getAssetCandidateKeys(asset)) {
@@ -62,17 +48,16 @@ function resolveCharacterAssetUrl(
     }
   }
 
-  return buildPublicCharacterAssetUrl(storageBaseUrl, asset.storage_path)
+  return undefined
 }
 
 function findAssetByResolvedUrl(
   resolvedUrl: string,
   characterAssets: CharacterAsset[],
   assetUrlMap: Record<string, string> | undefined,
-  storageBaseUrl: string,
 ): CharacterAsset | undefined {
   for (const asset of characterAssets) {
-    const assetUrl = resolveCharacterAssetUrl(asset, assetUrlMap, storageBaseUrl)
+    const assetUrl = resolveCharacterAssetUrl(asset, assetUrlMap)
     if (assetUrl === resolvedUrl) {
       return asset
     }
@@ -165,7 +150,6 @@ export function resolveEmotionRenderTarget(options: {
   characterAssets: CharacterAsset[]
   assetUrlMap?: Record<string, string>
   imageCommandUrlMap?: Record<string, string>
-  storageBaseUrl: string
   randomSeed?: string
 }): EmotionRenderTarget | null {
   const rawTag = options.rawTag.trim()
@@ -181,18 +165,10 @@ export function resolveEmotionRenderTarget(options: {
     const asset =
       resolveAssetTag(rawTag, {
         assets: options.characterAssets,
-        storageBaseUrl: options.storageBaseUrl,
-        bucketName: 'character-assets',
         randomSeed: options.randomSeed,
-        getAssetUrl: (asset) =>
-          resolveCharacterAssetUrl(asset, options.assetUrlMap, options.storageBaseUrl),
+        getAssetUrl: (asset) => resolveCharacterAssetUrl(asset, options.assetUrlMap),
       })?.asset ??
-      findAssetByResolvedUrl(
-        resolvedFromCommand,
-        options.characterAssets,
-        options.assetUrlMap,
-        options.storageBaseUrl,
-      )
+      findAssetByResolvedUrl(resolvedFromCommand, options.characterAssets, options.assetUrlMap)
 
     return {
       rawTag,
@@ -204,11 +180,8 @@ export function resolveEmotionRenderTarget(options: {
 
   const resolvedAsset = resolveAssetTag(rawTag, {
     assets: options.characterAssets,
-    storageBaseUrl: options.storageBaseUrl,
-    bucketName: 'character-assets',
     randomSeed: options.randomSeed,
-    getAssetUrl: (asset) =>
-      resolveCharacterAssetUrl(asset, options.assetUrlMap, options.storageBaseUrl),
+    getAssetUrl: (asset) => resolveCharacterAssetUrl(asset, options.assetUrlMap),
   })
   if (resolvedAsset) {
     return {

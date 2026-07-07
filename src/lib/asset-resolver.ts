@@ -42,11 +42,7 @@ export interface AssetResolutionContext {
   assets: CharacterAsset[]
   /** @deprecated Use character_assets.metadata.aliases instead */
   emotionImages?: Record<string, string> | null
-  /** Base URL for constructing fallback public URLs */
-  storageBaseUrl: string
-  /** Bucket name (default: 'character-assets') */
-  bucketName?: string
-  /** Override runtime URL resolution for private or signed asset delivery. */
+  /** Runtime URL resolver for private/signed asset delivery. */
   getAssetUrl?: (asset: CharacterAsset) => string | null | undefined
   /** Stable seed for prefix variant selection. Falls back to random selection when omitted. */
   randomSeed?: string
@@ -72,10 +68,10 @@ export interface AssetResolutionResult {
  * ```typescript
  * const result = resolveAssetTag("clothed_smile", {
  *   assets: characterAssets,
- *   storageBaseUrl: "https://...storage.supabase.co"
+ *   getAssetUrl: (asset) => signedAssetUrlMap[asset.storage_path]
  * })
  * if (result) {
- *   console.log(result.url) // https://.../character-assets/user/char/file.webp
+ *   console.log(result.url) // https://.../signed/asset/url
  * }
  * ```
  */
@@ -98,31 +94,19 @@ export function resolveAssetTag(
   // Strategy 1: Exact match in aliases
   const exactMatch = findExactMatch(cleanTag, orderedAssets)
   if (exactMatch) {
-    return {
-      url: buildPublicUrl(exactMatch, context),
-      asset: exactMatch,
-      strategy: 'exact',
-    }
+    return buildResolutionResult(exactMatch, context, 'exact')
   }
 
   // Strategy 2: Normalized match (case-insensitive, space/underscore agnostic)
   const normalizedMatch = findNormalizedMatch(cleanTag, orderedAssets)
   if (normalizedMatch) {
-    return {
-      url: buildPublicUrl(normalizedMatch, context),
-      asset: normalizedMatch,
-      strategy: 'normalized',
-    }
+    return buildResolutionResult(normalizedMatch, context, 'normalized')
   }
 
   // Strategy 3: Prefix match (for emotion variants)
   const prefixMatch = findPrefixMatch(cleanTag, orderedAssets, context.randomSeed)
   if (prefixMatch) {
-    return {
-      url: buildPublicUrl(prefixMatch, context),
-      asset: prefixMatch,
-      strategy: 'prefix',
-    }
+    return buildResolutionResult(prefixMatch, context, 'prefix')
   }
 
   return null
@@ -315,20 +299,21 @@ function stableIndex(seed: string, length: number): number {
   return (hash >>> 0) % length
 }
 
-/**
- * Build public URL for asset
- */
-function buildPublicUrl(asset: CharacterAsset, context: AssetResolutionContext): string {
+function buildResolutionResult(
+  asset: CharacterAsset,
+  context: AssetResolutionContext,
+  strategy: AssetResolutionResult['strategy'],
+): AssetResolutionResult | null {
   const customUrl = context.getAssetUrl?.(asset)
   if (typeof customUrl === 'string' && customUrl.length > 0) {
-    return customUrl
+    return {
+      url: customUrl,
+      asset,
+      strategy,
+    }
   }
 
-  const bucketName = context.bucketName || 'character-assets'
-  const baseUrl = context.storageBaseUrl.replace(/\/$/, '')
-  const path = asset.storage_path.replace(/^\//, '')
-
-  return `${baseUrl}/storage/v1/object/public/${bucketName}/${path}`
+  return null
 }
 
 /**
@@ -371,7 +356,7 @@ export function extractAssetTags(text: string): string[] {
 // ============================================================================
 
 export interface AssetUrlMapOptions {
-  /** Runtime URL resolver for a storage path. Can return signed or public URLs. */
+  /** Runtime URL resolver for a storage path. Usually returns private signed URLs. */
   getAssetUrl: (storagePath: string) => string | null | undefined
 }
 

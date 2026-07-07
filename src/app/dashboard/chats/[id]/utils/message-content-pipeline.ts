@@ -155,17 +155,10 @@ export function computeClientRenderDiagnostics(
   const hasStrictResolvers =
     (imageCommandUrlMap && Object.keys(imageCommandUrlMap).length > 0) ||
     (characterAssets && characterAssets.length > 0)
-  const storageBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const unresolvedImageTags =
     hasStrictResolvers && imageTags.length > 0
       ? filterUnresolvedImageTags(imageTags, (name) =>
-          resolveImageTagForDiagnostics(
-            name,
-            characterAssets,
-            assetUrlMap,
-            imageCommandUrlMap,
-            storageBaseUrl,
-          ),
+          resolveImageTagForDiagnostics(name, characterAssets, assetUrlMap, imageCommandUrlMap),
         )
       : []
   return {
@@ -218,7 +211,6 @@ function resolveImageTagForDiagnostics(
   characterAssets: CharacterAsset[] | undefined,
   assetUrlMap: Record<string, string> | undefined,
   imageCommandUrlMap: Record<string, string> | undefined,
-  storageBaseUrl: string,
 ): boolean {
   if (!name) return false
 
@@ -229,8 +221,6 @@ function resolveImageTagForDiagnostics(
   if (characterAssets && characterAssets.length > 0) {
     const resolved = resolveAssetTag(name, {
       assets: characterAssets,
-      storageBaseUrl,
-      bucketName: 'character-assets',
       getAssetUrl: (asset) => {
         if (!assetUrlMap) {
           return undefined

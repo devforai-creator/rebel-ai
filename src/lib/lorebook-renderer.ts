@@ -1,6 +1,13 @@
 /**
  * Lorebook Renderer
- * Activates and renders lorebook entries based on chat context
+ * Activates and renders lorebook entries based on chat context.
+ *
+ * This renderer intentionally supports a small runtime subset:
+ * always-active entries, comma-separated case-insensitive keyword includes,
+ * insertorder sorting, and a rough character-based maxTokens cap.
+ * Imported compatibility fields such as useRegex, selective/secondkey,
+ * scanDepth, probability, and negative keys are preserved on entries but are
+ * not evaluated here.
  */
 
 import type { LorebookEntry } from '@/types/lorebook.types'
@@ -29,7 +36,8 @@ export interface RenderedLorebook {
  * Activation Rules:
  * 1. Folders (mode: "folder") are NEVER rendered
  * 2. Always active entries (alwaysActive: true) are ALWAYS included
- * 3. Keyword entries are included if ANY keyword matches chat history
+ * 3. Keyword entries are included if ANY comma-separated key is a
+ *    case-insensitive substring of the full chat history
  * 4. Entries are sorted by insertorder (higher = earlier in prompt)
  */
 export function renderLorebook(options: RenderLorebookOptions): RenderedLorebook {

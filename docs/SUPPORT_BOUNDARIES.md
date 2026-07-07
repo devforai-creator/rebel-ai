@@ -60,7 +60,7 @@ Experimental paths must not directly own or redefine:
 
 - authentication, session issuance, or permission checks
 - Vault or API key secret ownership and write boundaries
-- admin bridge or internal trigger authorization
+- internal runner or trigger authorization
 - destructive multi-step writes that can leave partial durable state behind
 - billing, quotas, credits, or cost commitments
 - raw HTML, script execution, or equivalent arbitrary execution surfaces

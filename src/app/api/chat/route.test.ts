@@ -173,30 +173,6 @@ interface SupabaseFixture {
   messageDeleteError?: { message: string; code?: string | null }
 }
 
-type ChatAdminRequest =
-  | { action: 'checkAnonRateLimit'; args: Record<string, unknown> }
-  | { action: 'checkUserRateLimit'; args: Record<string, unknown> }
-  | { action: 'decryptSecret'; args: Record<string, unknown> }
-
-type ChatAdminCall = { name: string; params: Record<string, unknown> }
-
-let currentAdminMock: SupabaseAdminMock | null = null
-let adminRpcCalls: ChatAdminCall[] = []
-
-function buildChatAdminSuccess(data: unknown) {
-  return new Response(JSON.stringify({ data }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  })
-}
-
-function buildChatAdminError(message: string, status = 500) {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  })
-}
-
 async function expectJsonError(
   response: Response,
   status: number,
@@ -215,7 +191,7 @@ async function expectJsonError(
   return payload
 }
 
-fetchMock.mockImplementation(async (input, init) => {
+fetchMock.mockImplementation(async (input) => {
   const url =
     typeof input === 'string' || input instanceof URL
       ? new URL(input.toString())
@@ -228,53 +204,7 @@ fetchMock.mockImplementation(async (input, init) => {
     })
   }
 
-  if (url.pathname !== '/api/internal/chat-admin') {
-    throw new Error(`Unexpected fetch call: ${url.toString()}`)
-  }
-
-  const headers = new Headers(init?.headers)
-  const authHeader = headers.get('authorization')
-  const secret = process.env.CHAT_ADMIN_SECRET
-
-  if (!secret) {
-    return buildChatAdminError('CHAT_ADMIN_SECRET missing')
-  }
-
-  if (authHeader !== `Bearer ${secret}`) {
-    return buildChatAdminError('Unauthorized', 401)
-  }
-
-  if (!currentAdminMock) {
-    return buildChatAdminError('No admin mock configured')
-  }
-
-  const payload = init?.body ? JSON.parse(init.body.toString()) : {}
-  const action = payload.action as ChatAdminRequest['action']
-  const args = (payload.args ?? {}) as Record<string, unknown>
-
-  let rpcName: string
-  switch (action) {
-    case 'checkAnonRateLimit':
-      rpcName = 'check_anon_rate_limit'
-      break
-    case 'checkUserRateLimit':
-      rpcName = 'check_chat_rate_limit'
-      break
-    case 'decryptSecret':
-      rpcName = 'get_decrypted_secret'
-      break
-    default:
-      return buildChatAdminError(`Unsupported action: ${action}`)
-  }
-
-  adminRpcCalls.push({ name: rpcName, params: args })
-
-  const result = await currentAdminMock.rpc(rpcName, args)
-  if (result.error) {
-    return buildChatAdminError(result.error.message ?? 'RPC error')
-  }
-
-  return buildChatAdminSuccess(result.data ?? null)
+  throw new Error(`Unexpected fetch call: ${url.toString()}`)
 })
 
 class SupabaseRouteMock {
@@ -850,8 +780,7 @@ function createSupabaseMock(fixture: SupabaseFixture): SupabaseRouteMock & {
   const adminMock = new SupabaseAdminMock(fixture)
   const routeMock = new SupabaseRouteMock(fixture, adminMock)
   createClientMock.mockReturnValue(routeMock)
-  currentAdminMock = adminMock
-  adminRpcCalls = adminMock.rpcCalls
+  createAdminClientMock.mockReturnValue(adminMock)
   ;(
     routeMock as SupabaseRouteMock & {
       adminRpcCalls: Array<{ name: string; params: Record<string, unknown> }>
@@ -955,8 +884,6 @@ describe('POST /api/chat', () => {
     persistChatJobLifecycleStageMock.mockReset()
     triggerMessageTranslationMock.mockReset()
     triggerMessageTranslationMock.mockImplementation(() => undefined)
-    currentAdminMock = null
-    adminRpcCalls = []
     global.fetch = fetchMock as typeof global.fetch
   })
 

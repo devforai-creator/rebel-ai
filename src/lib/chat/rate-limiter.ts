@@ -3,7 +3,6 @@ import 'server-only'
 import crypto from 'crypto'
 import type { Database } from '@/types/database.types'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { buildInternalApiUrlForEdge } from '@/lib/internal-api-origin'
 import { checkAnonRateLimitRpc, checkChatRateLimit } from '@/lib/supabase/rpc'
 import { CHAT_RATE_LIMITS } from './runtime-limits'
 
@@ -17,24 +16,6 @@ type RateLimitRpcRow = {
   retry_after: number | null
 }
 
-interface ChatAdminRequestBase {
-  requester: string
-}
-
-type ChatAdminRateLimitPayload =
-  | (ChatAdminRequestBase & {
-      action: 'checkAnonRateLimit'
-      args: Database['public']['Functions']['check_anon_rate_limit']['Args']
-    })
-  | (ChatAdminRequestBase & {
-      action: 'checkUserRateLimit'
-      args: Database['public']['Functions']['check_chat_rate_limit']['Args']
-    })
-
-type ChatAdminResponse<T> = {
-  data: T
-}
-
 export async function checkUserRateLimit(userId: string): Promise<RateLimitResult> {
   const rateLimitArgs = {
     target_user_id: userId,
@@ -43,13 +24,7 @@ export async function checkUserRateLimit(userId: string): Promise<RateLimitResul
   } satisfies Database['public']['Functions']['check_chat_rate_limit']['Args']
 
   const adminSupabase = createAdminClient()
-  const rateLimitData = hasRpcClient(adminSupabase)
-    ? await readUserRateLimitViaRpc(adminSupabase, rateLimitArgs)
-    : await callChatAdmin<Array<RateLimitRpcRow> | null>({
-        requester: userId,
-        action: 'checkUserRateLimit',
-        args: rateLimitArgs,
-      })
+  const rateLimitData = await readUserRateLimitViaRpc(adminSupabase, rateLimitArgs)
 
   return normalizeRateLimitResult(rateLimitData, CHAT_RATE_LIMITS.userWindowSeconds)
 }
@@ -64,13 +39,7 @@ export async function checkAnonRateLimit(identifier: string): Promise<RateLimitR
   } satisfies Database['public']['Functions']['check_anon_rate_limit']['Args']
 
   const adminSupabase = createAdminClient()
-  const rateLimitData = hasRpcClient(adminSupabase)
-    ? await readAnonRateLimitViaRpc(adminSupabase, rateLimitArgs)
-    : await callChatAdmin<Array<RateLimitRpcRow> | null>({
-        requester: 'anonymous-user',
-        action: 'checkAnonRateLimit',
-        args: rateLimitArgs,
-      })
+  const rateLimitData = await readAnonRateLimitViaRpc(adminSupabase, rateLimitArgs)
 
   return normalizeRateLimitResult(rateLimitData, CHAT_RATE_LIMITS.anonWindowSeconds)
 }
@@ -93,10 +62,6 @@ function hashString(input: string): string {
   const hash = crypto.createHash('sha256').update(input).digest('base64url')
   // Prefix with 'ua:' for consistency and take first 32 chars to keep it readable
   return `ua:${hash.slice(0, 32)}`
-}
-
-function hasRpcClient(client: unknown): client is ReturnType<typeof createAdminClient> {
-  return typeof (client as { rpc?: unknown } | null)?.rpc === 'function'
 }
 
 async function readUserRateLimitViaRpc(
@@ -140,37 +105,4 @@ function normalizeRateLimitResult(
       : fallbackRetryAfter
 
   return { allowed, retryAfter: allowed ? null : retryAfter }
-}
-
-async function callChatAdmin<T>(payload: ChatAdminRateLimitPayload): Promise<T> {
-  const adminSecret = process.env.CHAT_ADMIN_SECRET
-
-  if (!adminSecret) {
-    throw new Error('CHAT_ADMIN_SECRET is not configured')
-  }
-
-  const endpointUrl = buildInternalApiUrlForEdge('/api/internal/chat-admin')
-
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${adminSecret}`,
-  }
-
-  if (process.env.VERCEL_AUTOMATION_BYPASS_SECRET) {
-    headers['x-vercel-protection-bypass'] = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
-  }
-
-  const response = await fetch(endpointUrl, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload),
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Chat admin request failed (${response.status}): ${errorText}`)
-  }
-
-  const json = (await response.json()) as ChatAdminResponse<T>
-  return json.data
 }

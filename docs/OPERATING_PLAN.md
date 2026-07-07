@@ -107,14 +107,14 @@ Evidence:
 
 ### 3.4 Secret ownership and privileged boundaries
 
-- User-owned keys, admin bridge access, and internal trigger authorization must remain explicit and narrow.
+- User-owned keys, privileged runner access, and internal trigger authorization must remain explicit and narrow.
 - Any privilege escalation or secret-write loophole blocks public opening.
 
 Evidence:
 
 - [actions.ts](../src/app/dashboard/api-keys/actions.ts)
-- [route.ts](../src/app/api/internal/chat-admin/route.ts)
 - [admin.ts](../src/lib/supabase/admin.ts)
+- [vault.ts](../src/app/api/internal/chat-job-runner/vault.ts)
 - [SECURITY.md](../SECURITY.md)
 
 ### 3.5 Background job health and recovery visibility
@@ -203,7 +203,7 @@ Status: open
 
 Evidence:
 
-- [route.ts](../src/app/api/internal/chat-admin/route.ts)
+- [rate-limiter.ts](../src/lib/chat/rate-limiter.ts)
 - [route.ts](../src/app/api/chat/route.ts)
 
 ### Gate 4. One public deployment profile is frozen

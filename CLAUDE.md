@@ -71,12 +71,12 @@ CI (GitHub Actions, Node 20): lint → format:check → test with coverage → b
 
 ### Runtime Split
 
-- **Node runtime**: `/api/chat`, `/api/internal/*` (job runners, admin bridge) — anything that touches secrets or does LLM calls
+- **Node runtime**: `/api/chat`, `/api/internal/*` (job runners, maintenance routes, internal triggers) — anything that touches secrets or does LLM calls
 - **Edge runtime**: lightweight routes like job status (`/api/chat/jobs/[jobId]`), icon serving
 
 ### Internal API Auth
 
-- `CHAT_ADMIN_SECRET`: Edge ↔ internal admin bridge auth, trigger → runner auth
+- `CHAT_ADMIN_SECRET`: internal runner, maintenance route, and trigger → runner bearer auth
 - `CRON_SECRET`: bearer token used by external schedulers or Vercel Cron to call trigger routes
 - `INTERNAL_API_ORIGIN`: trusted origin for internal calls (required in production)
 - Use `buildInternalApiUrl()` from `src/lib/internal-api-origin.ts` for all internal API calls

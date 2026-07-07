@@ -79,7 +79,7 @@ Experimental paths should not directly own:
 
 - authentication or permission checks
 - Vault / API key secret ownership
-- admin bridge or internal trigger authorization
+- internal runner or trigger authorization
 - destructive multi-step writes
 - billing or cost commitments
 - raw HTML, script execution, or equivalent arbitrary execution surfaces

@@ -184,10 +184,21 @@ export interface Database extends Omit<GeneratedDatabase, 'public'> {
       >
       messages: OverrideTable<RawMessageTable, Message, MessageInsert, MessageUpdate>
     }
-    Functions: Omit<PublicFunctions, 'match_chat_facts'> & {
+    Functions: Omit<PublicFunctions, 'match_chat_facts' | 'update_character_with_modules'> & {
       match_chat_facts: Omit<PublicFunctions['match_chat_facts'], 'Args'> & {
         Args: Omit<PublicFunctions['match_chat_facts']['Args'], 'query_embedding'> & {
           query_embedding: number[]
+        }
+      }
+      update_character_with_modules: Omit<
+        PublicFunctions['update_character_with_modules'],
+        'Args'
+      > & {
+        Args: Omit<
+          PublicFunctions['update_character_with_modules']['Args'],
+          'p_greeting_message'
+        > & {
+          p_greeting_message: string | null
         }
       }
     }

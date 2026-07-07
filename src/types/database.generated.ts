@@ -735,6 +735,7 @@ export type Database = {
           created_at: string
           custom_system_prompt: string | null
           id: string
+          last_message_at: string | null
           max_context_messages: number
           model_config: Json | null
           persona_id: string | null
@@ -747,6 +748,7 @@ export type Database = {
           created_at?: string
           custom_system_prompt?: string | null
           id?: string
+          last_message_at?: string | null
           max_context_messages?: number
           model_config?: Json | null
           persona_id?: string | null
@@ -759,6 +761,7 @@ export type Database = {
           created_at?: string
           custom_system_prompt?: string | null
           id?: string
+          last_message_at?: string | null
           max_context_messages?: number
           model_config?: Json | null
           persona_id?: string | null
@@ -1506,18 +1509,6 @@ export type Database = {
         Args: { module_ids: string[]; requester?: string }
         Returns: number
       }
-      update_character_with_modules: {
-        Args: {
-          p_character_id: string
-          p_description: string
-          p_greeting_message: string | null
-          p_module_ids?: string[]
-          p_name: string
-          p_requester?: string
-          p_system_prompt: string
-        }
-        Returns: undefined
-      }
       delete_secret:
         | { Args: { secret_name: string }; Returns: undefined }
         | {
@@ -1594,12 +1585,38 @@ export type Database = {
           start_seq: number
         }[]
       }
+      recalculate_chat_last_message_at: {
+        Args: { p_chat_id: string }
+        Returns: undefined
+      }
       record_service_health_status: {
         Args: {
           p_error_message?: string
           p_metadata?: Json
           p_service_label: string
           p_was_success: boolean
+        }
+        Returns: undefined
+      }
+      update_character_with_modules: {
+        Args: {
+          p_character_id: string
+          p_description: string
+          p_greeting_message: string
+          p_module_ids?: string[]
+          p_name: string
+          p_requester?: string
+          p_system_prompt: string
+        }
+        Returns: undefined
+      }
+      validate_chat_turn_message_pointer: {
+        Args: {
+          p_chat_id: string
+          p_expected_role: string
+          p_message_id: string
+          p_pointer_name: string
+          p_turn_id: string
         }
         Returns: undefined
       }

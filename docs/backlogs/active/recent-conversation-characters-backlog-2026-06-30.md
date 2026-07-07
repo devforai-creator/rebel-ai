@@ -139,39 +139,41 @@ SQL sketch:
 - On eligible message DELETE, recalculate the deleted message's `OLD.chat_id` from the remaining eligible messages.
 - On UPDATE, ignore content/status-only changes. Recalculate when `chat_id`, `role`, or `created_at` changes. If `chat_id` changes, recalculate both `OLD.chat_id` and `NEW.chat_id`.
 
-#### P0-2. Add the column, backfill, trigger, and justified index
+#### P0-2. Add the column, backfill, triggers, and index decision
 
-- [ ] Add nullable `last_message_at timestamptz` with no default.
-- [ ] Backfill it from the maximum eligible `messages.created_at` for each chat.
-- [ ] Add trigger behavior that maintains the same invariant after insert, delete, and relevant
+- [x] Add nullable `last_message_at timestamptz` with no default.
+- [x] Backfill it from the maximum eligible `messages.created_at` for each chat.
+- [x] Add trigger behavior that maintains the same invariant after insert, delete, and relevant
       changes to `chat_id`, `role`, or `created_at`.
-- [ ] Schema-qualify referenced objects and give trigger functions a safe `search_path`, following
+- [x] Schema-qualify referenced objects and give trigger functions a safe `search_path`, following
       the repository's hardened function patterns.
-- [ ] Start with the candidate partial index
-      `(user_id, character_id, last_message_at DESC, id DESC) WHERE last_message_at IS NOT NULL`,
-      but retain it only after checking the planned grouped query with `EXPLAIN` on representative
-      data.
+- [x] Defer the candidate partial index
+      `(user_id, character_id, last_message_at DESC, id DESC) WHERE last_message_at IS NOT NULL`
+      until P1-2, where the planned grouped query can be checked with `EXPLAIN` on representative
+      data before adding or rejecting it.
 
 Done when:
 
-- [ ] a newer eligible message advances the value
-- [ ] an older message does not move it backwards
-- [ ] deleting the newest message restores the next maximum or `null`
-- [ ] system-only and empty chats remain `null`
-- [ ] existing chats are backfilled consistently with the same rules
+- [x] a newer eligible message advances the value
+- [x] an older message does not move it backwards
+- [x] deleting the newest message restores the next maximum or `null`
+- [x] relevant `chat_id`, `role`, and `created_at` updates recalculate the affected chat or chats
+- [x] system-only and empty chats remain `null`
+- [x] existing chats are backfilled consistently with the same rules
 
 #### P0-3. Prove the invariant locally
 
 - [ ] Add integration coverage for insert, out-of-order insert, newest-message delete, final-message
-      delete, system-message exclusion, and cross-user isolation.
-- [ ] Apply the migration locally with `supabase db push --local` or a clean `supabase db reset`.
-- [ ] Regenerate `src/types/database.generated.ts` with `npm run db:types`.
-- [ ] Regenerate `supabase/schema.sql` with `npm run db:schema`.
+      delete, system-message exclusion, relevant `chat_id`/`role`/`created_at` updates, and
+      cross-user isolation.
+- [x] Apply the migration locally with `supabase db push --local` or a clean `supabase db reset`.
+- [x] Regenerate `src/types/database.generated.ts` with `npm run db:types`.
+- [x] Regenerate `supabase/schema.sql` with `npm run db:schema`.
 - [ ] Run the focused database tests and `npm run typecheck`.
 
 Done when:
 
-- [ ] generated types expose `last_message_at` in chat Row/Insert/Update shapes
+- [x] generated types expose `last_message_at` in chat Row/Insert/Update shapes
 - [ ] `npm run db:schema:check` reports no generated-schema drift
 - [ ] the focused integration tests pass against local Supabase
 

@@ -182,6 +182,7 @@ export interface RegenerationProcessOptions {
 export interface SummaryWithFallbackOptions {
   model: LanguageModel
   provider: LlmProvider
+  modelName: string
   systemPrompt: string
   prompt: string
   maxTokens: number

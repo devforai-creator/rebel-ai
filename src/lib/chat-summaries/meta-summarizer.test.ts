@@ -14,6 +14,11 @@ const mockModel = {} as LanguageModel
 
 const generateSummaryWithFallbackMock = vi.fn()
 const getLastSummaryEndMock = vi.fn()
+const resolvePromptCacheDecisionMock = vi.fn()
+
+vi.mock('@/lib/llm/prompt-cache', () => ({
+  resolvePromptCacheDecision: (...args: unknown[]) => resolvePromptCacheDecisionMock(...args),
+}))
 
 vi.mock('./chunk-summarizer', async () => {
   const actual = await vi.importActual<typeof import('./chunk-summarizer')>('./chunk-summarizer')
@@ -36,6 +41,8 @@ describe('meta-summarizer', () => {
     vi.resetModules()
     generateSummaryWithFallbackMock.mockReset()
     getLastSummaryEndMock.mockReset()
+    resolvePromptCacheDecisionMock.mockReset()
+    resolvePromptCacheDecisionMock.mockReturnValue(null)
   })
 
   afterEach(() => {
@@ -43,6 +50,7 @@ describe('meta-summarizer', () => {
   })
 
   it('creates higher-level summary and stores it', async () => {
+    resolvePromptCacheDecisionMock.mockReturnValue({ key: 'meta:chat-1:1-20' })
     generateSummaryWithFallbackMock.mockResolvedValue({
       summaryText: 'meta summary',
       summaryStatus: 'ok',
@@ -58,7 +66,7 @@ describe('meta-summarizer', () => {
       userId: 'user-1',
       model: mockModel,
       provider: 'openai',
-      modelName: 'gpt-4o',
+      modelName: 'gpt-5.6',
       segments: [
         { start_seq: 1, end_seq: 10, summary: 's1' },
         { start_seq: 11, end_seq: 20, summary: 's2' },
@@ -70,7 +78,12 @@ describe('meta-summarizer', () => {
       fallbackLabel: 'meta 1-20',
     })
 
-    expect(generateSummaryWithFallbackMock).toHaveBeenCalled()
+    expect(generateSummaryWithFallbackMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelName: 'gpt-5.6',
+        promptCache: { key: 'meta:chat-1:1-20' },
+      }),
+    )
     const chatSummaries = supabase.state.chatSummaries as Array<Record<string, unknown>>
     expect(chatSummaries).toHaveLength(1)
     expect(chatSummaries[0]).toMatchObject({

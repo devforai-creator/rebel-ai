@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
-import { hasExtendedOpenAICacheRetention } from '@/lib/models'
+import { hasExtendedOpenAICacheRetention, isOpenAIGpt56Model } from '@/lib/models'
 import { getAnthropicMinCacheTokens, type AnthropicCacheTTL } from './provider-options'
 import { resolveProviderCacheMode } from './cache-mode'
 
@@ -33,7 +33,7 @@ const PROMPT_CACHE_RETENTION = resolveRetention()
 
 export interface PromptCacheDecision {
   key: string
-  retention: '24h' | 'in_memory'
+  retention?: '24h' | 'in_memory'
 }
 
 export function resolvePromptCacheDecision({
@@ -65,8 +65,9 @@ export function resolvePromptCacheDecision({
     return null
   }
 
-  const retention =
-    retentionPreference === '24h'
+  const retention = isOpenAIGpt56Model(modelName)
+    ? undefined
+    : retentionPreference === '24h'
       ? hasExtendedOpenAICacheRetention(modelName)
         ? '24h'
         : 'in_memory'
@@ -88,7 +89,7 @@ export function resolvePromptCacheDecision({
 
   return {
     key,
-    retention,
+    ...(retention ? { retention } : {}),
   }
 }
 

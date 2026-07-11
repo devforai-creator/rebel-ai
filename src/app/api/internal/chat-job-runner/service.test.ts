@@ -2159,6 +2159,48 @@ describe('processChatJobs', () => {
     })
   })
 
+  it('keeps the GPT-5.6 chat cache key without legacy retention or an implicit effort', async () => {
+    vi.stubEnv('OPENAI_PROMPT_CACHE_MODE', 'auto')
+    vi.stubEnv('OPENAI_PROMPT_CACHE_MIN_TOKENS', '1')
+
+    const supabase = createChatJobRunnerSupabaseMock({
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    decryptSecretMock.mockResolvedValue('sk-test')
+    parseChatJobPayloadMock.mockReturnValue(
+      buildValidPayload({
+        requestId: 'req-gpt-56-cache',
+        provider: 'openai',
+        modelName: 'gpt-5.6',
+      }),
+    )
+    streamTextMock.mockResolvedValue({
+      textStream: ['hello world'],
+      finishReason: Promise.resolve('stop'),
+      providerMetadata: Promise.resolve({}),
+      usage: Promise.resolve({ inputTokens: 10, outputTokens: 20, totalTokens: 30 }),
+    })
+    claimPendingJobMock.mockResolvedValueOnce({
+      id: 'job-gpt-56-cache',
+      payload: { ok: true },
+    })
+    claimPendingJobMock.mockResolvedValueOnce(null)
+
+    const { processChatJobs } = await import('./service')
+    await processChatJobs(1)
+
+    const call = streamTextMock.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(call).not.toHaveProperty('temperature')
+    expect(call.providerOptions).toEqual({
+      openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+        promptCacheKey: 'chat:chat-1',
+      },
+    })
+  })
+
   it('passes active lorebook as extra dynamic context into memory planning', async () => {
     const moduleData: unknown = {
       id: 'module-1',

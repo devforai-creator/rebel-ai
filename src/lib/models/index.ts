@@ -13,6 +13,11 @@ function normalizeModelName(modelName?: string | null): string {
   return modelName ? modelName.toLowerCase() : ''
 }
 
+export function isOpenAIGpt56Model(modelName?: string | null): boolean {
+  const normalized = normalizeModelName(modelName).trim()
+  return normalized === 'gpt-5.6' || normalized.startsWith('gpt-5.6-')
+}
+
 function sortByUiOrder(a: ModelDefinition, b: ModelDefinition): number {
   const orderA = typeof a.uiOrder === 'number' ? a.uiOrder : Number.MAX_SAFE_INTEGER
   const orderB = typeof b.uiOrder === 'number' ? b.uiOrder : Number.MAX_SAFE_INTEGER

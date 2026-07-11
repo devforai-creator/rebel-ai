@@ -269,6 +269,40 @@ describe('estimateUsageCost', () => {
   })
 
   describe('OpenAI models', () => {
+    it('switches GPT-5.6 pricing immediately above the 272K prompt boundary', () => {
+      const atBoundary = estimateUsageCost({
+        provider: 'openai',
+        modelName: 'gpt-5.6',
+        promptTokens: 272000,
+      })
+      const aboveBoundary = estimateUsageCost({
+        provider: 'openai',
+        modelName: 'gpt-5.6-sol',
+        promptTokens: 272001,
+      })
+
+      expect(atBoundary?.promptCost).toBeCloseTo(1.36, 6)
+      expect(aboveBoundary?.promptCost).toBeCloseTo(2.72001, 6)
+    })
+
+    it('should apply GPT-5.6 long-context pricing above 272K input tokens', () => {
+      const params: UsageCostParams = {
+        provider: 'openai',
+        modelName: 'gpt-5.6',
+        promptTokens: 300000,
+        completionTokens: 10000,
+        cachedInputTokens: 100000,
+      }
+      const result = estimateUsageCost(params)
+      expect(result).not.toBeNull()
+
+      // GPT-5.6 long context: Input $10/M, Cached $1/M, Output $45/M.
+      expect(result!.promptCost).toBeCloseTo(2, 6)
+      expect(result!.cachedInputCost).toBeCloseTo(0.1, 6)
+      expect(result!.completionCost).toBeCloseTo(0.45, 6)
+      expect(result!.reasoningCost).toBe(0)
+    })
+
     it('should subtract cached tokens from total input (OpenAI-specific behavior)', () => {
       // OpenAI AI SDK returns inputTokens as total (includes cached)
       const params: UsageCostParams = {

@@ -1,4 +1,5 @@
 import type { JSONValue, SharedV2ProviderOptions } from '@ai-sdk/provider'
+import { isOpenAIGpt56Model } from '@/lib/models'
 
 export type AnthropicCacheTTL = '5m' | '1h'
 export const DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT = 'high'
@@ -42,10 +43,15 @@ export function getProviderOptions(
 
     if (overrides?.promptCacheKey) {
       openaiOptions.promptCacheKey = overrides.promptCacheKey
-      openaiOptions.promptCacheRetention = overrides.promptCacheRetention ?? '24h'
+      if (!isOpenAIGpt56Model(overrides.modelName)) {
+        openaiOptions.promptCacheRetention = overrides.promptCacheRetention ?? '24h'
+      }
     }
 
-    if (overrides?.reasoningEffort && overrides.reasoningEffort !== 'none') {
+    if (
+      overrides?.reasoningEffort &&
+      (overrides.reasoningEffort !== 'none' || isOpenAIGpt56Model(overrides.modelName))
+    ) {
       openaiOptions.reasoningEffort = overrides.reasoningEffort
     }
 

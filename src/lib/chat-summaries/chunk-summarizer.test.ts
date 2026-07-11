@@ -2,14 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LanguageModel } from 'ai'
 
 import { CHUNK_SIZE, SUMMARY_LEVEL_CHUNK } from './config'
+import type { PromptCacheDecision } from '@/lib/llm/prompt-cache'
 import { createChatSummariesSupabaseMock, type SupabaseClientType } from '@/tests/mocks/supabase'
 
 // Helper to cast mock model
 const mockModel = {} as LanguageModel
 
 const generateTextMock = vi.fn()
-const getProviderOptionsMock = vi.fn(() => ({}))
-const resolvePromptCacheDecisionMock = vi.fn(() => null)
+const resolvePromptCacheDecisionMock = vi.fn<(args: unknown) => PromptCacheDecision | null>(
+  () => null,
+)
 const generateFactEmbeddingMock = vi.fn()
 
 vi.mock('ai', () => {
@@ -32,11 +34,6 @@ vi.mock('ai', () => {
   }
 })
 
-vi.mock('@/lib/llm/provider-options', () => ({
-  getProviderOptions: (...args: Parameters<typeof getProviderOptionsMock>) =>
-    getProviderOptionsMock(...args),
-}))
-
 vi.mock('@/lib/llm/prompt-cache', () => ({
   resolvePromptCacheDecision: (...args: Parameters<typeof resolvePromptCacheDecisionMock>) =>
     resolvePromptCacheDecisionMock(...args),
@@ -50,7 +47,6 @@ describe('chunk-summarizer', () => {
   beforeEach(() => {
     vi.resetModules()
     generateTextMock.mockReset()
-    getProviderOptionsMock.mockClear()
     resolvePromptCacheDecisionMock.mockClear()
     generateFactEmbeddingMock.mockReset()
   })
@@ -70,6 +66,7 @@ describe('chunk-summarizer', () => {
     const result = await generateSummaryWithFallback({
       model: mockModel,
       provider: 'google',
+      modelName: 'gemini',
       systemPrompt: 'SYS',
       prompt: 'PROMPT',
       maxTokens: 123,
@@ -88,6 +85,38 @@ describe('chunk-summarizer', () => {
     expect(generateTextMock.mock.calls[0][0]).not.toHaveProperty('temperature')
   })
 
+  it('passes the GPT-5.6 model identity through to summary provider options', async () => {
+    generateTextMock.mockResolvedValue({
+      text: 'summary text',
+      usage: { outputTokens: 12 },
+      finishReason: 'stop',
+    })
+    const { generateSummaryWithFallback } = await import('./chunk-summarizer')
+
+    await generateSummaryWithFallback({
+      model: mockModel,
+      provider: 'openai',
+      modelName: 'gpt-5.6',
+      systemPrompt: 'SYS',
+      prompt: 'PROMPT',
+      maxTokens: 123,
+      fallbackLabel: 'chunk',
+      fallbackTextFactory: () => 'fallback',
+      promptCache: { key: 'summary:chat-1:1-10' },
+    })
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerOptions: {
+          openai: {
+            textVerbosity: 'low',
+            promptCacheKey: 'summary:chat-1:1-10',
+          },
+        },
+      }),
+    )
+  })
+
   it('falls back to local summary when LLM fails', async () => {
     generateTextMock.mockRejectedValue(new Error('LLM down'))
     const { generateSummaryWithFallback } = await import('./chunk-summarizer')
@@ -95,6 +124,7 @@ describe('chunk-summarizer', () => {
     const result = await generateSummaryWithFallback({
       model: mockModel,
       provider: 'google',
+      modelName: 'gemini',
       systemPrompt: 'SYS',
       prompt: 'PROMPT',
       maxTokens: 1,
@@ -119,6 +149,7 @@ describe('chunk-summarizer', () => {
     const result = await generateSummaryWithFallback({
       model: mockModel,
       provider: 'google',
+      modelName: 'gemini',
       systemPrompt: 'SYS',
       prompt: 'PROMPT',
       maxTokens: 8,
@@ -156,6 +187,7 @@ describe('chunk-summarizer', () => {
     const result = await generateSummaryWithFallback({
       model: mockModel,
       provider: 'google',
+      modelName: 'gemini',
       systemPrompt: 'SYS',
       prompt: 'PROMPT',
       maxTokens: 8,
@@ -185,6 +217,7 @@ describe('chunk-summarizer', () => {
     const result = await generateSummaryWithFallback({
       model: mockModel,
       provider: 'google',
+      modelName: 'gemini',
       systemPrompt: 'SYS',
       prompt: 'PROMPT',
       maxTokens: 8,
@@ -564,6 +597,46 @@ describe('chunk-summarizer', () => {
     })
 
     expect(chatFacts).toHaveLength(1) // unchanged
+  })
+
+  it('passes the GPT-5.6 model identity through to facts provider options', async () => {
+    generateFactEmbeddingMock.mockResolvedValue([0.1, 0.2, 0.3])
+    generateTextMock.mockResolvedValue({
+      text: '- Fact one',
+      finishReason: 'stop',
+    })
+    resolvePromptCacheDecisionMock.mockReturnValueOnce({ key: 'facts:chat-1:1-2' })
+
+    const supabase = createChatSummariesSupabaseMock({
+      messages: [
+        { role: 'user', content: 'hi', sequence: 1, chat_id: 'chat-1' },
+        { role: 'assistant', content: 'response', sequence: 2, chat_id: 'chat-1' },
+      ],
+    })
+    const { createChunkFacts } = await import('./chunk-summarizer')
+
+    await createChunkFacts({
+      supabase: supabase as unknown as SupabaseClientType,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      model: mockModel,
+      provider: 'openai',
+      modelName: 'gpt-5.6',
+      startSeq: 1,
+      endSeq: 2,
+      factPrompt: 'FACT',
+    })
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerOptions: {
+          openai: {
+            textVerbosity: 'low',
+            promptCacheKey: 'facts:chat-1:1-2',
+          },
+        },
+      }),
+    )
   })
 
   it('returns early when createChunkFacts cannot load messages', async () => {

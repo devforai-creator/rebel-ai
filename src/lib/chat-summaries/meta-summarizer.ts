@@ -63,6 +63,7 @@ export async function createHigherLevelSummary({
   const { summaryText, summaryStatus, tokenCount } = await generateSummaryWithFallback({
     model,
     provider,
+    modelName,
     systemPrompt,
     prompt: promptContent,
     maxTokens: META_SUMMARY_MAX_TOKENS,

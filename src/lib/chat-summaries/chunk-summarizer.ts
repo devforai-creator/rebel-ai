@@ -40,6 +40,7 @@ function logFactsExtractionDebug(...args: unknown[]): void {
 export async function generateSummaryWithFallback({
   model,
   provider,
+  modelName,
   systemPrompt,
   prompt,
   maxTokens,
@@ -56,6 +57,7 @@ export async function generateSummaryWithFallback({
         : { model, system: systemPrompt, prompt, maxTokens }
 
     const providerOptions = getProviderOptions(provider, {
+      modelName,
       promptCacheKey: promptCache?.key ?? undefined,
       promptCacheRetention: promptCache?.retention ?? undefined,
     })
@@ -317,6 +319,7 @@ export async function createChunkSummary({
   const { summaryText, summaryStatus, tokenCount } = await generateSummaryWithFallback({
     model,
     provider,
+    modelName,
     systemPrompt,
     prompt: summaryPromptContent,
     maxTokens: CHUNK_SUMMARY_MAX_TOKENS,
@@ -435,6 +438,7 @@ export async function createChunkFacts({
     })
 
     const providerOptions = getProviderOptions(provider, {
+      modelName,
       promptCacheKey: promptCache?.key ?? undefined,
       promptCacheRetention: promptCache?.retention ?? undefined,
     })

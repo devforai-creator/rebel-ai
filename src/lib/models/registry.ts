@@ -1,6 +1,26 @@
 import type { Provider } from '@/types/database.types'
 import type { ModelDefinition, ModelPricingTier, ProviderDefaults } from './types'
 
+const OPENAI_GPT56_PRICING: ModelPricingTier[] = [
+  {
+    maxPromptTokens: 272_000,
+    rates: {
+      input: 5,
+      output: 30,
+      cachedInput: 0.5,
+      reasoning: 30,
+    },
+  },
+  {
+    rates: {
+      input: 10, // 2x long-context rate for prompts over 272K tokens
+      output: 45, // 1.5x long-context rate for prompts over 272K tokens
+      cachedInput: 1,
+      reasoning: 45,
+    },
+  },
+]
+
 const OPENAI_GPT55_PRICING: ModelPricingTier[] = [
   {
     rates: {
@@ -307,6 +327,19 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
   // OpenAI (GPT)
   // ===========================================================================
   {
+    id: 'gpt-5.6',
+    provider: 'openai',
+    displayName: 'GPT-5.6',
+    aliases: ['gpt-5.6-sol'],
+    pricing: OPENAI_GPT56_PRICING,
+    features: {
+      promptCaching: 'standard',
+      reasoning: true,
+    },
+    uiVisible: true,
+    uiOrder: 1,
+  },
+  {
     id: 'gpt-5.5',
     provider: 'openai',
     displayName: 'GPT-5.5',
@@ -316,7 +349,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
       reasoning: true,
     },
     uiVisible: true,
-    uiOrder: 1,
+    uiOrder: 2,
   },
   {
     id: 'gpt-5.4',
@@ -328,7 +361,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
       reasoning: true,
     },
     uiVisible: true,
-    uiOrder: 2,
+    uiOrder: 3,
   },
   {
     id: 'gpt-5.2',
@@ -340,7 +373,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
       reasoning: true,
     },
     uiVisible: true,
-    uiOrder: 3,
+    uiOrder: 4,
   },
   {
     id: 'gpt-5.1-chat-latest',
@@ -353,7 +386,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
       reasoning: true,
     },
     uiVisible: true,
-    uiOrder: 4,
+    uiOrder: 5,
   },
   {
     id: 'gpt-5.1',
@@ -366,7 +399,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
       reasoning: true,
     },
     uiVisible: true,
-    uiOrder: 5,
+    uiOrder: 6,
   },
   {
     id: 'gpt-5',
@@ -378,7 +411,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
       reasoning: true,
     },
     uiVisible: true,
-    uiOrder: 6,
+    uiOrder: 7,
   },
   {
     id: 'gpt-4.1',
@@ -388,7 +421,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
       promptCaching: 'standard',
     },
     uiVisible: true,
-    uiOrder: 7,
+    uiOrder: 8,
   },
   {
     id: 'gpt-4o',

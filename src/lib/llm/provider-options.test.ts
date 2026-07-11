@@ -79,6 +79,21 @@ describe('getProviderOptions', () => {
     })
   })
 
+  it('does not send legacy prompt cache retention for GPT-5.6', () => {
+    const options = getProviderOptions('openai', {
+      modelName: 'gpt-5.6',
+      promptCacheKey: 'cache-key',
+      promptCacheRetention: '24h',
+    })
+
+    expect(options).toEqual({
+      openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+        promptCacheKey: 'cache-key',
+      },
+    })
+  })
+
   it('passes reasoningEffort to openai provider options', () => {
     const options = getProviderOptions('openai', {
       reasoningEffort: 'high',
@@ -95,6 +110,33 @@ describe('getProviderOptions', () => {
   it('omits reasoningEffort when set to none', () => {
     const options = getProviderOptions('openai', {
       reasoningEffort: 'none',
+    })
+
+    expect(options).toEqual({
+      openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+      },
+    })
+  })
+
+  it('passes reasoningEffort none explicitly for GPT-5.6', () => {
+    const options = getProviderOptions('openai', {
+      modelName: 'gpt-5.6',
+      reasoningEffort: 'none',
+    })
+
+    expect(options).toEqual({
+      openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+        reasoningEffort: 'none',
+      },
+    })
+  })
+
+  it('preserves the GPT-5.6 default when the reasoning preference is missing', () => {
+    const options = getProviderOptions('openai', {
+      modelName: 'gpt-5.6-sol',
+      reasoningEffort: null,
     })
 
     expect(options).toEqual({

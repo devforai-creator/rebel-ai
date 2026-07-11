@@ -7,6 +7,7 @@ import {
   getDefaultModelForProvider,
   hasReasoningSupport,
   hasExtendedOpenAICacheRetention,
+  isOpenAIGpt56Model,
   MODEL_REGISTRY,
   PROVIDER_DEFAULTS,
 } from './index'
@@ -43,6 +44,7 @@ describe('Model Registry', () => {
 
       expect(Array.isArray(ids)).toBe(true)
       expect(ids.every((id) => typeof id === 'string')).toBe(true)
+      expect(ids).toContain('gpt-5.6')
       expect(ids).toContain('gpt-5.4')
       expect(ids).toContain('gpt-5.2')
       expect(ids).toContain('gpt-5.1')
@@ -301,6 +303,7 @@ describe('Model Registry', () => {
     })
 
     it('returns false for older GPT models', () => {
+      expect(hasExtendedOpenAICacheRetention('gpt-5.6')).toBe(false)
       expect(hasExtendedOpenAICacheRetention('gpt-4o')).toBe(false)
       expect(hasExtendedOpenAICacheRetention('gpt-4o-mini')).toBe(false)
       expect(hasExtendedOpenAICacheRetention('gpt-4.1')).toBe(false)
@@ -316,8 +319,22 @@ describe('Model Registry', () => {
     })
   })
 
+  describe('isOpenAIGpt56Model', () => {
+    it('matches the GPT-5.6 alias and family model IDs', () => {
+      expect(isOpenAIGpt56Model('gpt-5.6')).toBe(true)
+      expect(isOpenAIGpt56Model('GPT-5.6-SOL')).toBe(true)
+      expect(isOpenAIGpt56Model('gpt-5.6-terra')).toBe(true)
+    })
+
+    it('does not match earlier model generations', () => {
+      expect(isOpenAIGpt56Model('gpt-5.5')).toBe(false)
+      expect(isOpenAIGpt56Model(null)).toBe(false)
+    })
+  })
+
   describe('hasReasoningSupport', () => {
     it('returns true for GPT-5.x models with reasoning', () => {
+      expect(hasReasoningSupport('gpt-5.6')).toBe(true)
       expect(hasReasoningSupport('gpt-5.4')).toBe(true)
       expect(hasReasoningSupport('gpt-5.2')).toBe(true)
       expect(hasReasoningSupport('gpt-5.1')).toBe(true)
@@ -337,6 +354,50 @@ describe('Model Registry', () => {
 
     it('returns false for unknown models', () => {
       expect(hasReasoningSupport('unknown-model')).toBe(false)
+    })
+  })
+
+  describe('GPT 5.6 registration', () => {
+    it('is found by the API alias and explicit Sol model ID', () => {
+      const aliasModel = findModelDefinition({ modelName: 'gpt-5.6' })
+      const solModel = findModelDefinition({ modelName: 'gpt-5.6-sol' })
+
+      expect(aliasModel).not.toBeNull()
+      expect(aliasModel?.id).toBe('gpt-5.6')
+      expect(aliasModel?.provider).toBe('openai')
+      expect(aliasModel?.displayName).toBe('GPT-5.6')
+      expect(aliasModel?.features?.promptCaching).toBe('standard')
+      expect(solModel?.id).toBe('gpt-5.6')
+      expect(hasReasoningSupport('gpt-5.6-sol')).toBe(true)
+    })
+
+    it('has standard and long-context pricing tiers', () => {
+      const tiers = getModelPricingTiers({ provider: 'openai', modelName: 'gpt-5.6' })
+      const solTiers = getModelPricingTiers({ provider: 'openai', modelName: 'gpt-5.6-sol' })
+
+      expect(tiers).not.toBeNull()
+      expect(tiers).toHaveLength(2)
+      expect(solTiers).toEqual(tiers)
+      expect(tiers![0].maxPromptTokens).toBe(272_000)
+      expect(tiers![0].rates).toEqual({
+        input: 5,
+        output: 30,
+        cachedInput: 0.5,
+        reasoning: 30,
+      })
+      expect(tiers![1].rates).toEqual({
+        input: 10,
+        output: 45,
+        cachedInput: 1,
+        reasoning: 45,
+      })
+    })
+
+    it('appears first in the UI while keeping GPT-5.5 as the provider default', () => {
+      const ids = listUiModelIdsByProvider('openai')
+
+      expect(ids[0]).toBe('gpt-5.6')
+      expect(getDefaultModelForProvider('openai')).toBe('gpt-5.5')
     })
   })
 
@@ -366,10 +427,10 @@ describe('Model Registry', () => {
       expect(model?.features?.reasoning).toBe(true)
     })
 
-    it('appears first in UI model list', () => {
+    it('appears after GPT-5.6 in UI model list', () => {
       const ids = listUiModelIdsByProvider('openai')
 
-      expect(ids[0]).toBe('gpt-5.5')
+      expect(ids[1]).toBe('gpt-5.5')
     })
   })
 

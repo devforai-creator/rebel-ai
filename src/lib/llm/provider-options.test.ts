@@ -32,16 +32,16 @@ describe('getProviderOptions', () => {
     })
   })
 
-  it('sets low text verbosity for openai provider by default', () => {
+  it('sets high text verbosity for openai provider by default', () => {
     const options = getProviderOptions('openai')
     expect(options).toEqual({
       openai: {
-        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+        textVerbosity: 'high',
       },
     })
   })
 
-  it('sets low text verbosity for openai provider when prompt cache key is empty', () => {
+  it('sets high text verbosity for openai provider when prompt cache key is empty', () => {
     const options = getProviderOptions('openai', { promptCacheKey: '' })
     expect(options).toEqual({
       openai: {

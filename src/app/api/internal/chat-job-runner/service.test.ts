@@ -2121,7 +2121,7 @@ describe('processChatJobs', () => {
     )
   })
 
-  it('omits temperature and sets low OpenAI text verbosity by default', async () => {
+  it('omits temperature and sets high OpenAI text verbosity by default', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       rpc: { get_decrypted_secret: () => decryptSecretMock() },
     })

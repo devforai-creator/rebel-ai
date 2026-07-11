@@ -109,7 +109,7 @@ describe('chunk-summarizer', () => {
       expect.objectContaining({
         providerOptions: {
           openai: {
-            textVerbosity: 'low',
+            textVerbosity: 'high',
             promptCacheKey: 'summary:chat-1:1-10',
           },
         },
@@ -631,7 +631,7 @@ describe('chunk-summarizer', () => {
       expect.objectContaining({
         providerOptions: {
           openai: {
-            textVerbosity: 'low',
+            textVerbosity: 'high',
             promptCacheKey: 'facts:chat-1:1-2',
           },
         },

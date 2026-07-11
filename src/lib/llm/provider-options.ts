@@ -4,7 +4,7 @@ import { isOpenAIGpt56Model } from '@/lib/models'
 export type AnthropicCacheTTL = '5m' | '1h'
 export const DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT = 'high'
 export const ANTHROPIC_INTERLEAVED_THINKING_BETA = 'interleaved-thinking-2025-05-14'
-export const DEFAULT_OPENAI_TEXT_VERBOSITY = 'low'
+export const DEFAULT_OPENAI_TEXT_VERBOSITY = 'high'
 
 type ProviderOptionsInput = {
   modelName?: string | null

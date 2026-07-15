@@ -147,6 +147,8 @@ SQL sketch:
       changes to `chat_id`, `role`, or `created_at`.
 - [x] Schema-qualify referenced objects and give trigger functions a safe `search_path`, following
       the repository's hardened function patterns.
+- [x] Keep the recalculation helper internal by revoking direct execution from `public`, `anon`,
+      `authenticated`, and `service_role`; trigger functions still execute it as the function owner.
 - [x] Defer the candidate partial index
       `(user_id, character_id, last_message_at DESC, id DESC) WHERE last_message_at IS NOT NULL`
       until P1-2, where the planned grouped query can be checked with `EXPLAIN` on representative
@@ -163,19 +165,26 @@ Done when:
 
 #### P0-3. Prove the invariant locally
 
-- [ ] Add integration coverage for insert, out-of-order insert, newest-message delete, final-message
+- [x] Add integration coverage for insert, out-of-order insert, newest-message delete, final-message
       delete, system-message exclusion, relevant `chat_id`/`role`/`created_at` updates, and
       cross-user isolation.
 - [x] Apply the migration locally with `supabase db push --local` or a clean `supabase db reset`.
 - [x] Regenerate `src/types/database.generated.ts` with `npm run db:types`.
 - [x] Regenerate `supabase/schema.sql` with `npm run db:schema`.
-- [ ] Run the focused database tests and `npm run typecheck`.
+- [x] Run the focused database tests and `npm run typecheck`.
 
 Done when:
 
 - [x] generated types expose `last_message_at` in chat Row/Insert/Update shapes
-- [ ] `npm run db:schema:check` reports no generated-schema drift
-- [ ] the focused integration tests pass against local Supabase
+- [x] `npm run db:schema:check` reports no generated-schema drift
+- [x] the focused integration tests pass against local Supabase
+
+Verification evidence (2026-07-16):
+
+- `npm run test:rls` — 5 files and 57 tests passed.
+- `npm run db:verify` — generated types, generated schema, schema drift check, and typecheck passed.
+- The first cross-user test run exposed direct authenticated execution of the internal recalculation
+  helper; the migration now revokes all direct execution from API roles, and the rerun passed.
 
 ### P1. Define the Recent-Character Query
 

@@ -58,7 +58,8 @@ begin
 end;
 $$;
 
-revoke execute on function public.recalculate_chat_last_message_at(uuid) from public;
+revoke all on function public.recalculate_chat_last_message_at(uuid)
+  from public, anon, authenticated, service_role;
 
 create or replace function public.recalculate_chat_last_message_at_after_delete()
 returns trigger

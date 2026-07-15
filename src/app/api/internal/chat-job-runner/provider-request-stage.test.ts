@@ -294,6 +294,35 @@ describe('requestProviderStage', () => {
     })
   })
 
+  it('records explicitly disabled Anthropic thinking as not requested', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const payload = buildPayload({
+      provider: 'anthropic',
+      modelName: 'claude-sonnet-5',
+    })
+    const context = buildContext()
+    getProviderOptionsMock.mockReturnValue({
+      anthropic: {
+        thinking: { type: 'disabled' },
+      },
+    })
+
+    await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-anthropic-disabled',
+      payload,
+      context,
+      timings: {},
+    })
+
+    expect(context.debugMetrics).toMatchObject({
+      anthropic_thinking_requested: false,
+      anthropic_thinking_type: 'disabled',
+      anthropic_thinking_effort: null,
+      anthropic_interleaved_thinking_requested: false,
+    })
+  })
+
   it('routes enabled chats through the experimental wrapper seam before streaming', async () => {
     const { requestProviderStage } = await import('./provider-request-stage')
     const payload = buildPayload()

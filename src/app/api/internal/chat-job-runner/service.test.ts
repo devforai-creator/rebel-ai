@@ -869,7 +869,7 @@ describe('processChatJobs', () => {
         user_id: 'user-1',
         is_active: true,
         provider: 'anthropic',
-        model_preference: 'claude-opus-4-5',
+        model_preference: 'claude-sonnet-5',
         vault_secret_name: 'vault-key',
         service_tier: 'standard',
       },
@@ -882,7 +882,7 @@ describe('processChatJobs', () => {
       buildValidPayload({
         requestId: 'req-anthropic-batch',
         provider: 'anthropic',
-        modelName: 'claude-opus-4-5',
+        modelName: 'claude-sonnet-5',
         deliveryMode: 'anthropic_batch',
       }),
     )
@@ -906,8 +906,9 @@ describe('processChatJobs', () => {
         apiKey: 'sk-ant-test',
         customId: 'job-job-anthropic-batch',
         params: expect.objectContaining({
-          model: 'claude-opus-4-5',
+          model: 'claude-sonnet-5',
           messages: [{ role: 'user', content: 'Hello' }],
+          thinking: { type: 'disabled' },
         }),
       }),
     )
@@ -932,7 +933,7 @@ describe('processChatJobs', () => {
         user_id: 'user-1',
         is_active: true,
         provider: 'anthropic',
-        model_preference: 'claude-opus-4-5',
+        model_preference: 'claude-fable-5',
         vault_secret_name: 'vault-key',
         service_tier: 'standard',
       },
@@ -945,7 +946,7 @@ describe('processChatJobs', () => {
       buildValidPayload({
         requestId: 'req-anthropic-batch-cache-ttl',
         provider: 'anthropic',
-        modelName: 'claude-opus-4-5',
+        modelName: 'claude-fable-5',
         deliveryMode: 'anthropic_batch',
       }),
     )
@@ -992,6 +993,8 @@ describe('processChatJobs', () => {
           params?: {
             cache_control?: { type: 'ephemeral'; ttl?: '5m' | '1h' }
             system?: Array<{ cache_control?: { type: 'ephemeral'; ttl?: '5m' | '1h' } }>
+            thinking?: { type: 'adaptive' | 'disabled' }
+            output_config?: { effort: 'low' | 'medium' | 'high' | 'max' }
           }
         }
       | undefined
@@ -1005,6 +1008,8 @@ describe('processChatJobs', () => {
       type: 'ephemeral',
       ttl: '1h',
     })
+    expect(call?.params?.thinking).toEqual({ type: 'adaptive' })
+    expect(call?.params?.output_config).toEqual({ effort: 'low' })
   })
 
   it('polls completed Anthropic Batch jobs and records batch-priced usage', async () => {

@@ -20,6 +20,12 @@ export type AnthropicBatchMessageParams = {
   max_tokens: number
   system?: string | AnthropicTextBlock[]
   messages: AnthropicBatchMessage[]
+  thinking?: {
+    type: 'adaptive' | 'disabled'
+  }
+  output_config?: {
+    effort: 'low' | 'medium' | 'high' | 'max'
+  }
   cache_control?: {
     type: 'ephemeral'
     ttl?: '5m' | '1h'

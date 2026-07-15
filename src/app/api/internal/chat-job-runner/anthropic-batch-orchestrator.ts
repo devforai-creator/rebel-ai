@@ -213,6 +213,7 @@ function buildAnthropicBatchRequest({
   }
 
   const cacheControl = extractAnthropicRequestCacheControl(streamPayloadPlan)
+  const thinkingConfig = extractAnthropicRequestThinkingConfig(streamPayloadPlan)
   const systemCacheControl: NonNullable<AnthropicTextBlock['cache_control']> = cacheControl ?? {
     type: 'ephemeral',
   }
@@ -243,6 +244,8 @@ function buildAnthropicBatchRequest({
         role: message.role,
         content: message.content,
       })),
+    ...(thinkingConfig.thinking ? { thinking: thinkingConfig.thinking } : {}),
+    ...(thinkingConfig.effort ? { output_config: { effort: thinkingConfig.effort } } : {}),
     ...(cacheControl ? { cache_control: cacheControl } : {}),
   }
 
@@ -251,6 +254,31 @@ function buildAnthropicBatchRequest({
   }
 
   return params
+}
+
+function extractAnthropicRequestThinkingConfig(
+  streamPayloadPlan: ReturnType<typeof buildStreamPayloadPlan>,
+): {
+  thinking: AnthropicBatchMessageParams['thinking'] | null
+  effort: NonNullable<AnthropicBatchMessageParams['output_config']>['effort'] | null
+} {
+  const anthropicOptions = streamPayloadPlan.streamRequest.providerOptions?.anthropic as
+    | Record<string, unknown>
+    | undefined
+  const rawThinking = anthropicOptions?.thinking
+  const thinkingType =
+    rawThinking && typeof rawThinking === 'object'
+      ? (rawThinking as Record<string, unknown>).type
+      : null
+  const thinking: AnthropicBatchMessageParams['thinking'] | null =
+    thinkingType === 'adaptive' || thinkingType === 'disabled' ? { type: thinkingType } : null
+  const rawEffort = anthropicOptions?.effort
+  const effort =
+    rawEffort === 'low' || rawEffort === 'medium' || rawEffort === 'high' || rawEffort === 'max'
+      ? rawEffort
+      : null
+
+  return { thinking, effort }
 }
 
 function extractAnthropicRequestCacheControl(

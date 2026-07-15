@@ -2,7 +2,7 @@ import type { JSONValue, SharedV2ProviderOptions } from '@ai-sdk/provider'
 import { isOpenAIGpt56Model } from '@/lib/models'
 
 export type AnthropicCacheTTL = '5m' | '1h'
-export const DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT = 'high'
+export const MINIMUM_ANTHROPIC_ALWAYS_ON_EFFORT = 'low'
 export const ANTHROPIC_INTERLEAVED_THINKING_BETA = 'interleaved-thinking-2025-05-14'
 export const DEFAULT_OPENAI_TEXT_VERBOSITY = 'high'
 
@@ -60,22 +60,19 @@ export function getProviderOptions(
     }
   }
 
-  if (provider === 'anthropic' && supportsAnthropicAdaptiveThinking(overrides?.modelName)) {
-    const anthropicOptions: Record<string, JSONValue> = {
+  if (provider === 'anthropic' && usesAlwaysOnAnthropicThinking(overrides?.modelName)) {
+    options.anthropic = {
       thinking: {
         type: 'adaptive',
       },
-      effort:
-        overrides?.reasoningEffort && overrides.reasoningEffort !== 'none'
-          ? overrides.reasoningEffort
-          : DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT,
+      effort: MINIMUM_ANTHROPIC_ALWAYS_ON_EFFORT,
     }
-
-    if (!usesBuiltInAnthropicInterleavedThinking(overrides?.modelName)) {
-      anthropicOptions.anthropicBeta = [ANTHROPIC_INTERLEAVED_THINKING_BETA]
+  } else if (provider === 'anthropic' && usesDefaultOnAnthropicThinking(overrides?.modelName)) {
+    options.anthropic = {
+      thinking: {
+        type: 'disabled',
+      },
     }
-
-    options.anthropic = anthropicOptions
   }
 
   return Object.keys(options).length > 0 ? options : undefined
@@ -116,7 +113,7 @@ export function supportsAnthropicAdaptiveThinking(modelName?: string | null): bo
   return false
 }
 
-function usesBuiltInAnthropicInterleavedThinking(modelName?: string | null): boolean {
+function usesAlwaysOnAnthropicThinking(modelName?: string | null): boolean {
   if (typeof modelName !== 'string') {
     return false
   }
@@ -125,8 +122,16 @@ function usesBuiltInAnthropicInterleavedThinking(modelName?: string | null): boo
   return (
     normalized.includes('claude-fable-5') ||
     normalized.includes('claude-mythos-5') ||
-    normalized.includes('claude-sonnet-5')
+    normalized.includes('claude-mythos-preview')
   )
+}
+
+function usesDefaultOnAnthropicThinking(modelName?: string | null): boolean {
+  if (typeof modelName !== 'string') {
+    return false
+  }
+
+  return modelName.trim().toLowerCase().replaceAll('.', '-').includes('claude-sonnet-5')
 }
 
 /**

@@ -107,7 +107,16 @@ function disableAnthropicThinkingForRequiredToolChoice(
 
   let disabled = false
 
-  if (Object.prototype.hasOwnProperty.call(anthropicOptions, 'thinking')) {
+  const rawThinking = anthropicOptions.thinking
+  const thinkingType =
+    rawThinking && typeof rawThinking === 'object'
+      ? (rawThinking as Record<string, unknown>).type
+      : null
+
+  if (
+    Object.prototype.hasOwnProperty.call(anthropicOptions, 'thinking') &&
+    thinkingType !== 'disabled'
+  ) {
     delete anthropicOptions.thinking
     disabled = true
   }
@@ -388,12 +397,12 @@ export async function requestProviderStage({
     anthropicOptions?.thinking && typeof anthropicOptions.thinking === 'object'
       ? (anthropicOptions.thinking as Record<string, unknown>)
       : null
+  const anthropicThinkingType =
+    typeof anthropicThinking?.type === 'string' ? anthropicThinking.type : null
   const standardAnthropicThinkingDebugMetrics: AnthropicThinkingDebugMetricSnapshot = {
-    requested: provider === 'anthropic' ? !!anthropicThinking : null,
-    type:
-      provider === 'anthropic' && typeof anthropicThinking?.type === 'string'
-        ? anthropicThinking.type
-        : null,
+    requested:
+      provider === 'anthropic' ? !!anthropicThinking && anthropicThinkingType !== 'disabled' : null,
+    type: provider === 'anthropic' ? anthropicThinkingType : null,
     effort:
       provider === 'anthropic' && typeof anthropicOptions?.effort === 'string'
         ? anthropicOptions.effort

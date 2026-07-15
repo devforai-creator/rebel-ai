@@ -2,9 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   ANTHROPIC_CACHE_MIN_TOKENS,
-  ANTHROPIC_INTERLEAVED_THINKING_BETA,
-  DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT,
   DEFAULT_OPENAI_TEXT_VERBOSITY,
+  MINIMUM_ANTHROPIC_ALWAYS_ON_EFFORT,
   buildAnthropicCacheControl,
   getAnthropicMinCacheTokens,
   getProviderOptions,
@@ -174,43 +173,27 @@ describe('getProviderOptions', () => {
     })
   })
 
-  it('enables adaptive thinking for supported anthropic models', () => {
+  it('does not enable optional adaptive thinking for Anthropic models', () => {
     const options = getProviderOptions('anthropic', {
       modelName: 'claude-opus-4-7',
     })
 
-    expect(options).toEqual({
-      anthropic: {
-        thinking: {
-          type: 'adaptive',
-        },
-        effort: DEFAULT_ANTHROPIC_ADAPTIVE_EFFORT,
-        anthropicBeta: [ANTHROPIC_INTERLEAVED_THINKING_BETA],
-      },
-    })
+    expect(options).toBeUndefined()
   })
 
-  it('passes reasoningEffort through as anthropic effort when adaptive thinking is enabled', () => {
+  it('ignores reasoningEffort for optional Anthropic thinking', () => {
     const options = getProviderOptions('anthropic', {
       modelName: 'claude-opus-4-7',
       reasoningEffort: 'medium',
     })
 
-    expect(options).toEqual({
-      anthropic: {
-        thinking: {
-          type: 'adaptive',
-        },
-        effort: 'medium',
-        anthropicBeta: [ANTHROPIC_INTERLEAVED_THINKING_BETA],
-      },
-    })
+    expect(options).toBeUndefined()
   })
 
-  it('omits legacy interleaved thinking beta for Claude Fable 5', () => {
+  it('keeps always-on Claude Fable 5 thinking at minimum effort', () => {
     const options = getProviderOptions('anthropic', {
       modelName: 'claude-fable-5',
-      reasoningEffort: 'medium',
+      reasoningEffort: 'high',
     })
 
     expect(options).toEqual({
@@ -218,12 +201,12 @@ describe('getProviderOptions', () => {
         thinking: {
           type: 'adaptive',
         },
-        effort: 'medium',
+        effort: MINIMUM_ANTHROPIC_ALWAYS_ON_EFFORT,
       },
     })
   })
 
-  it('omits legacy interleaved thinking beta for Claude Sonnet 5', () => {
+  it('explicitly disables default-on Claude Sonnet 5 thinking', () => {
     const options = getProviderOptions('anthropic', {
       modelName: 'claude-sonnet-5',
       reasoningEffort: 'medium',
@@ -232,9 +215,8 @@ describe('getProviderOptions', () => {
     expect(options).toEqual({
       anthropic: {
         thinking: {
-          type: 'adaptive',
+          type: 'disabled',
         },
-        effort: 'medium',
       },
     })
   })

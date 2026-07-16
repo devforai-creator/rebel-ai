@@ -56,15 +56,15 @@ const nextConfig = {
               process.env.NODE_ENV === 'production'
                 ? "script-src 'self' 'unsafe-inline'" // Next.js App Router still emits inline bootstrap/Flight scripts in production
                 : "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Dev only: require by Next.js dev runtime (react-refresh / webpack module eval). MUST NEVER appear in production CSP.
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // Framework/runtime inline styles still exist; Google Fonts remains allowlisted
+              "style-src 'self' 'unsafe-inline'", // Framework/runtime inline styles still exist
               "img-src 'self' data: blob: https://*.supabase.co",
-              "font-src 'self' data: https://fonts.gstatic.com",
+              "font-src 'self' data:",
               "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
               "media-src 'self' blob: https://*.supabase.co",
-              "frame-src 'self'",
+              "frame-src 'none'",
               "frame-ancestors 'none'",
               "form-action 'self'",
-              "base-uri 'self'",
+              "base-uri 'none'",
               "object-src 'none'",
             ].join('; '),
           },

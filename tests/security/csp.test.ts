@@ -40,4 +40,18 @@ describe('CSP invariants', () => {
     const csp = await getCSP()
     expect(csp).toContain("'unsafe-eval'")
   })
+
+  it('does not allow unused Google Fonts origins', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const csp = await getCSP()
+    expect(csp).not.toContain('fonts.googleapis.com')
+    expect(csp).not.toContain('fonts.gstatic.com')
+  })
+
+  it('disables unused frame and base capabilities', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const csp = await getCSP()
+    expect(csp).toContain("frame-src 'none'")
+    expect(csp).toContain("base-uri 'none'")
+  })
 })

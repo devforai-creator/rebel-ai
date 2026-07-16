@@ -24,6 +24,14 @@ describe('CSP invariants', () => {
     return cspHeader.value
   }
 
+  function getDirective(csp: string, name: string): string {
+    const directive = csp.split('; ').find((part) => part.startsWith(`${name} `))
+    if (!directive) {
+      throw new Error(`${name} directive not found in CSP`)
+    }
+    return directive
+  }
+
   it('production CSP must NOT contain "unsafe-eval"', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     const csp = await getCSP()
@@ -46,6 +54,47 @@ describe('CSP invariants', () => {
     const csp = await getCSP()
     expect(csp).toContain("script-src-attr 'none'")
   })
+
+  it('scopes browser Supabase access to the configured project origin', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://project-ref.supabase.co/rest/v1')
+    const csp = await getCSP()
+
+    expect(getDirective(csp, 'img-src')).toBe(
+      "img-src 'self' data: blob: https://project-ref.supabase.co",
+    )
+    expect(getDirective(csp, 'connect-src')).toBe(
+      "connect-src 'self' https://project-ref.supabase.co wss://project-ref.supabase.co",
+    )
+    expect(getDirective(csp, 'media-src')).toBe(
+      "media-src 'self' blob: https://project-ref.supabase.co",
+    )
+    expect(csp).not.toContain('*.supabase.co')
+  })
+
+  it('maps a local HTTP Supabase origin to its WebSocket origin', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'http://127.0.0.1:54321')
+    const csp = await getCSP()
+
+    expect(getDirective(csp, 'connect-src')).toBe(
+      "connect-src 'self' http://127.0.0.1:54321 ws://127.0.0.1:54321",
+    )
+  })
+
+  it.each(['', 'not-a-url', 'https://*.supabase.co'])(
+    'fails closed for an absent or invalid Supabase URL: %s',
+    async (supabaseUrl) => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', supabaseUrl)
+      const csp = await getCSP()
+
+      expect(getDirective(csp, 'img-src')).toBe("img-src 'self' data: blob:")
+      expect(getDirective(csp, 'connect-src')).toBe("connect-src 'self'")
+      expect(getDirective(csp, 'media-src')).toBe("media-src 'self' blob:")
+      expect(csp).not.toContain('supabase.co')
+    },
+  )
 
   it('does not allow unused Google Fonts origins', async () => {
     vi.stubEnv('NODE_ENV', 'production')

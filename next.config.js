@@ -2,6 +2,33 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 })
 
+function getSupabaseCspOrigins(rawUrl) {
+  if (!rawUrl) {
+    return { resourceOrigin: null, realtimeOrigin: null }
+  }
+
+  try {
+    const url = new URL(rawUrl)
+    if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.hostname.includes('*')) {
+      return { resourceOrigin: null, realtimeOrigin: null }
+    }
+
+    const realtimeUrl = new URL(url.origin)
+    realtimeUrl.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+
+    return {
+      resourceOrigin: url.origin,
+      realtimeOrigin: realtimeUrl.origin,
+    }
+  } catch {
+    return { resourceOrigin: null, realtimeOrigin: null }
+  }
+}
+
+function buildCspDirective(name, ...sources) {
+  return [name, ...sources.filter(Boolean)].join(' ')
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
@@ -25,6 +52,10 @@ const nextConfig = {
     ],
   },
   async headers() {
+    const { resourceOrigin, realtimeOrigin } = getSupabaseCspOrigins(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+    )
+
     return [
       {
         source: '/(.*)',
@@ -58,10 +89,10 @@ const nextConfig = {
                 : "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Dev only: require by Next.js dev runtime (react-refresh / webpack module eval). MUST NEVER appear in production CSP.
               "script-src-attr 'none'", // React event handlers do not require inline HTML event attributes
               "style-src 'self' 'unsafe-inline'", // Framework/runtime inline styles still exist
-              "img-src 'self' data: blob: https://*.supabase.co",
+              buildCspDirective('img-src', "'self'", 'data:', 'blob:', resourceOrigin),
               "font-src 'self' data:",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
-              "media-src 'self' blob: https://*.supabase.co",
+              buildCspDirective('connect-src', "'self'", resourceOrigin, realtimeOrigin),
+              buildCspDirective('media-src', "'self'", 'blob:', resourceOrigin),
               "frame-src 'none'",
               "frame-ancestors 'none'",
               "form-action 'self'",

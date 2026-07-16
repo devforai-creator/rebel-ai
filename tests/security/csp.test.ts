@@ -41,6 +41,12 @@ describe('CSP invariants', () => {
     expect(csp).toContain("'unsafe-eval'")
   })
 
+  it('blocks inline HTML script event attributes', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const csp = await getCSP()
+    expect(csp).toContain("script-src-attr 'none'")
+  })
+
   it('does not allow unused Google Fonts origins', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     const csp = await getCSP()

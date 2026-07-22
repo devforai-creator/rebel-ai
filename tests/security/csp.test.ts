@@ -1,27 +1,23 @@
-import { describe, it, expect, afterEach, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import { buildContentSecurityPolicy } from '@/lib/security/content-security-policy'
 
 describe('CSP invariants', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs()
-    vi.resetModules()
-  })
-
   type NextConfigShape = {
     headers: () => Promise<Array<{ headers: Array<{ key: string; value: string }> }>>
   }
 
-  async function getCSP(): Promise<string> {
-    vi.resetModules()
-    const configModule = await import('../../next.config.js')
-    const config = (configModule.default ?? configModule) as NextConfigShape
-    const headerSets = await config.headers()
-    const cspHeader = headerSets[0].headers.find(
-      (h: { key: string; value: string }) => h.key === 'Content-Security-Policy',
-    )
-    if (!cspHeader) {
-      throw new Error('Content-Security-Policy header not found in next.config.js')
-    }
-    return cspHeader.value
+  const TEST_NONCE = 'dGVzdC1ub25jZQ=='
+
+  function getCSP({
+    nonce = TEST_NONCE,
+    isDevelopment = false,
+    supabaseUrl = 'https://project-ref.supabase.co',
+  }: {
+    nonce?: string
+    isDevelopment?: boolean
+    supabaseUrl?: string
+  } = {}): string {
+    return buildContentSecurityPolicy({ nonce, isDevelopment, supabaseUrl })
   }
 
   function getDirective(csp: string, name: string): string {
@@ -32,33 +28,46 @@ describe('CSP invariants', () => {
     return directive
   }
 
-  it('production CSP must NOT contain "unsafe-eval"', async () => {
-    vi.stubEnv('NODE_ENV', 'production')
-    const csp = await getCSP()
-    expect(
-      csp,
-      "Production CSP must not contain 'unsafe-eval'. " +
-        'It would widen XSS attack surface — any string reaching eval context becomes executable JS. ' +
-        'If dev needs eval, use the NODE_ENV branch in next.config.js (prod branch must stay clean).',
-    ).not.toContain("'unsafe-eval'")
+  it('does not define a conflicting static CSP in next.config.js', async () => {
+    const configModule = await import('../../next.config.js')
+    const config = (configModule.default ?? configModule) as NextConfigShape
+    const headerSets = await config.headers()
+    const cspHeaders = headerSets.flatMap((headerSet) =>
+      headerSet.headers.filter((header) => header.key === 'Content-Security-Policy'),
+    )
+
+    expect(cspHeaders).toEqual([])
   })
 
-  it('development CSP allows unsafe-eval (Next.js dev runtime)', async () => {
-    vi.stubEnv('NODE_ENV', 'development')
-    const csp = await getCSP()
-    expect(csp).toContain("'unsafe-eval'")
+  it('uses a nonce and strict-dynamic instead of unsafe-inline in production', () => {
+    const csp = getCSP()
+
+    expect(getDirective(csp, 'script-src')).toBe(
+      `script-src 'self' 'nonce-${TEST_NONCE}' 'strict-dynamic'`,
+    )
+    expect(getDirective(csp, 'script-src')).not.toContain("'unsafe-inline'")
+    expect(csp).not.toContain("'unsafe-eval'")
   })
 
-  it('blocks inline HTML script event attributes', async () => {
-    vi.stubEnv('NODE_ENV', 'production')
-    const csp = await getCSP()
-    expect(csp).toContain("script-src-attr 'none'")
+  it('allows unsafe-eval only for the development runtime', () => {
+    const csp = getCSP({ isDevelopment: true })
+
+    expect(getDirective(csp, 'script-src')).toBe(
+      `script-src 'self' 'nonce-${TEST_NONCE}' 'strict-dynamic' 'unsafe-eval'`,
+    )
+    expect(getDirective(csp, 'script-src')).not.toContain("'unsafe-inline'")
   })
 
-  it('scopes browser Supabase access to the configured project origin', async () => {
-    vi.stubEnv('NODE_ENV', 'production')
-    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://project-ref.supabase.co/rest/v1')
-    const csp = await getCSP()
+  it('rejects nonces that could escape the CSP source expression', () => {
+    expect(() => getCSP({ nonce: "bad'nonce" })).toThrow('CSP nonce contains invalid characters')
+  })
+
+  it('blocks inline HTML script event attributes', () => {
+    expect(getCSP()).toContain("script-src-attr 'none'")
+  })
+
+  it('scopes browser Supabase access to the configured project origin', () => {
+    const csp = getCSP({ supabaseUrl: 'https://project-ref.supabase.co/rest/v1' })
 
     expect(getDirective(csp, 'img-src')).toBe(
       "img-src 'self' data: blob: https://project-ref.supabase.co",
@@ -72,10 +81,8 @@ describe('CSP invariants', () => {
     expect(csp).not.toContain('*.supabase.co')
   })
 
-  it('maps a local HTTP Supabase origin to its WebSocket origin', async () => {
-    vi.stubEnv('NODE_ENV', 'development')
-    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'http://127.0.0.1:54321')
-    const csp = await getCSP()
+  it('maps a local HTTP Supabase origin to its WebSocket origin', () => {
+    const csp = getCSP({ supabaseUrl: 'http://127.0.0.1:54321' })
 
     expect(getDirective(csp, 'connect-src')).toBe(
       "connect-src 'self' http://127.0.0.1:54321 ws://127.0.0.1:54321",
@@ -84,10 +91,8 @@ describe('CSP invariants', () => {
 
   it.each(['', 'not-a-url', 'https://*.supabase.co'])(
     'fails closed for an absent or invalid Supabase URL: %s',
-    async (supabaseUrl) => {
-      vi.stubEnv('NODE_ENV', 'production')
-      vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', supabaseUrl)
-      const csp = await getCSP()
+    (supabaseUrl) => {
+      const csp = getCSP({ supabaseUrl })
 
       expect(getDirective(csp, 'img-src')).toBe("img-src 'self' data: blob:")
       expect(getDirective(csp, 'connect-src')).toBe("connect-src 'self'")
@@ -96,16 +101,14 @@ describe('CSP invariants', () => {
     },
   )
 
-  it('does not allow unused Google Fonts origins', async () => {
-    vi.stubEnv('NODE_ENV', 'production')
-    const csp = await getCSP()
+  it('does not allow unused Google Fonts origins', () => {
+    const csp = getCSP()
     expect(csp).not.toContain('fonts.googleapis.com')
     expect(csp).not.toContain('fonts.gstatic.com')
   })
 
-  it('disables unused frame and base capabilities', async () => {
-    vi.stubEnv('NODE_ENV', 'production')
-    const csp = await getCSP()
+  it('disables unused frame and base capabilities', () => {
+    const csp = getCSP()
     expect(csp).toContain("frame-src 'none'")
     expect(csp).toContain("base-uri 'none'")
   })

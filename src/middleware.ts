@@ -1,20 +1,31 @@
 import { createServerClient, type SetAllCookies } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { AuthError, type SupabaseClient } from '@supabase/supabase-js'
+import { buildContentSecurityPolicy } from '@/lib/security/content-security-policy'
 import { serverSupabaseRealtimeOptions } from '@/lib/supabase/server-realtime'
 import type { Database } from '@/types/database.types'
 
 const AUTH_RETRY_ATTEMPTS = 3
 const AUTH_RETRY_BASE_DELAY_MS = 200
+const CONTENT_SECURITY_POLICY_HEADER = 'Content-Security-Policy'
+const NONCE_HEADER = 'x-nonce'
 type SupabaseServerClient = SupabaseClient<Database>
 type GetUserResult = Awaited<ReturnType<SupabaseServerClient['auth']['getUser']>>
 type SupabaseCookiesToSet = Parameters<SetAllCookies>[0]
 
 export async function middleware(request: NextRequest) {
+  const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
+  const contentSecurityPolicy = buildContentSecurityPolicy({
+    nonce,
+    isDevelopment: process.env.NODE_ENV === 'development',
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  })
+  const createNextResponse = () => createNonceResponse(request, nonce, contentSecurityPolicy)
+
   // Skip middleware for Vercel's screenshot bot (generates deployment thumbnails)
   const userAgent = request.headers.get('user-agent') || ''
   if (userAgent.includes('vercel-screenshot')) {
-    return NextResponse.next()
+    return createNextResponse()
   }
 
   // Skip middleware for large file uploads
@@ -25,12 +36,10 @@ export async function middleware(request: NextRequest) {
       request.nextUrl.pathname === '/dashboard/characters/new' ||
       request.nextUrl.pathname.startsWith('/dashboard/characters/'))
   ) {
-    return NextResponse.next()
+    return createNextResponse()
   }
 
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+  let supabaseResponse = createNextResponse()
 
   // Supabase SSR returns a more specific generic signature than the middleware alias uses.
   // Keep the cast at the factory boundary instead of leaking it into auth logic below.
@@ -45,9 +54,7 @@ export async function middleware(request: NextRequest) {
         },
         setAll(cookiesToSet: SupabaseCookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({
-            request,
-          })
+          supabaseResponse = createNextResponse()
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           )
@@ -89,17 +96,43 @@ export async function middleware(request: NextRequest) {
   if (!user && pathname.startsWith('/dashboard')) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
-    return NextResponse.redirect(url)
+    return withContentSecurityPolicy(NextResponse.redirect(url), contentSecurityPolicy)
   }
 
   // Redirect already logged-in users from auth pages to dashboard
   if (user && pathname.startsWith('/auth')) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
+    return withContentSecurityPolicy(NextResponse.redirect(url), contentSecurityPolicy)
   }
 
   return supabaseResponse
+}
+
+function createNonceResponse(
+  request: NextRequest,
+  nonce: string,
+  contentSecurityPolicy: string,
+): NextResponse {
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set(NONCE_HEADER, nonce)
+  requestHeaders.set(CONTENT_SECURITY_POLICY_HEADER, contentSecurityPolicy)
+
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  })
+
+  return withContentSecurityPolicy(response, contentSecurityPolicy)
+}
+
+function withContentSecurityPolicy(
+  response: NextResponse,
+  contentSecurityPolicy: string,
+): NextResponse {
+  response.headers.set(CONTENT_SECURITY_POLICY_HEADER, contentSecurityPolicy)
+  return response
 }
 
 function shouldRetryAuth(error: unknown): boolean {

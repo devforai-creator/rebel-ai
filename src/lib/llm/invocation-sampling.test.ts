@@ -21,6 +21,18 @@ describe('resolveInvocationSamplingOptions', () => {
     ).toEqual({})
   })
 
+  it.each(['gemini-3.6-flash', 'gemini-3.5-flash-lite'])(
+    'does not send deprecated sampling options to %s',
+    (modelName) => {
+      expect(
+        resolveInvocationSamplingOptions({
+          provider: 'google',
+          modelName,
+        }),
+      ).toEqual({})
+    },
+  )
+
   it('returns an empty option set for all other providers', () => {
     expect(
       resolveInvocationSamplingOptions({

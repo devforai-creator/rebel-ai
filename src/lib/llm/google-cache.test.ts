@@ -68,6 +68,8 @@ describe('google-cache', () => {
 
   describe('getGoogleCacheMinTokens', () => {
     it('returns 1024 for Flash models', () => {
+      expect(getGoogleCacheMinTokens('gemini-3.6-flash')).toBe(1024)
+      expect(getGoogleCacheMinTokens('gemini-3.5-flash-lite')).toBe(1024)
       expect(getGoogleCacheMinTokens('gemini-2.5-flash')).toBe(1024)
       expect(getGoogleCacheMinTokens('gemini-3-flash-preview')).toBe(1024)
       expect(getGoogleCacheMinTokens('gemini-flash')).toBe(1024)

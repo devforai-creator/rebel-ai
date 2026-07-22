@@ -83,12 +83,32 @@ const GEMINI_3_PRO_PRICING: ModelPricingTier[] = [
   },
 ]
 
+const GEMINI_36_FLASH_PRICING: ModelPricingTier[] = [
+  {
+    rates: {
+      input: 1.5,
+      output: 7.5,
+      cachedInput: 0.15,
+    },
+  },
+]
+
 const GEMINI_35_FLASH_PRICING: ModelPricingTier[] = [
   {
     rates: {
       input: 1.5,
       output: 9,
       cachedInput: 0.15,
+    },
+  },
+]
+
+const GEMINI_35_FLASH_LITE_PRICING: ModelPricingTier[] = [
+  {
+    rates: {
+      input: 0.3,
+      output: 2.5,
+      cachedInput: 0.03,
     },
   },
 ]
@@ -254,12 +274,28 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
   // Google (Gemini)
   // ===========================================================================
   {
+    id: 'gemini-3.6-flash',
+    provider: 'google',
+    displayName: 'Gemini 3.6 Flash',
+    pricing: GEMINI_36_FLASH_PRICING,
+    uiVisible: true,
+    uiOrder: 1,
+  },
+  {
     id: 'gemini-3.5-flash',
     provider: 'google',
     displayName: 'Gemini 3.5 Flash',
     pricing: GEMINI_35_FLASH_PRICING,
     uiVisible: true,
-    uiOrder: 1,
+    uiOrder: 2,
+  },
+  {
+    id: 'gemini-3.5-flash-lite',
+    provider: 'google',
+    displayName: 'Gemini 3.5 Flash-Lite',
+    pricing: GEMINI_35_FLASH_LITE_PRICING,
+    uiVisible: true,
+    uiOrder: 3,
   },
   {
     id: 'gemini-3.1-flash-lite',
@@ -267,7 +303,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
     displayName: 'Gemini 3.1 Flash-Lite',
     pricing: GEMINI_31_FLASH_LITE_PRICING,
     uiVisible: true,
-    uiOrder: 2,
+    uiOrder: 4,
   },
   {
     id: 'gemini-3.1-pro-preview',
@@ -275,7 +311,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
     displayName: 'Gemini 3.1 Pro (Preview)',
     pricing: GEMINI_3_PRO_PRICING,
     uiVisible: true,
-    uiOrder: 3,
+    uiOrder: 5,
   },
   {
     id: 'gemini-3-pro-preview',
@@ -283,7 +319,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
     displayName: 'Gemini 3 Pro (Preview)',
     pricing: GEMINI_3_PRO_PRICING,
     uiVisible: true,
-    uiOrder: 4,
+    uiOrder: 6,
   },
   {
     id: 'gemini-3-flash-preview',
@@ -292,7 +328,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
     aliases: ['gemini-3.0-flash-preview'],
     pricing: GEMINI_3_FLASH_PRICING,
     uiVisible: true,
-    uiOrder: 5,
+    uiOrder: 7,
   },
   {
     id: 'gemini-2.5-pro',
@@ -300,21 +336,21 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
     displayName: 'Gemini 2.5 Pro',
     pricing: GEMINI_25_PRO_PRICING,
     uiVisible: true,
-    uiOrder: 6,
+    uiOrder: 8,
   },
   {
     id: 'gemini-2.5-flash',
     provider: 'google',
     displayName: 'Gemini 2.5 Flash',
     uiVisible: true,
-    uiOrder: 7,
+    uiOrder: 9,
   },
   {
     id: 'gemini-2.5-flash-lite',
     provider: 'google',
     displayName: 'Gemini 2.5 Flash Lite',
     uiVisible: true,
-    uiOrder: 8,
+    uiOrder: 10,
   },
   {
     id: 'gemini-2.0-flash-exp',
@@ -621,7 +657,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
 export const PROVIDER_DEFAULTS: Record<Provider, ProviderDefaults> = {
   google: {
     defaultModel: 'gemini-2.5-flash',
-    lightweightModel: 'gemini-3.1-flash-lite',
+    lightweightModel: 'gemini-3.5-flash-lite',
   },
   openai: {
     defaultModel: 'gpt-5.5',

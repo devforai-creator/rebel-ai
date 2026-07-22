@@ -35,23 +35,26 @@ describe('buildLanguageModel', () => {
     vi.clearAllMocks()
   })
 
-  it('builds google model', async () => {
-    const googleModel = { provider: 'google-model' } as unknown as LanguageModel
-    const googleFactory = vi.fn(() => googleModel)
-    createGoogleGenerativeAIMock.mockReturnValue(googleFactory)
-    const { buildLanguageModel } = await import('./model-factory')
+  it.each(['gemini-3.6-flash', 'gemini-3.5-flash-lite'])(
+    'builds google model %s',
+    async (modelName) => {
+      const googleModel = { provider: 'google-model' } as unknown as LanguageModel
+      const googleFactory = vi.fn(() => googleModel)
+      createGoogleGenerativeAIMock.mockReturnValue(googleFactory)
+      const { buildLanguageModel } = await import('./model-factory')
 
-    const model = buildLanguageModel({
-      provider: 'google',
-      modelName: 'gemini-2.0-flash',
-      apiKey: 'g-key',
-      serviceTier: 'standard',
-    })
+      const model = buildLanguageModel({
+        provider: 'google',
+        modelName,
+        apiKey: 'g-key',
+        serviceTier: 'standard',
+      })
 
-    expect(createGoogleGenerativeAIMock).toHaveBeenCalledWith({ apiKey: 'g-key' })
-    expect(googleFactory).toHaveBeenCalledWith('gemini-2.0-flash')
-    expect(model).not.toBe(googleModel)
-  })
+      expect(createGoogleGenerativeAIMock).toHaveBeenCalledWith({ apiKey: 'g-key' })
+      expect(googleFactory).toHaveBeenCalledWith(modelName)
+      expect(model).not.toBe(googleModel)
+    },
+  )
 
   it('strips live system and tool config when cached Google content owns the request contract', async () => {
     const doStream = vi.fn(async (params) => params)

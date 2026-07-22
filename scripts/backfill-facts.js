@@ -10,7 +10,7 @@
  *   1. Add these to your .env.local:
  *      BACKFILL_API_PROVIDER=google
  *      BACKFILL_API_KEY=your-api-key
- *      BACKFILL_MODEL_NAME=gemini-3.1-flash-lite
+ *      BACKFILL_MODEL_NAME=gemini-3.5-flash-lite
  *
  *   2. Run the script:
  *      npm run backfill:facts
@@ -52,13 +52,13 @@ if (!apiKeyProvider || !apiKey || !modelName) {
   console.error('  BACKFILL_API_PROVIDER (google|openai|anthropic)')
   console.error('  BACKFILL_API_KEY (your API key)')
   console.error(
-    '  BACKFILL_MODEL_NAME (e.g., gemini-3.1-flash-lite, gpt-4o-mini, claude-3-5-haiku-20241022)',
+    '  BACKFILL_MODEL_NAME (e.g., gemini-3.5-flash-lite, gpt-4o-mini, claude-3-5-haiku-20241022)',
   )
   console.error('')
   console.error('Example:')
   console.error('  BACKFILL_API_PROVIDER=google')
   console.error('  BACKFILL_API_KEY=your-google-api-key')
-  console.error('  BACKFILL_MODEL_NAME=gemini-3.1-flash-lite')
+  console.error('  BACKFILL_MODEL_NAME=gemini-3.5-flash-lite')
   process.exit(1)
 }
 

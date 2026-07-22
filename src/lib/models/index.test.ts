@@ -3,6 +3,7 @@ import {
   listModelsByProvider,
   listUiModelIdsByProvider,
   findModelDefinition,
+  getModelFeatures,
   getModelPricingTiers,
   getDefaultModelForProvider,
   hasReasoningSupport,
@@ -94,6 +95,16 @@ describe('Model Registry', () => {
       expect(model).not.toBeNull()
       expect(model?.provider).toBe('anthropic')
       expect(model?.displayName).toBe('Claude Sonnet 5')
+    })
+
+    it('resolves configured model families before broad aliases', () => {
+      expect(findModelDefinition({ modelName: 'gpt-5.6-terra' })?.id).toBe('gpt-5.6')
+      expect(findModelDefinition({ modelName: 'claude-sonnet-5-20260701' })?.id).toBe(
+        'claude-sonnet-5',
+      )
+      expect(findModelDefinition({ modelName: 'claude-opus-4.8-20260701' })?.id).toBe(
+        'claude-opus-4-8',
+      )
     })
 
     it('is case-insensitive', () => {
@@ -376,6 +387,30 @@ describe('Model Registry', () => {
 
     it('returns false for unknown models', () => {
       expect(hasExtendedOpenAICacheRetention('unknown-model')).toBe(false)
+    })
+  })
+
+  describe('model capabilities', () => {
+    it('keeps provider request and delivery policies with the model definition', () => {
+      expect(getModelFeatures({ provider: 'anthropic', modelName: 'claude-fable-5' })).toEqual(
+        expect.objectContaining({
+          anthropicThinking: 'adaptive-always-on',
+          batchChat: true,
+          promptCacheMinTokens: 512,
+        }),
+      )
+      expect(getModelFeatures({ provider: 'openai', modelName: 'gpt-5.6-terra' })?.openai).toEqual({
+        promptCacheRetention: 'omit',
+        forwardReasoningEffortNone: true,
+      })
+      expect(
+        getModelFeatures({ provider: 'google', modelName: 'gemini-3.6-flash' })
+          ?.promptCacheMinTokens,
+      ).toBe(1024)
+    })
+
+    it('returns null when a model is not registered', () => {
+      expect(getModelFeatures({ modelName: 'unknown-model' })).toBeNull()
     })
   })
 

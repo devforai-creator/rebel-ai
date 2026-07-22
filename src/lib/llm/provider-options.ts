@@ -1,5 +1,7 @@
 import type { JSONValue, SharedV2ProviderOptions } from '@ai-sdk/provider'
-import { isOpenAIGpt56Model } from '@/lib/models'
+import { ANTHROPIC_CACHE_MIN_TOKENS, getModelFeatures } from '@/lib/models'
+
+export { ANTHROPIC_CACHE_MIN_TOKENS }
 
 export type AnthropicCacheTTL = '5m' | '1h'
 export const MINIMUM_ANTHROPIC_ALWAYS_ON_EFFORT = 'low'
@@ -37,20 +39,24 @@ export function getProviderOptions(
   }
 
   if (provider === 'openai') {
+    const openAIModelPolicy = getModelFeatures({
+      provider: 'openai',
+      modelName: overrides?.modelName,
+    })?.openai
     const openaiOptions: Record<string, JSONValue> = {
       textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
     }
 
     if (overrides?.promptCacheKey) {
       openaiOptions.promptCacheKey = overrides.promptCacheKey
-      if (!isOpenAIGpt56Model(overrides.modelName)) {
+      if (openAIModelPolicy?.promptCacheRetention !== 'omit') {
         openaiOptions.promptCacheRetention = overrides.promptCacheRetention ?? '24h'
       }
     }
 
     if (
       overrides?.reasoningEffort &&
-      (overrides.reasoningEffort !== 'none' || isOpenAIGpt56Model(overrides.modelName))
+      (overrides.reasoningEffort !== 'none' || openAIModelPolicy?.forwardReasoningEffortNone)
     ) {
       openaiOptions.reasoningEffort = overrides.reasoningEffort
     }
@@ -88,20 +94,24 @@ export function supportsAnthropicAdaptiveThinking(modelName?: string | null): bo
     return false
   }
 
+  const configuredPolicy = getModelFeatures({
+    provider: 'anthropic',
+    modelName,
+  })?.anthropicThinking
+  if (configuredPolicy) {
+    return true
+  }
+
   if (normalized.includes('claude-mythos-preview')) {
     return true
   }
 
-  if (normalized.includes('claude-fable-5') || normalized.includes('claude-mythos-5')) {
+  if (normalized.includes('claude-mythos-5')) {
     return true
   }
 
   const opusMatch = normalized.match(/claude-opus-4-(\d+)/)
   if (opusMatch && Number(opusMatch[1]) >= 6) {
-    return true
-  }
-
-  if (normalized.includes('claude-sonnet-5')) {
     return true
   }
 
@@ -118,12 +128,16 @@ function usesAlwaysOnAnthropicThinking(modelName?: string | null): boolean {
     return false
   }
 
+  const configuredPolicy = getModelFeatures({
+    provider: 'anthropic',
+    modelName,
+  })?.anthropicThinking
+  if (configuredPolicy) {
+    return configuredPolicy === 'adaptive-always-on'
+  }
+
   const normalized = modelName.trim().toLowerCase().replaceAll('.', '-')
-  return (
-    normalized.includes('claude-fable-5') ||
-    normalized.includes('claude-mythos-5') ||
-    normalized.includes('claude-mythos-preview')
-  )
+  return normalized.includes('claude-mythos-5') || normalized.includes('claude-mythos-preview')
 }
 
 function usesDefaultOnAnthropicThinking(modelName?: string | null): boolean {
@@ -131,7 +145,15 @@ function usesDefaultOnAnthropicThinking(modelName?: string | null): boolean {
     return false
   }
 
-  return modelName.trim().toLowerCase().replaceAll('.', '-').includes('claude-sonnet-5')
+  const configuredPolicy = getModelFeatures({
+    provider: 'anthropic',
+    modelName,
+  })?.anthropicThinking
+  if (configuredPolicy) {
+    return configuredPolicy === 'adaptive-default-disabled'
+  }
+
+  return false
 }
 
 /**
@@ -158,50 +180,30 @@ export function buildAnthropicCacheControl(
  * the common current and legacy breakpoints explicit instead of using a single
  * family-wide value.
  */
-export const ANTHROPIC_CACHE_MIN_TOKENS: Record<string, number> = {
-  fable: 512, // Fable 5
-  mythos: 512, // Mythos 5
-  mythosPreview: 2048, // Mythos Preview
-  opus48: 1024, // Opus 4.8
-  opus: 4096, // Opus 4.5/4.6/4.7
-  opusLegacy: 1024, // Opus 4/4.1/3
-  sonnet: 1024, // Sonnet 4/4.5/3.7/3.5
-  haiku: 4096, // Haiku 4.5
-  haikuLegacy: 2048, // Haiku 3/3.5
-}
-
 /**
  * Get minimum cacheable tokens for an Anthropic model.
  */
 export function getAnthropicMinCacheTokens(modelName: string): number {
-  const normalized = modelName.toLowerCase().replaceAll('.', '-')
-  if (normalized.includes('fable-5')) {
-    return ANTHROPIC_CACHE_MIN_TOKENS.fable
+  const configuredMinTokens = getModelFeatures({
+    provider: 'anthropic',
+    modelName,
+  })?.promptCacheMinTokens
+  if (typeof configuredMinTokens === 'number') {
+    return configuredMinTokens
   }
+
+  const normalized = modelName.toLowerCase().replaceAll('.', '-')
   if (normalized.includes('mythos-preview')) {
     return ANTHROPIC_CACHE_MIN_TOKENS.mythosPreview
   }
   if (normalized.includes('mythos-5')) {
     return ANTHROPIC_CACHE_MIN_TOKENS.mythos
   }
-  if (normalized.includes('haiku-4-5')) {
-    return ANTHROPIC_CACHE_MIN_TOKENS.haiku
-  }
   if (normalized.includes('haiku')) {
     return ANTHROPIC_CACHE_MIN_TOKENS.haikuLegacy
   }
   if (normalized.includes('sonnet')) {
     return ANTHROPIC_CACHE_MIN_TOKENS.sonnet
-  }
-  if (normalized.includes('opus-4-8')) {
-    return ANTHROPIC_CACHE_MIN_TOKENS.opus48
-  }
-  if (
-    normalized.includes('opus-4-5') ||
-    normalized.includes('opus-4-6') ||
-    normalized.includes('opus-4-7')
-  ) {
-    return ANTHROPIC_CACHE_MIN_TOKENS.opus
   }
   if (normalized.includes('opus')) {
     return ANTHROPIC_CACHE_MIN_TOKENS.opusLegacy

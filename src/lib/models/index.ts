@@ -1,9 +1,18 @@
 import type { Provider } from '@/types/database.types'
 import { MODEL_REGISTRY, PROVIDER_DEFAULTS } from './registry'
-import type { ModelDefinition, ModelPricingTier } from './types'
+import type { ModelDefinition, ModelFeatures, ModelPricingTier } from './types'
 
 export { MODEL_REGISTRY, PROVIDER_DEFAULTS } from './registry'
-export type { ModelDefinition, ModelPricingRateSet, ModelPricingTier, ModelFeatures } from './types'
+export { ANTHROPIC_CACHE_MIN_TOKENS } from './catalog/anthropic'
+export type {
+  AnthropicThinkingPolicy,
+  ModelDefinition,
+  ModelFeatures,
+  ModelMatchRules,
+  ModelPricingRateSet,
+  ModelPricingTier,
+  OpenAIModelPolicy,
+} from './types'
 
 type ListOptions = {
   uiOnly?: boolean
@@ -29,6 +38,16 @@ function isAliasMatch(entry: ModelDefinition, normalizedTarget: string): boolean
     return false
   }
   return entry.aliases.some((alias) => normalizedTarget.includes(alias.toLowerCase()))
+}
+
+function isFamilyMatch(entry: ModelDefinition, normalizedTarget: string): boolean {
+  const prefixes = entry.matches?.prefixes ?? []
+  if (prefixes.some((prefix) => normalizedTarget.startsWith(prefix.toLowerCase()))) {
+    return true
+  }
+
+  const fragments = entry.matches?.contains ?? []
+  return fragments.some((fragment) => normalizedTarget.includes(fragment.toLowerCase()))
 }
 
 export function listModelsByProvider(
@@ -73,6 +92,16 @@ export function findModelDefinition({
     return exactMatch
   }
 
+  const familyMatch = MODEL_REGISTRY.find((entry) => {
+    if (provider && entry.provider !== provider) {
+      return false
+    }
+    return isFamilyMatch(entry, normalized)
+  })
+  if (familyMatch) {
+    return familyMatch
+  }
+
   const aliasMatch = MODEL_REGISTRY.find((entry) => {
     if (provider && entry.provider !== provider) {
       return false
@@ -81,6 +110,17 @@ export function findModelDefinition({
   })
 
   return aliasMatch ?? null
+}
+
+export function getModelFeatures({
+  modelName,
+  provider,
+}: {
+  modelName?: string | null
+  provider?: Provider
+}): ModelFeatures | null {
+  const model = findModelDefinition({ modelName, provider })
+  return model ? (model.features ?? {}) : null
 }
 
 export function getModelPricingTiers({

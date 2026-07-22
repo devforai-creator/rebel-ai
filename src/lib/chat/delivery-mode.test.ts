@@ -40,6 +40,12 @@ describe('chat delivery modes', () => {
     expect(
       isAnthropicBatchChatSupported({
         provider: 'anthropic',
+        modelName: 'claude-sonnet-5-20260701',
+      }),
+    ).toBe(true)
+    expect(
+      isAnthropicBatchChatSupported({
+        provider: 'anthropic',
         modelName: 'claude-opus-4-8',
       }),
     ).toBe(true)

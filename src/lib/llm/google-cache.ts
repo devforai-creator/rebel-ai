@@ -27,6 +27,7 @@ import {
   type Tool,
   type ToolConfig,
 } from '@google/generative-ai/server'
+import { getModelFeatures } from '@/lib/models'
 import type {
   SerializableFunctionToolChoice,
   SerializableFunctionToolContract,
@@ -465,6 +466,14 @@ export type CreateGoogleCacheResult = GoogleCacheResult | GoogleCacheError
  * Determines if a model supports explicit caching and returns minimum token requirement
  */
 export function getGoogleCacheMinTokens(modelName: string): number | null {
+  const configuredMinTokens = getModelFeatures({
+    provider: 'google',
+    modelName,
+  })?.promptCacheMinTokens
+  if (typeof configuredMinTokens === 'number') {
+    return configuredMinTokens
+  }
+
   const lowerModel = modelName.toLowerCase()
 
   // Flash models: 1024 minimum

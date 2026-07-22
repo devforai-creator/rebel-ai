@@ -37,6 +37,7 @@ active contract, runbook, map, reference, working note, evidence, or backlog.
 
 ## Active Maps And Inventories
 
+- [MODEL_CATALOG.md](./MODEL_CATALOG.md): model registration workflow, provider catalog fields, and capability-driven runtime contracts
 - [PROJECT_SCALING_HARDENING.md](./PROJECT_SCALING_HARDENING.md): design direction for keeping the repo maintainable as scope, complexity, and contributor surface area grow
 - [FIRST_CLASS_PATH_MAP.md](./FIRST_CLASS_PATH_MAP.md): compact map of the
   maintained chat request -> queue -> runner -> durable-write path

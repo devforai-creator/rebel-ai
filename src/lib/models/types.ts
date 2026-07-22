@@ -14,9 +14,28 @@ export type ModelPricingTier = {
   rates: ModelPricingRateSet
 }
 
+export type AnthropicThinkingPolicy =
+  | 'adaptive-supported'
+  | 'adaptive-always-on'
+  | 'adaptive-default-disabled'
+
+export type OpenAIModelPolicy = {
+  promptCacheRetention?: 'omit'
+  forwardReasoningEffortNone?: boolean
+}
+
 export type ModelFeatures = {
+  anthropicThinking?: AnthropicThinkingPolicy
+  batchChat?: boolean
   promptCaching?: 'standard' | 'extended'
+  promptCacheMinTokens?: number
   reasoning?: boolean
+  openai?: OpenAIModelPolicy
+}
+
+export type ModelMatchRules = {
+  contains?: string[]
+  prefixes?: string[]
 }
 
 export type ModelDefinition = {
@@ -24,6 +43,7 @@ export type ModelDefinition = {
   provider: Provider
   displayName: string
   aliases?: string[]
+  matches?: ModelMatchRules
   uiVisible?: boolean
   uiOrder?: number
   pricing?: ModelPricingTier[]

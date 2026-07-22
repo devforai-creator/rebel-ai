@@ -58,6 +58,21 @@ describe('OpenAI prompt cache decision', () => {
     })
   })
 
+  it('uses the same cache policy for GPT-5.6 family variants', async () => {
+    const { resolvePromptCacheDecision } = await loadModule()
+
+    const decision = resolvePromptCacheDecision({
+      ...baseArgs,
+      modelName: 'gpt-5.6-terra',
+      cacheKeyOverride: 'chat:chat-1',
+      retentionPreference: '24h',
+    })
+
+    expect(decision).toEqual({
+      key: 'chat:chat-1',
+    })
+  })
+
   it('defaults to off when mode env is missing', async () => {
     vi.unstubAllEnvs()
     const { resolvePromptCacheDecision } = await loadModule()

@@ -67,7 +67,7 @@ If you want the current operating defaults and public-opening gates, read [docs/
 
 ### Prerequisites
 
-- Node.js 20.x
+- Node.js 24.x
 - Supabase account
 - At least one supported model API key
 

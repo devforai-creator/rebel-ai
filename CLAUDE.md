@@ -24,7 +24,7 @@ npm run chat:jobs        # Manually drain chat job queue
 npm run character:jobs   # Manually drain character import job queue
 ```
 
-CI (GitHub Actions, Node 20): lint → format:check → test with coverage → build → secret scan.
+CI (GitHub Actions, Node 24): lint → format:check → test with coverage → build → secret scan.
 
 ## Code Style
 

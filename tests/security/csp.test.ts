@@ -4,6 +4,7 @@ import { buildContentSecurityPolicy } from '@/lib/security/content-security-poli
 describe('CSP invariants', () => {
   type NextConfigShape = {
     headers: () => Promise<Array<{ headers: Array<{ key: string; value: string }> }>>
+    poweredByHeader?: boolean
   }
 
   const TEST_NONCE = 'dGVzdC1ub25jZQ=='
@@ -28,15 +29,25 @@ describe('CSP invariants', () => {
     return directive
   }
 
-  it('does not define a conflicting static CSP in next.config.js', async () => {
+  async function getNextConfig(): Promise<NextConfigShape> {
     const configModule = await import('../../next.config.js')
-    const config = (configModule.default ?? configModule) as NextConfigShape
+    return (configModule.default ?? configModule) as NextConfigShape
+  }
+
+  it('does not define a conflicting static CSP in next.config.js', async () => {
+    const config = await getNextConfig()
     const headerSets = await config.headers()
     const cspHeaders = headerSets.flatMap((headerSet) =>
       headerSet.headers.filter((header) => header.key === 'Content-Security-Policy'),
     )
 
     expect(cspHeaders).toEqual([])
+  })
+
+  it('disables the Next.js powered-by response header', async () => {
+    const config = await getNextConfig()
+
+    expect(config.poweredByHeader).toBe(false)
   })
 
   it('uses a nonce and strict-dynamic instead of unsafe-inline in production', () => {

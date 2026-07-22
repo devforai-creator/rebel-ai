@@ -132,6 +132,23 @@ describe('getProviderOptions', () => {
     })
   })
 
+  it('applies GPT-5.6 provider policy to registered family variants', () => {
+    const options = getProviderOptions('openai', {
+      modelName: 'gpt-5.6-terra',
+      promptCacheKey: 'cache-key',
+      promptCacheRetention: '24h',
+      reasoningEffort: 'none',
+    })
+
+    expect(options).toEqual({
+      openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+        promptCacheKey: 'cache-key',
+        reasoningEffort: 'none',
+      },
+    })
+  })
+
   it('preserves the GPT-5.6 default when the reasoning preference is missing', () => {
     const options = getProviderOptions('openai', {
       modelName: 'gpt-5.6-sol',

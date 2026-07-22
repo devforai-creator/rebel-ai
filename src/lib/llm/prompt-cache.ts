@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
-import { hasExtendedOpenAICacheRetention, isOpenAIGpt56Model } from '@/lib/models'
+import { getModelFeatures, hasExtendedOpenAICacheRetention } from '@/lib/models'
 import { getAnthropicMinCacheTokens, type AnthropicCacheTTL } from './provider-options'
 import { resolveProviderCacheMode } from './cache-mode'
 
@@ -65,7 +65,9 @@ export function resolvePromptCacheDecision({
     return null
   }
 
-  const retention = isOpenAIGpt56Model(modelName)
+  const omitsRetention =
+    getModelFeatures({ provider: 'openai', modelName })?.openai?.promptCacheRetention === 'omit'
+  const retention = omitsRetention
     ? undefined
     : retentionPreference === '24h'
       ? hasExtendedOpenAICacheRetention(modelName)

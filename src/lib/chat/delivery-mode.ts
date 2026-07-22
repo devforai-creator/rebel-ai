@@ -1,3 +1,5 @@
+import { getModelFeatures } from '@/lib/models'
+
 export const CHAT_DELIVERY_MODE_STREAMING = 'streaming'
 export const CHAT_DELIVERY_MODE_ANTHROPIC_BATCH = 'anthropic_batch'
 
@@ -30,13 +32,5 @@ export function isAnthropicBatchChatSupported({
     return false
   }
 
-  const normalized = modelName.toLowerCase()
-  return (
-    normalized.includes('claude-fable-5') ||
-    normalized.includes('claude-sonnet-5') ||
-    normalized.includes('claude-opus-4-8') ||
-    normalized.includes('claude-opus-4-7') ||
-    normalized.includes('claude-opus-4-6') ||
-    normalized.includes('claude-opus-4-5')
-  )
+  return getModelFeatures({ provider: 'anthropic', modelName })?.batchChat === true
 }

@@ -6,7 +6,7 @@
 
 ## Build, Test, and Development Commands
 
-Use Node 20 to match CI. Install dependencies with `npm install`. Start locally with `npm run dev`, and verify production output with `npm run build`. Run `npm run lint` for ESLint, `npm run format:check` to verify Prettier, and `npm run format` to rewrite formatting. Run `npm run test -- --coverage` for the same Vitest flow used in CI. Use `npm run test:rls` only after `supabase start` when validating row-level security. Run `npx tsc --noEmit` before opening a PR.
+Use Node 24 to match CI. Install dependencies with `npm install`. Start locally with `npm run dev`, and verify production output with `npm run build`. Run `npm run lint` for ESLint, `npm run format:check` to verify Prettier, and `npm run format` to rewrite formatting. Run `npm run test -- --coverage` for the same Vitest flow used in CI. Use `npm run test:rls` only after `supabase start` when validating row-level security. Run `npx tsc --noEmit` before opening a PR.
 
 ## Coding Style & Naming Conventions
 

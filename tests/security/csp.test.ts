@@ -3,7 +3,9 @@ import { buildContentSecurityPolicy } from '@/lib/security/content-security-poli
 
 describe('CSP invariants', () => {
   type NextConfigShape = {
-    headers: () => Promise<Array<{ headers: Array<{ key: string; value: string }> }>>
+    headers: () => Promise<
+      Array<{ source: string; headers: Array<{ key: string; value: string }> }>
+    >
     poweredByHeader?: boolean
   }
 
@@ -48,6 +50,17 @@ describe('CSP invariants', () => {
     const config = await getNextConfig()
 
     expect(config.poweredByHeader).toBe(false)
+  })
+
+  it('restricts app resources to same-origin embedding', async () => {
+    const config = await getNextConfig()
+    const headerSets = await config.headers()
+    const globalHeaders = headerSets.find((headerSet) => headerSet.source === '/(.*)')?.headers
+
+    expect(globalHeaders).toContainEqual({
+      key: 'Cross-Origin-Resource-Policy',
+      value: 'same-origin',
+    })
   })
 
   it('uses a nonce and strict-dynamic instead of unsafe-inline in production', () => {

@@ -110,4 +110,4 @@ The repo still includes a lot of engineering detail, but that detail now lives i
 
 AGPL-3.0-or-later. See [LICENSE](./LICENSE).
 
-License history: versions up to and including the commit tagged `apache-2.0-final` were released under Apache-2.0 and remain available under that license. All later versions are licensed under AGPL-3.0-or-later.
+License history: versions up to and including the commit tagged `apache-2.0-final` (commit `0fd90cacf7cfc64192aceef40b432b9218b981cf`) were released under Apache-2.0 and remain available under that license. All later versions are licensed under AGPL-3.0-or-later.

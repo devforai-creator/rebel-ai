@@ -3,7 +3,7 @@
 **Self-hosted character chat for people who want their own keys, data, and control.**
 
 [![CI](https://github.com/devforai-creator/rebel-ai/actions/workflows/test.yml/badge.svg)](https://github.com/devforai-creator/rebel-ai/actions/workflows/test.yml)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
+[![License](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](./LICENSE)
 
 > RebelAI is a self-hosted character chat stack for people who want to bring their own API keys and keep conversations on infrastructure they control. It is built around ownership, portability, and explicit product boundaries rather than platform lock-in.
 
@@ -108,4 +108,6 @@ The repo still includes a lot of engineering detail, but that detail now lives i
 
 ## License
 
-Apache 2.0. See [LICENSE](./LICENSE).
+AGPL-3.0-or-later. See [LICENSE](./LICENSE).
+
+License history: versions up to and including the commit tagged `apache-2.0-final` (commit `0fd90cacf7cfc64192aceef40b432b9218b981cf`) were released under Apache-2.0 and remain available under that license. All later versions are licensed under AGPL-3.0-or-later.

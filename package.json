@@ -2,6 +2,7 @@
   "name": "rebel-ai",
   "version": "0.0.0-dev",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "engines": {
     "node": "20.x"
   },

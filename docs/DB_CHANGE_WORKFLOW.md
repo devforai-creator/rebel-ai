@@ -87,6 +87,23 @@ Storage buckets must remain private, all ten `storage.objects` policies must be
 present with their ownership guards, and sensitive table/RPC grants must remain
 restricted.
 
+## Automated Production Contract Check
+
+`.github/workflows/supabase-contract.yml` runs the same linked contract check
+manually and once per day at 03:23 Asia/Seoul. It is intentionally separate from
+pull request CI because it connects to the production database.
+
+The workflow targets the Seoul project explicitly and runs in the GitHub
+`Production` environment. Configure `SUPABASE_DB_PASSWORD` as an environment
+secret there; never commit the password or store it as a repository variable.
+The secret is scoped only to the contract verification step, after dependency
+installation has completed.
+
+Run the workflow manually after configuring the secret and confirm one
+successful result before relying on the daily schedule. If production moves to
+another Supabase project or PostgreSQL version, update the explicit project
+metadata in the workflow in the same change.
+
 ## SQL Editor Rule
 
 Using Supabase SQL Editor is allowed only for:

@@ -1,0 +1,58 @@
+name: Supabase Production Contract
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 03:23 Asia/Seoul every day. Scheduled workflows use UTC.
+    - cron: '23 18 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-contract
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    name: Verify Seoul Supabase contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: Production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure Seoul project metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 supabase/.temp
+          printf '%s\n' 'ceatljsosxyulebubcng' > supabase/.temp/project-ref
+          printf '%s\n' \
+            'postgresql://postgres.ceatljsosxyulebubcng@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres' \
+            > supabase/.temp/pooler-url
+          printf '%s\n' '17.6.1.147' > supabase/.temp/postgres-version
+
+      - name: Verify production storage and ACL contract
+        shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ceatljsosxyulebubcng.supabase.co
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SUPABASE_DB_PASSWORD}" ]]; then
+            echo "::error::Configure SUPABASE_DB_PASSWORD in the GitHub Production environment."
+            exit 1
+          fi
+          npm run db:contract:linked

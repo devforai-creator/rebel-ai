@@ -10,6 +10,7 @@ const {
   buildContractQuery,
   evaluateSnapshot,
   main,
+  queryLinkedDatabase,
   resolveProjectRefFromSupabaseUrl,
 } = checker
 
@@ -157,5 +158,67 @@ describe('check-linked-supabase-contract', () => {
       }),
     ).toBe(0)
     expect(consoleImpl.log).toHaveBeenCalledWith(expect.stringContaining('sensitive_acl=locked'))
+  })
+
+  it('uses the runner psql client when it is available', () => {
+    const snapshot = createValidSnapshot()
+    const spawn = vi.fn().mockReturnValue({
+      status: 0,
+      stdout: `${JSON.stringify(snapshot)}\n`,
+      stderr: '',
+    })
+
+    expect(
+      queryLinkedDatabase({
+        poolerUrl: 'postgresql://example',
+        postgresVersion: '17.6.1.147',
+        password: 'test-password',
+        spawn,
+      }),
+    ).toEqual(snapshot)
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(spawn.mock.calls[0][0]).toBe('psql')
+    expect(spawn.mock.calls[0][1]).toEqual(
+      expect.arrayContaining(['--dbname', 'postgresql://example']),
+    )
+    expect(spawn.mock.calls[0][2].env).toMatchObject({
+      PGPASSWORD: 'test-password',
+      PGSSLMODE: 'require',
+    })
+  })
+
+  it('falls back to the matching Supabase Docker image when psql is unavailable', () => {
+    const snapshot = createValidSnapshot()
+    const missingPsql = Object.assign(new Error('spawnSync psql ENOENT'), {
+      code: 'ENOENT',
+    })
+    const spawn = vi
+      .fn()
+      .mockReturnValueOnce({ status: null, error: missingPsql })
+      .mockReturnValueOnce({
+        status: 0,
+        stdout: `${JSON.stringify(snapshot)}\n`,
+        stderr: '',
+      })
+
+    expect(
+      queryLinkedDatabase({
+        poolerUrl: 'postgresql://example',
+        postgresVersion: '17.6.1.147',
+        password: 'test-password',
+        spawn,
+      }),
+    ).toEqual(snapshot)
+    expect(spawn).toHaveBeenCalledTimes(2)
+    expect(spawn.mock.calls[0][0]).toBe('psql')
+    expect(spawn.mock.calls[1][0]).toBe('docker')
+    expect(spawn.mock.calls[1][1]).toEqual(
+      expect.arrayContaining([
+        'public.ecr.aws/supabase/postgres:17.6.1.147',
+        'psql',
+        '--dbname',
+        'postgresql://example',
+      ]),
+    )
   })
 })

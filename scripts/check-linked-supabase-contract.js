@@ -388,41 +388,51 @@ function readLinkedProject(rootDir) {
 }
 
 function queryLinkedDatabase({ poolerUrl, postgresVersion, password, spawn = spawnSync }) {
-  const result = spawn(
-    'docker',
-    [
-      'run',
-      '--rm',
-      '-e',
-      'PGPASSWORD',
-      '-e',
-      'PGSSLMODE=require',
-      `public.ecr.aws/supabase/postgres:${postgresVersion}`,
-      'psql',
-      '-X',
-      '-qAt',
-      '--set',
-      'ON_ERROR_STOP=on',
-      '--dbname',
-      poolerUrl,
-      '-c',
-      buildContractQuery(),
-    ],
-    {
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        PGPASSWORD: password,
-        PGSSLMODE: 'require',
-      },
-      maxBuffer: 8 * 1024 * 1024,
+  const psqlArguments = [
+    '-X',
+    '-qAt',
+    '--set',
+    'ON_ERROR_STOP=on',
+    '--dbname',
+    poolerUrl,
+    '-c',
+    buildContractQuery(),
+  ]
+  const spawnOptions = {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PGPASSWORD: password,
+      PGSSLMODE: 'require',
     },
-  )
+    maxBuffer: 8 * 1024 * 1024,
+  }
+
+  let result = spawn('psql', psqlArguments, spawnOptions)
+  if (result.error?.code === 'ENOENT') {
+    result = spawn(
+      'docker',
+      [
+        'run',
+        '--rm',
+        '-e',
+        'PGPASSWORD',
+        '-e',
+        'PGSSLMODE=require',
+        `public.ecr.aws/supabase/postgres:${postgresVersion}`,
+        'psql',
+        ...psqlArguments,
+      ],
+      spawnOptions,
+    )
+  }
 
   if (result.status !== 0) {
-    const message = String(result.stderr || result.stdout || 'unknown psql error')
+    const message = String(
+      result.error?.message || result.stderr || result.stdout || 'unknown psql error',
+    )
       .replaceAll(password, '[redacted]')
-      .slice(0, 1200)
+      .slice(-1200)
     throw new Error(message)
   }
 

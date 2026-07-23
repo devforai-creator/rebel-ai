@@ -5,6 +5,9 @@ const {
   EXPECTED_BUCKETS,
   EXPECTED_RLS_TABLES,
   EXPECTED_STORAGE_POLICIES,
+  FORBIDDEN_FUNCTION_GRANTS,
+  REQUIRED_FUNCTION_GRANTS,
+  buildContractQuery,
   evaluateSnapshot,
   main,
   resolveProjectRefFromSupabaseUrl,
@@ -40,6 +43,26 @@ function createValidSnapshot() {
 }
 
 describe('check-linked-supabase-contract', () => {
+  it('builds the storage, RLS, and function grant catalog query', () => {
+    const query = buildContractQuery()
+
+    for (const fragment of [
+      'pg_policies',
+      'storage.buckets',
+      'information_schema.table_privileges',
+      'has_function_privilege',
+      'forbiddenFunctionGrants',
+      'missingRequiredFunctionGrants',
+    ]) {
+      expect(query).toContain(fragment)
+    }
+
+    for (const [signature, role] of [...FORBIDDEN_FUNCTION_GRANTS, ...REQUIRED_FUNCTION_GRANTS]) {
+      expect(query).toContain(signature)
+      expect(query).toContain(`'${role}'`)
+    }
+  })
+
   it('accepts the expected storage and ACL contract', () => {
     expect(evaluateSnapshot(createValidSnapshot())).toEqual([])
   })

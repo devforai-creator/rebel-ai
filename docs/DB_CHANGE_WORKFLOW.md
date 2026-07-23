@@ -71,13 +71,21 @@ supabase db push --linked
 
 ```bash
 supabase db diff --linked --schema public
+npm run db:contract:linked
 ```
 
 Expected result:
 
 ```text
 No schema changes found
+[check-linked-supabase-contract] OK ... sensitive_acl=locked
 ```
+
+The linked contract check covers the boundary that `db diff --schema public`
+does not: the CLI project ref must match `NEXT_PUBLIC_SUPABASE_URL`, the three
+Storage buckets must remain private, all ten `storage.objects` policies must be
+present with their ownership guards, and sensitive table/RPC grants must remain
+restricted.
 
 ## SQL Editor Rule
 
@@ -117,6 +125,13 @@ supabase db diff --linked --schema public
 4. Only after that, repair migration history for versions that are already
    present in production.
 5. Push only the new reconciliation migration.
+
+6. Run both production alignment checks after the repair.
+
+```bash
+supabase db diff --linked --schema public
+npm run db:contract:linked
+```
 
 Do not run `supabase db push --linked` against a drifted production database
 until you understand what the CLI is about to apply.

@@ -23,6 +23,7 @@
     "prepare": "husky",
     "db:schema": "bash scripts/build-hosted-schema.sh",
     "db:schema:check": "bash scripts/build-hosted-schema.sh --check",
+    "db:contract:linked": "node scripts/check-linked-supabase-contract.js",
     "db:types": "supabase db push --local --yes && supabase gen types --local --schema public > src/types/database.generated.ts",
     "db:verify": "npm run db:types && npm run db:schema && npm run db:schema:check && npm run typecheck",
     "test": "vitest run",

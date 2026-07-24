@@ -34,6 +34,7 @@ export default async function PersonasPage({ searchParams }: Props) {
     .select('id, name, description, created_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
+    .order('name', { ascending: true })
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

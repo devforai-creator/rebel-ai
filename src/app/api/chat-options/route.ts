@@ -29,7 +29,8 @@ export async function GET() {
       .from('personas')
       .select('id, name, description')
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false })
+      .order('name', { ascending: true }),
   ])
 
   if (apiKeysResult.error) {

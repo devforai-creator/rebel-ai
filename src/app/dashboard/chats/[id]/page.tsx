@@ -136,6 +136,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
     .from('personas')
     .select('id, name')
     .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
     .order('name', { ascending: true })
 
   const [

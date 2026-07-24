@@ -5,6 +5,7 @@ export const ANTHROPIC_CACHE_MIN_TOKENS: Record<string, number> = {
   fable: 512,
   mythos: 512,
   mythosPreview: 2048,
+  opus5: 512,
   opus48: 1024,
   opus: 4096,
   opusLegacy: 1024,
@@ -47,6 +48,17 @@ export const anthropicModelCatalog = defineProviderCatalog({
         anthropicThinking: 'adaptive-always-on',
         batchChat: true,
         promptCacheMinTokens: ANTHROPIC_CACHE_MIN_TOKENS.fable,
+      },
+    },
+    {
+      id: 'claude-opus-5',
+      displayName: 'Claude Opus 5',
+      matches: { contains: ['claude-opus-5'] },
+      pricing: flatPricing({ input: 5, output: 25, cachedInput: 0.5 }),
+      features: {
+        anthropicThinking: 'adaptive-default-disabled',
+        batchChat: true,
+        promptCacheMinTokens: ANTHROPIC_CACHE_MIN_TOKENS.opus5,
       },
     },
     {

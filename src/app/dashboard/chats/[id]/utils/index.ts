@@ -1,6 +1,7 @@
 export type {
   DisplayMessage,
   StreamingAssistantDraft,
+  ActiveChatJob,
   LatestMessageTokenStats,
   MessageChangePayload,
   ModuleRegexEntry,

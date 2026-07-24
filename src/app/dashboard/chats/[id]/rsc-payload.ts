@@ -1,4 +1,7 @@
+import { CHAT_DELIVERY_MODE_STREAMING, isChatDeliveryMode } from '@/lib/chat/delivery-mode'
+import { parseChatJobPayload } from '@/lib/chat/job-payload'
 import type { ProjectedTurnMessage } from '@/lib/chat/turn-types'
+import type { ActiveChatJob } from './utils'
 
 const CHAT_CHARACTER_METADATA_KEYS = [
   'default_variables',
@@ -11,6 +14,32 @@ type ChatCharacterMetadata = Record<string, unknown>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function buildInitialActiveChatJob(
+  job:
+    | {
+        id: string
+        delivery_mode: string | null
+        payload: unknown
+      }
+    | null
+    | undefined,
+): ActiveChatJob | null {
+  if (!job || !job.id) {
+    return null
+  }
+
+  const parsedPayload = parseChatJobPayload(job.payload)
+  const deliveryMode = isChatDeliveryMode(job.delivery_mode)
+    ? job.delivery_mode
+    : (parsedPayload?.deliveryMode ?? CHAT_DELIVERY_MODE_STREAMING)
+
+  return {
+    id: job.id,
+    deliveryMode,
+    regenerateAssistantMessageId: parsedPayload?.regenerateAssistantMessageId ?? null,
+  }
 }
 
 export function stripInitialMessageDebugInfo(

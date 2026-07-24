@@ -18,6 +18,7 @@ import { ChatComposer, MessageList, TokenStatsPanel, DebugModal } from './compon
 export default function ChatInterface({
   chatId,
   initialMessages,
+  initialActiveJob,
   apiKeys,
   preselectedApiKeyId,
   initialModelConfig,
@@ -81,6 +82,7 @@ export default function ChatInterface({
   const { composer, history, messageState, actions, debug } = useChatMessageLifecycle({
     chatId,
     initialMessages,
+    initialActiveJob,
     initialHistoryCursor,
     hasMoreHistory,
     selectedApiKeyId,

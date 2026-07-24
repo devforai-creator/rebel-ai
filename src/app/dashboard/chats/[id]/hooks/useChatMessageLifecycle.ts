@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { AlternateModelsConfig } from '@/lib/chat/model-config'
 import type { ChatDeliveryMode } from '@/lib/chat/delivery-mode'
 import type { Message } from '@/types/database.types'
-import type { DebugInfo, DisplayMessage, MessageChangePayload } from '../utils'
+import type { ActiveChatJob, DebugInfo, DisplayMessage, MessageChangePayload } from '../utils'
 import { useChatDebugModal } from './useChatDebugModal'
 import { combineHistoryWithLiveMessages, useChatHistory } from './useChatHistory'
 import { useChatMessageActions } from './useChatMessageActions'
@@ -38,6 +38,7 @@ export function buildInitialChatMessageTrackingState(
 export type UseChatMessageLifecycleArgs = {
   chatId: string
   initialMessages: Message[]
+  initialActiveJob: ActiveChatJob | null
   initialHistoryCursor: number | null
   hasMoreHistory: boolean
   selectedApiKeyId: string
@@ -70,6 +71,7 @@ export type UseChatMessageLifecycleReturn = {
 export function useChatMessageLifecycle({
   chatId,
   initialMessages,
+  initialActiveJob,
   initialHistoryCursor,
   hasMoreHistory,
   selectedApiKeyId,
@@ -102,6 +104,7 @@ export function useChatMessageLifecycle({
   const queuedChat = useQueuedChat({
     chatId,
     initialMessages,
+    initialActiveJob,
     historyMessages,
     selectedApiKeyId,
     deliveryMode,

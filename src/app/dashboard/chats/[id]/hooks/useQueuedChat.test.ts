@@ -52,6 +52,7 @@ function createHookParams(overrides: Partial<Parameters<typeof useQueuedChat>[0]
   return {
     chatId: 'chat-1',
     initialMessages: [createMessage()],
+    initialActiveJob: null,
     historyMessages: [],
     selectedApiKeyId: '',
     fetchLatestUsage: vi.fn(async () => {}),
@@ -93,6 +94,71 @@ describe('useQueuedChat', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('restores an active job and resumes polling after a page reload', async () => {
+    vi.useFakeTimers()
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      value: false,
+    })
+
+    const fetchLatestUsage = vi.fn(async () => {})
+    const latestAssistant = createMessage({
+      id: 'assistant-2',
+      role: 'assistant',
+      content: 'restored response',
+      sequence: 3,
+    })
+    const fetchMock = vi.fn(async (input: unknown) => {
+      const url = String(input)
+      if (url === '/api/chat/jobs/job-restored') {
+        return createJsonResponse({ status: 'success' })
+      }
+      if (url === '/api/chats/chat-1/messages/latest') {
+        return createJsonResponse(latestAssistant)
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() =>
+      useQueuedChat(
+        createHookParams({
+          initialActiveJob: {
+            id: 'job-restored',
+            deliveryMode: 'streaming',
+            regenerateAssistantMessageId: null,
+          },
+          fetchLatestUsage,
+        }),
+      ),
+    )
+
+    expect(result.current.isLoading).toBe(true)
+    expect(result.current.streamingDraft).toMatchObject({
+      id: 'stream-job-restored',
+      jobId: 'job-restored',
+      role: 'assistant',
+      content: '',
+      streaming: true,
+    })
+
+    await flushPendingPollCycle()
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      '/api/chat/jobs/job-restored',
+      '/api/chats/chat-1/messages/latest',
+    ])
+    expect(fetchLatestUsage).toHaveBeenCalledOnce()
+    expect(result.current.isLoading).toBe(false)
+    expect(result.current.streamingDraft).toBeNull()
+    expect(result.current.messages).toContainEqual(
+      expect.objectContaining({
+        id: 'assistant-2',
+        content: 'restored response',
+      }),
+    )
   })
 
   it('rejects reload requests for assistant messages that are not persisted yet', () => {

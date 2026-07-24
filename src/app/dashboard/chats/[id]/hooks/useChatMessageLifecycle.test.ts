@@ -172,6 +172,11 @@ describe('useChatMessageLifecycle', () => {
       useChatMessageLifecycle({
         chatId: 'chat-1',
         initialMessages,
+        initialActiveJob: {
+          id: 'job-restored',
+          deliveryMode: 'streaming',
+          regenerateAssistantMessageId: null,
+        },
         initialHistoryCursor: 10,
         hasMoreHistory: true,
         selectedApiKeyId: 'key-1',
@@ -188,6 +193,15 @@ describe('useChatMessageLifecycle', () => {
     }
     expect(historyArgs.persistedMessageIds.current.has('initial-1')).toBe(true)
     expect(historyArgs.debugInfoMap.current.get('initial-1')).toEqual({ cacheHit: true })
+    expect(mocks.useQueuedChatMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialActiveJob: {
+          id: 'job-restored',
+          deliveryMode: 'streaming',
+          regenerateAssistantMessageId: null,
+        },
+      }),
+    )
 
     expect(result.current.composer.input).toBe('draft input')
     expect(result.current.messageState.combinedMessages).toEqual([

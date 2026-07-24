@@ -20,7 +20,12 @@ import { isLLMProvider } from '@/lib/api-keys/provider-utils'
 import { loadProjectedChatWindow } from '@/lib/chat/turns'
 import type { Persona } from '@/types/database.types'
 import { CHAT_RUNTIME_API_KEY_OPTION_COLUMNS } from '../api-key-options'
-import { pickChatCharacterMetadata, stripInitialMessageDebugInfo } from './rsc-payload'
+import {
+  buildInitialActiveChatJob,
+  pickChatCharacterMetadata,
+  stripInitialMessageDebugInfo,
+} from './rsc-payload'
+import { ACTIVE_QUEUE_JOB_STATUSES } from '@/lib/queue/admission'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -73,15 +78,28 @@ export default async function ChatPage({ params, searchParams }: Props) {
 
   // Handle Supabase nested select which returns array for single relations
   const character = Array.isArray(chat.characters) ? chat.characters[0] : chat.characters
-  const characterAvatarUrl = await resolveSingleCharacterAvatarUrl(
-    adminSupabase,
-    character
-      ? {
-          id: character.id,
-          avatar_url: character.avatar_url ?? null,
-        }
-      : null,
-  )
+  // Resolve active work before loading messages so a completion racing with refresh is either
+  // restored as pending work or included by the subsequent message-window query.
+  const activeJobPromise = supabase
+    .from('chat_generation_jobs')
+    .select('id, delivery_mode, payload')
+    .eq('chat_id', id)
+    .eq('user_id', user.id)
+    .in('status', [...ACTIVE_QUEUE_JOB_STATUSES])
+    .limit(1)
+    .maybeSingle()
+  const [characterAvatarUrl, { data: activeJob, error: activeJobError }] = await Promise.all([
+    resolveSingleCharacterAvatarUrl(
+      adminSupabase,
+      character
+        ? {
+            id: character.id,
+            avatar_url: character.avatar_url ?? null,
+          }
+        : null,
+    ),
+    activeJobPromise,
+  ])
 
   const personaPromise: Promise<Persona | null> = (async () => {
     if (!chat.persona_id) return null
@@ -144,8 +162,16 @@ export default async function ChatPage({ params, searchParams }: Props) {
   ])
 
   const initialMessages = stripInitialMessageDebugInfo(initialWindow.messages)
+  const initialActiveJob = buildInitialActiveChatJob(activeJob)
   const historyCursor = initialWindow.nextCursor
   const normalizedModelConfig = normalizeChatModelConfig(chat.model_config)
+
+  if (activeJobError) {
+    console.warn('[ChatPage] Failed to restore active chat job', {
+      chatId: id,
+      message: activeJobError.message,
+    })
+  }
 
   // Filter to only include LLM providers (exclude embedding-only providers)
   const apiKeyList = (apiKeys || []).filter((key) => isLLMProvider(key.provider))
@@ -191,6 +217,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
             <ChatInterface
               chatId={chat.id}
               initialMessages={initialMessages}
+              initialActiveJob={initialActiveJob}
               apiKeys={apiKeyList}
               preselectedApiKeyId={preselectedApiKeyId}
               initialModelConfig={normalizedModelConfig}

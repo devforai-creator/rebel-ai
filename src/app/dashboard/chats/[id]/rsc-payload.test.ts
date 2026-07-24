@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectedTurnMessage } from '@/lib/chat/turn-types'
-import { pickChatCharacterMetadata, stripInitialMessageDebugInfo } from './rsc-payload'
+import {
+  buildInitialActiveChatJob,
+  pickChatCharacterMetadata,
+  stripInitialMessageDebugInfo,
+} from './rsc-payload'
 
 function createMessage(overrides: Partial<ProjectedTurnMessage> = {}): ProjectedTurnMessage {
   return {
@@ -27,6 +31,48 @@ function createMessage(overrides: Partial<ProjectedTurnMessage> = {}): Projected
 }
 
 describe('chat RSC payload helpers', () => {
+  it('reduces an active job payload to the fields needed for client recovery', () => {
+    expect(
+      buildInitialActiveChatJob({
+        id: 'job-1',
+        delivery_mode: 'anthropic_batch',
+        payload: {
+          version: 1,
+          requestId: 'request-1',
+          chatId: 'chat-1',
+          turnId: 'turn-1',
+          userId: 'user-1',
+          apiKeyId: 'secret-key-reference',
+          provider: 'anthropic',
+          modelName: 'claude-opus-4-6',
+          deliveryMode: 'anthropic_batch',
+          sanitizedMessages: [{ role: 'user', content: 'private conversation' }],
+          isRegeneration: true,
+          regenerateAssistantMessageId: 'assistant-1',
+        },
+      }),
+    ).toEqual({
+      id: 'job-1',
+      deliveryMode: 'anthropic_batch',
+      regenerateAssistantMessageId: 'assistant-1',
+    })
+  })
+
+  it('falls back safely when an active job has a legacy or invalid payload', () => {
+    expect(
+      buildInitialActiveChatJob({
+        id: 'job-1',
+        delivery_mode: 'streaming',
+        payload: { version: 0 },
+      }),
+    ).toEqual({
+      id: 'job-1',
+      deliveryMode: 'streaming',
+      regenerateAssistantMessageId: null,
+    })
+    expect(buildInitialActiveChatJob(null)).toBeNull()
+  })
+
   it('removes debug_info from initial messages while preserving display fields', () => {
     const messages = [
       createMessage({

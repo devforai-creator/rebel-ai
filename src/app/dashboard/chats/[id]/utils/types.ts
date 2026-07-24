@@ -29,6 +29,12 @@ export type StreamingAssistantDraft = DisplayMessage & {
   replaceMessageId: string | null
 }
 
+export type ActiveChatJob = {
+  id: string
+  deliveryMode: ChatDeliveryMode
+  regenerateAssistantMessageId: string | null
+}
+
 /**
  * Token usage statistics for the latest message
  */
@@ -202,6 +208,7 @@ export interface ChatAssetData {
 export interface ChatInterfaceProps {
   chatId: string
   initialMessages: Message[]
+  initialActiveJob: ActiveChatJob | null
   apiKeys: ApiKeyOption[]
   preselectedApiKeyId?: string
   initialModelConfig?: ChatModelConfig | null

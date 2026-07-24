@@ -10,6 +10,7 @@ import {
   MessageChangePayload,
   DebugInfo,
   StreamingAssistantDraft,
+  ActiveChatJob,
   mapMessageToDisplay,
 } from '../utils'
 import { MESSAGE_STATUS_COMPLETED, isVisibleMessageStatus } from '@/lib/chat/message-status'
@@ -31,6 +32,7 @@ import {
 export interface UseQueuedChatParams {
   chatId: string
   initialMessages: Message[]
+  initialActiveJob: ActiveChatJob | null
   historyMessages: Message[]
   selectedApiKeyId: string
   deliveryMode?: ChatDeliveryMode
@@ -64,6 +66,7 @@ export interface UseQueuedChatReturn {
 export function useQueuedChat({
   chatId,
   initialMessages,
+  initialActiveJob,
   selectedApiKeyId,
   deliveryMode = CHAT_DELIVERY_MODE_STREAMING,
   alternateModels,
@@ -76,15 +79,26 @@ export function useQueuedChat({
   )
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
-  const [pendingJobId, setPendingJobId] = useState<string | null>(null)
-  const pendingJobIdRef = useRef<string | null>(null)
+  const [pendingJobId, setPendingJobId] = useState<string | null>(initialActiveJob?.id ?? null)
+  const pendingJobIdRef = useRef<string | null>(initialActiveJob?.id ?? null)
   const pendingAssistantVisibleRef = useRef(false)
-  const pendingRegenerationTargetIdRef = useRef<string | null>(null)
+  const pendingRegenerationTargetIdRef = useRef<string | null>(
+    initialActiveJob?.regenerateAssistantMessageId ?? null,
+  )
+  const resumedInitialJobIdRef = useRef<string | null>(null)
   const lastStreamProgressAtRef = useRef<number | null>(null)
   const [isPageVisible, setIsPageVisible] = useState(
     () => typeof document === 'undefined' || !document.hidden,
   )
-  const [streamingDraft, setStreamingDraft] = useState<StreamingAssistantDraft | null>(null)
+  const [streamingDraft, setStreamingDraft] = useState<StreamingAssistantDraft | null>(() =>
+    initialActiveJob
+      ? createStreamingAssistantDraft(
+          initialActiveJob.id,
+          initialActiveJob.regenerateAssistantMessageId,
+          initialActiveJob.deliveryMode,
+        )
+      : null,
+  )
   const [error, setError] = useState<Error | null>(null)
 
   useEffect(() => {
@@ -228,7 +242,7 @@ export function useQueuedChat({
   }, [fetchLatestMessage, upsertAssistantMessage])
 
   const pollJobStatus = useCallback(
-    async (jobId: string) => {
+    async (jobId: string, jobDeliveryMode: ChatDeliveryMode) => {
       const result = await pollJobStatusPure(
         jobId,
         {
@@ -257,7 +271,7 @@ export function useQueuedChat({
             })
           },
           onSlowProgress: (elapsedMs) => {
-            toast.info(getQueuedChatSlowProgressMessage(deliveryMode, elapsedMs), {
+            toast.info(getQueuedChatSlowProgressMessage(jobDeliveryMode, elapsedMs), {
               duration: 8000,
             })
           },
@@ -268,7 +282,7 @@ export function useQueuedChat({
                 resolve,
                 resolveQueuedChatPollSleepDelay({
                   baseDelayMs: ms,
-                  deliveryMode,
+                  deliveryMode: jobDeliveryMode,
                   isPageVisible,
                   lastProgressAt: lastStreamProgressAtRef.current,
                   now: Date.now(),
@@ -277,15 +291,26 @@ export function useQueuedChat({
             )
           },
         },
-        getQueuedChatPollerConfig(deliveryMode),
+        getQueuedChatPollerConfig(jobDeliveryMode),
       )
 
       if (result.outcome !== 'success') {
         throw result.error
       }
     },
-    [appendAssistantMessage, clearPendingJob, deliveryMode, fetchLatestUsage, isPageVisible],
+    [appendAssistantMessage, clearPendingJob, fetchLatestUsage, isPageVisible],
   )
+
+  useEffect(() => {
+    if (!initialActiveJob || resumedInitialJobIdRef.current === initialActiveJob.id) {
+      return
+    }
+
+    resumedInitialJobIdRef.current = initialActiveJob.id
+    void pollJobStatus(initialActiveJob.id, initialActiveJob.deliveryMode).catch(() => {
+      // Error state and user feedback are handled inside pollJobStatus.
+    })
+  }, [initialActiveJob, pollJobStatus])
 
   const handleRealtimeMessageChange = useCallback(
     (payload: MessageChangePayload) => {
@@ -393,7 +418,7 @@ export function useQueuedChat({
         pendingJobIdRef.current = data.jobId
         setPendingJobId(data.jobId)
         startStreamingDraft(data.jobId, regenerateAssistantMessageId)
-        await pollJobStatus(data.jobId)
+        await pollJobStatus(data.jobId, deliveryMode)
       } catch (err) {
         const normalized = err instanceof Error ? err : new Error('Chat request failed.')
         setError(normalized)

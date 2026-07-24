@@ -92,7 +92,7 @@
     "husky": "^9.1.7",
     "jsdom": "^29.0.2",
     "lint-staged": "^16.4.0",
-    "postcss": "8.5.15",
+    "postcss": "8.5.18",
     "prettier": "^3.8.3",
     "server-only": "^0.0.1",
     "tailwindcss": "^3.4.1",
@@ -113,7 +113,7 @@
     "vite": "7.3.5",
     "esbuild": "0.28.1",
     "ws": "7.5.11",
-    "postcss": "8.5.15",
+    "postcss": "8.5.18",
     "sharp": "0.35.3"
   }
 }

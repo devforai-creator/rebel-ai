@@ -264,6 +264,45 @@ describe('useQueuedChat', () => {
     expect(persistedMessageIds.current.has('user-2')).toBe(true)
   })
 
+  it('removes a realtime user message when the server rolls it back', () => {
+    const persistedMessageIds = { current: new Set<string>(['user-1']) }
+    const rolledBackUserMessage = createMessage({
+      id: 'user-2',
+      content: 'concurrent message',
+      sequence: 2,
+    })
+    const { result } = renderHook(() =>
+      useQueuedChat(
+        createHookParams({
+          initialMessages: [createMessage({ id: 'user-1' })],
+          persistedMessageIds,
+        }),
+      ),
+    )
+
+    act(() => {
+      result.current.handleRealtimeMessageChange({
+        eventType: 'INSERT',
+        old: null,
+        new: rolledBackUserMessage,
+      })
+    })
+
+    expect(result.current.messages.map((message) => message.id)).toEqual(['user-1', 'user-2'])
+    expect(persistedMessageIds.current.has('user-2')).toBe(true)
+
+    act(() => {
+      result.current.handleRealtimeMessageChange({
+        eventType: 'DELETE',
+        old: rolledBackUserMessage,
+        new: null,
+      })
+    })
+
+    expect(result.current.messages.map((message) => message.id)).toEqual(['user-1'])
+    expect(persistedMessageIds.current.has('user-2')).toBe(false)
+  })
+
   it('replaces the originating device optimistic user message with its realtime row', () => {
     const fetchMock = vi.fn(() => new Promise(() => {}))
     vi.stubGlobal('fetch', fetchMock)

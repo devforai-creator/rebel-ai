@@ -365,7 +365,7 @@ export function useQueuedChat({
 
       if (
         payload.eventType === 'DELETE' &&
-        oldMessage?.role === 'assistant' &&
+        (oldMessage?.role === 'assistant' || oldMessage?.role === 'user') &&
         typeof oldMessage.id === 'string'
       ) {
         setMessages((prev) => prev.filter((msg) => msg.id !== oldMessage.id))

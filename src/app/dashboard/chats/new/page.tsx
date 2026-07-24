@@ -5,12 +5,22 @@ import { CHAT_SELECTABLE_API_KEY_OPTION_COLUMNS } from '../api-key-options'
 import NewChatForm from './NewChatForm'
 
 interface Props {
-  searchParams: Promise<{ character?: string }>
+  searchParams: Promise<{
+    character?: string
+    apiKey?: string
+    persona?: string
+    greeting?: string
+  }>
 }
 
 export default async function NewChatPage({ searchParams }: Props) {
   const params = await searchParams
   const characterId = params.character?.trim()
+  const initialApiKeyId = params.apiKey?.trim()
+  const initialPersonaId = params.persona?.trim()
+  const parsedGreetingIndex = Number(params.greeting)
+  const initialGreetingIndex =
+    Number.isInteger(parsedGreetingIndex) && parsedGreetingIndex >= 0 ? parsedGreetingIndex : 0
   const backHref = characterId ? `/dashboard/characters/${characterId}` : '/dashboard/characters'
   const supabase = await createClient()
 
@@ -84,7 +94,14 @@ export default async function NewChatPage({ searchParams }: Props) {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <NewChatForm character={character} apiKeys={apiKeys} personas={personas || []} />
+        <NewChatForm
+          character={character}
+          apiKeys={apiKeys}
+          personas={personas || []}
+          initialApiKeyId={initialApiKeyId}
+          initialPersonaId={initialPersonaId}
+          initialGreetingIndex={initialGreetingIndex}
+        />
       </main>
     </div>
   )

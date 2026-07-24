@@ -20,22 +20,23 @@ export default function ChatPersonaWidget({
   availablePersonas,
   asMenuItem = false,
 }: Props) {
-  if (personaId) {
-    return (
-      <ChatPersonaEditDialog
-        personaId={personaId}
-        initialName={initialName}
-        initialDescription={initialDescription}
+  return (
+    <>
+      <ChatPersonaSelectDialog
+        chatId={chatId}
+        currentPersonaId={personaId}
+        currentPersonaName={initialName}
+        availablePersonas={availablePersonas}
         asMenuItem={asMenuItem}
       />
-    )
-  }
-
-  return (
-    <ChatPersonaSelectDialog
-      chatId={chatId}
-      availablePersonas={availablePersonas}
-      asMenuItem={asMenuItem}
-    />
+      {personaId ? (
+        <ChatPersonaEditDialog
+          personaId={personaId}
+          initialName={initialName}
+          initialDescription={initialDescription}
+          asMenuItem={asMenuItem}
+        />
+      ) : null}
+    </>
   )
 }

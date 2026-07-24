@@ -1,9 +1,23 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { resolveDashboardReturnPath } from '@/lib/navigation/dashboard-return'
 import PersonaList from './PersonaList'
 
-export default async function PersonasPage() {
+interface Props {
+  searchParams: Promise<{ returnTo?: string }>
+}
+
+export default async function PersonasPage({ searchParams }: Props) {
+  const { returnTo } = await searchParams
+  const returnHref = resolveDashboardReturnPath(returnTo)
+  const returnPathname = returnHref.split(/[?#]/, 1)[0]
+  const returnLabel =
+    returnPathname === '/dashboard/chats/new'
+      ? '← 새 채팅으로 돌아가기'
+      : returnPathname.startsWith('/dashboard/chats/')
+        ? '← 채팅으로 돌아가기'
+        : '← Dashboard'
   const supabase = await createClient()
 
   const {
@@ -29,10 +43,10 @@ export default async function PersonasPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link
-                href="/dashboard"
+                href={returnHref}
                 className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
               >
-                ← Dashboard
+                {returnLabel}
               </Link>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">

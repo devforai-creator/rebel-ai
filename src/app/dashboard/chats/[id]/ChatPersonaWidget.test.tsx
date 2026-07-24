@@ -132,4 +132,73 @@ describe('ChatPersonaWidget', () => {
 
     expect(updatePersonaMock).not.toHaveBeenCalled()
   })
+
+  it('switches from the current persona to another persona', async () => {
+    updateChatPersonaMock.mockResolvedValue({ success: true })
+
+    render(
+      <ChatPersonaWidget
+        chatId="chat-1"
+        personaId="persona-1"
+        initialName="Scout"
+        initialDescription="Curious"
+        availablePersonas={[
+          { id: 'persona-1', name: 'Scout' },
+          { id: 'persona-2', name: 'Guide' },
+        ]}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /change persona/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Guide' }))
+    fireEvent.click(screen.getByRole('button', { name: /confirm selection/i }))
+
+    await waitFor(() => {
+      expect(updateChatPersonaMock).toHaveBeenCalledWith('chat-1', 'persona-2')
+    })
+    expect(refreshMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('unsets the current persona', async () => {
+    updateChatPersonaMock.mockResolvedValue({ success: true })
+
+    render(
+      <ChatPersonaWidget
+        chatId="chat-1"
+        personaId="persona-1"
+        initialName="Scout"
+        initialDescription="Curious"
+        availablePersonas={[{ id: 'persona-1', name: 'Scout' }]}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /change persona/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'No persona' }))
+    fireEvent.click(screen.getByRole('button', { name: /confirm selection/i }))
+
+    await waitFor(() => {
+      expect(updateChatPersonaMock).toHaveBeenCalledWith('chat-1', null)
+    })
+    expect(refreshMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns to the current chat after persona management', () => {
+    render(
+      <ChatPersonaWidget
+        chatId="chat-1"
+        personaId={null}
+        initialName={null}
+        initialDescription={null}
+        availablePersonas={[]}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /select persona/i }))
+
+    const href = screen.getByRole('link', { name: /manage personas/i }).getAttribute('href')
+    const url = new URL(href!, 'https://rebel-ai.local')
+
+    expect(url.pathname).toBe('/dashboard/personas')
+    expect(url.searchParams.get('returnTo')).toBe('/dashboard/chats/chat-1')
+  })
 })

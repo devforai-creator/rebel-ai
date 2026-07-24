@@ -3,6 +3,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import type { Database, PersonaUpdate } from '@/types/database.types'
+import { ACTIVE_QUEUE_JOB_STATUSES } from '@/lib/queue/admission'
 import { MAX_PERSONA_DESCRIPTION_LENGTH, MAX_PERSONA_NAME_LENGTH } from './constants'
 
 type Supabase = SupabaseClient<Database>
@@ -47,6 +48,77 @@ export type UpdatedPersona = {
   id: string
   name: string
   description: string | null
+}
+
+export const ACTIVE_PERSONA_MUTATION_CONFLICT_MESSAGE =
+  'Wait for active chat responses to finish before changing this persona.'
+
+export async function verifyPersonaNotUsedByActiveChat({
+  supabase,
+  userId,
+  personaId,
+}: {
+  supabase: Supabase
+  userId: string
+  personaId: string
+}): Promise<{ success: true } | { success: false; status: 409 | 500; message: string }> {
+  const { data: chats, error: chatsError } = await supabase
+    .from('chats')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('persona_id', personaId)
+
+  if (chatsError) {
+    console.error('[Persona Update] Failed to load linked chats', {
+      userId,
+      personaId,
+      message: chatsError.message,
+      code: chatsError.code,
+    })
+    return {
+      success: false,
+      status: 500,
+      message: 'Failed to check active chats',
+    }
+  }
+
+  const chatIds = (chats ?? []).map((chat) => chat.id)
+
+  if (chatIds.length === 0) {
+    return { success: true }
+  }
+
+  const { data: activeJobs, error: activeJobsError } = await supabase
+    .from('chat_generation_jobs')
+    .select('id')
+    .eq('user_id', userId)
+    .in('chat_id', chatIds)
+    .in('status', [...ACTIVE_QUEUE_JOB_STATUSES])
+    .limit(1)
+
+  if (activeJobsError) {
+    console.error('[Persona Update] Failed to check active chat jobs', {
+      userId,
+      personaId,
+      message: activeJobsError.message,
+      code: activeJobsError.code,
+    })
+    return {
+      success: false,
+      status: 500,
+      message: 'Failed to check active chats',
+    }
+  }
+
+  if ((activeJobs ?? []).length > 0) {
+    return {
+      success: false,
+      status: 409,
+      message: ACTIVE_PERSONA_MUTATION_CONFLICT_MESSAGE,
+    }
+  }
+
+  return { success: true }
 }
 
 export async function verifyOwnedPersona({
@@ -109,7 +181,7 @@ export async function updateOwnedPersona({
   input: NormalizedPersonaUpdateInput
 }): Promise<
   | { success: true; persona: UpdatedPersona }
-  | { success: false; status: 404 | 500; message: string }
+  | { success: false; status: 404 | 409 | 500; message: string }
 > {
   const ownership = await verifyOwnedPersona({
     supabase,
@@ -119,6 +191,16 @@ export async function updateOwnedPersona({
 
   if (!ownership.success) {
     return ownership
+  }
+
+  const activeUse = await verifyPersonaNotUsedByActiveChat({
+    supabase,
+    userId,
+    personaId,
+  })
+
+  if (!activeUse.success) {
+    return activeUse
   }
 
   const updateData: PersonaUpdate = {}

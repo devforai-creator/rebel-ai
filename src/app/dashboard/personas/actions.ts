@@ -8,6 +8,7 @@ import {
   parsePersonaUpdateInput,
   updateOwnedPersona,
   verifyOwnedPersona,
+  verifyPersonaNotUsedByActiveChat,
 } from '@/lib/personas/update'
 
 /**
@@ -159,6 +160,16 @@ export async function deletePersona(personaId: string) {
           ? 'Persona not found or you do not have permission'
           : 'Failed to load persona. Please try again.',
     }
+  }
+
+  const activeUse = await verifyPersonaNotUsedByActiveChat({
+    supabase,
+    userId: user.id,
+    personaId,
+  })
+
+  if (!activeUse.success) {
+    return { error: activeUse.message }
   }
 
   const { error } = await supabase

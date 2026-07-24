@@ -15,11 +15,21 @@ function buildContext(personaId: string) {
 function buildSupabase(options: {
   user: { id: string } | null
   personas?: Array<Record<string, unknown>>
+  chats?: Array<Record<string, unknown>>
+  chatGenerationJobs?: Array<Record<string, unknown>>
 }) {
   const supabase = createSupabaseMock({
     tables: {
       personas: {
         rows: options.personas ?? [],
+        primaryKeys: ['id'],
+      },
+      chats: {
+        rows: options.chats ?? [],
+        primaryKeys: ['id'],
+      },
+      chat_generation_jobs: {
+        rows: options.chatGenerationJobs ?? [],
         primaryKeys: ['id'],
       },
     },
@@ -130,5 +140,36 @@ describe('PATCH /api/personas/[personaId]', () => {
     expect(supabase.state.personas).toEqual([
       { id: 'p-1', user_id: 'user-1', name: 'New Name', description: null },
     ])
+  })
+
+  it('returns 409 while a linked chat has an active response', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      personas: [{ id: 'p-1', user_id: 'user-1', name: 'Old', description: 'desc' }],
+      chats: [{ id: 'chat-1', user_id: 'user-1', persona_id: 'p-1' }],
+      chatGenerationJobs: [
+        {
+          id: 'job-1',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          status: 'processing',
+        },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { PATCH } = await import('./route')
+
+    const response = await PATCH(
+      new NextRequest('http://localhost/api/personas/p-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ name: 'New Name' }),
+      }),
+      buildContext('p-1'),
+    )
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Wait for active chat responses to finish before changing this persona.',
+    })
   })
 })

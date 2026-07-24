@@ -1,10 +1,12 @@
 'use client'
 
+import React from 'react'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { Character, Persona } from '@/types/database.types'
+import { buildPersonaManagementHref } from '@/lib/navigation/dashboard-return'
 import { formatChatApiKeyOptionLabel, type ChatSelectableApiKeyOption } from '../api-key-options'
 import { createChat } from '../actions'
 import { getCharacterGreetingOptions } from './greeting-options'
@@ -13,18 +15,42 @@ interface Props {
   character: CharacterOption
   apiKeys: ChatSelectableApiKeyOption[]
   personas: PersonaOption[]
+  initialApiKeyId?: string
+  initialPersonaId?: string
+  initialGreetingIndex?: number
 }
 
 type CharacterOption = Pick<Character, 'id' | 'user_id' | 'name' | 'greeting_message' | 'metadata'>
 type PersonaOption = Pick<Persona, 'id' | 'name' | 'description'>
 
-export default function NewChatForm({ character, apiKeys, personas }: Props) {
+const API_KEY_SELECT_ID = 'new-chat-api-key'
+const PERSONA_SELECT_ID = 'new-chat-persona'
+
+export default function NewChatForm({
+  character,
+  apiKeys,
+  personas,
+  initialApiKeyId = '',
+  initialPersonaId = '',
+  initialGreetingIndex = 0,
+}: Props) {
   const router = useRouter()
-  const [apiKeyId, setApiKeyId] = useState('')
-  const [personaId, setPersonaId] = useState('')
+  const allGreetings = getCharacterGreetingOptions(character)
+  const [apiKeyId, setApiKeyId] = useState(() =>
+    apiKeys.some((key) => key.id === initialApiKeyId) ? initialApiKeyId : '',
+  )
+  const [personaId, setPersonaId] = useState(() =>
+    personas.some((persona) => persona.id === initialPersonaId) ? initialPersonaId : '',
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [greetingIndex, setGreetingIndex] = useState(0)
+  const [greetingIndex, setGreetingIndex] = useState(() =>
+    Number.isInteger(initialGreetingIndex) &&
+    initialGreetingIndex >= 0 &&
+    initialGreetingIndex < allGreetings.length
+      ? initialGreetingIndex
+      : 0,
+  )
   const characterId = character.id
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -62,11 +88,24 @@ export default function NewChatForm({ character, apiKeys, personas }: Props) {
 
   const selectedApiKey = apiKeys.find((k) => k.id === apiKeyId)
 
-  const allGreetings = getCharacterGreetingOptions(character)
-
   const currentGreeting =
     allGreetings[greetingIndex] !== undefined ? allGreetings[greetingIndex] : null
   const hasMultipleOptions = allGreetings.length > 1
+  const returnParams = new URLSearchParams({ character: characterId })
+
+  if (apiKeyId) {
+    returnParams.set('apiKey', apiKeyId)
+  }
+  if (personaId) {
+    returnParams.set('persona', personaId)
+  }
+  if (greetingIndex > 0) {
+    returnParams.set('greeting', String(greetingIndex))
+  }
+
+  const personaManagementHref = buildPersonaManagementHref(
+    `/dashboard/chats/new?${returnParams.toString()}`,
+  )
 
   const handlePreviousGreeting = () => {
     setGreetingIndex((prev) => (prev > 0 ? prev - 1 : allGreetings.length - 1))
@@ -150,10 +189,14 @@ export default function NewChatForm({ character, apiKeys, personas }: Props) {
 
         {/* API 키 선택 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <label
+            htmlFor={API_KEY_SELECT_ID}
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          >
             API 키 선택 <span className="text-red-500">*</span>
           </label>
           <select
+            id={API_KEY_SELECT_ID}
             value={apiKeyId}
             onChange={(e) => setApiKeyId(e.target.value)}
             required
@@ -184,17 +227,21 @@ export default function NewChatForm({ character, apiKeys, personas }: Props) {
         {/* 페르소나 선택 (선택사항) */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor={PERSONA_SELECT_ID}
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               페르소나 선택 (선택사항)
             </label>
             <Link
-              href="/dashboard/personas"
+              href={personaManagementHref}
               className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
             >
               페르소나 관리
             </Link>
           </div>
           <select
+            id={PERSONA_SELECT_ID}
             value={personaId}
             onChange={(e) => setPersonaId(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"

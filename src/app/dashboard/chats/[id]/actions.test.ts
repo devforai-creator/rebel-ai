@@ -16,10 +16,12 @@ function buildSupabase({
   user,
   chats,
   personas,
+  chatGenerationJobs,
 }: {
   user: { id: string } | null
   chats?: Array<Record<string, unknown>>
   personas?: Array<Record<string, unknown>>
+  chatGenerationJobs?: Array<Record<string, unknown>>
 }) {
   const supabase = createSupabaseMock({
     tables: {
@@ -29,6 +31,10 @@ function buildSupabase({
       },
       personas: {
         rows: personas ?? [],
+        primaryKeys: ['id'],
+      },
+      chat_generation_jobs: {
+        rows: chatGenerationJobs ?? [],
         primaryKeys: ['id'],
       },
     },
@@ -95,6 +101,51 @@ describe('chat actions', () => {
 
     await expect(updateChatPersona('chat-1', 'persona-1')).resolves.toEqual({
       error: 'Persona not found or access denied',
+    })
+  })
+
+  it('unsets the chat persona', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      chats: [{ id: 'chat-1', user_id: 'user-1', persona_id: 'persona-1' }],
+      personas: [{ id: 'persona-1', user_id: 'user-1', name: 'Scout' }],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { updateChatPersona } = await import('./actions')
+
+    await expect(updateChatPersona('chat-1', null)).resolves.toEqual({ success: true })
+    expect(getChatRows(supabase)[0]).toMatchObject({
+      id: 'chat-1',
+      persona_id: null,
+    })
+  })
+
+  it('blocks persona changes while the chat has an active response', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      chats: [{ id: 'chat-1', user_id: 'user-1', persona_id: 'persona-1' }],
+      personas: [
+        { id: 'persona-1', user_id: 'user-1', name: 'Scout' },
+        { id: 'persona-2', user_id: 'user-1', name: 'Guide' },
+      ],
+      chatGenerationJobs: [
+        {
+          id: 'job-1',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          status: 'processing',
+        },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { updateChatPersona } = await import('./actions')
+
+    await expect(updateChatPersona('chat-1', 'persona-2')).resolves.toEqual({
+      error: 'Wait for the current response to finish before changing personas.',
+    })
+    expect(getChatRows(supabase)[0]).toMatchObject({
+      id: 'chat-1',
+      persona_id: 'persona-1',
     })
   })
 

@@ -313,7 +313,7 @@ export default function PersonaList({ initialPersonas }: Props) {
       <ConfirmDialog
         isOpen={pendingDeleteId !== null}
         title="Delete persona?"
-        description="This removes the saved persona from your account."
+        description="This removes the saved persona from your account and unsets it in chats that use it."
         confirmLabel="Delete persona"
         isConfirming={isPending && pendingDeleteId !== null}
         onConfirm={confirmDelete}

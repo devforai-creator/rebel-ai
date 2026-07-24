@@ -3,13 +3,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { hasPersistableChatModelConfig, normalizeChatModelConfig } from '@/lib/chat/model-config'
+import { ACTIVE_QUEUE_JOB_STATUSES } from '@/lib/queue/admission'
 
 function hasOwnModelConfigKey(input: unknown, key: string): boolean {
   return !!input && typeof input === 'object' && Object.prototype.hasOwnProperty.call(input, key)
 }
 
-export async function updateChatPersona(chatId: string, personaId: string) {
+export async function updateChatPersona(chatId: string, personaId: string | null) {
   const supabase = await createClient()
+  const normalizedPersonaId = personaId?.trim() || null
 
   const {
     data: { user },
@@ -31,22 +33,41 @@ export async function updateChatPersona(chatId: string, personaId: string) {
     return { error: 'Chat not found or access denied' }
   }
 
-  // 2. Verify ownership of the persona
-  const { data: persona, error: personaError } = await supabase
-    .from('personas')
-    .select('id')
-    .eq('id', personaId)
-    .eq('user_id', user.id)
-    .single()
+  // 2. Verify ownership of the persona when setting one
+  if (normalizedPersonaId) {
+    const { data: persona, error: personaError } = await supabase
+      .from('personas')
+      .select('id')
+      .eq('id', normalizedPersonaId)
+      .eq('user_id', user.id)
+      .single()
 
-  if (personaError || !persona) {
-    return { error: 'Persona not found or access denied' }
+    if (personaError || !persona) {
+      return { error: 'Persona not found or access denied' }
+    }
   }
 
-  // 3. Update chat
+  // 3. Keep the persona stable while a response is pending or being generated
+  const { data: activeJobs, error: activeJobsError } = await supabase
+    .from('chat_generation_jobs')
+    .select('id')
+    .eq('chat_id', chatId)
+    .eq('user_id', user.id)
+    .in('status', [...ACTIVE_QUEUE_JOB_STATUSES])
+    .limit(1)
+
+  if (activeJobsError) {
+    return { error: 'Failed to check the current response status' }
+  }
+
+  if ((activeJobs ?? []).length > 0) {
+    return { error: 'Wait for the current response to finish before changing personas.' }
+  }
+
+  // 4. Update chat
   const { error: updateError } = await supabase
     .from('chats')
-    .update({ persona_id: personaId })
+    .update({ persona_id: normalizedPersonaId })
     .eq('id', chatId)
 
   if (updateError) {

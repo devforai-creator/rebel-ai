@@ -15,14 +15,26 @@ vi.mock('next/cache', () => ({
 function buildSupabase({
   user,
   personas,
+  chats,
+  chatGenerationJobs,
 }: {
   user: { id: string } | null
   personas?: Array<Record<string, unknown>>
+  chats?: Array<Record<string, unknown>>
+  chatGenerationJobs?: Array<Record<string, unknown>>
 }) {
   const supabase = createSupabaseMock({
     tables: {
       personas: {
         rows: personas ?? [],
+        primaryKeys: ['id'],
+      },
+      chats: {
+        rows: chats ?? [],
+        primaryKeys: ['id'],
+      },
+      chat_generation_jobs: {
+        rows: chatGenerationJobs ?? [],
         primaryKeys: ['id'],
       },
     },
@@ -85,6 +97,15 @@ describe('persona actions', () => {
     const supabase = buildSupabase({
       user: { id: 'user-1' },
       personas: [{ id: 'persona-1', user_id: 'user-1', name: 'Old', description: 'Desc' }],
+      chats: [{ id: 'chat-1', user_id: 'user-1', persona_id: 'persona-1' }],
+      chatGenerationJobs: [
+        {
+          id: 'job-1',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          status: 'completed',
+        },
+      ],
     })
     createClientMock.mockResolvedValue(supabase)
     const { updatePersona } = await import('./actions')
@@ -102,6 +123,31 @@ describe('persona actions', () => {
       { id: 'persona-1', user_id: 'user-1', name: 'New Name', description: null },
     ])
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/personas')
+  })
+
+  it('blocks persona updates while a linked chat has an active response', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      personas: [{ id: 'persona-1', user_id: 'user-1', name: 'Old', description: 'Desc' }],
+      chats: [{ id: 'chat-1', user_id: 'user-1', persona_id: 'persona-1' }],
+      chatGenerationJobs: [
+        {
+          id: 'job-1',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          status: 'pending',
+        },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { updatePersona } = await import('./actions')
+
+    await expect(updatePersona('persona-1', { name: 'New Name' })).resolves.toEqual({
+      error: 'Wait for active chat responses to finish before changing this persona.',
+    })
+    expect(supabase.state.personas).toEqual([
+      { id: 'persona-1', user_id: 'user-1', name: 'Old', description: 'Desc' },
+    ])
   })
 
   it('returns unauthorized when deleting without a session', async () => {
@@ -140,5 +186,28 @@ describe('persona actions', () => {
     })
     expect(supabase.state.personas).toEqual([])
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard/personas')
+  })
+
+  it('blocks persona deletion while a linked chat has an active response', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      personas: [{ id: 'persona-1', user_id: 'user-1', name: 'Old', description: 'Desc' }],
+      chats: [{ id: 'chat-1', user_id: 'user-1', persona_id: 'persona-1' }],
+      chatGenerationJobs: [
+        {
+          id: 'job-1',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          status: 'processing',
+        },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { deletePersona } = await import('./actions')
+
+    await expect(deletePersona('persona-1')).resolves.toEqual({
+      error: 'Wait for active chat responses to finish before changing this persona.',
+    })
+    expect(supabase.state.personas).toHaveLength(1)
   })
 })

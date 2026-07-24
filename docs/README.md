@@ -38,7 +38,8 @@ active contract, runbook, map, reference, working note, evidence, or backlog.
 ## Active Maps And Inventories
 
 - [MODEL_CATALOG.md](./MODEL_CATALOG.md): model registration workflow, provider catalog fields, and capability-driven runtime contracts
-- [PROJECT_SCALING_HARDENING.md](./PROJECT_SCALING_HARDENING.md): design direction for keeping the repo maintainable as scope, complexity, and contributor surface area grow
+- [PROJECT_SCALING_HARDENING.md](./PROJECT_SCALING_HARDENING.md): current map of shipped
+  hardening foundations and the remaining client, runner, durable-write, and isolation work
 - [FIRST_CLASS_PATH_MAP.md](./FIRST_CLASS_PATH_MAP.md): compact map of the
   maintained chat request -> queue -> runner -> durable-write path
 - [LLM_INVOCATION_OWNERSHIP.md](./LLM_INVOCATION_OWNERSHIP.md): inventory of real
@@ -85,7 +86,8 @@ Reviews are evidence and recommendations, not the source of truth for the curren
 - [SECURITY_AUDIT_DECISIONS.md](./SECURITY_AUDIT_DECISIONS.md): maintainer log for `npm audit` and Dependabot advisories that fall outside the CI auto-block policy
 - [reviews/experimental-agentic-transcript-recall-exit-report-template.md](./reviews/experimental-agentic-transcript-recall-exit-report-template.md)
 - [reviews/production-readiness-followups-2026-04-12.md](./reviews/production-readiness-followups-2026-04-12.md)
-- [reviews/review-followups.md](./reviews/review-followups.md)
+- [reviews/review-followups.md](./reviews/review-followups.md): archived April dashboard
+  review closeout; historical priorities, not the current execution queue
 
 ## Backlogs
 

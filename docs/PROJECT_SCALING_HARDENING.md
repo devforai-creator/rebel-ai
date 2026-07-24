@@ -1,6 +1,13 @@
 # Project Scaling Hardening
 
-This document is an engineering note for keeping RebelAI maintainable as product scope, runtime complexity, contributor surface area, and automation usage grow.
+Status: Active
+Role: Map
+Last reviewed: 2026-07-25
+Source of truth: code, tests, `package.json`, and the active deployment
+Revisit when: the first-class chat path, runner stages, client lifecycle, or support boundaries change
+
+This document is an engineering map for keeping RebelAI maintainable as product scope, runtime
+complexity, contributor surface area, and automation usage grow.
 
 The primary goal is not "optimize the repo for weak models."
 The primary goal is to keep the project scalable:
@@ -33,12 +40,10 @@ This document is about preventing that drift.
 
 ## 2. Current Assessment
 
-Current state: stronger than average for a solo-maintainer AI product, but not yet as scalable as it should be across every hot path.
-
-Approximate posture:
-
-- current: `7.5-8/10` for change resilience under growth
-- realistic near-term target: `8.5-9/10` for routine feature work, refactors, and bug fixes
+Current state: the first-class path and its verification entry points are substantially more
+explicit than when this note was first written. The remaining scaling debt is concentrated in
+client chat lifecycle coordination, runner-stage ownership, durable writes, and physical isolation
+of experimental paths.
 
 Why the current posture is already above average:
 
@@ -48,12 +53,21 @@ Why the current posture is already above average:
 - browser/server Supabase usage already has explicit boundaries in [client.ts](../src/lib/supabase/client.ts), [server.ts](../src/lib/supabase/server.ts), and [admin.ts](../src/lib/supabase/admin.ts)
 - boundary drift already has at least one dedicated static check in [check-browser-supabase-client.js](../scripts/check-browser-supabase-client.js)
 - the repo has strong test density around auth, chat, queue, storage, import, and support-tier behavior
+- `npm run verify:core` provides a compact maintained-chat-path gate
+- [FIRST_CLASS_PATH_MAP.md](./FIRST_CLASS_PATH_MAP.md) names the request, queue, runner, durable-write,
+  and best-effort follow-up owners
+- the chat API delegates parsing, admission, persistence, submission, and post-submit effects to
+  adjacent modules instead of keeping them all inline
+- provider model metadata now lives in provider-specific catalogs under
+  [src/lib/models/catalog/](../src/lib/models/catalog/)
 
-Why the score is not higher yet:
+Why the work is not complete:
 
 - some core chat paths still concentrate too much orchestration in a few files
 - queue, runner, memory, and post-processing behavior still requires too much multi-file mental stitching
-- there is not yet a single compact `verify:core` style command for the exact first-class path
+- client chat state still reconciles SSR, optimistic, Realtime, stream, and polling inputs across
+  overlapping state paths
+- important turn, job, summary, and metadata writes still need narrower ownership contracts
 - experimental and fallback behavior is conceptually separated better than it is physically separated
 
 ## 3. Main Risk Zones
@@ -68,11 +82,13 @@ These are the areas where growth pressure can most easily turn into future maint
 
 Risk:
 
-- request validation, rate limiting, ownership, persistence, queue admission, and experimental trigger dispatch all live close together
+- the route shell is now split into adjacent modules, but durable user-turn persistence and job
+  enqueue are still separate operations and optional effects remain close to the core submission path
 
 Desired end state:
 
-- admission, validation, durable write, and optional side effects should each have their own narrow contract
+- preserve the current parsing/admission/submission split while making the critical durable write
+  atomic and keeping optional side effects outside that transaction
 
 ### 3.2 Runner execution and post-generation stages
 
@@ -106,15 +122,17 @@ Desired end state:
 - [src/lib/chat/model-config.ts](../src/lib/chat/model-config.ts)
 - [src/lib/chat-memory/index.ts](../src/lib/chat-memory/index.ts)
 - [src/lib/chat-summaries/index.ts](../src/lib/chat-summaries/index.ts)
-- [src/lib/models/registry.ts](../src/lib/models/registry.ts)
+- [src/lib/models/catalog/](../src/lib/models/catalog/)
 
 Risk:
 
-- future changes can accidentally widen the supported surface or make fallback behavior ambiguous
+- model capabilities are centralized, but memory modes and experimental post-processing can still
+  widen the supported surface or make fallback behavior ambiguous
 
 Desired end state:
 
-- one place should decide support tier, one place should decide enablement, and one place should decide runtime dispatch
+- keep capability-driven model behavior centralized while making support tier, feature enablement,
+  and runtime dispatch explicit for memory and experimental paths
 
 ## 4. Hardening Principles
 
@@ -193,9 +211,12 @@ Prefer:
 
 These are the highest-leverage changes for keeping RebelAI scalable and maintainable as it grows.
 
-### Priority 1. Add a compact first-class verification command
+### Priority 1. Keep the compact first-class verification command aligned
 
-Add one command that verifies the real maintained path instead of the full repo surface.
+Status: shipped; maintain as the first-class path changes.
+
+`npm run verify:core` now combines the browser Supabase boundary check, focused core-path tests, and
+typecheck.
 
 Target coverage:
 
@@ -209,15 +230,20 @@ Why it matters:
 
 - contributors need a short, obvious verification target after every edit in the first-class path
 
-### Priority 2. Split the chat API route by responsibility
+### Priority 2. Preserve the chat API responsibility split and narrow its durable write
 
-Refactor [src/app/api/chat/route.ts](../src/app/api/chat/route.ts) so that:
+Status: substantially shipped; atomic submission remains.
 
-- request parsing and shape normalization live in one module
-- admission and ownership checks live in one module
-- turn persistence lives in one module
-- queue/job dispatch lives in one module
-- experimental side effects stay outside the supported synchronous path
+[src/app/api/chat/route.ts](../src/app/api/chat/route.ts) now delegates to:
+
+- [request-contract.ts](../src/app/api/chat/request-contract.ts) for parsing and normalization
+- [chat-admission.ts](../src/app/api/chat/chat-admission.ts) for ownership and admission
+- [submit-chat-job.ts](../src/app/api/chat/submit-chat-job.ts) for post-admission orchestration
+- [job-persistence.ts](../src/app/api/chat/job-persistence.ts) for turn and job persistence
+- [post-submit-effects.ts](../src/app/api/chat/post-submit-effects.ts) for optional follow-ups
+
+The remaining high-value step is to make user-turn/message persistence and job enqueue one
+database-atomic operation without collapsing these responsibilities back into the route.
 
 Why it matters:
 
@@ -225,13 +251,21 @@ Why it matters:
 
 ### Priority 3. Turn runner stages into an explicit pipeline contract
 
+Status: in progress.
+
 Make the runner stages return small typed result objects with stable names and isolated side effects.
+
+Stage modules now exist for execution context, provider request, streaming response, post-processing,
+assistant finalization, and post-generation work. The remaining work is to reduce the size and
+cross-stage knowledge of the largest modules and narrow which stages may perform durable writes.
 
 Why it matters:
 
 - this keeps runner evolution from turning into one large mental model that only a maintainer can safely edit
 
 ### Priority 4. Add import-layer checks
+
+Status: partial.
 
 Add lightweight checks for rules such as:
 
@@ -243,9 +277,11 @@ Why it matters:
 
 - architectural drift often starts as import drift before it becomes logic drift
 
-### Priority 5. Publish a first-class path map
+### Priority 5. Maintain the first-class path map
 
-Add one small doc or generated map that answers:
+Status: shipped.
+
+[FIRST_CLASS_PATH_MAP.md](./FIRST_CLASS_PATH_MAP.md) now answers:
 
 - what is the exact supported chat success path
 - which modules are allowed to write durable state in that path
@@ -256,6 +292,8 @@ Why it matters:
 - the project should not depend on unwritten maintainer memory to explain the main path
 
 ### Priority 6. Make experimental features disposable by default
+
+Status: in progress.
 
 For every experimental path, require:
 
@@ -305,7 +343,8 @@ The next step is to turn more of the current intent into mechanical constraints:
 - smaller core modules
 - tighter write surfaces
 - more import-boundary enforcement
-- one obvious first-class verification path
+- one job-scoped client lifecycle model
+- continued alignment of `verify:core` and [FIRST_CLASS_PATH_MAP.md](./FIRST_CLASS_PATH_MAP.md)
 - more disposable experimental branches
 
 This is primarily a project-scaling investment.

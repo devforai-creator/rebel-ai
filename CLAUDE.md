@@ -18,13 +18,11 @@ npm run test             # Vitest (unit + integration)
 npm run test -- path     # Single test file
 npm run test:rls         # RLS policy tests (requires `supabase start`)
 npm run test:vault       # Vault security test (requires .env.local)
-npx tsc --noEmit         # Type check
+npm run typecheck        # Type check (next typegen + tsc --noEmit)
 npm run db:types         # Push local migrations + regenerate database.generated.ts
 npm run chat:jobs        # Manually drain chat job queue
 npm run character:jobs   # Manually drain character import job queue
 ```
-
-CI (GitHub Actions, Node 24): lint → format:check → test with coverage → build → secret scan.
 
 ## Code Style
 

@@ -207,31 +207,49 @@ export function useQueuedChat({
     return fetchLatestChatMessage(chatId) as Promise<(Message & { debug_info?: DebugInfo }) | null>
   }, [chatId])
 
+  const upsertUserMessage = useCallback(
+    (userMessage: Message & { debug_info?: DebugInfo }) => {
+      if (userMessage.debug_info) {
+        debugInfoMap.current.set(userMessage.id, userMessage.debug_info)
+      }
+      persistedMessageIds.current.add(userMessage.id)
+
+      setMessages((prev) => {
+        const mappedMessage = mapMessageToDisplay(userMessage)
+        const existingIndex = prev.findIndex((message) => message.id === userMessage.id)
+
+        if (existingIndex !== -1) {
+          const next = [...prev]
+          next[existingIndex] = mappedMessage
+          return next
+        }
+
+        const next = [...prev]
+        for (let index = next.length - 1; index >= 0; index -= 1) {
+          if (
+            next[index].temp &&
+            next[index].role === 'user' &&
+            next[index].content === userMessage.content
+          ) {
+            next[index] = mappedMessage
+            return next
+          }
+        }
+
+        return [...next, mappedMessage]
+      })
+    },
+    [debugInfoMap, persistedMessageIds],
+  )
+
   const syncLatestUserMessage = useCallback(async () => {
     const latest = await fetchLatestMessage()
     if (!latest || latest.role !== 'user') {
       return
     }
 
-    if (latest.debug_info) {
-      debugInfoMap.current.set(latest.id, latest.debug_info as DebugInfo)
-    }
-    persistedMessageIds.current.add(latest.id)
-
-    setMessages((prev) => {
-      const next = [...prev]
-      for (let index = next.length - 1; index >= 0; index -= 1) {
-        if (next[index].temp && next[index].role === 'user') {
-          next[index] = mapMessageToDisplay(latest)
-          return next
-        }
-      }
-      if (next.some((msg) => msg.id === latest.id)) {
-        return next
-      }
-      return [...next, mapMessageToDisplay(latest)]
-    })
-  }, [fetchLatestMessage, debugInfoMap, persistedMessageIds])
+    upsertUserMessage(latest)
+  }, [fetchLatestMessage, upsertUserMessage])
 
   const appendAssistantMessage = useCallback(async () => {
     const latest = await fetchLatestMessage()
@@ -314,33 +332,40 @@ export function useQueuedChat({
 
   const handleRealtimeMessageChange = useCallback(
     (payload: MessageChangePayload) => {
-      const newMessage = (payload.new as AssistantMessageSnapshot | null) ?? null
-      const oldMessage = (payload.old as AssistantMessageSnapshot | null) ?? null
+      const newMessage = payload.new
+      const oldMessage = payload.old
 
       if (
         payload.eventType === 'INSERT' &&
-        newMessage &&
-        newMessage.role === 'assistant' &&
+        newMessage?.role === 'user' &&
+        typeof newMessage.id === 'string' &&
+        typeof newMessage.content === 'string'
+      ) {
+        upsertUserMessage(newMessage as Message & { debug_info?: DebugInfo })
+        return
+      }
+
+      if (
+        payload.eventType === 'INSERT' &&
+        newMessage?.role === 'assistant' &&
         typeof newMessage.id === 'string'
       ) {
-        upsertAssistantMessage(newMessage)
+        upsertAssistantMessage(newMessage as AssistantMessageSnapshot)
         return
       }
 
       if (
         payload.eventType === 'UPDATE' &&
-        newMessage &&
-        newMessage.role === 'assistant' &&
+        newMessage?.role === 'assistant' &&
         typeof newMessage.id === 'string'
       ) {
-        upsertAssistantMessage(newMessage)
+        upsertAssistantMessage(newMessage as AssistantMessageSnapshot)
         return
       }
 
       if (
         payload.eventType === 'DELETE' &&
-        oldMessage &&
-        oldMessage.role === 'assistant' &&
+        oldMessage?.role === 'assistant' &&
         typeof oldMessage.id === 'string'
       ) {
         setMessages((prev) => prev.filter((msg) => msg.id !== oldMessage.id))
@@ -348,7 +373,7 @@ export function useQueuedChat({
         debugInfoMap.current.delete(oldMessage.id)
       }
     },
-    [debugInfoMap, persistedMessageIds, upsertAssistantMessage],
+    [debugInfoMap, persistedMessageIds, upsertAssistantMessage, upsertUserMessage],
   )
 
   const handleAssistantStreamEvent = useCallback((payload: AssistantStreamBroadcastPayload) => {

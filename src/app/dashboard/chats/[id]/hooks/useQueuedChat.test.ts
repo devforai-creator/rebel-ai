@@ -224,6 +224,150 @@ describe('useQueuedChat', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('appends realtime user messages from another device without duplicates', () => {
+    const persistedMessageIds = { current: new Set<string>(['user-1']) }
+    const remoteUserMessage = createMessage({
+      id: 'user-2',
+      content: 'sent from another device',
+      sequence: 2,
+    })
+    const { result } = renderHook(() =>
+      useQueuedChat(
+        createHookParams({
+          initialMessages: [createMessage({ id: 'user-1' })],
+          persistedMessageIds,
+        }),
+      ),
+    )
+
+    act(() => {
+      result.current.handleRealtimeMessageChange({
+        eventType: 'INSERT',
+        old: null,
+        new: remoteUserMessage,
+      })
+      result.current.handleRealtimeMessageChange({
+        eventType: 'INSERT',
+        old: null,
+        new: remoteUserMessage,
+      })
+    })
+
+    expect(result.current.messages).toEqual([
+      expect.objectContaining({ id: 'user-1' }),
+      expect.objectContaining({
+        id: 'user-2',
+        role: 'user',
+        content: 'sent from another device',
+      }),
+    ])
+    expect(persistedMessageIds.current.has('user-2')).toBe(true)
+  })
+
+  it('replaces the originating device optimistic user message with its realtime row', () => {
+    const fetchMock = vi.fn(() => new Promise(() => {}))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const persistedMessageIds = { current: new Set<string>(['user-1']) }
+    const { result } = renderHook(() =>
+      useQueuedChat(
+        createHookParams({
+          initialMessages: [createMessage({ id: 'user-1' })],
+          selectedApiKeyId: 'key-1',
+          persistedMessageIds,
+        }),
+      ),
+    )
+
+    act(() => {
+      result.current.handleInputChange({
+        target: { value: 'optimistic message' },
+      } as Parameters<typeof result.current.handleInputChange>[0])
+    })
+    act(() => {
+      result.current.handleSubmit()
+    })
+
+    expect(result.current.messages).toHaveLength(2)
+    expect(result.current.messages[1]).toMatchObject({
+      role: 'user',
+      content: 'optimistic message',
+      temp: true,
+    })
+
+    act(() => {
+      result.current.handleRealtimeMessageChange({
+        eventType: 'INSERT',
+        old: null,
+        new: createMessage({
+          id: 'user-2',
+          content: 'optimistic message',
+          sequence: 2,
+        }),
+      })
+    })
+
+    expect(result.current.messages).toHaveLength(2)
+    expect(result.current.messages[1]).toEqual(
+      expect.objectContaining({
+        id: 'user-2',
+        role: 'user',
+        content: 'optimistic message',
+      }),
+    )
+    expect(result.current.messages[1].temp).toBeUndefined()
+    expect(persistedMessageIds.current.has('user-2')).toBe(true)
+  })
+
+  it('does not replace an optimistic message with a different realtime user message', () => {
+    const fetchMock = vi.fn(() => new Promise(() => {}))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() =>
+      useQueuedChat(
+        createHookParams({
+          initialMessages: [createMessage({ id: 'user-1' })],
+          selectedApiKeyId: 'key-1',
+        }),
+      ),
+    )
+
+    act(() => {
+      result.current.handleInputChange({
+        target: { value: 'local pending message' },
+      } as Parameters<typeof result.current.handleInputChange>[0])
+    })
+    act(() => {
+      result.current.handleSubmit()
+    })
+
+    act(() => {
+      result.current.handleRealtimeMessageChange({
+        eventType: 'INSERT',
+        old: null,
+        new: createMessage({
+          id: 'user-2',
+          content: 'sent from another device',
+          sequence: 2,
+        }),
+      })
+    })
+
+    expect(result.current.messages).toEqual([
+      expect.objectContaining({ id: 'user-1' }),
+      expect.objectContaining({
+        role: 'user',
+        content: 'local pending message',
+        temp: true,
+      }),
+      expect.objectContaining({
+        id: 'user-2',
+        role: 'user',
+        content: 'sent from another device',
+      }),
+    ])
+  })
+
   it('drops deleted assistant messages from UI state and bookkeeping refs', () => {
     const assistantDebugInfo = { cacheHit: true } as DebugInfo
     const assistantMessage = createMessage({

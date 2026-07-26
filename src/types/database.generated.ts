@@ -1515,21 +1515,6 @@ export type Database = {
             Args: { requester?: string; secret_name: string }
             Returns: undefined
           }
-      get_character_asset_url: { Args: { asset_id: string }; Returns: string }
-      get_character_assets: {
-        Args: { p_character_id: string }
-        Returns: {
-          asset_type: string
-          content_type: string
-          display_name: string
-          display_order: number
-          file_name: string
-          file_size: number
-          id: string
-          metadata: Json
-          public_url: string
-        }[]
-      }
       get_chat_token_totals: {
         Args: { p_chat_id: string; p_requester: string }
         Returns: {

@@ -7808,3 +7808,13 @@ create trigger recalculate_chat_last_message_at_after_update_trigger
   after update of chat_id, role, created_at on public.messages
   for each row execute function public.recalculate_chat_last_message_at_after_update();
 
+
+
+-- >>> 92_drop_obsolete_public_asset_url_rpcs.sql
+
+-- Remove legacy RPCs that expose public character asset URLs.
+-- Character assets are private and are delivered through signed URLs.
+
+drop function if exists public.get_character_assets(uuid);
+drop function if exists public.get_character_asset_url(uuid);
+

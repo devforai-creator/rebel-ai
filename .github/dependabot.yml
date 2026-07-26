@@ -4,9 +4,19 @@ updates:
   - package-ecosystem: 'npm'
     directory: '/'
     schedule:
-      interval: 'daily'
+      interval: 'monthly'
       time: '09:00'
       timezone: 'Asia/Seoul'
+    cooldown:
+      default-days: 7
+    allow:
+      - dependency-name: '@safe-ugc-ui/*'
+        update-types:
+          - 'version-update:semver-patch'
+          - 'version-update:semver-minor'
+      - dependency-name: '*'
+        update-types:
+          - 'version-update:semver-patch'
     groups:
       safe-ugc-ui:
         applies-to: 'version-updates'
@@ -20,13 +30,18 @@ updates:
           - '@safe-ugc-ui/*'
         update-types:
           - 'patch'
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
 
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
-      interval: 'weekly'
-      day: 'monday'
+      interval: 'monthly'
       time: '09:15'
       timezone: 'Asia/Seoul'
-    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+    open-pull-requests-limit: 1

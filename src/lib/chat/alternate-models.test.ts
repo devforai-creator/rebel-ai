@@ -1,60 +1,96 @@
-import { describe, it, expect } from 'vitest'
-import { resolveAlternateApiKeyId } from './alternate-models'
+import { describe, expect, it } from 'vitest'
+import { resolveAlternateModelSelection } from './alternate-models'
 
-describe('resolveAlternateApiKeyId', () => {
-  it('returns selected API key when alternate models disabled', () => {
-    const result = resolveAlternateApiKeyId({
-      alternateModels: { enabled: false, primaryApiKeyId: 'a', secondaryApiKeyId: 'b' },
-      selectedApiKeyId: 'primary',
+describe('resolveAlternateModelSelection', () => {
+  it('returns the selected model when alternate models are disabled', () => {
+    const result = resolveAlternateModelSelection({
+      alternateModels: {
+        enabled: false,
+        primaryApiKeyId: 'a',
+        primaryModelName: 'model-a',
+        secondaryApiKeyId: 'b',
+        secondaryModelName: 'model-b',
+      },
+      selectedModel: { apiKeyId: 'primary', modelName: 'selected-model' },
       messages: [],
     })
 
-    expect(result).toBe('primary')
+    expect(result).toEqual({ apiKeyId: 'primary', modelName: 'selected-model' })
   })
 
-  it('returns selected API key when secondary key is missing', () => {
-    const result = resolveAlternateApiKeyId({
-      alternateModels: { enabled: true, primaryApiKeyId: 'a', secondaryApiKeyId: null },
-      selectedApiKeyId: 'primary',
+  it('returns the selected model when the secondary selection is incomplete', () => {
+    const result = resolveAlternateModelSelection({
+      alternateModels: {
+        enabled: true,
+        primaryApiKeyId: 'a',
+        primaryModelName: 'model-a',
+        secondaryApiKeyId: null,
+        secondaryModelName: null,
+      },
+      selectedModel: { apiKeyId: 'primary', modelName: 'selected-model' },
       messages: [],
     })
 
-    expect(result).toBe('primary')
+    expect(result).toEqual({ apiKeyId: 'primary', modelName: 'selected-model' })
   })
 
-  it('alternates to secondary when last assistant used primary', () => {
-    const result = resolveAlternateApiKeyId({
-      alternateModels: { enabled: true, primaryApiKeyId: 'a', secondaryApiKeyId: 'b' },
-      selectedApiKeyId: 'a',
+  it('starts with the primary model', () => {
+    const result = resolveAlternateModelSelection({
+      alternateModels: {
+        enabled: true,
+        primaryApiKeyId: 'shared-key',
+        primaryModelName: 'model-a',
+        secondaryApiKeyId: 'shared-key',
+        secondaryModelName: 'model-b',
+      },
+      selectedModel: { apiKeyId: 'shared-key', modelName: 'model-a' },
+      messages: [],
+    })
+
+    expect(result).toEqual({ apiKeyId: 'shared-key', modelName: 'model-a' })
+  })
+
+  it('alternates models that share one provider credential', () => {
+    const result = resolveAlternateModelSelection({
+      alternateModels: {
+        enabled: true,
+        primaryApiKeyId: 'shared-key',
+        primaryModelName: 'model-a',
+        secondaryApiKeyId: 'shared-key',
+        secondaryModelName: 'model-b',
+      },
+      selectedModel: { apiKeyId: 'shared-key', modelName: 'model-a' },
       messages: [
-        { role: 'assistant', debug_info: { modelConfig: { apiKeyId: 'a' } } },
-        { role: 'user' },
+        {
+          role: 'assistant',
+          debug_info: {
+            modelConfig: { apiKeyId: 'shared-key', modelName: 'model-a' },
+          },
+        },
       ],
     })
 
-    expect(result).toBe('b')
+    expect(result).toEqual({ apiKeyId: 'shared-key', modelName: 'model-b' })
   })
 
-  it('alternates to primary when last assistant used secondary', () => {
-    const result = resolveAlternateApiKeyId({
-      alternateModels: { enabled: true, primaryApiKeyId: 'a', secondaryApiKeyId: 'b' },
-      selectedApiKeyId: 'a',
+  it('alternates back after the secondary model', () => {
+    const result = resolveAlternateModelSelection({
+      alternateModels: {
+        enabled: true,
+        primaryApiKeyId: 'a',
+        primaryModelName: 'model-a',
+        secondaryApiKeyId: 'b',
+        secondaryModelName: 'model-b',
+      },
+      selectedModel: { apiKeyId: 'a', modelName: 'model-a' },
       messages: [
-        { role: 'assistant', debug_info: { modelConfig: { apiKeyId: 'b' } } },
-        { role: 'user' },
+        {
+          role: 'assistant',
+          debug_info: { modelConfig: { apiKeyId: 'b', modelName: 'model-b' } },
+        },
       ],
     })
 
-    expect(result).toBe('a')
-  })
-
-  it('defaults to primary when no assistant metadata exists', () => {
-    const result = resolveAlternateApiKeyId({
-      alternateModels: { enabled: true, primaryApiKeyId: 'a', secondaryApiKeyId: 'b' },
-      selectedApiKeyId: 'a',
-      messages: [{ role: 'user' }],
-    })
-
-    expect(result).toBe('a')
+    expect(result).toEqual({ apiKeyId: 'a', modelName: 'model-a' })
   })
 })

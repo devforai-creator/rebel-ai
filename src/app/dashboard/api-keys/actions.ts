@@ -40,7 +40,6 @@ const apiKeyFormSchema = z.object({
     .refine((value) => value.length > 0, {
       message: 'API 키를 입력해주세요.',
     }),
-  model_preference: z.string().optional().default(''),
   service_tier: z
     .string()
     .optional()
@@ -115,7 +114,6 @@ export async function createApiKey(
   const provider = parsedForm.data.provider as Provider
   const keyName = parsedForm.data.key_name
   const apiKey = parsedForm.data.api_key
-  const modelPreference = parsedForm.data.model_preference
   const rawServiceTier = parsedForm.data.service_tier
   const normalizedTier = allowedServiceTiers.includes(rawServiceTier as ApiServiceTier)
     ? (rawServiceTier as ApiServiceTier)
@@ -218,7 +216,7 @@ export async function createApiKey(
     provider,
     key_name: keyName,
     vault_secret_name: vaultSecretName,
-    model_preference: modelPreference || null,
+    model_preference: null,
     service_tier: serviceTier,
     reasoning_effort: reasoningEffort,
   })

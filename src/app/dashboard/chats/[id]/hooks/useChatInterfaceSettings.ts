@@ -19,61 +19,95 @@ import {
   isAnthropicBatchChatSupported,
   type ChatDeliveryMode,
 } from '@/lib/chat/delivery-mode'
+import {
+  buildLlmModelOptions,
+  isSameLlmModelSelection,
+  resolveLlmModelSelection,
+  type LlmModelSelection,
+} from '@/lib/llm/model-selection'
 import { updateChatModelConfig } from '../actions'
 import type { ApiKeyOption } from '../utils'
 
 type ResolveInitialChatSettingsArgs = {
   apiKeys: ApiKeyOption[]
   preselectedApiKeyId?: string
+  preselectedModelName?: string
   normalizedModelConfig: ReturnType<typeof normalizeChatModelConfig>
   storedApiKeyId?: string | null
+  storedModelName?: string | null
 }
 
 export type InitialChatSettings = {
   primaryApiKeyId: string
+  primaryModelName: string
   secondaryApiKeyId: string
+  secondaryModelName: string
   alternateModelsEnabled: boolean
-}
-
-function resolveValidApiKeyId(apiKeys: ApiKeyOption[], candidate?: string | null): string | null {
-  if (!candidate) {
-    return null
-  }
-
-  return apiKeys.some((key) => key.id === candidate) ? candidate : null
 }
 
 export function resolveInitialChatSettings({
   apiKeys,
   preselectedApiKeyId,
+  preselectedModelName,
   normalizedModelConfig,
   storedApiKeyId,
+  storedModelName,
 }: ResolveInitialChatSettingsArgs): InitialChatSettings {
-  const primaryFromConfig = resolveValidApiKeyId(
-    apiKeys,
-    normalizedModelConfig.alternateModels?.primaryApiKeyId,
-  )
-  const primaryFromPreselected = resolveValidApiKeyId(apiKeys, preselectedApiKeyId ?? null)
-  const primaryFromStored = resolveValidApiKeyId(apiKeys, storedApiKeyId ?? null)
-  const primaryApiKeyId =
-    primaryFromConfig ?? primaryFromPreselected ?? primaryFromStored ?? apiKeys[0]?.id ?? ''
+  const primarySelection =
+    resolveLlmModelSelection({
+      credentials: apiKeys,
+      apiKeyId: normalizedModelConfig.alternateModels?.primaryApiKeyId,
+      modelName: normalizedModelConfig.alternateModels?.primaryModelName,
+    }) ??
+    resolveLlmModelSelection({
+      credentials: apiKeys,
+      apiKeyId: preselectedApiKeyId,
+      modelName: preselectedModelName,
+    }) ??
+    resolveLlmModelSelection({
+      credentials: apiKeys,
+      apiKeyId: storedApiKeyId,
+      modelName: storedModelName,
+    }) ??
+    resolveLlmModelSelection({
+      credentials: apiKeys,
+      apiKeyId: apiKeys[0]?.id,
+    })
 
-  const secondaryFromConfig = resolveValidApiKeyId(
-    apiKeys,
-    normalizedModelConfig.alternateModels?.secondaryApiKeyId,
-  )
-  const fallbackSecondary = apiKeys.find((key) => key.id !== primaryApiKeyId)?.id ?? ''
-  const secondaryApiKeyId = secondaryFromConfig ?? fallbackSecondary
+  const modelOptions = buildLlmModelOptions(apiKeys)
+  const secondaryFromConfig = resolveLlmModelSelection({
+    credentials: apiKeys,
+    apiKeyId: normalizedModelConfig.alternateModels?.secondaryApiKeyId,
+    modelName: normalizedModelConfig.alternateModels?.secondaryModelName,
+  })
+  const fallbackSecondary =
+    [
+      ...apiKeys.map((credential) =>
+        resolveLlmModelSelection({
+          credentials: apiKeys,
+          apiKeyId: credential.id,
+        }),
+      ),
+      ...modelOptions.map((option) => ({
+        apiKeyId: option.credential.id,
+        modelName: option.modelName,
+      })),
+    ]
+      .filter((selection): selection is LlmModelSelection => selection !== null)
+      .find((selection) => !isSameLlmModelSelection(selection, primarySelection)) ?? null
+  const secondarySelection = secondaryFromConfig ?? fallbackSecondary
 
   const alternateModelsEnabled =
     (normalizedModelConfig.alternateModels?.enabled ?? false) &&
-    !!primaryApiKeyId &&
-    !!secondaryApiKeyId &&
-    primaryApiKeyId !== secondaryApiKeyId
+    !!primarySelection &&
+    !!secondarySelection &&
+    !isSameLlmModelSelection(primarySelection, secondarySelection)
 
   return {
-    primaryApiKeyId,
-    secondaryApiKeyId,
+    primaryApiKeyId: primarySelection?.apiKeyId ?? '',
+    primaryModelName: primarySelection?.modelName ?? '',
+    secondaryApiKeyId: secondarySelection?.apiKeyId ?? '',
+    secondaryModelName: secondarySelection?.modelName ?? '',
     alternateModelsEnabled,
   }
 }
@@ -82,13 +116,16 @@ type UseChatInterfaceSettingsArgs = {
   chatId: string
   apiKeys: ApiKeyOption[]
   preselectedApiKeyId?: string
+  preselectedModelName?: string
   initialModelConfig?: ChatModelConfig | null
   isDeveloper: boolean
 }
 
 type UseChatInterfaceSettingsReturn = {
   selectedApiKeyId: string
+  selectedModelName: string
   secondaryApiKeyId: string
+  secondaryModelName: string
   selectedApiKey: ApiKeyOption | null
   alternateModelsEnabled: boolean
   memoryMode: ChatMemoryMode
@@ -97,8 +134,8 @@ type UseChatInterfaceSettingsReturn = {
   deliveryMode: ChatDeliveryMode
   developerMode: boolean
   handleToggleAlternateModels: () => void
-  handleSelectPrimaryApiKey: (nextId: string) => void
-  handleSelectSecondaryApiKey: (nextId: string) => void
+  handleSelectPrimaryModel: (selection: LlmModelSelection) => void
+  handleSelectSecondaryModel: (selection: LlmModelSelection) => void
   handleSelectMemoryMode: (nextMode: ChatMemoryMode) => void
   handleToggleAnthropicBatchMode: () => void
   toggleDeveloperMode: () => void
@@ -108,6 +145,7 @@ export function useChatInterfaceSettings({
   chatId,
   apiKeys,
   preselectedApiKeyId,
+  preselectedModelName,
   initialModelConfig,
   isDeveloper,
 }: UseChatInterfaceSettingsArgs): UseChatInterfaceSettingsReturn {
@@ -132,15 +170,24 @@ export function useChatInterfaceSettings({
       resolveInitialChatSettings({
         apiKeys,
         preselectedApiKeyId,
+        preselectedModelName,
         normalizedModelConfig,
         storedApiKeyId:
           typeof window === 'undefined' ? null : localStorage.getItem('lastUsedApiKey'),
+        storedModelName:
+          typeof window === 'undefined' ? null : localStorage.getItem('lastUsedModel'),
       }),
-    [apiKeys, normalizedModelConfig, preselectedApiKeyId],
+    [apiKeys, normalizedModelConfig, preselectedApiKeyId, preselectedModelName],
   )
 
-  const [selectedApiKeyId, setSelectedApiKeyId] = useState(initialSettings.primaryApiKeyId)
-  const [secondaryApiKeyId, setSecondaryApiKeyId] = useState(initialSettings.secondaryApiKeyId)
+  const [selectedModel, setSelectedModel] = useState<LlmModelSelection>({
+    apiKeyId: initialSettings.primaryApiKeyId,
+    modelName: initialSettings.primaryModelName,
+  })
+  const [secondaryModel, setSecondaryModel] = useState<LlmModelSelection>({
+    apiKeyId: initialSettings.secondaryApiKeyId,
+    modelName: initialSettings.secondaryModelName,
+  })
   const [alternateModelsEnabled, setAlternateModelsEnabled] = useState(
     initialSettings.alternateModelsEnabled,
   )
@@ -170,24 +217,27 @@ export function useChatInterfaceSettings({
   }, [chatId, isDeveloper, normalizedModelConfig])
 
   useEffect(() => {
-    if (selectedApiKeyId) {
-      localStorage.setItem('lastUsedApiKey', selectedApiKeyId)
+    if (selectedModel.apiKeyId && selectedModel.modelName) {
+      localStorage.setItem('lastUsedApiKey', selectedModel.apiKeyId)
+      localStorage.setItem('lastUsedModel', selectedModel.modelName)
     }
-  }, [selectedApiKeyId])
+  }, [selectedModel])
 
   const persistModelConfig = useCallback(
     async (
       nextEnabled: boolean,
-      nextPrimary: string,
-      nextSecondary: string,
+      nextPrimary: LlmModelSelection,
+      nextSecondary: LlmModelSelection,
       nextMemoryMode: ChatMemoryMode,
       nextAgenticTranscriptRecallMode: AgenticTranscriptRecallOverrideMode,
     ) => {
       const config = {
         alternateModels: {
           enabled: nextEnabled,
-          primaryApiKeyId: nextPrimary || null,
-          secondaryApiKeyId: nextSecondary || null,
+          primaryApiKeyId: nextPrimary.apiKeyId || null,
+          primaryModelName: nextPrimary.modelName || null,
+          secondaryApiKeyId: nextSecondary.apiKeyId || null,
+          secondaryModelName: nextSecondary.modelName || null,
         },
         memory:
           nextMemoryMode === 'prefix_live_blocks'
@@ -211,13 +261,13 @@ export function useChatInterfaceSettings({
   )
 
   const selectedApiKey = useMemo(
-    () => apiKeys.find((key) => key.id === selectedApiKeyId) ?? null,
-    [apiKeys, selectedApiKeyId],
+    () => apiKeys.find((key) => key.id === selectedModel.apiKeyId) ?? null,
+    [apiKeys, selectedModel.apiKeyId],
   )
   const anthropicBatchChatEnabled = isAnthropicBatchChatEnabled()
   const anthropicBatchModeSupported = isAnthropicBatchChatSupported({
     provider: selectedApiKey?.provider,
-    modelName: selectedApiKey?.model_preference,
+    modelName: selectedModel.modelName,
   })
   const anthropicBatchModeAvailable =
     anthropicBatchChatEnabled && !alternateModelsEnabled && anthropicBatchModeSupported
@@ -242,12 +292,17 @@ export function useChatInterfaceSettings({
   const handleToggleAlternateModels = useCallback(() => {
     const nextEnabled = !alternateModelsEnabled
     if (nextEnabled) {
-      if (!selectedApiKeyId || !secondaryApiKeyId) {
-        toast.error('교대 모드를 사용하려면 두 개의 API 키를 선택하세요.')
+      if (
+        !selectedModel.apiKeyId ||
+        !selectedModel.modelName ||
+        !secondaryModel.apiKeyId ||
+        !secondaryModel.modelName
+      ) {
+        toast.error('교대 모드를 사용하려면 두 개의 모델을 선택하세요.')
         return
       }
-      if (selectedApiKeyId === secondaryApiKeyId) {
-        toast.error('교대 모드는 서로 다른 API 키가 필요합니다.')
+      if (isSameLlmModelSelection(selectedModel, secondaryModel)) {
+        toast.error('교대 모드는 서로 다른 모델 선택이 필요합니다.')
         return
       }
     }
@@ -255,8 +310,8 @@ export function useChatInterfaceSettings({
     setAlternateModelsEnabled(nextEnabled)
     void persistModelConfig(
       nextEnabled,
-      selectedApiKeyId,
-      secondaryApiKeyId,
+      selectedModel,
+      secondaryModel,
       memoryMode,
       agenticTranscriptRecallMode,
     )
@@ -265,20 +320,20 @@ export function useChatInterfaceSettings({
     alternateModelsEnabled,
     memoryMode,
     persistModelConfig,
-    secondaryApiKeyId,
-    selectedApiKeyId,
+    secondaryModel,
+    selectedModel,
   ])
 
-  const handleSelectPrimaryApiKey = useCallback(
-    (nextId: string) => {
-      setSelectedApiKeyId(nextId)
-      if (alternateModelsEnabled && nextId === secondaryApiKeyId) {
-        toast.error('교대 모드는 서로 다른 API 키가 필요합니다.')
+  const handleSelectPrimaryModel = useCallback(
+    (nextModel: LlmModelSelection) => {
+      setSelectedModel(nextModel)
+      if (alternateModelsEnabled && isSameLlmModelSelection(nextModel, secondaryModel)) {
+        toast.error('교대 모드는 서로 다른 모델 선택이 필요합니다.')
       }
       void persistModelConfig(
         alternateModelsEnabled,
-        nextId,
-        secondaryApiKeyId,
+        nextModel,
+        secondaryModel,
         memoryMode,
         agenticTranscriptRecallMode,
       )
@@ -288,20 +343,20 @@ export function useChatInterfaceSettings({
       alternateModelsEnabled,
       memoryMode,
       persistModelConfig,
-      secondaryApiKeyId,
+      secondaryModel,
     ],
   )
 
-  const handleSelectSecondaryApiKey = useCallback(
-    (nextId: string) => {
-      setSecondaryApiKeyId(nextId)
-      if (alternateModelsEnabled && nextId === selectedApiKeyId) {
-        toast.error('교대 모드는 서로 다른 API 키가 필요합니다.')
+  const handleSelectSecondaryModel = useCallback(
+    (nextModel: LlmModelSelection) => {
+      setSecondaryModel(nextModel)
+      if (alternateModelsEnabled && isSameLlmModelSelection(nextModel, selectedModel)) {
+        toast.error('교대 모드는 서로 다른 모델 선택이 필요합니다.')
       }
       void persistModelConfig(
         alternateModelsEnabled,
-        selectedApiKeyId,
-        nextId,
+        selectedModel,
+        nextModel,
         memoryMode,
         agenticTranscriptRecallMode,
       )
@@ -311,7 +366,7 @@ export function useChatInterfaceSettings({
       alternateModelsEnabled,
       memoryMode,
       persistModelConfig,
-      selectedApiKeyId,
+      selectedModel,
     ],
   )
 
@@ -320,8 +375,8 @@ export function useChatInterfaceSettings({
       setMemoryMode(nextMode)
       void persistModelConfig(
         alternateModelsEnabled,
-        selectedApiKeyId,
-        secondaryApiKeyId,
+        selectedModel,
+        secondaryModel,
         nextMode,
         agenticTranscriptRecallMode,
       )
@@ -330,8 +385,8 @@ export function useChatInterfaceSettings({
       agenticTranscriptRecallMode,
       alternateModelsEnabled,
       persistModelConfig,
-      secondaryApiKeyId,
-      selectedApiKeyId,
+      secondaryModel,
+      selectedModel,
     ],
   )
 
@@ -355,8 +410,10 @@ export function useChatInterfaceSettings({
   }, [developerMode])
 
   return {
-    selectedApiKeyId,
-    secondaryApiKeyId,
+    selectedApiKeyId: selectedModel.apiKeyId,
+    selectedModelName: selectedModel.modelName,
+    secondaryApiKeyId: secondaryModel.apiKeyId,
+    secondaryModelName: secondaryModel.modelName,
     selectedApiKey,
     alternateModelsEnabled,
     memoryMode,
@@ -365,8 +422,8 @@ export function useChatInterfaceSettings({
     deliveryMode,
     developerMode,
     handleToggleAlternateModels,
-    handleSelectPrimaryApiKey,
-    handleSelectSecondaryApiKey,
+    handleSelectPrimaryModel,
+    handleSelectSecondaryModel,
     handleSelectMemoryMode,
     handleToggleAnthropicBatchMode,
     toggleDeveloperMode,

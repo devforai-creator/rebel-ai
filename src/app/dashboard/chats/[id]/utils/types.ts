@@ -211,6 +211,7 @@ export interface ChatInterfaceProps {
   initialActiveJob: ActiveChatJob | null
   apiKeys: ApiKeyOption[]
   preselectedApiKeyId?: string
+  preselectedModelName?: string
   initialModelConfig?: ChatModelConfig | null
   initialUsageStats: LatestMessageTokenStats | null
   usageStatsEnabled: boolean

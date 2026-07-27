@@ -84,6 +84,8 @@ export async function POST(request: Request) {
       return createReprocessTextResponse('API key not found or inactive', { status: 400 })
     case 'unsupported_provider':
       return createReprocessTextResponse('Unsupported provider', { status: 400 })
+    case 'unsupported_model':
+      return createReprocessTextResponse('Unsupported model for provider', { status: 400 })
     case 'decrypt_failed':
       return createReprocessTextResponse('Failed to decrypt API key', { status: 500 })
     case 'save_failed':

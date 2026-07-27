@@ -380,6 +380,30 @@ describe('loadChatJobExecutionContext', () => {
     )
   })
 
+  it('rejects a queued provider that does not match the stored credential', async () => {
+    const { loadChatJobExecutionContext } = await import('./execution-context')
+    const supabase = createChatJobRunnerSupabaseMock({
+      apiKey: {
+        id: 'key-1',
+        user_id: 'user-1',
+        is_active: true,
+        provider: 'google',
+        vault_secret_name: 'vault-key',
+        service_tier: 'standard',
+        reasoning_effort: null,
+      },
+    })
+
+    await expect(
+      loadChatJobExecutionContext({
+        supabase: supabase as never,
+        payload: buildValidPayload({ provider: 'openai' }),
+        timings: {},
+      }),
+    ).rejects.toThrow('API key provider does not match queued model provider')
+    expect(decryptSecretMock).not.toHaveBeenCalled()
+  })
+
   it('loads the persisted turn transcript for regeneration jobs', async () => {
     const { loadChatJobExecutionContext } = await import('./execution-context')
     const supabase = createChatJobRunnerSupabaseMock()

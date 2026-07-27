@@ -485,6 +485,7 @@ describe('account actions', () => {
         table: 'profiles',
         payload: {
           summary_api_key_id: null,
+          summary_model_name: null,
         },
         filters: [['id', 'user-1']],
       },
@@ -501,6 +502,7 @@ describe('account actions', () => {
       buildFormData({
         reprocess_prompt: '  Rewrite this naturally.  ',
         reprocess_key_id: '  llm-key  ',
+        reprocess_model_name: '  gpt-5.5  ',
       }),
     )
 
@@ -511,10 +513,31 @@ describe('account actions', () => {
         payload: {
           reprocess_prompt: 'Rewrite this naturally.',
           reprocess_api_key_id: 'llm-key',
+          reprocess_model_name: 'gpt-5.5',
         },
         filters: [['id', 'user-1']],
       },
     ])
+  })
+
+  it('rejects a model that does not belong to the selected credential provider', async () => {
+    const supabase = buildSupabase()
+    createClientMock.mockResolvedValue(supabase)
+    const { updateSummaryModelPreference } = await import('./actions')
+
+    const result = await updateSummaryModelPreference(
+      { error: null, success: false },
+      buildFormData({
+        summary_key_id: 'llm-key',
+        summary_model_name: 'gemini-2.5-flash',
+      }),
+    )
+
+    expect(result).toEqual({
+      error: 'The selected model is not available for this provider.',
+      success: false,
+    })
+    expect(supabase.state.profileUpdateCalls).toHaveLength(0)
   })
 
   it('normalizes blank translation model selection to null', async () => {
@@ -535,6 +558,7 @@ describe('account actions', () => {
         table: 'profiles',
         payload: {
           translation_api_key_id: null,
+          translation_model_name: null,
         },
         filters: [['id', 'user-1']],
       },

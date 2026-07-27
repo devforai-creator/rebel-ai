@@ -55,6 +55,7 @@ function createHookParams(overrides: Partial<Parameters<typeof useQueuedChat>[0]
     initialActiveJob: null,
     historyMessages: [],
     selectedApiKeyId: '',
+    selectedModelName: 'gpt-5-mini',
     fetchLatestUsage: vi.fn(async () => {}),
     debugInfoMap: { current: new Map<string, DebugInfo>() },
     persistedMessageIds: { current: new Set<string>() },
@@ -184,7 +185,7 @@ describe('useQueuedChat', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('removes the temporary user message and surfaces an error when no API key is selected', async () => {
+  it('removes the temporary user message and surfaces an error when no model is selected', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
@@ -211,7 +212,7 @@ describe('useQueuedChat', () => {
     })
 
     await waitFor(() => {
-      expect(result.current.error?.message).toBe('Please select an API key.')
+      expect(result.current.error?.message).toBe('Please select a model.')
     })
 
     expect(result.current.input).toBe('')
@@ -220,7 +221,7 @@ describe('useQueuedChat', () => {
       id: 'user-1',
       content: 'existing message',
     })
-    expect(toastErrorMock).toHaveBeenCalledWith('Please select an API key.')
+    expect(toastErrorMock).toHaveBeenCalledWith('Please select a model.')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -697,6 +698,7 @@ describe('useQueuedChat', () => {
     expect(JSON.parse(String(requestInit.body))).toEqual({
       chatId: 'chat-1',
       apiKeyId: 'key-1',
+      modelName: 'gpt-5-mini',
       userMessage: 'queued hello',
       deliveryMode: 'streaming',
       isRegeneration: false,
@@ -759,6 +761,7 @@ describe('useQueuedChat', () => {
     expect(JSON.parse(String(requestInit.body))).toEqual({
       chatId: 'chat-1',
       apiKeyId: 'key-1',
+      modelName: 'gpt-5-mini',
       deliveryMode: 'streaming',
       isRegeneration: true,
       regenerateAssistantMessageId: 'assistant-1',

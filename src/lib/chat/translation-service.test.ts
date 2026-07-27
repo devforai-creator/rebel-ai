@@ -9,6 +9,8 @@ const createOpenRouterProviderMock = vi.fn()
 const createAnthropicProviderMock = vi.fn()
 const createDeepSeekProviderMock = vi.fn()
 const getDefaultModelForProviderMock = vi.fn()
+const listModelsByProviderMock = vi.fn()
+const openAIModelMock = vi.fn()
 
 vi.mock('ai', async () => {
   const actual = await vi.importActual<typeof import('ai')>('ai')
@@ -47,6 +49,8 @@ vi.mock('@ai-sdk/deepseek', () => ({
 vi.mock('@/lib/models', () => ({
   getDefaultModelForProvider: (...args: Parameters<typeof getDefaultModelForProviderMock>) =>
     getDefaultModelForProviderMock(...args),
+  listModelsByProvider: (...args: Parameters<typeof listModelsByProviderMock>) =>
+    listModelsByProviderMock(...args),
 }))
 
 type TranslationRows = {
@@ -68,7 +72,13 @@ function createTranslationClients(
       profiles: {
         rows:
           profileRow === undefined
-            ? [{ id: 'user-1', translation_api_key_id: 'key-1' }]
+            ? [
+                {
+                  id: 'user-1',
+                  translation_api_key_id: 'key-1',
+                  translation_model_name: null,
+                },
+              ]
             : profileRow
               ? [profileRow]
               : [],
@@ -116,13 +126,16 @@ beforeEach(() => {
   vi.clearAllMocks()
 
   createGoogleProviderMock.mockImplementation(() => vi.fn(() => ({ id: 'google-model' })))
-  createOpenAIProviderMock.mockImplementation(() => vi.fn(() => ({ id: 'openai-model' })))
+  openAIModelMock.mockReset()
+  openAIModelMock.mockReturnValue({ id: 'openai-model' })
+  createOpenAIProviderMock.mockImplementation(() => openAIModelMock)
   createOpenRouterProviderMock.mockImplementation(() => ({
     chat: vi.fn(() => ({ id: 'openrouter-model' })),
   }))
   createAnthropicProviderMock.mockImplementation(() => vi.fn(() => ({ id: 'anthropic-model' })))
   createDeepSeekProviderMock.mockImplementation(() => vi.fn(() => ({ id: 'deepseek-model' })))
   getDefaultModelForProviderMock.mockReturnValue('default-lightweight-model')
+  listModelsByProviderMock.mockReturnValue([{ id: 'gpt-5.4' }])
   generateTextMock.mockResolvedValue({ text: 'translated text' })
 })
 
@@ -312,6 +325,40 @@ describe('translateMessageForUser', () => {
 
     const apiKeys = state.apiKeys as Array<Record<string, unknown>>
     expect(apiKeys[0].last_used_at).toEqual(expect.any(String))
+  })
+
+  it('uses the profile model with a reusable provider credential', async () => {
+    const { translateMessageForUser } = await import('./translation-service')
+    const { supabase, getAdminClient } = createTranslationClients({
+      rows: {
+        profileRow: {
+          id: 'user-1',
+          translation_api_key_id: 'key-1',
+          translation_model_name: 'gpt-5.4',
+        },
+        apiKeyRow: {
+          id: 'key-1',
+          user_id: 'user-1',
+          is_active: true,
+          provider: 'openai',
+          model_preference: 'gpt-5',
+          vault_secret_name: 'vault-key',
+          service_tier: 'standard',
+        },
+      },
+    })
+
+    const result = await translateMessageForUser({
+      supabase,
+      getAdminClient,
+      userId: 'user-1',
+      messageId: 'msg-1',
+      messageContent: '안녕',
+      trimOutput: true,
+    })
+
+    expect(result).toMatchObject({ status: 'success' })
+    expect(openAIModelMock).toHaveBeenCalledWith('gpt-5.4')
   })
 
   it('preserves whitespace when trimOutput is false', async () => {

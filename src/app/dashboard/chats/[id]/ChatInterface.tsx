@@ -21,6 +21,7 @@ export default function ChatInterface({
   initialActiveJob,
   apiKeys,
   preselectedApiKeyId,
+  preselectedModelName,
   initialModelConfig,
   initialUsageStats,
   usageStatsEnabled,
@@ -37,7 +38,9 @@ export default function ChatInterface({
 
   const {
     selectedApiKeyId,
+    selectedModelName,
     secondaryApiKeyId,
+    secondaryModelName,
     alternateModelsEnabled,
     memoryMode,
     anthropicBatchModeEnabled,
@@ -45,8 +48,8 @@ export default function ChatInterface({
     deliveryMode,
     developerMode,
     handleToggleAlternateModels,
-    handleSelectPrimaryApiKey,
-    handleSelectSecondaryApiKey,
+    handleSelectPrimaryModel,
+    handleSelectSecondaryModel,
     handleSelectMemoryMode,
     handleToggleAnthropicBatchMode,
     toggleDeveloperMode,
@@ -54,6 +57,7 @@ export default function ChatInterface({
     chatId,
     apiKeys,
     preselectedApiKeyId,
+    preselectedModelName,
     initialModelConfig,
     isDeveloper,
   })
@@ -86,11 +90,14 @@ export default function ChatInterface({
     initialHistoryCursor,
     hasMoreHistory,
     selectedApiKeyId,
+    selectedModelName,
     deliveryMode,
     alternateModels: {
       enabled: alternateModelsEnabled,
       primaryApiKeyId: selectedApiKeyId || null,
+      primaryModelName: selectedModelName || null,
       secondaryApiKeyId: secondaryApiKeyId || null,
+      secondaryModelName: secondaryModelName || null,
     },
     fetchLatestUsage,
     onMessageChangeSideEffect: handleUsageRealtime,
@@ -113,13 +120,15 @@ export default function ChatInterface({
       <TokenStatsPanel
         apiKeys={apiKeys}
         selectedApiKeyId={selectedApiKeyId}
+        selectedModelName={selectedModelName}
         secondaryApiKeyId={secondaryApiKeyId}
+        secondaryModelName={secondaryModelName}
         alternateModelsEnabled={alternateModelsEnabled}
         memoryMode={memoryMode}
         anthropicBatchModeEnabled={anthropicBatchModeEnabled && anthropicBatchModeAvailable}
         anthropicBatchModeAvailable={anthropicBatchModeAvailable}
-        onSelectApiKey={handleSelectPrimaryApiKey}
-        onSelectSecondaryApiKey={handleSelectSecondaryApiKey}
+        onSelectPrimaryModel={handleSelectPrimaryModel}
+        onSelectSecondaryModel={handleSelectSecondaryModel}
         onToggleAlternateModels={handleToggleAlternateModels}
         onSelectMemoryMode={handleSelectMemoryMode}
         onToggleAnthropicBatchMode={handleToggleAnthropicBatchMode}

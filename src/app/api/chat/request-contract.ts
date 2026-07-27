@@ -9,6 +9,7 @@ const chatRequestSchema = z
     userMessage: z.unknown().optional(),
     chatId: z.unknown().optional(),
     apiKeyId: z.unknown().optional(),
+    modelName: z.unknown().optional(),
     deliveryMode: z.unknown().optional(),
     isRegeneration: z.unknown().optional(),
     regenerateAssistantMessageId: z.unknown().optional(),
@@ -18,6 +19,7 @@ const chatRequestSchema = z
 export interface ParsedChatRequest {
   chatId: string
   apiKeyId: string
+  modelName: string | null
   rawDeliveryMode: unknown
   isRegeneration: boolean
   regenerateAssistantMessageId: string | null
@@ -56,6 +58,7 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
     userMessage: rawUserMessage,
     chatId,
     apiKeyId,
+    modelName: rawModelName,
     deliveryMode: rawDeliveryMode,
     isRegeneration: rawIsRegeneration,
     regenerateAssistantMessageId: rawRegenerateAssistantMessageId,
@@ -72,6 +75,14 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
     return {
       status: 'error',
       response: createErrorResponse('Invalid apiKeyId', 400),
+    }
+  }
+
+  const modelName = typeof rawModelName === 'string' ? rawModelName.trim() : null
+  if (typeof rawModelName !== 'undefined' && !modelName) {
+    return {
+      status: 'error',
+      response: createErrorResponse('Invalid modelName', 400),
     }
   }
 
@@ -106,6 +117,7 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
       value: {
         chatId,
         apiKeyId,
+        modelName,
         rawDeliveryMode,
         isRegeneration,
         regenerateAssistantMessageId,
@@ -135,6 +147,7 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
     value: {
       chatId,
       apiKeyId,
+      modelName,
       rawDeliveryMode,
       isRegeneration,
       regenerateAssistantMessageId,

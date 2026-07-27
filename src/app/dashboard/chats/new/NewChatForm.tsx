@@ -7,7 +7,13 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { Character, Persona } from '@/types/database.types'
 import { buildPersonaManagementHref } from '@/lib/navigation/dashboard-return'
-import { formatChatApiKeyOptionLabel, type ChatSelectableApiKeyOption } from '../api-key-options'
+import {
+  buildLlmModelOptions,
+  parseLlmModelSelection,
+  resolveLlmModelSelection,
+  serializeLlmModelSelection,
+} from '@/lib/llm/model-selection'
+import { formatChatModelOptionLabel, type ChatSelectableApiKeyOption } from '../api-key-options'
 import { createChat } from '../actions'
 import { getCharacterGreetingOptions } from './greeting-options'
 
@@ -16,6 +22,7 @@ interface Props {
   apiKeys: ChatSelectableApiKeyOption[]
   personas: PersonaOption[]
   initialApiKeyId?: string
+  initialModelName?: string
   initialPersonaId?: string
   initialGreetingIndex?: number
 }
@@ -23,7 +30,7 @@ interface Props {
 type CharacterOption = Pick<Character, 'id' | 'user_id' | 'name' | 'greeting_message' | 'metadata'>
 type PersonaOption = Pick<Persona, 'id' | 'name' | 'description'>
 
-const API_KEY_SELECT_ID = 'new-chat-api-key'
+const MODEL_SELECT_ID = 'new-chat-model'
 const PERSONA_SELECT_ID = 'new-chat-persona'
 
 export default function NewChatForm({
@@ -31,13 +38,28 @@ export default function NewChatForm({
   apiKeys,
   personas,
   initialApiKeyId = '',
+  initialModelName = '',
   initialPersonaId = '',
   initialGreetingIndex = 0,
 }: Props) {
   const router = useRouter()
   const allGreetings = getCharacterGreetingOptions(character)
-  const [apiKeyId, setApiKeyId] = useState(() =>
-    apiKeys.some((key) => key.id === initialApiKeyId) ? initialApiKeyId : '',
+  const modelOptions = buildLlmModelOptions(apiKeys)
+  const [modelSelection, setModelSelection] = useState(() =>
+    initialApiKeyId
+      ? (resolveLlmModelSelection({
+          credentials: apiKeys,
+          apiKeyId: initialApiKeyId,
+          modelName: initialModelName,
+        }) ??
+        resolveLlmModelSelection({
+          credentials: apiKeys,
+          apiKeyId: apiKeys[0]?.id,
+        }))
+      : resolveLlmModelSelection({
+          credentials: apiKeys,
+          apiKeyId: apiKeys[0]?.id,
+        }),
   )
   const [personaId, setPersonaId] = useState(() =>
     personas.some((persona) => persona.id === initialPersonaId) ? initialPersonaId : '',
@@ -55,6 +77,11 @@ export default function NewChatForm({
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!modelSelection) {
+      setError('사용할 모델을 선택해주세요')
+      return
+    }
+
     setLoading(true)
     setError(null)
 
@@ -77,8 +104,11 @@ export default function NewChatForm({
         return
       }
 
-      // 채팅 페이지로 이동 (API 키 ID 전달)
-      router.push(`/dashboard/chats/${result.chatId}?apiKey=${apiKeyId}`)
+      const chatParams = new URLSearchParams({
+        apiKey: modelSelection.apiKeyId,
+        model: modelSelection.modelName,
+      })
+      router.push(`/dashboard/chats/${result.chatId}?${chatParams.toString()}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : '채팅 생성에 실패했습니다'
       setError(message)
@@ -86,15 +116,16 @@ export default function NewChatForm({
     }
   }
 
-  const selectedApiKey = apiKeys.find((k) => k.id === apiKeyId)
+  const selectedApiKey = apiKeys.find((key) => key.id === modelSelection?.apiKeyId)
 
   const currentGreeting =
     allGreetings[greetingIndex] !== undefined ? allGreetings[greetingIndex] : null
   const hasMultipleOptions = allGreetings.length > 1
   const returnParams = new URLSearchParams({ character: characterId })
 
-  if (apiKeyId) {
-    returnParams.set('apiKey', apiKeyId)
+  if (modelSelection) {
+    returnParams.set('apiKey', modelSelection.apiKeyId)
+    returnParams.set('model', modelSelection.modelName)
   }
   if (personaId) {
     returnParams.set('persona', personaId)
@@ -187,25 +218,27 @@ export default function NewChatForm({
           </div>
         </div>
 
-        {/* API 키 선택 */}
+        {/* 모델 및 provider credential 선택 */}
         <div>
           <label
-            htmlFor={API_KEY_SELECT_ID}
+            htmlFor={MODEL_SELECT_ID}
             className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
           >
-            API 키 선택 <span className="text-red-500">*</span>
+            모델 선택 <span className="text-red-500">*</span>
           </label>
           <select
-            id={API_KEY_SELECT_ID}
-            value={apiKeyId}
-            onChange={(e) => setApiKeyId(e.target.value)}
+            id={MODEL_SELECT_ID}
+            value={modelSelection ? serializeLlmModelSelection(modelSelection) : ''}
+            onChange={(event) => {
+              setModelSelection(parseLlmModelSelection(event.target.value))
+            }}
             required
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
           >
-            <option value="">API 키를 선택하세요</option>
-            {apiKeys.map((key) => (
-              <option key={key.id} value={key.id}>
-                {formatChatApiKeyOptionLabel(key, { includeModelPreference: true })}
+            <option value="">모델을 선택하세요</option>
+            {modelOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {formatChatModelOptionLabel(option)}
               </option>
             ))}
           </select>
@@ -213,11 +246,11 @@ export default function NewChatForm({
           {selectedApiKey && (
             <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
               <p className="text-sm text-blue-800 dark:text-blue-300">
-                <strong>{selectedApiKey.provider}</strong> 제공자의 API를 사용합니다
+                <strong>{selectedApiKey.provider}</strong> credential을 사용합니다
               </p>
-              {selectedApiKey.model_preference && (
+              {modelSelection && (
                 <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                  모델: {selectedApiKey.model_preference}
+                  모델: {modelSelection.modelName}
                 </p>
               )}
             </div>
@@ -275,7 +308,7 @@ export default function NewChatForm({
         {/* 제출 버튼 */}
         <button
           type="submit"
-          disabled={loading || !apiKeyId}
+          disabled={loading || !modelSelection}
           className="w-full py-3 px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? '생성 중...' : '채팅 시작'}

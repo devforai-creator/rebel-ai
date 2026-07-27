@@ -13,6 +13,7 @@ describe('ReprocessSettingsForm', () => {
       <ReprocessSettingsForm
         initialPrompt={null}
         initialKeyId={null}
+        initialModelName={null}
         apiKeys={[
           {
             id: 'key-1',
@@ -33,5 +34,6 @@ describe('ReprocessSettingsForm', () => {
     expect(html).toContain('id="reprocess_prompt"')
     expect(html).toContain('for="reprocess_key_id"')
     expect(html).toContain('id="reprocess_key_id"')
+    expect(html).toContain('name="reprocess_model_name"')
   })
 })

@@ -2,8 +2,14 @@
 
 import React, { memo } from 'react'
 import Button from '@/app/dashboard/components/Button'
-import { formatChatApiKeyOptionLabel } from '../../api-key-options'
+import { formatChatModelOptionLabel } from '../../api-key-options'
 import type { ChatMemoryMode } from '@/lib/chat/model-config'
+import {
+  buildLlmModelOptions,
+  parseLlmModelSelection,
+  serializeLlmModelSelection,
+  type LlmModelSelection,
+} from '@/lib/llm/model-selection'
 import {
   LatestMessageTokenStats,
   ApiKeyOption,
@@ -15,13 +21,15 @@ import {
 interface TokenStatsPanelProps {
   apiKeys: ApiKeyOption[]
   selectedApiKeyId: string
+  selectedModelName: string
   secondaryApiKeyId: string
+  secondaryModelName: string
   alternateModelsEnabled: boolean
   memoryMode: ChatMemoryMode
   anthropicBatchModeEnabled: boolean
   anthropicBatchModeAvailable: boolean
-  onSelectApiKey: (id: string) => void
-  onSelectSecondaryApiKey: (id: string) => void
+  onSelectPrimaryModel: (selection: LlmModelSelection) => void
+  onSelectSecondaryModel: (selection: LlmModelSelection) => void
   onToggleAlternateModels: () => void
   onSelectMemoryMode: (mode: ChatMemoryMode) => void
   onToggleAnthropicBatchMode: () => void
@@ -39,13 +47,15 @@ interface TokenStatsPanelProps {
 export const TokenStatsPanel = memo(function TokenStatsPanel({
   apiKeys,
   selectedApiKeyId,
+  selectedModelName,
   secondaryApiKeyId,
+  secondaryModelName,
   alternateModelsEnabled,
   memoryMode,
   anthropicBatchModeEnabled,
   anthropicBatchModeAvailable,
-  onSelectApiKey,
-  onSelectSecondaryApiKey,
+  onSelectPrimaryModel,
+  onSelectSecondaryModel,
   onToggleAlternateModels,
   onSelectMemoryMode,
   onToggleAnthropicBatchMode,
@@ -59,6 +69,22 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
   onToggleDeveloperMode,
   onOpenAssetDiagnostics,
 }: TokenStatsPanelProps) {
+  const modelOptions = buildLlmModelOptions(apiKeys)
+  const selectedModelValue = serializeLlmModelSelection({
+    apiKeyId: selectedApiKeyId,
+    modelName: selectedModelName,
+  })
+  const secondaryModelValue = serializeLlmModelSelection({
+    apiKeyId: secondaryApiKeyId,
+    modelName: secondaryModelName,
+  })
+  const handleModelChange = (value: string, onChange: (selection: LlmModelSelection) => void) => {
+    const selection = parseLlmModelSelection(value)
+    if (selection) {
+      onChange(selection)
+    }
+  }
+
   return (
     <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2">
       <div className="max-w-4xl mx-auto">
@@ -66,13 +92,13 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
         <div className="flex items-center justify-between gap-2 sm:hidden">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <select
-              value={selectedApiKeyId}
-              onChange={(e) => onSelectApiKey(e.target.value)}
+              value={selectedModelValue}
+              onChange={(event) => handleModelChange(event.target.value, onSelectPrimaryModel)}
               className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white flex-1 min-w-0"
             >
-              {apiKeys.map((key) => (
-                <option key={key.id} value={key.id}>
-                  {formatChatApiKeyOptionLabel(key)}
+              {modelOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {formatChatModelOptionLabel(option)}
                 </option>
               ))}
             </select>
@@ -166,13 +192,13 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
             </option>
           </select>
           <select
-            value={secondaryApiKeyId}
-            onChange={(e) => onSelectSecondaryApiKey(e.target.value)}
+            value={secondaryModelValue}
+            onChange={(event) => handleModelChange(event.target.value, onSelectSecondaryModel)}
             className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
           >
-            {apiKeys.map((key) => (
-              <option key={key.id} value={key.id}>
-                {formatChatApiKeyOptionLabel(key, { prefix: '보조' })}
+            {modelOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {formatChatModelOptionLabel(option, { prefix: '보조' })}
               </option>
             ))}
           </select>
@@ -183,17 +209,19 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
           {/* Main row */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <label className="text-sm text-gray-600 dark:text-gray-400">API Key:</label>
+              <label className="text-sm text-gray-600 dark:text-gray-400">Model:</label>
               <select
-                value={selectedApiKeyId}
-                onChange={(e) => onSelectApiKey(e.target.value)}
+                value={selectedModelValue}
+                onChange={(event) => handleModelChange(event.target.value, onSelectPrimaryModel)}
                 className="text-sm px-3 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white min-w-[220px]"
               >
-                {apiKeys.map((key) => (
-                  <option key={key.id} value={key.id}>
-                    {formatChatApiKeyOptionLabel(key, {
+                {modelOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {formatChatModelOptionLabel(option, {
                       extraProviderDetail:
-                        key.provider === 'openai' ? formatServiceTierLabel(key.service_tier) : null,
+                        option.credential.provider === 'openai'
+                          ? formatServiceTierLabel(option.credential.service_tier)
+                          : null,
                     })}
                   </option>
                 ))}
@@ -241,17 +269,19 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                   </option>
                 </select>
                 <select
-                  value={secondaryApiKeyId}
-                  onChange={(e) => onSelectSecondaryApiKey(e.target.value)}
+                  value={secondaryModelValue}
+                  onChange={(event) =>
+                    handleModelChange(event.target.value, onSelectSecondaryModel)
+                  }
                   className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white max-w-[220px]"
                 >
-                  {apiKeys.map((key) => (
-                    <option key={key.id} value={key.id}>
-                      {formatChatApiKeyOptionLabel(key, {
+                  {modelOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {formatChatModelOptionLabel(option, {
                         prefix: '보조',
                         extraProviderDetail:
-                          key.provider === 'openai'
-                            ? formatServiceTierLabel(key.service_tier)
+                          option.credential.provider === 'openai'
+                            ? formatServiceTierLabel(option.credential.service_tier)
                             : null,
                       })}
                     </option>

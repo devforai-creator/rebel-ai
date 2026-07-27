@@ -180,6 +180,7 @@ describe('useChatMessageLifecycle', () => {
         initialHistoryCursor: 10,
         hasMoreHistory: true,
         selectedApiKeyId: 'key-1',
+        selectedModelName: 'gpt-5-mini',
         deliveryMode: 'streaming' satisfies ChatDeliveryMode,
         alternateModels: null,
         fetchLatestUsage: vi.fn(async () => {}),

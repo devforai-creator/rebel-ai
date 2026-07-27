@@ -19,7 +19,7 @@ export default async function ApiKeysPage() {
   const { data: apiKeys, error } = await supabase
     .from('api_keys')
     .select(
-      'id, provider, key_name, model_preference, service_tier, reasoning_effort, is_active, usage_notes, last_used_at, created_at, updated_at',
+      'id, provider, key_name, service_tier, reasoning_effort, is_active, usage_notes, last_used_at, created_at',
     )
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
@@ -53,7 +53,8 @@ export default async function ApiKeysPage() {
             🔑 BYOK (Bring Your Own Key)
           </h3>
           <p className="text-sm text-blue-800 dark:text-blue-300 mb-3">
-            Register your own API keys to use high-performance AI models at low cost.
+            Register one provider credential, then choose any supported model from that provider
+            when you use it.
           </p>
           <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-1">
             <li>

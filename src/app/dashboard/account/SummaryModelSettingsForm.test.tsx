@@ -12,6 +12,7 @@ describe('SummaryModelSettingsForm', () => {
     const html = renderToStaticMarkup(
       <SummaryModelSettingsForm
         initialKeyId={null}
+        initialModelName={null}
         apiKeys={[
           {
             id: 'key-1',
@@ -24,10 +25,11 @@ describe('SummaryModelSettingsForm', () => {
       />,
     )
 
-    expect(html).toContain('Summary-dedicated API Key')
+    expect(html).toContain('Summary-dedicated Model')
     expect(html).toContain('Advanced option.')
     expect(html).toContain('Same as chat (default)')
     expect(html).toContain('for="summary_key_id"')
     expect(html).toContain('id="summary_key_id"')
+    expect(html).toContain('name="summary_model_name"')
   })
 })

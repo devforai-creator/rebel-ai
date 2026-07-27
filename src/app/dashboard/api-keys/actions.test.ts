@@ -315,7 +315,7 @@ describe('api key actions', () => {
     expect(supabase.state.insertPayloads).toHaveLength(0)
   })
 
-  it('creates an OpenAI key with normalized values', async () => {
+  it('creates an OpenAI credential and ignores the legacy model field', async () => {
     const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
     const adminSupabase = createAdminSupabase()
     const supabase = buildSupabase()
@@ -353,7 +353,7 @@ describe('api key actions', () => {
         provider: 'openai',
         key_name: 'Personal GPT Key',
         vault_secret_name: 'apikey_11111111-1111-1111-1111-111111111111_loyw3v28_openai',
-        model_preference: 'gpt-5',
+        model_preference: null,
         service_tier: 'flex',
         reasoning_effort: 'high',
       },

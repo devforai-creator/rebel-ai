@@ -14,7 +14,7 @@ import {
   mapMessageToDisplay,
 } from '../utils'
 import { MESSAGE_STATUS_COMPLETED, isVisibleMessageStatus } from '@/lib/chat/message-status'
-import { resolveAlternateApiKeyId } from '@/lib/chat/alternate-models'
+import { resolveAlternateModelSelection } from '@/lib/chat/alternate-models'
 import { pollJobStatus as pollJobStatusPure } from './job-poller'
 import { fetchChatJobStatus, fetchLatestChatMessage, requestQueuedChatJob } from './queued-chat-api'
 import {
@@ -35,6 +35,7 @@ export interface UseQueuedChatParams {
   initialActiveJob: ActiveChatJob | null
   historyMessages: Message[]
   selectedApiKeyId: string
+  selectedModelName: string
   deliveryMode?: ChatDeliveryMode
   alternateModels?: AlternateModelsConfig | null
   fetchLatestUsage: () => Promise<void>
@@ -68,6 +69,7 @@ export function useQueuedChat({
   initialMessages,
   initialActiveJob,
   selectedApiKeyId,
+  selectedModelName,
   deliveryMode = CHAT_DELIVERY_MODE_STREAMING,
   alternateModels,
   fetchLatestUsage,
@@ -391,14 +393,17 @@ export function useQueuedChat({
     setStreamingDraft((current) => updateStreamingDraftFromEvent(current, payload))
   }, [])
 
-  const resolveNextApiKeyId = useCallback(
+  const resolveNextModel = useCallback(
     () =>
-      resolveAlternateApiKeyId({
+      resolveAlternateModelSelection({
         alternateModels,
-        selectedApiKeyId,
+        selectedModel: {
+          apiKeyId: selectedApiKeyId,
+          modelName: selectedModelName,
+        },
         messages,
       }),
-    [alternateModels, messages, selectedApiKeyId],
+    [alternateModels, messages, selectedApiKeyId, selectedModelName],
   )
 
   const sendChatRequest = useCallback(
@@ -415,9 +420,9 @@ export function useQueuedChat({
       removeTempMessage?: () => void
       syncUser?: boolean
     }) => {
-      const resolvedApiKeyId = resolveNextApiKeyId()
-      if (!resolvedApiKeyId) {
-        const err = new Error('Please select an API key.')
+      const resolvedModel = resolveNextModel()
+      if (!resolvedModel.apiKeyId || !resolvedModel.modelName) {
+        const err = new Error('Please select a model.')
         setError(err)
         toast.error(err.message)
         removeTempMessage?.()
@@ -429,7 +434,8 @@ export function useQueuedChat({
       try {
         const data = await requestQueuedChatJob({
           chatId,
-          apiKeyId: resolvedApiKeyId,
+          apiKeyId: resolvedModel.apiKeyId,
+          modelName: resolvedModel.modelName,
           userMessage,
           deliveryMode,
           isRegeneration,
@@ -470,7 +476,7 @@ export function useQueuedChat({
       clearPendingJob,
       deliveryMode,
       pollJobStatus,
-      resolveNextApiKeyId,
+      resolveNextModel,
       startStreamingDraft,
       syncLatestUserMessage,
     ],

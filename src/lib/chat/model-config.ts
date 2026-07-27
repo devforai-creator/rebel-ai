@@ -4,7 +4,9 @@ import type { LlmProvider } from '@/types/database.types'
 export type AlternateModelsConfig = {
   enabled: boolean
   primaryApiKeyId: string | null
+  primaryModelName: string | null
   secondaryApiKeyId: string | null
+  secondaryModelName: string | null
 }
 
 export type ChatMemoryMode = 'summary_window' | 'prefix_live_blocks'
@@ -101,15 +103,21 @@ export function normalizeChatModelConfig(input: unknown): ChatModelConfig {
     const enabled = raw.enabled === true
     const primaryApiKeyId =
       typeof raw.primaryApiKeyId === 'string' && raw.primaryApiKeyId ? raw.primaryApiKeyId : null
+    const primaryModelName =
+      typeof raw.primaryModelName === 'string' ? raw.primaryModelName.trim() || null : null
     const secondaryApiKeyId =
       typeof raw.secondaryApiKeyId === 'string' && raw.secondaryApiKeyId
         ? raw.secondaryApiKeyId
         : null
+    const secondaryModelName =
+      typeof raw.secondaryModelName === 'string' ? raw.secondaryModelName.trim() || null : null
 
     normalized.alternateModels = {
       enabled,
       primaryApiKeyId,
+      primaryModelName,
       secondaryApiKeyId,
+      secondaryModelName,
     }
   }
 

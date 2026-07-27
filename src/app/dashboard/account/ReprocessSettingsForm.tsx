@@ -6,12 +6,14 @@ import Button from '@/app/dashboard/components/Button'
 import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { updateReprocessSettings, type ReprocessSettingsState } from './actions'
-import { formatSelectableLlmApiKeyLabel, type SelectableLlmApiKey } from './options'
+import LlmModelPreferenceSelect from './LlmModelPreferenceSelect'
+import type { SelectableLlmApiKey } from './options'
 import { useActionStateFeedback } from './useActionStateFeedback'
 
 interface Props {
   initialPrompt: string | null
   initialKeyId: string | null
+  initialModelName: string | null
   apiKeys: SelectableLlmApiKey[]
 }
 
@@ -23,9 +25,13 @@ const initialState: ReprocessSettingsState = {
 const REPROCESS_PROMPT_ID = 'reprocess_prompt'
 const REPROCESS_KEY_ID = 'reprocess_key_id'
 
-export default function ReprocessSettingsForm({ initialPrompt, initialKeyId, apiKeys }: Props) {
+export default function ReprocessSettingsForm({
+  initialPrompt,
+  initialKeyId,
+  initialModelName,
+  apiKeys,
+}: Props) {
   const [state, formAction] = useActionState(updateReprocessSettings, initialState)
-  const [selectedKey, setSelectedKey] = useState(initialKeyId ?? '')
   const [prompt, setPrompt] = useState(initialPrompt ?? '')
   const { feedback, clearFeedback } = useActionStateFeedback(state, {
     successMessage: 'Saved successfully.',
@@ -61,30 +67,17 @@ export default function ReprocessSettingsForm({ initialPrompt, initialKeyId, api
       </div>
 
       <div className="space-y-2">
-        <label
-          htmlFor={REPROCESS_KEY_ID}
-          className="block text-sm font-medium text-gray-900 dark:text-gray-200"
-        >
-          Reprocess API Key
-        </label>
-        <select
+        <LlmModelPreferenceSelect
           id={REPROCESS_KEY_ID}
-          name="reprocess_key_id"
-          className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50"
-          value={selectedKey}
-          onChange={(event) => {
-            setSelectedKey(event.target.value)
-            clearFeedback()
-          }}
-          disabled={!hasKeys}
-        >
-          <option value="">Select an API key</option>
-          {apiKeys.map((key) => (
-            <option key={key.id} value={key.id}>
-              {formatSelectableLlmApiKeyLabel(key)}
-            </option>
-          ))}
-        </select>
+          label="Reprocess Model"
+          apiKeyInputName="reprocess_key_id"
+          modelInputName="reprocess_model_name"
+          initialApiKeyId={initialKeyId}
+          initialModelName={initialModelName}
+          apiKeys={apiKeys}
+          emptyLabel="Select a model"
+          onSelectionChange={clearFeedback}
+        />
         <p className="text-xs text-gray-500 dark:text-gray-400">
           Select which API key and model to use for this experimental rewrite path.
         </p>

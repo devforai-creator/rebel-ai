@@ -45,7 +45,10 @@ import { decryptSecret } from './vault'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type DebugMetricValue = string | number | boolean | null
-type RunnerApiKeyRow = Pick<ApiKey, 'vault_secret_name' | 'service_tier' | 'reasoning_effort'>
+type RunnerApiKeyRow = Pick<
+  ApiKey,
+  'provider' | 'vault_secret_name' | 'service_tier' | 'reasoning_effort'
+>
 type RunnerProfileRow = Pick<Profile, 'enable_agentic_transcript_recall_default'>
 type RunnerChatRow = Pick<
   Chat,
@@ -311,8 +314,8 @@ export async function loadChatJobExecutionContext({
   const apiKeyQueryStart = performance.now()
   const apiKeyQueryPromise = supabase
     .from('api_keys')
-    .select<'vault_secret_name, service_tier, reasoning_effort'>(
-      'vault_secret_name, service_tier, reasoning_effort',
+    .select<'provider, vault_secret_name, service_tier, reasoning_effort'>(
+      'provider, vault_secret_name, service_tier, reasoning_effort',
     )
     .eq('id', apiKeyId)
     .eq('user_id', userId)
@@ -356,6 +359,9 @@ export async function loadChatJobExecutionContext({
 
   if (apiKeyError || !apiKeyData) {
     throw new Error('API key not found or inactive')
+  }
+  if (apiKeyData.provider !== provider) {
+    throw new Error('API key provider does not match queued model provider')
   }
   if (chatError || !chat) {
     throw new Error('Chat not found')

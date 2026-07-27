@@ -316,6 +316,17 @@ function withFromOverride<T extends { from: (table: string) => unknown }>(
   return supabase
 }
 
+function setRunnerApiKeyProvider(
+  supabase: ReturnType<typeof createChatJobRunnerSupabaseMock>,
+  provider: string,
+) {
+  const apiKeys = supabase.state.apiKeys as Array<Record<string, unknown>>
+  if (!apiKeys[0]) {
+    throw new Error('Runner API key fixture is missing')
+  }
+  apiKeys[0].provider = provider
+}
+
 describe('processChatJobs', () => {
   beforeEach(() => {
     claimPendingJobMock.mockReset()
@@ -723,6 +734,7 @@ describe('processChatJobs', () => {
     createAdminClientMock.mockReturnValue(supabase)
 
     decryptSecretMock.mockResolvedValue('sk-test')
+    setRunnerApiKeyProvider(supabase, 'unknown-provider')
     parseChatJobPayloadMock.mockReturnValue(buildValidPayload({ provider: 'unknown-provider' }))
     claimPendingJobMock.mockResolvedValueOnce({ id: 'job-bad-provider', payload: { ok: true } })
     claimPendingJobMock.mockResolvedValueOnce(null)
@@ -1146,6 +1158,7 @@ describe('processChatJobs', () => {
     createAdminClientMock.mockReturnValue(supabase)
 
     decryptSecretMock.mockResolvedValue('sk-test')
+    setRunnerApiKeyProvider(supabase, 'google')
     parseChatJobPayloadMock.mockReturnValue(
       buildValidPayload({
         requestId: 'req-google-explicit-cache',
@@ -1232,6 +1245,7 @@ describe('processChatJobs', () => {
     createAdminClientMock.mockReturnValue(supabase)
 
     decryptSecretMock.mockResolvedValue('sk-test')
+    setRunnerApiKeyProvider(supabase, 'google')
     parseChatJobPayloadMock.mockReturnValue(
       buildValidPayload({
         requestId: 'req-google-explicit-cache-tools',
@@ -1345,6 +1359,7 @@ describe('processChatJobs', () => {
     createAdminClientMock.mockReturnValue(supabase)
 
     decryptSecretMock.mockResolvedValue('sk-test')
+    setRunnerApiKeyProvider(supabase, 'google')
     parseChatJobPayloadMock.mockReturnValue(
       buildValidPayload({
         requestId: 'req-google-cache-off',
@@ -1442,6 +1457,7 @@ describe('processChatJobs', () => {
     createAdminClientMock.mockReturnValue(supabase)
 
     decryptSecretMock.mockResolvedValue('sk-test')
+    setRunnerApiKeyProvider(supabase, 'google')
     parseChatJobPayloadMock.mockReturnValue(
       buildValidPayload({
         requestId: 'req-google-cache-retry',
@@ -1678,6 +1694,7 @@ describe('processChatJobs', () => {
     createAdminClientMock.mockReturnValue(supabase)
 
     decryptSecretMock.mockResolvedValue('sk-test')
+    setRunnerApiKeyProvider(supabase, 'google')
     parseChatJobPayloadMock.mockReturnValue(
       buildValidPayload({
         requestId: 'req-gemini-prohibited',
@@ -1778,6 +1795,7 @@ describe('processChatJobs', () => {
     createAdminClientMock.mockReturnValue(supabase)
 
     decryptSecretMock.mockResolvedValue('sk-test')
+    setRunnerApiKeyProvider(supabase, 'google')
     parseChatJobPayloadMock.mockReturnValue(
       buildValidPayload({
         requestId: 'req-gemini-bad-json',
@@ -2005,6 +2023,7 @@ describe('processChatJobs', () => {
     createAdminClientMock.mockReturnValue(supabase)
 
     decryptSecretMock.mockResolvedValue('sk-test')
+    setRunnerApiKeyProvider(supabase, 'google')
     parseChatJobPayloadMock.mockReturnValue(
       buildValidPayload({
         requestId: 'req-gemini-filtered-empty',
@@ -2276,6 +2295,7 @@ describe('processChatJobs', () => {
     createAdminClientMock.mockReturnValue(supabase)
 
     decryptSecretMock.mockResolvedValue('sk-test')
+    setRunnerApiKeyProvider(supabase, 'google')
     parseChatJobPayloadMock.mockReturnValue({
       version: 1,
       requestId: 'req-2',
@@ -2544,6 +2564,7 @@ describe('processChatJobs', () => {
     createAdminClientMock.mockReturnValue(supabase)
 
     decryptSecretMock.mockResolvedValue('sk-test')
+    setRunnerApiKeyProvider(supabase, 'anthropic')
     parseChatJobPayloadMock.mockReturnValue({
       version: 1,
       requestId: 'req-4',

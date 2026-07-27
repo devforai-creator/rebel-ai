@@ -1192,9 +1192,12 @@ export type Database = {
           is_admin: boolean
           meta_summary_prompt: string | null
           reprocess_api_key_id: string | null
+          reprocess_model_name: string | null
           reprocess_prompt: string | null
           summary_api_key_id: string | null
+          summary_model_name: string | null
           translation_api_key_id: string | null
+          translation_model_name: string | null
           updated_at: string
           username: string | null
           voyage_embedding_api_key_id: string | null
@@ -1212,9 +1215,12 @@ export type Database = {
           is_admin?: boolean
           meta_summary_prompt?: string | null
           reprocess_api_key_id?: string | null
+          reprocess_model_name?: string | null
           reprocess_prompt?: string | null
           summary_api_key_id?: string | null
+          summary_model_name?: string | null
           translation_api_key_id?: string | null
+          translation_model_name?: string | null
           updated_at?: string
           username?: string | null
           voyage_embedding_api_key_id?: string | null
@@ -1232,9 +1238,12 @@ export type Database = {
           is_admin?: boolean
           meta_summary_prompt?: string | null
           reprocess_api_key_id?: string | null
+          reprocess_model_name?: string | null
           reprocess_prompt?: string | null
           summary_api_key_id?: string | null
+          summary_model_name?: string | null
           translation_api_key_id?: string | null
+          translation_model_name?: string | null
           updated_at?: string
           username?: string | null
           voyage_embedding_api_key_id?: string | null

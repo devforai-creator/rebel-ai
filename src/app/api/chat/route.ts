@@ -76,6 +76,7 @@ export async function POST(req: Request) {
     const {
       chatId,
       apiKeyId,
+      modelName: requestedModelName,
       rawDeliveryMode,
       isRegeneration,
       regenerateAssistantMessageId,
@@ -88,6 +89,7 @@ export async function POST(req: Request) {
       supabase,
       userId: user.id,
       apiKeyId,
+      preferredModelName: requestedModelName,
     })
 
     if (resolvedConfig.status === 'missing_api_key') {
@@ -120,6 +122,10 @@ export async function POST(req: Request) {
 
     if (resolvedConfig.status === 'unsupported_provider') {
       return createErrorResponse('Unsupported provider', 400)
+    }
+
+    if (resolvedConfig.status === 'unsupported_model') {
+      return createErrorResponse('Unsupported model for provider', 400)
     }
 
     const { provider, modelName } = resolvedConfig.config

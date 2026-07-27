@@ -105,6 +105,7 @@ function buildContext(
 ): LoadedChatJobExecutionContext {
   return {
     apiKeyData: {
+      provider: 'openai',
       vault_secret_name: 'vault-key',
       service_tier: 'standard',
       reasoning_effort: 'medium',

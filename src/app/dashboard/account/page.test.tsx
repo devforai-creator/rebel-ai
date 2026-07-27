@@ -59,9 +59,12 @@ type ProfileRow = {
   enable_chat_usage_stats: boolean
   voyage_embedding_api_key_id: string | null
   summary_api_key_id: string | null
+  summary_model_name: string | null
   reprocess_prompt: string | null
   reprocess_api_key_id: string | null
+  reprocess_model_name: string | null
   translation_api_key_id: string | null
+  translation_model_name: string | null
 }
 
 type ApiKeyRow = {
@@ -194,9 +197,12 @@ describe('account page', () => {
           enable_chat_usage_stats: true,
           voyage_embedding_api_key_id: 'voyage-key',
           summary_api_key_id: 'summary-key',
+          summary_model_name: 'gpt-5.5',
           reprocess_prompt: 'Translate to Korean and keep the tone.',
           reprocess_api_key_id: 'reprocess-key',
+          reprocess_model_name: 'gpt-5.4',
           translation_api_key_id: 'translation-key',
+          translation_model_name: 'gemini-2.5-flash',
         },
         apiKeys: [
           {
@@ -214,7 +220,7 @@ describe('account page', () => {
             user_id: 'user-1',
             key_name: 'Budget Summary',
             provider: 'openai',
-            model_preference: 'gpt-4o-mini',
+            model_preference: 'gpt-5.5',
             is_active: true,
             service_tier: null,
             created_at: '2026-04-02T00:00:00.000Z',
@@ -224,7 +230,7 @@ describe('account page', () => {
             user_id: 'user-1',
             key_name: 'Rewrite Key',
             provider: 'openai',
-            model_preference: 'gpt-4.1-mini',
+            model_preference: 'gpt-5.4',
             is_active: true,
             service_tier: 'default',
             created_at: '2026-04-03T00:00:00.000Z',
@@ -268,18 +274,18 @@ describe('account page', () => {
     expect(
       (screen.getByLabelText('Voyage Embeddings Key to Connect') as HTMLSelectElement).value,
     ).toBe('voyage-key')
-    expect((screen.getByLabelText('Summary-dedicated API Key') as HTMLSelectElement).value).toBe(
-      'summary-key',
+    expect((screen.getByLabelText('Summary-dedicated Model') as HTMLSelectElement).value).toBe(
+      JSON.stringify(['summary-key', 'gpt-5.5']),
     )
     expect((screen.getByLabelText('Reprocess Prompt') as HTMLTextAreaElement).value).toBe(
       'Translate to Korean and keep the tone.',
     )
-    expect((screen.getByLabelText('Reprocess API Key') as HTMLSelectElement).value).toBe(
-      'reprocess-key',
+    expect((screen.getByLabelText('Reprocess Model') as HTMLSelectElement).value).toBe(
+      JSON.stringify(['reprocess-key', 'gpt-5.4']),
     )
     expect(
-      (screen.getByLabelText('Translation API Key (Bilingual Memory)') as HTMLSelectElement).value,
-    ).toBe('translation-key')
+      (screen.getByLabelText('Translation Model (Bilingual Memory)') as HTMLSelectElement).value,
+    ).toBe(JSON.stringify(['translation-key', 'gemini-2.5-flash']))
 
     expect(
       document.querySelector('input[name="enable_chat_usage_stats"][value="true"]'),

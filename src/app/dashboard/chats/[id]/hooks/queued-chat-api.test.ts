@@ -74,6 +74,7 @@ describe('queued-chat-api', () => {
       requestQueuedChatJob({
         chatId: 'chat-1',
         apiKeyId: 'key-1',
+        modelName: 'gpt-5-mini',
         userMessage: 'hello',
         deliveryMode: 'streaming',
       }),
@@ -87,6 +88,7 @@ describe('queued-chat-api', () => {
       requestQueuedChatJob({
         chatId: 'chat-1',
         apiKeyId: 'key-1',
+        modelName: 'gpt-5-mini',
         userMessage: 'hello',
         deliveryMode: 'streaming',
       }),
@@ -101,6 +103,7 @@ describe('queued-chat-api', () => {
       requestQueuedChatJob({
         chatId: 'chat-1',
         apiKeyId: 'key-1',
+        modelName: 'gpt-5-mini',
         userMessage: 'hello',
         deliveryMode: 'streaming',
       }),
@@ -112,6 +115,7 @@ describe('queued-chat-api', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'key-1',
+        modelName: 'gpt-5-mini',
         userMessage: 'hello',
         deliveryMode: 'streaming',
       }),
@@ -126,6 +130,7 @@ describe('queued-chat-api', () => {
       requestQueuedChatJob({
         chatId: 'chat-1',
         apiKeyId: 'key-1',
+        modelName: 'gpt-5-mini',
         deliveryMode: 'streaming',
         isRegeneration: true,
         regenerateAssistantMessageId: 'assistant-1',
@@ -138,6 +143,7 @@ describe('queued-chat-api', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'key-1',
+        modelName: 'gpt-5-mini',
         deliveryMode: 'streaming',
         isRegeneration: true,
         regenerateAssistantMessageId: 'assistant-1',

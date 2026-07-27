@@ -28,7 +28,9 @@ describe('normalizeChatModelConfig', () => {
       alternateModels: {
         enabled: true,
         primaryApiKeyId: 'primary',
+        primaryModelName: ' model-primary ',
         secondaryApiKeyId: 'secondary',
+        secondaryModelName: 'model-secondary',
       },
     })
 
@@ -36,7 +38,9 @@ describe('normalizeChatModelConfig', () => {
       alternateModels: {
         enabled: true,
         primaryApiKeyId: 'primary',
+        primaryModelName: 'model-primary',
         secondaryApiKeyId: 'secondary',
+        secondaryModelName: 'model-secondary',
       },
     })
   })
@@ -46,7 +50,9 @@ describe('normalizeChatModelConfig', () => {
       alternateModels: {
         enabled: false,
         primaryApiKeyId: 123,
+        primaryModelName: 456,
         secondaryApiKeyId: '',
+        secondaryModelName: '',
       },
     })
 
@@ -54,7 +60,9 @@ describe('normalizeChatModelConfig', () => {
       alternateModels: {
         enabled: false,
         primaryApiKeyId: null,
+        primaryModelName: null,
         secondaryApiKeyId: null,
+        secondaryModelName: null,
       },
     })
   })
@@ -97,7 +105,9 @@ describe('normalizeChatModelConfig', () => {
       alternateModels: {
         enabled: true,
         primaryApiKeyId: 'primary',
+        primaryModelName: 'model-primary',
         secondaryApiKeyId: 'secondary',
+        secondaryModelName: 'model-secondary',
       },
       memory: {
         mode: 'prefix_live_blocks',
@@ -108,7 +118,9 @@ describe('normalizeChatModelConfig', () => {
       alternateModels: {
         enabled: true,
         primaryApiKeyId: 'primary',
+        primaryModelName: 'model-primary',
         secondaryApiKeyId: 'secondary',
+        secondaryModelName: 'model-secondary',
       },
       memory: {
         mode: 'prefix_live_blocks',
@@ -197,14 +209,18 @@ describe('buildOperatorDefaultChatModelConfig', () => {
         alternateModels: {
           enabled: false,
           primaryApiKeyId: 'primary',
+          primaryModelName: 'model-primary',
           secondaryApiKeyId: 'secondary',
+          secondaryModelName: 'model-secondary',
         },
       }),
     ).toEqual({
       alternateModels: {
         enabled: false,
         primaryApiKeyId: 'primary',
+        primaryModelName: 'model-primary',
         secondaryApiKeyId: 'secondary',
+        secondaryModelName: 'model-secondary',
       },
       memory: {
         mode: 'prefix_live_blocks',

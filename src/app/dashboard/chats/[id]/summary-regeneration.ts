@@ -93,6 +93,10 @@ export async function resolveSummaryRegenerationModelConfig(
     return { error: 'Could not find an active LLM API key for regeneration.' }
   }
 
+  if (resolvedConfig.status === 'unsupported_model') {
+    return { error: 'Could not find a supported model for regeneration.' }
+  }
+
   const modelName =
     usage.model_provider === resolvedConfig.config.provider && usage.model_name
       ? usage.model_name

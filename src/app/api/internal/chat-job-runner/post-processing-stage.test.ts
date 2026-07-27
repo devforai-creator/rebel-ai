@@ -60,6 +60,7 @@ describe('runPostProcessingStage', () => {
       origin: 'https://internal.example.com',
       context: {
         apiKeyData: {
+          provider: 'anthropic',
           vault_secret_name: 'vault-key',
           service_tier: 'standard',
           reasoning_effort: null,
@@ -157,6 +158,7 @@ describe('runPostProcessingStage', () => {
         origin: 'https://internal.example.com',
         context: {
           apiKeyData: {
+            provider: 'openai',
             vault_secret_name: 'vault-key',
             service_tier: 'standard',
             reasoning_effort: null,
@@ -214,6 +216,7 @@ describe('runPostProcessingStage', () => {
         origin: 'https://internal.example.com',
         context: {
           apiKeyData: {
+            provider: 'anthropic',
             vault_secret_name: 'vault-key',
             service_tier: 'standard',
             reasoning_effort: null,

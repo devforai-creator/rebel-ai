@@ -11,6 +11,7 @@ export interface ChatJobStatusResponse {
 export interface QueueChatRequestPayload {
   chatId: string
   apiKeyId: string
+  modelName: string
   userMessage?: string
   deliveryMode: ChatDeliveryMode
   isRegeneration?: boolean

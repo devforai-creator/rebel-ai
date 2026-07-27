@@ -17,9 +17,12 @@ export async function resolveSummaryModelPreference({
 }): Promise<SummaryModelConfig | null> {
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select<'summary_api_key_id'>('summary_api_key_id')
+    .select<'summary_api_key_id, summary_model_name'>('summary_api_key_id, summary_model_name')
     .eq('id', userId)
-    .maybeSingle<{ summary_api_key_id: string | null }>()
+    .maybeSingle<{
+      summary_api_key_id: string | null
+      summary_model_name: string | null
+    }>()
 
   if (profileError) {
     console.error('[Summary Model] Failed to load profile preference', {
@@ -38,6 +41,7 @@ export async function resolveSummaryModelPreference({
     supabase,
     userId,
     apiKeyId: summaryKeyId,
+    preferredModelName: profile.summary_model_name,
   })
 
   if (resolvedConfig.status === 'missing_api_key') {
@@ -54,6 +58,16 @@ export async function resolveSummaryModelPreference({
       userId,
       summaryKeyId,
       provider: resolvedConfig.provider,
+    })
+    return null
+  }
+
+  if (resolvedConfig.status === 'unsupported_model') {
+    console.warn('[Summary Model] Stored summary model is unsupported for provider', {
+      userId,
+      summaryKeyId,
+      provider: resolvedConfig.provider,
+      modelName: resolvedConfig.modelName,
     })
     return null
   }

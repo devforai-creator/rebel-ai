@@ -15,7 +15,18 @@ interface Props {
   apiKeys: ApiKeyListItem[]
 }
 
-type ApiKeyListItem = Omit<ApiKey, 'vault_secret_name' | 'user_id'>
+type ApiKeyListItem = Pick<
+  ApiKey,
+  | 'id'
+  | 'provider'
+  | 'key_name'
+  | 'service_tier'
+  | 'reasoning_effort'
+  | 'is_active'
+  | 'usage_notes'
+  | 'last_used_at'
+  | 'created_at'
+>
 
 export default function ApiKeyList({ apiKeys }: Props) {
   const router = useRouter()
@@ -99,13 +110,6 @@ export default function ApiKeyList({ apiKeys }: Props) {
 
               {/* Key Name */}
               <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{key.key_name}</h3>
-
-              {/* Model */}
-              {key.model_preference && (
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  Model: {key.model_preference}
-                </p>
-              )}
 
               {/* Metadata */}
               <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">

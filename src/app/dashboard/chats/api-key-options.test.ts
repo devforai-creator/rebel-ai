@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   CHAT_RUNTIME_API_KEY_OPTION_COLUMNS,
   CHAT_SELECTABLE_API_KEY_OPTION_COLUMNS,
-  formatChatApiKeyOptionLabel,
+  formatChatCredentialLabel,
+  formatChatModelOptionLabel,
 } from './api-key-options'
 
 describe('chat api key option helpers', () => {
@@ -13,9 +14,9 @@ describe('chat api key option helpers', () => {
     )
   })
 
-  it('formats a basic chat API key label by default', () => {
+  it('formats a provider credential label', () => {
     expect(
-      formatChatApiKeyOptionLabel({
+      formatChatCredentialLabel({
         id: 'key-1',
         key_name: 'Primary',
         provider: 'openai',
@@ -24,21 +25,25 @@ describe('chat api key option helpers', () => {
     ).toBe('Primary (openai)')
   })
 
-  it('formats model preference, prefix, and extra provider detail when requested', () => {
+  it('formats a model, credential, prefix, and extra provider detail', () => {
     expect(
-      formatChatApiKeyOptionLabel(
+      formatChatModelOptionLabel(
         {
-          id: 'key-1',
-          key_name: 'Primary',
-          provider: 'openai',
-          model_preference: 'gpt-5-mini',
+          credential: {
+            id: 'key-1',
+            key_name: 'Primary',
+            provider: 'openai',
+            model_preference: 'gpt-5-mini',
+          },
+          modelName: 'gpt-5-mini',
+          displayName: 'GPT-5 mini',
+          value: 'selection',
         },
         {
-          includeModelPreference: true,
           prefix: '보조',
           extraProviderDetail: 'Standard',
         },
       ),
-    ).toBe('보조: Primary (openai · Standard) - gpt-5-mini')
+    ).toBe('보조: GPT-5 mini · Primary (openai · Standard)')
   })
 })

@@ -3,10 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSupabaseMock } from '@/tests/mocks/supabase'
 
 const getDefaultModelForProviderMock = vi.fn((provider: string) => `default-${provider}`)
+const listModelsByProviderMock = vi.fn()
 
 vi.mock('@/lib/models', () => ({
   getDefaultModelForProvider: (...args: Parameters<typeof getDefaultModelForProviderMock>) =>
     getDefaultModelForProviderMock(...args),
+  listModelsByProvider: (...args: Parameters<typeof listModelsByProviderMock>) =>
+    listModelsByProviderMock(...args),
 }))
 
 function createSummaryPreferenceSupabaseMock({
@@ -34,6 +37,8 @@ describe('resolveSummaryModelPreference', () => {
   beforeEach(() => {
     getDefaultModelForProviderMock.mockReset()
     getDefaultModelForProviderMock.mockImplementation((provider: string) => `default-${provider}`)
+    listModelsByProviderMock.mockReset()
+    listModelsByProviderMock.mockReturnValue([{ id: 'gpt-5.4' }])
   })
 
   it('returns null when profile preference query fails', async () => {
@@ -148,6 +153,39 @@ describe('resolveSummaryModelPreference', () => {
       apiKeyId: 'key-1',
     })
     expect(getDefaultModelForProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('uses the profile model with a reusable provider credential', async () => {
+    const supabase = createSummaryPreferenceSupabaseMock({
+      profiles: [
+        {
+          id: 'user-1',
+          summary_api_key_id: 'key-1',
+          summary_model_name: 'gpt-5.4',
+        },
+      ],
+      apiKeys: [
+        {
+          id: 'key-1',
+          user_id: 'user-1',
+          provider: 'openai',
+          model_preference: 'gpt-5',
+          is_active: true,
+        },
+      ],
+    })
+    const { resolveSummaryModelPreference } = await import('./summary-model-preference')
+
+    await expect(
+      resolveSummaryModelPreference({
+        supabase: supabase as never,
+        userId: 'user-1',
+      }),
+    ).resolves.toEqual({
+      provider: 'openai',
+      modelName: 'gpt-5.4',
+      apiKeyId: 'key-1',
+    })
   })
 
   it('falls back to provider default model when preference is missing', async () => {

@@ -5,7 +5,6 @@ import { useFormStatus } from 'react-dom'
 import Button from '@/app/dashboard/components/Button'
 import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import { surfaceCardClassName } from '@/app/dashboard/components/SurfaceCard'
-import { listUiModelIdsByProvider } from '@/lib/models'
 import { createApiKey, type ApiKeyFormState } from './actions'
 import GoogleApiKeySidePanel from './GoogleApiKeySidePanel'
 import { MAX_API_KEY_LENGTH, PROVIDER_OPTIONS, PROVIDER_RULES } from './providerRules'
@@ -254,24 +253,6 @@ export default function AddApiKeyForm() {
               </p>
             </div>
           )}
-
-          {/* Model Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Default Model (Optional)
-            </label>
-            <select
-              name="model_preference"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="">None</option>
-              {listUiModelIdsByProvider(provider).map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
-            </select>
-          </div>
 
           {/* 제출 버튼 */}
           <SubmitButton />

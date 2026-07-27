@@ -1514,6 +1514,63 @@ describe('POST /api/chat', () => {
     )
   })
 
+  it('reuses one provider credential with an explicitly selected model', async () => {
+    const supabase = createSupabaseMock(
+      buildDefaultAuthenticatedFixture({
+        apiKeys: [
+          {
+            id: 'api-key-1',
+            user_id: 'user-1',
+            provider: 'google',
+            is_active: true,
+            vault_secret_name: 'secret-key',
+            model_preference: 'gemini-2.5-flash',
+          },
+        ],
+      }),
+    )
+
+    const response = await POST(
+      new Request('http://localhost/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          chatId: 'chat-1',
+          apiKeyId: 'api-key-1',
+          modelName: 'gemini-3.5-flash',
+          userMessage: 'use another Google model',
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(202)
+    expect(supabase.chatJobs).toHaveLength(1)
+    expect(supabase.chatJobs[0].payload).toMatchObject({
+      apiKeyId: 'api-key-1',
+      provider: 'google',
+      modelName: 'gemini-3.5-flash',
+    })
+  })
+
+  it('rejects a model that belongs to a different provider', async () => {
+    const supabase = createSupabaseMock(buildDefaultAuthenticatedFixture())
+
+    const response = await POST(
+      new Request('http://localhost/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          chatId: 'chat-1',
+          apiKeyId: 'api-key-1',
+          modelName: 'gpt-5.5',
+          userMessage: 'do not cross providers',
+        }),
+      }),
+    )
+
+    await expectJsonError(response, 400, 'Unsupported model for provider')
+    expect(supabase.messages).toHaveLength(0)
+    expect(supabase.chatJobs).toHaveLength(0)
+  })
+
   it('dispatches the chat job runner trigger with the expected internal URL and auth headers', async () => {
     process.env.INTERNAL_API_ORIGIN = 'https://internal.example.com'
     process.env.VERCEL_AUTOMATION_BYPASS_SECRET = 'vercel-bypass-secret'

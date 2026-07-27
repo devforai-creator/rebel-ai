@@ -1,12 +1,14 @@
 'use server'
 
 import { z } from 'zod'
-import { isLLMProvider } from '@/lib/api-keys/provider-utils'
+import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
+import { listModelsByProvider } from '@/lib/models'
 import {
   createAuthenticatedAccountContext,
   optionalTrimmedStringSchema,
   parseAccountFormData,
   revalidateAccountSettingsPage,
+  type AccountActionFailureResult,
   type BasicAccountActionResult,
   updateProfileForUser,
   validateSelectedApiKey,
@@ -39,16 +41,41 @@ const agenticTranscriptRecallDefaultSettingsFormSchema = z.object({
 
 const summaryModelPreferenceFormSchema = z.object({
   summary_key_id: optionalTrimmedStringSchema,
+  summary_model_name: optionalTrimmedStringSchema,
 })
 
 const reprocessSettingsFormSchema = z.object({
   reprocess_prompt: optionalTrimmedStringSchema,
   reprocess_key_id: optionalTrimmedStringSchema,
+  reprocess_model_name: optionalTrimmedStringSchema,
 })
 
 const translationModelPreferenceFormSchema = z.object({
   translation_key_id: optionalTrimmedStringSchema,
+  translation_model_name: optionalTrimmedStringSchema,
 })
+
+function validateModelSelectionPair(
+  apiKeyId: string | null,
+  modelName: string | null,
+): AccountActionFailureResult | null {
+  if (!!apiKeyId === !!modelName) {
+    return null
+  }
+
+  return {
+    error: 'Please select a credential and model together.',
+    success: false,
+  }
+}
+
+function isSelectableProviderModel(provider: string, modelName: string | null): boolean {
+  return (
+    !!modelName &&
+    isKnownLLMProvider(provider) &&
+    listModelsByProvider(provider, { uiOnly: true }).some((model) => model.id === modelName)
+  )
+}
 
 export async function updateSummaryPrompts(
   chunkPrompt: string | null,
@@ -274,6 +301,14 @@ export async function updateSummaryModelPreference(
     return parsedForm
   }
 
+  const pairValidation = validateModelSelectionPair(
+    parsedForm.data.summary_key_id,
+    parsedForm.data.summary_model_name,
+  )
+  if (pairValidation) {
+    return pairValidation
+  }
+
   const keyValidation = await validateSelectedApiKey({
     supabase,
     userId,
@@ -281,7 +316,10 @@ export async function updateSummaryModelPreference(
     missingMessage: 'Could not find the selected API key.',
     providerMismatchMessage: 'Only LLM provider keys can be selected.',
     inactiveMessage: 'Inactive API keys cannot be used.',
-    isProviderAllowed: isLLMProvider,
+    isProviderAllowed: isKnownLLMProvider,
+    isSelectionAllowed: (provider) =>
+      isSelectableProviderModel(provider, parsedForm.data.summary_model_name),
+    selectionMismatchMessage: 'The selected model is not available for this provider.',
   })
 
   if (keyValidation) {
@@ -291,7 +329,10 @@ export async function updateSummaryModelPreference(
   const error = await updateProfileForUser({
     supabase,
     userId,
-    updates: { summary_api_key_id: parsedForm.data.summary_key_id },
+    updates: {
+      summary_api_key_id: parsedForm.data.summary_key_id,
+      summary_model_name: parsedForm.data.summary_model_name,
+    },
     logLabel: '[Account] Failed to update summary model preference:',
   })
 
@@ -332,6 +373,14 @@ export async function updateReprocessSettings(
     return parsedForm
   }
 
+  const pairValidation = validateModelSelectionPair(
+    parsedForm.data.reprocess_key_id,
+    parsedForm.data.reprocess_model_name,
+  )
+  if (pairValidation) {
+    return pairValidation
+  }
+
   const keyValidation = await validateSelectedApiKey({
     supabase,
     userId,
@@ -339,7 +388,10 @@ export async function updateReprocessSettings(
     missingMessage: 'Could not find the selected API key.',
     providerMismatchMessage: 'Only LLM provider keys can be selected.',
     inactiveMessage: 'Inactive API keys cannot be used.',
-    isProviderAllowed: isLLMProvider,
+    isProviderAllowed: isKnownLLMProvider,
+    isSelectionAllowed: (provider) =>
+      isSelectableProviderModel(provider, parsedForm.data.reprocess_model_name),
+    selectionMismatchMessage: 'The selected model is not available for this provider.',
   })
 
   if (keyValidation) {
@@ -352,6 +404,7 @@ export async function updateReprocessSettings(
     updates: {
       reprocess_prompt: parsedForm.data.reprocess_prompt,
       reprocess_api_key_id: parsedForm.data.reprocess_key_id,
+      reprocess_model_name: parsedForm.data.reprocess_model_name,
     },
     logLabel: '[Account] Failed to update reprocess settings:',
   })
@@ -393,6 +446,14 @@ export async function updateTranslationModelPreference(
     return parsedForm
   }
 
+  const pairValidation = validateModelSelectionPair(
+    parsedForm.data.translation_key_id,
+    parsedForm.data.translation_model_name,
+  )
+  if (pairValidation) {
+    return pairValidation
+  }
+
   const keyValidation = await validateSelectedApiKey({
     supabase,
     userId,
@@ -400,7 +461,10 @@ export async function updateTranslationModelPreference(
     missingMessage: 'Could not find the selected API key.',
     providerMismatchMessage: 'Only LLM provider keys can be selected.',
     inactiveMessage: 'Inactive API keys cannot be used.',
-    isProviderAllowed: isLLMProvider,
+    isProviderAllowed: isKnownLLMProvider,
+    isSelectionAllowed: (provider) =>
+      isSelectableProviderModel(provider, parsedForm.data.translation_model_name),
+    selectionMismatchMessage: 'The selected model is not available for this provider.',
   })
 
   if (keyValidation) {
@@ -412,6 +476,7 @@ export async function updateTranslationModelPreference(
     userId,
     updates: {
       translation_api_key_id: parsedForm.data.translation_key_id,
+      translation_model_name: parsedForm.data.translation_model_name,
     },
     logLabel: '[Account] Failed to update translation model preference:',
   })

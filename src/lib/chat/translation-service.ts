@@ -7,7 +7,7 @@ import type { ApiKeyUpdate, MessageUpdate, Profile } from '@/types/database.type
 
 type TranslationSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'from'>
 type TranslationAdminSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'rpc'>
-type TranslationProfileRow = Pick<Profile, 'translation_api_key_id'>
+type TranslationProfileRow = Pick<Profile, 'translation_api_key_id' | 'translation_model_name'>
 
 export type TranslationResult =
   | { status: 'success'; content: string }
@@ -37,7 +37,9 @@ export async function translateMessageForUser({
 }: TranslationRequest): Promise<TranslationResult> {
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select<'translation_api_key_id'>('translation_api_key_id')
+    .select<'translation_api_key_id, translation_model_name'>(
+      'translation_api_key_id, translation_model_name',
+    )
     .eq('id', userId)
     .single<TranslationProfileRow>()
 
@@ -55,6 +57,7 @@ export async function translateMessageForUser({
     supabase,
     userId,
     apiKeyId,
+    preferredModelName: profile.translation_model_name,
     defaultModelMode: 'lightweight',
   })
 
@@ -66,6 +69,15 @@ export async function translateMessageForUser({
     return {
       status: 'translation_error',
       error: new Error(`Unsupported provider: ${resolvedConfig.provider}`),
+    }
+  }
+
+  if (resolvedConfig.status === 'unsupported_model') {
+    return {
+      status: 'translation_error',
+      error: new Error(
+        `Unsupported model for provider: ${resolvedConfig.provider}/${resolvedConfig.modelName}`,
+      ),
     }
   }
 

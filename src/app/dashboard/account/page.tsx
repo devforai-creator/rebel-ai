@@ -11,11 +11,11 @@ import ChatUsageSettingsForm from './ChatUsageSettingsForm'
 import ChangePasswordForm from './ChangePasswordForm'
 import ReprocessSettingsForm from './ReprocessSettingsForm'
 import TranslationModelSettingsForm from './TranslationModelSettingsForm'
-import { isLLMProvider } from '@/lib/api-keys/provider-utils'
+import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import type { SelectableLlmApiKey, VoyageEmbeddingsKeyOption } from './options'
 
 const ACCOUNT_PROFILE_SELECT_COLUMNS =
-  'display_name, chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt, enable_episodic_rag, enable_agentic_transcript_recall_default, enable_chat_usage_stats, voyage_embedding_api_key_id, summary_api_key_id, reprocess_prompt, reprocess_api_key_id, translation_api_key_id'
+  'display_name, chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt, enable_episodic_rag, enable_agentic_transcript_recall_default, enable_chat_usage_stats, voyage_embedding_api_key_id, summary_api_key_id, summary_model_name, reprocess_prompt, reprocess_api_key_id, reprocess_model_name, translation_api_key_id, translation_model_name'
 
 export default async function AccountPage() {
   const supabase = await createClient()
@@ -55,15 +55,19 @@ export default async function AccountPage() {
   }))
 
   const selectableLlmApiKeys: SelectableLlmApiKey[] =
-    summaryKeys
-      ?.filter((key) => isLLMProvider(key.provider))
-      .map((key) => ({
-        id: key.id,
-        key_name: key.key_name,
-        provider: key.provider,
-        model_preference: key.model_preference,
-        service_tier: key.service_tier,
-      })) ?? []
+    summaryKeys?.flatMap((key) =>
+      isKnownLLMProvider(key.provider)
+        ? [
+            {
+              id: key.id,
+              key_name: key.key_name,
+              provider: key.provider,
+              model_preference: key.model_preference,
+              service_tier: key.service_tier,
+            },
+          ]
+        : [],
+    ) ?? []
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -177,6 +181,7 @@ export default async function AccountPage() {
               <div className="mt-6">
                 <SummaryModelSettingsForm
                   initialKeyId={profile?.summary_api_key_id ?? null}
+                  initialModelName={profile?.summary_model_name ?? null}
                   apiKeys={selectableLlmApiKeys}
                 />
               </div>
@@ -200,6 +205,7 @@ export default async function AccountPage() {
                 <ReprocessSettingsForm
                   initialPrompt={profile?.reprocess_prompt ?? null}
                   initialKeyId={profile?.reprocess_api_key_id ?? null}
+                  initialModelName={profile?.reprocess_model_name ?? null}
                   apiKeys={selectableLlmApiKeys}
                 />
               </div>
@@ -222,6 +228,7 @@ export default async function AccountPage() {
               <div className="mt-6">
                 <TranslationModelSettingsForm
                   initialKeyId={profile?.translation_api_key_id ?? null}
+                  initialModelName={profile?.translation_model_name ?? null}
                   apiKeys={selectableLlmApiKeys}
                 />
               </div>

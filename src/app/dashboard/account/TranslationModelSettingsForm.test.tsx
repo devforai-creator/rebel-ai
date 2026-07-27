@@ -12,6 +12,7 @@ describe('TranslationModelSettingsForm', () => {
     const html = renderToStaticMarkup(
       <TranslationModelSettingsForm
         initialKeyId={null}
+        initialModelName={null}
         apiKeys={[
           {
             id: 'key-1',
@@ -24,10 +25,11 @@ describe('TranslationModelSettingsForm', () => {
       />,
     )
 
-    expect(html).toContain('Translation API Key (Bilingual Memory)')
+    expect(html).toContain('Translation Model (Bilingual Memory)')
     expect(html).toContain('Experimental option.')
     expect(html).toContain('may not lower total cost')
     expect(html).toContain('for="translation_key_id"')
     expect(html).toContain('id="translation_key_id"')
+    expect(html).toContain('name="translation_model_name"')
   })
 })

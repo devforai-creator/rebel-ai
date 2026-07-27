@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
-import { getDefaultModelForProvider } from '@/lib/models'
+import { getDefaultModelForProvider, listModelsByProvider } from '@/lib/models'
 import type { ApiServiceTier, Database, LlmProvider } from '@/types/database.types'
 
 type LlmConfigSupabaseClient = Pick<SupabaseClient<Database>, 'from'>
@@ -35,6 +35,11 @@ export type ResolveActiveLlmConfigResult =
   | {
       status: 'unsupported_provider'
       provider: string
+    }
+  | {
+      status: 'unsupported_model'
+      provider: LlmProvider
+      modelName: string
     }
 
 function normalizeConfiguredModelName(modelName?: string | null): string | null {
@@ -83,8 +88,23 @@ export async function resolveActiveLlmConfigForUser({
     }
   }
 
+  const normalizedPreferredModelName = normalizeConfiguredModelName(preferredModelName)
+  const preferredModel = normalizedPreferredModelName
+    ? listModelsByProvider(apiKeyRow.provider).find(
+        (model) => model.id.toLowerCase() === normalizedPreferredModelName.toLowerCase(),
+      )
+    : null
+
+  if (normalizedPreferredModelName && !preferredModel) {
+    return {
+      status: 'unsupported_model',
+      provider: apiKeyRow.provider,
+      modelName: normalizedPreferredModelName,
+    }
+  }
+
   const modelName =
-    normalizeConfiguredModelName(preferredModelName) ??
+    preferredModel?.id ??
     normalizeConfiguredModelName(apiKeyRow.model_preference) ??
     getDefaultModelForProvider(
       apiKeyRow.provider,

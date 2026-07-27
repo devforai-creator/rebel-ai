@@ -2,12 +2,14 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { CHAT_SELECTABLE_API_KEY_OPTION_COLUMNS } from '../api-key-options'
+import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import NewChatForm from './NewChatForm'
 
 interface Props {
   searchParams: Promise<{
     character?: string
     apiKey?: string
+    model?: string
     persona?: string
     greeting?: string
   }>
@@ -17,6 +19,7 @@ export default async function NewChatPage({ searchParams }: Props) {
   const params = await searchParams
   const characterId = params.character?.trim()
   const initialApiKeyId = params.apiKey?.trim()
+  const initialModelName = params.model?.trim()
   const initialPersonaId = params.persona?.trim()
   const parsedGreetingIndex = Number(params.greeting)
   const initialGreetingIndex =
@@ -62,7 +65,18 @@ export default async function NewChatPage({ searchParams }: Props) {
     redirect('/dashboard/characters')
   }
 
-  if (!apiKeys || apiKeys.length === 0) {
+  const llmApiKeys = (apiKeys ?? []).flatMap((key) =>
+    isKnownLLMProvider(key.provider)
+      ? [
+          {
+            ...key,
+            provider: key.provider,
+          },
+        ]
+      : [],
+  )
+
+  if (llmApiKeys.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
         <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-lg p-8 text-center">
@@ -97,9 +111,10 @@ export default async function NewChatPage({ searchParams }: Props) {
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <NewChatForm
           character={character}
-          apiKeys={apiKeys}
+          apiKeys={llmApiKeys}
           personas={personas || []}
           initialApiKeyId={initialApiKeyId}
+          initialModelName={initialModelName}
           initialPersonaId={initialPersonaId}
           initialGreetingIndex={initialGreetingIndex}
         />

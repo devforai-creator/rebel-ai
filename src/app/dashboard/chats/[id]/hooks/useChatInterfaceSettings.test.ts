@@ -7,7 +7,7 @@ const apiKeys = [
     id: 'key-1',
     key_name: 'Primary',
     provider: 'openai',
-    model_preference: 'gpt-5-mini',
+    model_preference: 'gpt-5.5',
     service_tier: 'standard',
   },
   {
@@ -37,14 +37,18 @@ describe('resolveInitialChatSettings', () => {
           alternateModels: {
             enabled: true,
             primaryApiKeyId: 'key-1',
+            primaryModelName: 'gpt-5.5',
             secondaryApiKeyId: 'key-2',
+            secondaryModelName: 'claude-opus-4-5',
           },
           memory: null,
         },
       }),
     ).toEqual({
       primaryApiKeyId: 'key-1',
+      primaryModelName: 'gpt-5.5',
       secondaryApiKeyId: 'key-2',
+      secondaryModelName: 'claude-opus-4-5',
       alternateModelsEnabled: true,
     })
   })
@@ -59,14 +63,18 @@ describe('resolveInitialChatSettings', () => {
           alternateModels: {
             enabled: false,
             primaryApiKeyId: 'missing',
+            primaryModelName: 'gpt-5.5',
             secondaryApiKeyId: 'also-missing',
+            secondaryModelName: 'claude-opus-4-5',
           },
           memory: null,
         },
       }),
     ).toEqual({
       primaryApiKeyId: 'key-3',
+      primaryModelName: 'gemini-2.5-pro',
       secondaryApiKeyId: 'key-1',
+      secondaryModelName: 'gpt-5.5',
       alternateModelsEnabled: false,
     })
   })
@@ -79,14 +87,18 @@ describe('resolveInitialChatSettings', () => {
           alternateModels: {
             enabled: true,
             primaryApiKeyId: 'key-1',
+            primaryModelName: 'gpt-5.5',
             secondaryApiKeyId: 'key-1',
+            secondaryModelName: 'gpt-5.5',
           },
           memory: null,
         },
       }),
     ).toEqual({
       primaryApiKeyId: 'key-1',
+      primaryModelName: 'gpt-5.5',
       secondaryApiKeyId: 'key-1',
+      secondaryModelName: 'gpt-5.5',
       alternateModelsEnabled: false,
     })
   })

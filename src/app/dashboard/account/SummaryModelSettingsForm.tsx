@@ -1,16 +1,18 @@
 'use client'
 
-import React, { useActionState, useState } from 'react'
+import React, { useActionState } from 'react'
 import Link from 'next/link'
 import Button from '@/app/dashboard/components/Button'
 import InlineFeedback from '@/app/dashboard/components/InlineFeedback'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { updateSummaryModelPreference, type SummaryModelPreferenceState } from './actions'
-import { formatSelectableLlmApiKeyLabel, type SelectableLlmApiKey } from './options'
+import LlmModelPreferenceSelect from './LlmModelPreferenceSelect'
+import type { SelectableLlmApiKey } from './options'
 import { useActionStateFeedback } from './useActionStateFeedback'
 
 interface Props {
   initialKeyId: string | null
+  initialModelName: string | null
   apiKeys: SelectableLlmApiKey[]
 }
 
@@ -21,9 +23,12 @@ const initialState: SummaryModelPreferenceState = {
 
 const SUMMARY_KEY_ID = 'summary_key_id'
 
-export default function SummaryModelSettingsForm({ initialKeyId, apiKeys }: Props) {
+export default function SummaryModelSettingsForm({
+  initialKeyId,
+  initialModelName,
+  apiKeys,
+}: Props) {
   const [state, formAction] = useActionState(updateSummaryModelPreference, initialState)
-  const [selectedKey, setSelectedKey] = useState(initialKeyId ?? '')
   const { feedback, clearFeedback } = useActionStateFeedback(state, {
     successMessage: 'Saved successfully.',
   })
@@ -33,33 +38,20 @@ export default function SummaryModelSettingsForm({ initialKeyId, apiKeys }: Prop
   return (
     <form action={formAction} className="space-y-4">
       <div className="space-y-2">
-        <label
-          htmlFor={SUMMARY_KEY_ID}
-          className="block text-sm font-medium text-gray-900 dark:text-gray-200"
-        >
-          Summary-dedicated API Key
-        </label>
-        <select
+        <LlmModelPreferenceSelect
           id={SUMMARY_KEY_ID}
-          name="summary_key_id"
-          className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50"
-          value={selectedKey}
-          onChange={(event) => {
-            setSelectedKey(event.target.value)
-            clearFeedback()
-          }}
-          disabled={!hasKeys}
-        >
-          <option value="">Same as chat (default)</option>
-          {apiKeys.map((key) => (
-            <option key={key.id} value={key.id}>
-              {formatSelectableLlmApiKeyLabel(key)}
-            </option>
-          ))}
-        </select>
+          label="Summary-dedicated Model"
+          apiKeyInputName="summary_key_id"
+          modelInputName="summary_model_name"
+          initialApiKeyId={initialKeyId}
+          initialModelName={initialModelName}
+          apiKeys={apiKeys}
+          emptyLabel="Same as chat (default)"
+          onSelectionChange={clearFeedback}
+        />
         <p className="text-xs text-gray-500 dark:text-gray-400">
           Advanced option. If not selected, the model from your recent chat will continue to be
-          used. Keys without a model set will use the provider&apos;s default model.
+          used. A registered provider credential can be reused across all of its supported models.
         </p>
       </div>
 
@@ -79,9 +71,7 @@ export default function SummaryModelSettingsForm({ initialKeyId, apiKeys }: Prop
 
       {feedback && <InlineFeedback tone={feedback.tone}>{feedback.message}</InlineFeedback>}
 
-      <Button type="submit" disabled={!hasKeys && selectedKey !== ''}>
-        Save
-      </Button>
+      <Button type="submit">Save</Button>
     </form>
   )
 }

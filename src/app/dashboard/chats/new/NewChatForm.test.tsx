@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatSelectableApiKeyOption } from '../api-key-options'
 import NewChatForm from './NewChatForm'
@@ -34,7 +34,7 @@ const apiKeys = [
     id: 'key-1',
     key_name: 'Primary',
     provider: 'openai',
-    model_preference: 'gpt-5',
+    model_preference: 'gpt-5.5',
   },
   {
     id: 'key-2',
@@ -69,12 +69,15 @@ describe('NewChatForm', () => {
         apiKeys={apiKeys}
         personas={personas}
         initialApiKeyId="key-2"
+        initialModelName="claude-sonnet-5"
         initialPersonaId="persona-1"
         initialGreetingIndex={1}
       />,
     )
 
-    expect((screen.getByLabelText(/API 키 선택/) as HTMLSelectElement).value).toBe('key-2')
+    expect((screen.getByLabelText(/모델 선택/) as HTMLSelectElement).value).toBe(
+      JSON.stringify(['key-2', 'claude-sonnet-5']),
+    )
     expect((screen.getByLabelText(/페르소나 선택/) as HTMLSelectElement).value).toBe('persona-1')
     expect(screen.getByText('첫 인사 (2/3)')).toBeTruthy()
   })
@@ -82,8 +85,8 @@ describe('NewChatForm', () => {
   it('keeps the current selections in the persona management return target', () => {
     render(<NewChatForm character={character} apiKeys={apiKeys} personas={personas} />)
 
-    fireEvent.change(screen.getByLabelText(/API 키 선택/), {
-      target: { value: 'key-2' },
+    fireEvent.change(screen.getByLabelText(/모델 선택/), {
+      target: { value: JSON.stringify(['key-2', 'claude-sonnet-5']) },
     })
     fireEvent.change(screen.getByLabelText(/페르소나 선택/), {
       target: { value: 'persona-2' },
@@ -96,7 +99,22 @@ describe('NewChatForm', () => {
     expect(returnUrl.pathname).toBe('/dashboard/chats/new')
     expect(returnUrl.searchParams.get('character')).toBe('char-1')
     expect(returnUrl.searchParams.get('apiKey')).toBe('key-2')
+    expect(returnUrl.searchParams.get('model')).toBe('claude-sonnet-5')
     expect(returnUrl.searchParams.get('persona')).toBe('persona-2')
     expect(returnUrl.searchParams.get('greeting')).toBe('1')
+  })
+
+  it('passes the selected credential and model to the new chat URL', async () => {
+    createChatMock.mockResolvedValue({ chatId: 'chat-1' })
+    render(<NewChatForm character={character} apiKeys={apiKeys} personas={personas} />)
+
+    fireEvent.change(screen.getByLabelText(/모델 선택/), {
+      target: { value: JSON.stringify(['key-1', 'gpt-5.4']) },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '채팅 시작' }))
+
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith('/dashboard/chats/chat-1?apiKey=key-1&model=gpt-5.4')
+    })
   })
 })

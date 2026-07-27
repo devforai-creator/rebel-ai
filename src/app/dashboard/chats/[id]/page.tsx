@@ -16,7 +16,7 @@ import SystemPromptEditorButton from './SystemPromptEditorButton'
 import ChatPersonaWidget from './ChatPersonaWidget'
 import { BASE_GLOBAL_SYSTEM_PROMPT } from '@/lib/chat/global-system-prompt'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
-import { isLLMProvider } from '@/lib/api-keys/provider-utils'
+import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import { loadProjectedChatWindow } from '@/lib/chat/turns'
 import type { Persona } from '@/types/database.types'
 import { CHAT_RUNTIME_API_KEY_OPTION_COLUMNS } from '../api-key-options'
@@ -29,7 +29,7 @@ import { ACTIVE_QUEUE_JOB_STATUSES } from '@/lib/queue/admission'
 
 interface Props {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ apiKey?: string }>
+  searchParams: Promise<{ apiKey?: string; model?: string }>
 }
 
 export default async function ChatPage({ params, searchParams }: Props) {
@@ -175,8 +175,18 @@ export default async function ChatPage({ params, searchParams }: Props) {
   }
 
   // Filter to only include LLM providers (exclude embedding-only providers)
-  const apiKeyList = (apiKeys || []).filter((key) => isLLMProvider(key.provider))
+  const apiKeyList = (apiKeys ?? []).flatMap((key) =>
+    isKnownLLMProvider(key.provider)
+      ? [
+          {
+            ...key,
+            provider: key.provider,
+          },
+        ]
+      : [],
+  )
   const preselectedApiKeyId = search.apiKey || apiKeyList[0]?.id
+  const preselectedModelName = search.model?.trim()
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
@@ -221,6 +231,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
               initialActiveJob={initialActiveJob}
               apiKeys={apiKeyList}
               preselectedApiKeyId={preselectedApiKeyId}
+              preselectedModelName={preselectedModelName}
               initialModelConfig={normalizedModelConfig}
               initialUsageStats={null}
               usageStatsEnabled={profileSettings?.enable_chat_usage_stats ?? false}

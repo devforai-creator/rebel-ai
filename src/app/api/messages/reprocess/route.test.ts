@@ -64,6 +64,7 @@ type ProfileRow = {
   id: string
   reprocess_prompt: string | null
   reprocess_api_key_id: string | null
+  reprocess_model_name?: string | null
 }
 
 type ApiKeyRow = {
@@ -532,7 +533,16 @@ describe('POST /api/messages/reprocess', () => {
   })
 
   it('updates the message content and usage metadata when reprocessing succeeds', async () => {
-    const supabase = createRouteSupabase()
+    const supabase = createRouteSupabase({
+      profileRows: [
+        {
+          id: 'user-1',
+          reprocess_prompt: 'Rewrite the text more naturally.',
+          reprocess_api_key_id: 'key-1',
+          reprocess_model_name: 'gpt-5.4',
+        },
+      ],
+    })
     hoistedMocks.createClientMock.mockReturnValue(supabase)
     hoistedMocks.streamTextMock.mockResolvedValue({
       textStream: createTextStream(['rewritten once']),
@@ -546,7 +556,7 @@ describe('POST /api/messages/reprocess', () => {
     expect(body).toEqual({ success: true, content: 'rewritten once' })
     expect(hoistedMocks.buildLanguageModelMock).toHaveBeenCalledWith({
       provider: 'openai',
-      modelName: 'gpt-reprocess',
+      modelName: 'gpt-5.4',
       apiKey: 'sk-test',
       serviceTier: 'standard',
     })
@@ -556,7 +566,7 @@ describe('POST /api/messages/reprocess', () => {
       id: 'assistant-msg-1',
       content: 'rewritten once',
       content_en: null,
-      model_used: 'gpt-reprocess',
+      model_used: 'gpt-5.4',
     })
 
     expect(supabase.state.updateCalls).toEqual(
@@ -570,7 +580,7 @@ describe('POST /api/messages/reprocess', () => {
           payload: {
             content: 'rewritten once',
             content_en: null,
-            model_used: 'gpt-reprocess',
+            model_used: 'gpt-5.4',
           },
         }),
         expect.objectContaining({

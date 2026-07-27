@@ -25,6 +25,7 @@ export type ReprocessAssistantMessageResult =
   | { status: 'settings_not_configured' }
   | { status: 'api_key_not_found' }
   | { status: 'unsupported_provider' }
+  | { status: 'unsupported_model' }
   | { status: 'decrypt_failed' }
   | { status: 'save_failed' }
   | { status: 'reprocess_failed' }
@@ -60,7 +61,7 @@ export async function reprocessAssistantMessageForUser({
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('reprocess_prompt, reprocess_api_key_id')
+    .select('reprocess_prompt, reprocess_api_key_id, reprocess_model_name')
     .eq('id', userId)
     .single()
 
@@ -76,6 +77,7 @@ export async function reprocessAssistantMessageForUser({
     supabase,
     userId,
     apiKeyId: profile.reprocess_api_key_id,
+    preferredModelName: profile.reprocess_model_name,
     defaultModelMode: 'lightweight',
   })
 
@@ -85,6 +87,10 @@ export async function reprocessAssistantMessageForUser({
 
   if (resolvedConfig.status === 'unsupported_provider') {
     return { status: 'unsupported_provider' }
+  }
+
+  if (resolvedConfig.status === 'unsupported_model') {
+    return { status: 'unsupported_model' }
   }
 
   let model

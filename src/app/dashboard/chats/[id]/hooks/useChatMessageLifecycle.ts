@@ -42,6 +42,7 @@ export type UseChatMessageLifecycleArgs = {
   initialHistoryCursor: number | null
   hasMoreHistory: boolean
   selectedApiKeyId: string
+  selectedModelName: string
   deliveryMode: ChatDeliveryMode
   alternateModels?: AlternateModelsConfig | null
   fetchLatestUsage: () => Promise<void>
@@ -75,6 +76,7 @@ export function useChatMessageLifecycle({
   initialHistoryCursor,
   hasMoreHistory,
   selectedApiKeyId,
+  selectedModelName,
   deliveryMode,
   alternateModels,
   fetchLatestUsage,
@@ -107,6 +109,7 @@ export function useChatMessageLifecycle({
     initialActiveJob,
     historyMessages,
     selectedApiKeyId,
+    selectedModelName,
     deliveryMode,
     alternateModels,
     fetchLatestUsage,

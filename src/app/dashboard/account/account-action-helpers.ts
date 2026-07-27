@@ -52,6 +52,8 @@ export async function validateSelectedApiKey({
   inactiveMessage,
   lookupMode = 'maybeSingle',
   isProviderAllowed,
+  isSelectionAllowed,
+  selectionMismatchMessage,
 }: {
   supabase: Pick<AccountActionSupabase, 'from'>
   userId: string
@@ -61,6 +63,8 @@ export async function validateSelectedApiKey({
   inactiveMessage: string
   lookupMode?: 'single' | 'maybeSingle'
   isProviderAllowed: (provider: string) => boolean
+  isSelectionAllowed?: (provider: string) => boolean
+  selectionMismatchMessage?: string
 }): Promise<AccountActionFailureResult | null> {
   if (!apiKeyId) {
     return null
@@ -81,6 +85,13 @@ export async function validateSelectedApiKey({
 
   if (!isProviderAllowed(apiKey.provider)) {
     return { error: providerMismatchMessage, success: false }
+  }
+
+  if (isSelectionAllowed && !isSelectionAllowed(apiKey.provider)) {
+    return {
+      error: selectionMismatchMessage ?? providerMismatchMessage,
+      success: false,
+    }
   }
 
   if (!apiKey.is_active) {

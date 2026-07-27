@@ -2,10 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSupabaseMock } from '@/tests/mocks/supabase'
 
 const getDefaultModelForProviderMock = vi.fn()
+const listModelsByProviderMock = vi.fn()
 
 vi.mock('@/lib/models', () => ({
   getDefaultModelForProvider: (...args: Parameters<typeof getDefaultModelForProviderMock>) =>
     getDefaultModelForProviderMock(...args),
+  listModelsByProvider: (...args: Parameters<typeof listModelsByProviderMock>) =>
+    listModelsByProviderMock(...args),
 }))
 
 function createResolverSupabase(apiKeys: Array<Record<string, unknown>>) {
@@ -23,6 +26,8 @@ describe('resolveActiveLlmConfigForUser', () => {
   beforeEach(() => {
     getDefaultModelForProviderMock.mockReset()
     getDefaultModelForProviderMock.mockReturnValue('default-model')
+    listModelsByProviderMock.mockReset()
+    listModelsByProviderMock.mockReturnValue([{ id: 'override-model' }])
   })
 
   it('returns missing_api_key when no active user-scoped API key is found', async () => {
@@ -85,7 +90,7 @@ describe('resolveActiveLlmConfigForUser', () => {
         supabase: supabase as never,
         userId: 'user-1',
         apiKeyId: 'key-1',
-        preferredModelName: 'override-model',
+        preferredModelName: '  OVERRIDE-MODEL  ',
       }),
     ).resolves.toEqual({
       status: 'success',
@@ -98,6 +103,35 @@ describe('resolveActiveLlmConfigForUser', () => {
       },
     })
     expect(getDefaultModelForProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects an explicit model that is not supported by the credential provider', async () => {
+    listModelsByProviderMock.mockReturnValueOnce([{ id: 'gpt-5.5' }])
+    const supabase = createResolverSupabase([
+      {
+        id: 'key-1',
+        user_id: 'user-1',
+        is_active: true,
+        provider: 'openai',
+        model_preference: null,
+        service_tier: 'standard',
+        vault_secret_name: 'vault-key',
+      },
+    ])
+    const { resolveActiveLlmConfigForUser } = await import('./llm-config-resolver')
+
+    await expect(
+      resolveActiveLlmConfigForUser({
+        supabase: supabase as never,
+        userId: 'user-1',
+        apiKeyId: 'key-1',
+        preferredModelName: 'gemini-2.5-flash',
+      }),
+    ).resolves.toEqual({
+      status: 'unsupported_model',
+      provider: 'openai',
+      modelName: 'gemini-2.5-flash',
+    })
   })
 
   it('falls back to the stored model preference before default resolution', async () => {

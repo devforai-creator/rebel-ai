@@ -33,8 +33,6 @@ type ResolveInitialChatSettingsArgs = {
   preselectedApiKeyId?: string
   preselectedModelName?: string
   normalizedModelConfig: ReturnType<typeof normalizeChatModelConfig>
-  storedApiKeyId?: string | null
-  storedModelName?: string | null
 }
 
 export type InitialChatSettings = {
@@ -50,8 +48,6 @@ export function resolveInitialChatSettings({
   preselectedApiKeyId,
   preselectedModelName,
   normalizedModelConfig,
-  storedApiKeyId,
-  storedModelName,
 }: ResolveInitialChatSettingsArgs): InitialChatSettings {
   const primarySelection =
     resolveLlmModelSelection({
@@ -63,11 +59,6 @@ export function resolveInitialChatSettings({
       credentials: apiKeys,
       apiKeyId: preselectedApiKeyId,
       modelName: preselectedModelName,
-    }) ??
-    resolveLlmModelSelection({
-      credentials: apiKeys,
-      apiKeyId: storedApiKeyId,
-      modelName: storedModelName,
     }) ??
     resolveLlmModelSelection({
       credentials: apiKeys,
@@ -172,10 +163,6 @@ export function useChatInterfaceSettings({
         preselectedApiKeyId,
         preselectedModelName,
         normalizedModelConfig,
-        storedApiKeyId:
-          typeof window === 'undefined' ? null : localStorage.getItem('lastUsedApiKey'),
-        storedModelName:
-          typeof window === 'undefined' ? null : localStorage.getItem('lastUsedModel'),
       }),
     [apiKeys, normalizedModelConfig, preselectedApiKeyId, preselectedModelName],
   )
@@ -217,11 +204,9 @@ export function useChatInterfaceSettings({
   }, [chatId, isDeveloper, normalizedModelConfig])
 
   useEffect(() => {
-    if (selectedModel.apiKeyId && selectedModel.modelName) {
-      localStorage.setItem('lastUsedApiKey', selectedModel.apiKeyId)
-      localStorage.setItem('lastUsedModel', selectedModel.modelName)
-    }
-  }, [selectedModel])
+    localStorage.removeItem('lastUsedApiKey')
+    localStorage.removeItem('lastUsedModel')
+  }, [])
 
   const persistModelConfig = useCallback(
     async (

@@ -32,7 +32,6 @@ describe('resolveInitialChatSettings', () => {
       resolveInitialChatSettings({
         apiKeys: [...apiKeys],
         preselectedApiKeyId: 'key-3',
-        storedApiKeyId: 'key-2',
         normalizedModelConfig: {
           alternateModels: {
             enabled: true,
@@ -53,12 +52,11 @@ describe('resolveInitialChatSettings', () => {
     })
   })
 
-  it('falls back from invalid config ids to preselected and stored ids', () => {
+  it('falls back from invalid config ids to the preselected credential', () => {
     expect(
       resolveInitialChatSettings({
         apiKeys: [...apiKeys],
         preselectedApiKeyId: 'key-3',
-        storedApiKeyId: 'key-2',
         normalizedModelConfig: {
           alternateModels: {
             enabled: false,
@@ -75,6 +73,28 @@ describe('resolveInitialChatSettings', () => {
       primaryModelName: 'gemini-2.5-pro',
       secondaryApiKeyId: 'key-1',
       secondaryModelName: 'gpt-5.5',
+      alternateModelsEnabled: false,
+    })
+  })
+
+  it('falls back to the first credential when no saved selection is valid', () => {
+    expect(
+      resolveInitialChatSettings({
+        apiKeys: [...apiKeys],
+        normalizedModelConfig: {
+          alternateModels: {
+            enabled: false,
+            primaryApiKeyId: 'missing',
+            primaryModelName: 'missing-model',
+            secondaryApiKeyId: null,
+            secondaryModelName: null,
+          },
+          memory: null,
+        },
+      }),
+    ).toMatchObject({
+      primaryApiKeyId: 'key-1',
+      primaryModelName: 'gpt-5.5',
       alternateModelsEnabled: false,
     })
   })

@@ -269,8 +269,8 @@ describe('getAnthropicMinCacheTokens', () => {
     expect(getAnthropicMinCacheTokens('Claude-HAIKU-4-5')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.haiku)
   })
 
-  it('returns legacy haiku minimum tokens for 3.x models', () => {
-    expect(getAnthropicMinCacheTokens('Claude-3.5-HAIKU')).toBe(
+  it('returns legacy haiku minimum tokens for Claude 3 models', () => {
+    expect(getAnthropicMinCacheTokens('Claude-3-HAIKU')).toBe(
       ANTHROPIC_CACHE_MIN_TOKENS.haikuLegacy,
     )
   })

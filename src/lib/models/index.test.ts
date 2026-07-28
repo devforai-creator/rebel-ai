@@ -57,6 +57,21 @@ describe('Model Registry', () => {
       // gpt-4o-mini is uiVisible: false (used as lightweight default)
       expect(ids).not.toContain('gpt-4o-mini')
     })
+
+    it('excludes models that are no longer available from their providers', () => {
+      const retiredModels = [
+        ['google', 'gemini-3-pro-preview'],
+        ['google', 'gemini-2.0-flash-exp'],
+        ['anthropic', 'claude-3-5-haiku-latest'],
+        ['openai', 'gpt-5.1-chat-latest'],
+        ['openai', 'gpt-5.1-mini'],
+      ] as const
+
+      for (const [provider, modelName] of retiredModels) {
+        expect(listModelsByProvider(provider).map((model) => model.id)).not.toContain(modelName)
+        expect(findModelDefinition({ provider, modelName })).toBeNull()
+      }
+    })
   })
 
   describe('findModelDefinition', () => {
@@ -151,7 +166,7 @@ describe('Model Registry', () => {
     it('returns tiered pricing for Gemini models', () => {
       const tiers = getModelPricingTiers({
         provider: 'google',
-        modelName: 'gemini-3-pro-preview',
+        modelName: 'gemini-3.1-pro-preview',
       })
 
       expect(tiers).not.toBeNull()
@@ -183,7 +198,7 @@ describe('Model Registry', () => {
       )
       expect(getDefaultModelForProvider('openai', { lightweight: true })).toBe('gpt-4o-mini')
       expect(getDefaultModelForProvider('anthropic', { lightweight: true })).toBe(
-        'claude-3-5-haiku-latest',
+        'claude-haiku-4-5',
       )
     })
 
@@ -369,7 +384,7 @@ describe('Model Registry', () => {
     it('returns true for GPT-5.x models with extended caching', () => {
       expect(hasExtendedOpenAICacheRetention('gpt-5.2')).toBe(true)
       expect(hasExtendedOpenAICacheRetention('gpt-5.1')).toBe(true)
-      expect(hasExtendedOpenAICacheRetention('gpt-5.1-mini')).toBe(true)
+      expect(hasExtendedOpenAICacheRetention('gpt-5.5')).toBe(true)
       expect(hasExtendedOpenAICacheRetention('gpt-5')).toBe(true)
     })
 
@@ -381,7 +396,7 @@ describe('Model Registry', () => {
     })
 
     it('returns false for non-OpenAI models', () => {
-      expect(hasExtendedOpenAICacheRetention('gemini-3-pro-preview')).toBe(false)
+      expect(hasExtendedOpenAICacheRetention('gemini-3.1-pro-preview')).toBe(false)
       expect(hasExtendedOpenAICacheRetention('claude-opus-4-5')).toBe(false)
     })
 
@@ -443,7 +458,7 @@ describe('Model Registry', () => {
     })
 
     it('returns false for non-OpenAI models', () => {
-      expect(hasReasoningSupport('gemini-3-pro-preview')).toBe(false)
+      expect(hasReasoningSupport('gemini-3.1-pro-preview')).toBe(false)
       expect(hasReasoningSupport('claude-opus-4-5')).toBe(false)
     })
 

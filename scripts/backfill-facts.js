@@ -52,7 +52,7 @@ if (!apiKeyProvider || !apiKey || !modelName) {
   console.error('  BACKFILL_API_PROVIDER (google|openai|anthropic)')
   console.error('  BACKFILL_API_KEY (your API key)')
   console.error(
-    '  BACKFILL_MODEL_NAME (e.g., gemini-3.5-flash-lite, gpt-4o-mini, claude-3-5-haiku-20241022)',
+    '  BACKFILL_MODEL_NAME (e.g., gemini-3.5-flash-lite, gpt-4o-mini, claude-haiku-4-5)',
   )
   console.error('')
   console.error('Example:')

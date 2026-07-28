@@ -77,7 +77,7 @@ describe('google-cache', () => {
 
     it('returns 4096 for Pro models', () => {
       expect(getGoogleCacheMinTokens('gemini-2.5-pro')).toBe(4096)
-      expect(getGoogleCacheMinTokens('gemini-3-pro-preview')).toBe(4096)
+      expect(getGoogleCacheMinTokens('gemini-3.1-pro-preview')).toBe(4096)
       expect(getGoogleCacheMinTokens('gemini-pro')).toBe(4096)
     })
 
@@ -89,7 +89,7 @@ describe('google-cache', () => {
 
     it('is case-insensitive', () => {
       expect(getGoogleCacheMinTokens('GEMINI-2.5-FLASH')).toBe(1024)
-      expect(getGoogleCacheMinTokens('Gemini-3-Pro-Preview')).toBe(4096)
+      expect(getGoogleCacheMinTokens('Gemini-3.1-Pro-Preview')).toBe(4096)
     })
   })
 
@@ -121,19 +121,23 @@ describe('google-cache', () => {
 
     it('returns false when below minimum tokens for Pro (4096)', () => {
       // mediumPrompt (~1500 tokens) < 4096
-      expect(shouldCreateGoogleCache('gemini-3-pro-preview', mediumPrompt, emptyMessages)).toBe(
+      expect(shouldCreateGoogleCache('gemini-3.1-pro-preview', mediumPrompt, emptyMessages)).toBe(
         false,
       )
     })
 
     it('returns true when above minimum tokens for Pro (4096)', () => {
       // longPrompt (~5000 tokens) > 4096
-      expect(shouldCreateGoogleCache('gemini-3-pro-preview', longPrompt, emptyMessages)).toBe(true)
+      expect(shouldCreateGoogleCache('gemini-3.1-pro-preview', longPrompt, emptyMessages)).toBe(
+        true,
+      )
     })
 
     it('combines system prompt and message tokens', () => {
       // mediumPrompt (~1500) + longMessages (~4000) = ~5500 tokens > 4096
-      expect(shouldCreateGoogleCache('gemini-3-pro-preview', mediumPrompt, longMessages)).toBe(true)
+      expect(shouldCreateGoogleCache('gemini-3.1-pro-preview', mediumPrompt, longMessages)).toBe(
+        true,
+      )
     })
   })
 
@@ -143,7 +147,7 @@ describe('google-cache', () => {
 
     it('returns enabled=true and minTokens for Pro when threshold met', () => {
       const result = resolveGoogleCacheDecision({
-        modelName: 'gemini-3-pro-preview',
+        modelName: 'gemini-3.1-pro-preview',
         systemPrompt: longPrompt,
         messagesToCache: [],
       })
@@ -154,7 +158,7 @@ describe('google-cache', () => {
 
     it('returns enabled=false when threshold not met', () => {
       const result = resolveGoogleCacheDecision({
-        modelName: 'gemini-3-pro-preview',
+        modelName: 'gemini-3.1-pro-preview',
         systemPrompt: shortPrompt,
         messagesToCache: [],
       })

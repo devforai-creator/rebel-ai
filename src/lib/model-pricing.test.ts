@@ -95,11 +95,11 @@ describe('estimateUsageCost', () => {
       })
     })
 
-    describe('gemini-3-pro-preview', () => {
+    describe('gemini-3.1-pro-preview', () => {
       it('should calculate cached input at 10% of input rate for tier 1', () => {
         const params: UsageCostParams = {
           provider: 'google',
-          modelName: 'gemini-3-pro-preview',
+          modelName: 'gemini-3.1-pro-preview',
           promptTokens: 10000,
           completionTokens: 1000,
           cachedInputTokens: 8000,
@@ -120,7 +120,7 @@ describe('estimateUsageCost', () => {
       it('should use tier 2 pricing for prompts > 200k tokens', () => {
         const params: UsageCostParams = {
           provider: 'google',
-          modelName: 'gemini-3-pro-preview',
+          modelName: 'gemini-3.1-pro-preview',
           promptTokens: 250000,
           completionTokens: 1000,
           cachedInputTokens: 200000,
@@ -143,7 +143,7 @@ describe('estimateUsageCost', () => {
         // cachedInput was missing and fallback to input rate was used
         const params: UsageCostParams = {
           provider: 'google',
-          modelName: 'gemini-3-pro-preview',
+          modelName: 'gemini-3.1-pro-preview',
           promptTokens: 10000,
           completionTokens: 0,
           cachedInputTokens: 10000,
@@ -453,7 +453,7 @@ describe('estimateUsageCost', () => {
     it('should handle zero tokens gracefully', () => {
       const params: UsageCostParams = {
         provider: 'google',
-        modelName: 'gemini-3-pro-preview',
+        modelName: 'gemini-3.1-pro-preview',
         promptTokens: 0,
         completionTokens: 0,
         cachedInputTokens: 0,
@@ -466,7 +466,7 @@ describe('estimateUsageCost', () => {
     it('should handle null tokens gracefully', () => {
       const params: UsageCostParams = {
         provider: 'google',
-        modelName: 'gemini-3-pro-preview',
+        modelName: 'gemini-3.1-pro-preview',
         promptTokens: null,
         completionTokens: null,
         cachedInputTokens: null,

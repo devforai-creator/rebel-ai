@@ -36,7 +36,7 @@ export const anthropicModelCatalog = defineProviderCatalog({
   provider: 'anthropic',
   defaults: {
     defaultModel: 'claude-haiku-4-5',
-    lightweightModel: 'claude-3-5-haiku-latest',
+    lightweightModel: 'claude-haiku-4-5',
   },
   models: [
     {
@@ -134,14 +134,6 @@ export const anthropicModelCatalog = defineProviderCatalog({
       matches: { contains: ['claude-haiku-4-5', 'claude-haiku-4.5'] },
       pricing: flatPricing({ input: 0.8, output: 4, cachedInput: 0.08 }),
       features: { promptCacheMinTokens: ANTHROPIC_CACHE_MIN_TOKENS.haiku },
-    },
-    {
-      id: 'claude-3-5-haiku-latest',
-      displayName: 'Claude 3.5 Haiku (Latest)',
-      aliases: ['claude-3-5-haiku'],
-      matches: { contains: ['claude-3-5-haiku'] },
-      features: { promptCacheMinTokens: ANTHROPIC_CACHE_MIN_TOKENS.haikuLegacy },
-      uiVisible: false,
     },
   ],
 })

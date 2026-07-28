@@ -227,7 +227,7 @@ describe('chat summary actions', () => {
           user_id: 'user-1',
           api_key_id: 'api-key-1',
           model_provider: 'anthropic',
-          model_name: 'claude-3-5-haiku-latest',
+          model_name: 'claude-haiku-4-5',
           created_at: '2026-04-14T00:00:00.000Z',
         },
       ],

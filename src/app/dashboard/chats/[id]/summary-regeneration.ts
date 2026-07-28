@@ -2,6 +2,7 @@ import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import { resolveSummaryModelPreference } from '@/lib/chat/summary-model-preference'
 import { readApiErrorMessage } from '@/lib/http/api-contract'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
+import { listModelsByProvider } from '@/lib/models'
 import type { createClient } from '@/lib/supabase/server'
 import type { LlmProvider } from '@/types/database.types'
 
@@ -97,14 +98,17 @@ export async function resolveSummaryRegenerationModelConfig(
     return { error: 'Could not find a supported model for regeneration.' }
   }
 
-  const modelName =
+  // Usage events are immutable history. Reuse only an exact ID that is still in the catalog.
+  const historicalModel =
     usage.model_provider === resolvedConfig.config.provider && usage.model_name
-      ? usage.model_name
-      : resolvedConfig.config.modelName
+      ? listModelsByProvider(resolvedConfig.config.provider).find(
+          (model) => model.id.toLowerCase() === usage.model_name?.trim().toLowerCase(),
+        )
+      : null
 
   return {
     provider: resolvedConfig.config.provider,
-    modelName,
+    modelName: historicalModel?.id ?? resolvedConfig.config.modelName,
     apiKeyId: resolvedConfig.config.apiKeyId,
   }
 }

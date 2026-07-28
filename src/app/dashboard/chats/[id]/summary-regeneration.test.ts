@@ -114,7 +114,7 @@ describe('summary regeneration helpers', () => {
           id: 'api-key-1',
           user_id: 'user-1',
           provider: 'anthropic',
-          model_preference: 'claude-3-5-haiku-latest',
+          model_preference: 'claude-haiku-4-5',
           is_active: true,
         },
       ],
@@ -126,7 +126,77 @@ describe('summary regeneration helpers', () => {
       resolveSummaryRegenerationModelConfig(supabase as never, 'chat-1', 'user-1'),
     ).resolves.toEqual({
       provider: 'anthropic',
-      modelName: 'claude-3-5-haiku-latest',
+      modelName: 'claude-haiku-4-5',
+      apiKeyId: 'api-key-1',
+    })
+  })
+
+  it('reuses the latest usage model while it remains registered', async () => {
+    const supabase = buildSupabase({
+      usageEvents: [
+        {
+          id: 'usage-1',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          api_key_id: 'api-key-1',
+          model_provider: 'anthropic',
+          model_name: 'claude-haiku-4-5',
+          created_at: '2026-04-14T00:00:00.000Z',
+        },
+      ],
+      apiKeys: [
+        {
+          id: 'api-key-1',
+          user_id: 'user-1',
+          provider: 'anthropic',
+          model_preference: 'claude-opus-4-5',
+          is_active: true,
+        },
+      ],
+    })
+    hoistedMocks.resolveSummaryModelPreferenceMock.mockResolvedValue(null)
+    const { resolveSummaryRegenerationModelConfig } = await import('./summary-regeneration')
+
+    await expect(
+      resolveSummaryRegenerationModelConfig(supabase as never, 'chat-1', 'user-1'),
+    ).resolves.toEqual({
+      provider: 'anthropic',
+      modelName: 'claude-haiku-4-5',
+      apiKeyId: 'api-key-1',
+    })
+  })
+
+  it('falls back to the active key default when the historical model was retired', async () => {
+    const supabase = buildSupabase({
+      usageEvents: [
+        {
+          id: 'usage-1',
+          chat_id: 'chat-1',
+          user_id: 'user-1',
+          api_key_id: 'api-key-1',
+          model_provider: 'google',
+          model_name: 'gemini-3-pro-preview',
+          created_at: '2026-04-14T00:00:00.000Z',
+        },
+      ],
+      apiKeys: [
+        {
+          id: 'api-key-1',
+          user_id: 'user-1',
+          provider: 'google',
+          model_preference: null,
+          is_active: true,
+        },
+      ],
+    })
+    hoistedMocks.resolveSummaryModelPreferenceMock.mockResolvedValue(null)
+    const { resolveSummaryRegenerationModelConfig } = await import('./summary-regeneration')
+
+    await expect(
+      resolveSummaryRegenerationModelConfig(supabase as never, 'chat-1', 'user-1'),
+    ).resolves.toEqual({
+      provider: 'google',
+      modelName: 'gemini-2.5-flash',
       apiKeyId: 'api-key-1',
     })
   })

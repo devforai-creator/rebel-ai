@@ -1,7 +1,7 @@
 import type { ModelPricingTier } from '../types'
 import { defineProviderCatalog, flatPricing } from './helpers'
 
-const GEMINI_3_PRO_PRICING: ModelPricingTier[] = [
+const GEMINI_31_PRO_PRICING: ModelPricingTier[] = [
   {
     maxPromptTokens: 200_000,
     rates: {
@@ -73,13 +73,7 @@ export const googleModelCatalog = defineProviderCatalog({
     {
       id: 'gemini-3.1-pro-preview',
       displayName: 'Gemini 3.1 Pro (Preview)',
-      pricing: GEMINI_3_PRO_PRICING,
-      features: { promptCacheMinTokens: 4096 },
-    },
-    {
-      id: 'gemini-3-pro-preview',
-      displayName: 'Gemini 3 Pro (Preview)',
-      pricing: GEMINI_3_PRO_PRICING,
+      pricing: GEMINI_31_PRO_PRICING,
       features: { promptCacheMinTokens: 4096 },
     },
     {
@@ -104,12 +98,6 @@ export const googleModelCatalog = defineProviderCatalog({
       id: 'gemini-2.5-flash-lite',
       displayName: 'Gemini 2.5 Flash Lite',
       features: { promptCacheMinTokens: 1024 },
-    },
-    {
-      id: 'gemini-2.0-flash-exp',
-      displayName: 'Gemini 2.0 Flash Exp',
-      features: { promptCacheMinTokens: 1024 },
-      uiVisible: false,
     },
   ],
 })

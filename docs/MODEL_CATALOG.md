@@ -21,6 +21,19 @@ Visible models receive `uiOrder` from their array position. Set `uiVisible: fals
 fallback model that should not appear in selectors; hidden models do not consume a visible order.
 The catalog helper rejects defaults that do not point to a registered model.
 
+## Retire A Model
+
+Remove a model only after its provider has ended API availability, not merely marked it deprecated.
+Before removal, audit mutable references in legacy API-key preferences, the three profile model
+preferences, chat alternate-model settings, and pending or processing chat-job payloads.
+
+- If mutable references exist, map or clear only those settings through the normal database
+  migration workflow.
+- Preserve `messages.model_used` and `chat_usage_events.model_name` as immutable history.
+- Update provider defaults before removing a model used as `defaultModel` or `lightweightModel`.
+- Do not reuse a historical model for regeneration unless its exact ID is still registered.
+- Add a regression test proving the retired ID is absent from both provider listings and lookup.
+
 ## Matching And Capabilities
 
 - `aliases` keeps compatibility with alternate names already accepted by the app.

@@ -127,7 +127,7 @@ describe('OpenAI prompt cache decision', () => {
 
     const decision = resolvePromptCacheDecision({
       ...baseArgs,
-      modelName: 'gpt-5.1-mini',
+      modelName: 'gpt-5.1',
       retentionPreference: '24h',
     })
 
@@ -177,7 +177,7 @@ describe('OpenAI prompt cache decision', () => {
 
     const decision = resolvePromptCacheDecision({
       ...baseArgs,
-      modelName: 'gpt-5.1-mini',
+      modelName: 'gpt-5.1',
     })
 
     expect(decision?.retention).toBe('in_memory')
@@ -262,11 +262,11 @@ describe('Anthropic prompt cache decision', () => {
     })
   })
 
-  it('keeps legacy haiku minimum tokens in metadata', async () => {
+  it('keeps Claude 3 Haiku minimum tokens in metadata', async () => {
     const { resolveAnthropicCacheDecision } = await loadModule()
 
     const decision = resolveAnthropicCacheDecision({
-      modelName: 'claude-3-5-haiku',
+      modelName: 'claude-3-haiku',
     })
 
     expect(decision).toEqual({

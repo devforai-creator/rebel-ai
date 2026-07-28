@@ -2156,7 +2156,7 @@ describe('processChatJobs', () => {
       buildValidPayload({
         requestId: 'req-omit-temperature',
         provider: 'openai',
-        modelName: 'gpt-5.1-chat-latest',
+        modelName: 'gpt-5.1',
       }),
     )
     streamTextMock.mockResolvedValue({

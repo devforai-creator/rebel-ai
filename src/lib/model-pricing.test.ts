@@ -416,7 +416,7 @@ describe('estimateUsageCost', () => {
   })
 
   describe('DeepSeek models', () => {
-    it('should calculate cached input at 20% of input rate', () => {
+    it('uses the current V4 Flash cache-hit price', () => {
       const params: UsageCostParams = {
         provider: 'deepseek',
         modelName: 'deepseek-v4-flash',
@@ -427,14 +427,35 @@ describe('estimateUsageCost', () => {
       const result = estimateUsageCost(params)
       expect(result).not.toBeNull()
 
-      // Input rate: $0.14/M, Cached rate: $0.028/M (20% of input)
+      // Input rate: $0.14/M, Cached rate: $0.0028/M
       // Fresh input: 100000 - 80000 = 20000 tokens
       // Fresh cost: (20000 / 1M) * 0.14 = $0.0028
-      // Cached cost: (80000 / 1M) * 0.028 = $0.00224
+      // Cached cost: (80000 / 1M) * 0.0028 = $0.000224
       // Output cost: (10000 / 1M) * 0.28 = $0.0028
       expect(result!.promptCost).toBeCloseTo(0.0028, 6)
-      expect(result!.cachedInputCost).toBeCloseTo(0.00224, 6)
+      expect(result!.cachedInputCost).toBeCloseTo(0.000224, 6)
       expect(result!.completionCost).toBeCloseTo(0.0028, 6)
+    })
+
+    it('uses the current V4 Pro prices', () => {
+      const params: UsageCostParams = {
+        provider: 'deepseek',
+        modelName: 'deepseek-v4-pro',
+        promptTokens: 100000,
+        completionTokens: 10000,
+        cachedInputTokens: 80000,
+      }
+      const result = estimateUsageCost(params)
+      expect(result).not.toBeNull()
+
+      // Input rate: $0.435/M, Cached rate: $0.003625/M
+      // Fresh input: 100000 - 80000 = 20000 tokens
+      // Fresh cost: (20000 / 1M) * 0.435 = $0.0087
+      // Cached cost: (80000 / 1M) * 0.003625 = $0.00029
+      // Output cost: (10000 / 1M) * 0.87 = $0.0087
+      expect(result!.promptCost).toBeCloseTo(0.0087, 6)
+      expect(result!.cachedInputCost).toBeCloseTo(0.00029, 6)
+      expect(result!.completionCost).toBeCloseTo(0.0087, 6)
     })
   })
 

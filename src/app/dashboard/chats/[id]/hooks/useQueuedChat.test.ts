@@ -486,7 +486,7 @@ describe('useQueuedChat', () => {
     ])
   })
 
-  it('skips the assistant fallback fetch when realtime already delivered the visible reply', async () => {
+  it('reconciles the latest assistant on completion even when realtime already delivered it', async () => {
     vi.useFakeTimers()
     Object.defineProperty(document, 'hidden', {
       configurable: true,
@@ -506,13 +506,15 @@ describe('useQueuedChat', () => {
       content: 'assistant reply',
       sequence: 3,
     })
+    let latestFetchCount = 0
     const fetchMock = vi.fn(async (input: unknown) => {
       const url = String(input)
       if (url === '/api/chat') {
         return createJsonResponse({ jobId: 'job-1' })
       }
       if (url === '/api/chats/chat-1/messages/latest') {
-        return createJsonResponse(latestUser)
+        latestFetchCount += 1
+        return createJsonResponse(latestFetchCount === 1 ? latestUser : assistantMessage)
       }
       if (url === '/api/chat/jobs/job-1') {
         return createJsonResponse({ status: 'success' })
@@ -559,10 +561,14 @@ describe('useQueuedChat', () => {
       '/api/chat',
       '/api/chats/chat-1/messages/latest',
       '/api/chat/jobs/job-1',
+      '/api/chats/chat-1/messages/latest',
     ])
     expect(fetchLatestUsage).toHaveBeenCalledOnce()
     expect(result.current.isLoading).toBe(false)
     expect(result.current.messages.map((message) => message.id)).toContain('assistant-1')
+    expect(result.current.messages.filter((message) => message.id === 'assistant-1')).toHaveLength(
+      1,
+    )
   })
 
   it('keeps the latest assistant fallback fetch when realtime has not delivered the reply yet', async () => {
@@ -636,6 +642,96 @@ describe('useQueuedChat', () => {
     expect(fetchLatestUsage).toHaveBeenCalledOnce()
     expect(result.current.isLoading).toBe(false)
     expect(result.current.messages.map((message) => message.id)).toContain('assistant-1')
+  })
+
+  it('recovers the completed reply after an unrelated assistant update clears the draft', async () => {
+    vi.useFakeTimers()
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      value: false,
+    })
+
+    const previousAssistant = createMessage({
+      id: 'assistant-old',
+      role: 'assistant',
+      content: 'previous reply',
+      sequence: 2,
+    })
+    const latestUser = createMessage({
+      id: 'user-2',
+      role: 'user',
+      content: 'queued hello',
+      sequence: 3,
+    })
+    const latestAssistant = createMessage({
+      id: 'assistant-new',
+      role: 'assistant',
+      content: 'completed reply',
+      sequence: 4,
+    })
+    let latestFetchCount = 0
+    const fetchMock = vi.fn(async (input: unknown) => {
+      const url = String(input)
+      if (url === '/api/chat') {
+        return createJsonResponse({ jobId: 'job-1' })
+      }
+      if (url === '/api/chats/chat-1/messages/latest') {
+        latestFetchCount += 1
+        return createJsonResponse(latestFetchCount === 1 ? latestUser : latestAssistant)
+      }
+      if (url === '/api/chat/jobs/job-1') {
+        return createJsonResponse({ status: 'success' })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() =>
+      useQueuedChat(
+        createHookParams({
+          initialMessages: [createMessage({ id: 'user-1' }), previousAssistant],
+          selectedApiKeyId: 'key-1',
+          persistedMessageIds: { current: new Set(['user-1', 'assistant-old']) },
+        }),
+      ),
+    )
+
+    act(() => {
+      result.current.handleInputChange({
+        target: { value: 'queued hello' },
+      } as Parameters<typeof result.current.handleInputChange>[0])
+    })
+    act(() => {
+      result.current.handleSubmit()
+    })
+
+    await flushChatRequestStart()
+    expect(result.current.streamingDraft).not.toBeNull()
+
+    act(() => {
+      result.current.handleRealtimeMessageChange({
+        eventType: 'UPDATE',
+        old: { id: 'assistant-old', role: 'assistant' },
+        new: {
+          id: 'assistant-old',
+          role: 'assistant',
+          message_status: 'completed',
+        },
+      })
+    })
+
+    expect(result.current.streamingDraft).toBeNull()
+
+    await flushPendingPollCycle()
+
+    expect(latestFetchCount).toBe(2)
+    expect(result.current.isLoading).toBe(false)
+    expect(result.current.messages).toContainEqual(
+      expect.objectContaining({
+        id: 'assistant-new',
+        content: 'completed reply',
+      }),
+    )
   })
 
   it('uses a slim userMessage request shape for normal sends', async () => {

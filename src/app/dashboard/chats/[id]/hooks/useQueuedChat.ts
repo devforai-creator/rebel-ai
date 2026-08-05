@@ -83,7 +83,6 @@ export function useQueuedChat({
   const [sending, setSending] = useState(false)
   const [pendingJobId, setPendingJobId] = useState<string | null>(initialActiveJob?.id ?? null)
   const pendingJobIdRef = useRef<string | null>(initialActiveJob?.id ?? null)
-  const pendingAssistantVisibleRef = useRef(false)
   const pendingRegenerationTargetIdRef = useRef<string | null>(
     initialActiveJob?.regenerateAssistantMessageId ?? null,
   )
@@ -180,7 +179,6 @@ export function useQueuedChat({
         isVisibleMessageStatus(messageStatus) &&
         assistantMessage.id !== pendingRegenerationTargetIdRef.current
       ) {
-        pendingAssistantVisibleRef.current = true
         setStreamingDraft(null)
       }
     },
@@ -189,7 +187,6 @@ export function useQueuedChat({
 
   const startStreamingDraft = useCallback(
     (jobId: string, regenerateAssistantMessageId: string | null) => {
-      pendingAssistantVisibleRef.current = false
       lastStreamProgressAtRef.current = null
       setStreamingDraft(
         createStreamingAssistantDraft(jobId, regenerateAssistantMessageId, deliveryMode),
@@ -200,7 +197,6 @@ export function useQueuedChat({
 
   const clearPendingJob = useCallback(() => {
     pendingJobIdRef.current = null
-    pendingAssistantVisibleRef.current = false
     lastStreamProgressAtRef.current = null
     setPendingJobId(null)
   }, [])
@@ -271,9 +267,9 @@ export function useQueuedChat({
           },
           getLastProgressAt: () => lastStreamProgressAtRef.current,
           onSuccess: async () => {
-            if (!pendingAssistantVisibleRef.current) {
-              await appendAssistantMessage()
-            }
+            // Realtime can miss the completed reply or deliver unrelated assistant updates first.
+            // Reconcile the authoritative latest message before clearing the streaming draft.
+            await appendAssistantMessage()
             await fetchLatestUsage()
             clearPendingJob()
             setStreamingDraft(null)

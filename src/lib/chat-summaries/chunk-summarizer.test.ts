@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LanguageModel } from 'ai'
 
-import { CHUNK_SIZE, SUMMARY_LEVEL_CHUNK } from './config'
+import { CHUNK_SIZE, CHUNK_TRANSCRIPT_WARNING_CHAR_THRESHOLD, SUMMARY_LEVEL_CHUNK } from './config'
 import type { PromptCacheDecision } from '@/lib/llm/prompt-cache'
 import { createChatSummariesSupabaseMock, type SupabaseClientType } from '@/tests/mocks/supabase'
 
@@ -270,6 +270,79 @@ describe('chunk-summarizer', () => {
       summary_status: 'ok',
     })
     expect(generateTextMock.mock.calls[0][0]).not.toHaveProperty('temperature')
+  })
+
+  it('passes complete long source messages to chunk summarization', async () => {
+    generateTextMock.mockResolvedValue({
+      text: 'chunk summary',
+      usage: { outputTokens: 5 },
+      finishReason: 'stop',
+    })
+    const tailDecision = 'TAIL_DECISION_MUST_REACH_SUMMARY'
+    const longAssistantMessage = `${'서사'.repeat(1400)}\n${tailDecision}`
+    const supabase = createChatSummariesSupabaseMock()
+    const { createChunkSummary } = await import('./chunk-summarizer')
+
+    await createChunkSummary({
+      supabase: supabase as unknown as SupabaseClientType,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      model: mockModel,
+      provider: 'google',
+      modelName: 'gemini',
+      startSeq: 1,
+      endSeq: 2,
+      systemPrompt: 'SYS',
+      expectedMessageCount: 2,
+      transcriptMessages: [
+        { role: 'user', content: 'continue' },
+        { role: 'assistant', content: longAssistantMessage },
+      ],
+    })
+
+    const prompt = generateTextMock.mock.calls[0][0].prompt as string
+    expect(prompt).toContain(longAssistantMessage)
+    expect(prompt).toContain(tailDecision)
+  })
+
+  it('warns without truncating unusually large chunk transcripts', async () => {
+    generateTextMock.mockResolvedValue({
+      text: 'chunk summary',
+      usage: { outputTokens: 5 },
+      finishReason: 'stop',
+    })
+    const tailDecision = 'OVERSIZED_TAIL_DECISION'
+    const longAssistantMessage = `${'x'.repeat(CHUNK_TRANSCRIPT_WARNING_CHAR_THRESHOLD)}${tailDecision}`
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const supabase = createChatSummariesSupabaseMock()
+    const { createChunkSummary } = await import('./chunk-summarizer')
+
+    await createChunkSummary({
+      supabase: supabase as unknown as SupabaseClientType,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      model: mockModel,
+      provider: 'google',
+      modelName: 'gemini',
+      startSeq: 1,
+      endSeq: 1,
+      systemPrompt: 'SYS',
+      expectedMessageCount: 1,
+      transcriptMessages: [{ role: 'assistant', content: longAssistantMessage }],
+    })
+
+    const prompt = generateTextMock.mock.calls[0][0].prompt as string
+    expect(prompt).toContain(tailDecision)
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[Chat Memory] Chunk transcript exceeds warning threshold',
+      expect.objectContaining({
+        chatId: 'chat-1',
+        startSeq: 1,
+        endSeq: 1,
+        purpose: 'summary',
+        warningThresholdChars: CHUNK_TRANSCRIPT_WARNING_CHAR_THRESHOLD,
+      }),
+    )
   })
 
   it('marks persisted chunk summaries as fallback when local fallback content is used', async () => {
@@ -597,6 +670,38 @@ describe('chunk-summarizer', () => {
     })
 
     expect(chatFacts).toHaveLength(1) // unchanged
+  })
+
+  it('passes complete long source messages to fact extraction', async () => {
+    generateFactEmbeddingMock.mockResolvedValue([0.1, 0.2, 0.3])
+    generateTextMock.mockResolvedValue({
+      text: '- Preserved fact',
+      finishReason: 'stop',
+    })
+    const tailFact = 'TAIL_FACT_MUST_REACH_EXTRACTION'
+    const longAssistantMessage = `${'서사'.repeat(1400)}\n${tailFact}`
+    const supabase = createChatSummariesSupabaseMock()
+    const { createChunkFacts } = await import('./chunk-summarizer')
+
+    await createChunkFacts({
+      supabase: supabase as unknown as SupabaseClientType,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      model: mockModel,
+      provider: 'google',
+      modelName: 'gemini',
+      startSeq: 1,
+      endSeq: 2,
+      factPrompt: 'FACT',
+      transcriptMessages: [
+        { role: 'user', content: 'continue' },
+        { role: 'assistant', content: longAssistantMessage },
+      ],
+    })
+
+    const prompt = generateTextMock.mock.calls[0][0].prompt as string
+    expect(prompt).toContain(longAssistantMessage)
+    expect(prompt).toContain(tailFact)
   })
 
   it('passes the GPT-5.6 model identity through to facts provider options', async () => {

@@ -7,7 +7,7 @@ import {
   SUMMARY_LEVEL_CHUNK,
   SUMMARY_LEVEL_META,
   SUMMARY_LEVEL_SUPER_META,
-  MESSAGE_CHAR_LIMIT,
+  META_SUMMARY_SEGMENT_CHAR_LIMIT,
   META_SUMMARY_MAX_TOKENS,
 } from './config'
 import {
@@ -41,7 +41,7 @@ export async function createHigherLevelSummary({
       (segment) =>
         `Messages ${segment.start_seq}-${segment.end_seq}:\n${truncateText(
           segment.summary.trim(),
-          MESSAGE_CHAR_LIMIT,
+          META_SUMMARY_SEGMENT_CHAR_LIMIT,
         )}`,
     )
     .join('\n\n')

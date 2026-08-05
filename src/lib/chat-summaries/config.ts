@@ -29,8 +29,11 @@ export const DEFAULT_LLM_CONFIG = {
   maxTokens: CHUNK_SUMMARY_MAX_TOKENS,
 } as const
 
-// Text limits
-export const MESSAGE_CHAR_LIMIT = 1200
+// Text limits and observability thresholds
+// Chunk summarization and fact extraction receive complete source messages. This is a warning
+// threshold only, so unusually large chunks are visible operationally without silently losing text.
+export const CHUNK_TRANSCRIPT_WARNING_CHAR_THRESHOLD = 48_000
+export const META_SUMMARY_SEGMENT_CHAR_LIMIT = 1200
 export const FALLBACK_SUMMARY_CHAR_LIMIT = 700
 export const FALLBACK_RECENT_MESSAGES = 5
 

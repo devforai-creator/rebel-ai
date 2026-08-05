@@ -14,12 +14,11 @@ import type {
 import {
   CHUNK_SIZE,
   SUMMARY_LEVEL_CHUNK,
-  MESSAGE_CHAR_LIMIT,
+  CHUNK_TRANSCRIPT_WARNING_CHAR_THRESHOLD,
   DEFAULT_LLM_CONFIG,
   CHUNK_SUMMARY_MAX_TOKENS,
 } from './config'
 import {
-  truncateText,
   estimateTokenCount,
   buildChunkFallbackSummary,
   calculateChunkBoundaries,
@@ -32,6 +31,37 @@ function logFactsExtractionDebug(...args: unknown[]): void {
   if (FACTS_EXTRACTION_DEBUG_ENABLED) {
     console.debug(...args)
   }
+}
+
+function formatChunkTranscript({
+  messages,
+  chatId,
+  startSeq,
+  endSeq,
+  purpose,
+}: {
+  messages: MessageTranscriptRow[]
+  chatId: string
+  startSeq: number
+  endSeq: number
+  purpose: 'summary' | 'facts'
+}): string {
+  const formattedTranscript = messages
+    .map((message) => `${message.role.toUpperCase()}: ${message.content}`)
+    .join('\n')
+
+  if (formattedTranscript.length > CHUNK_TRANSCRIPT_WARNING_CHAR_THRESHOLD) {
+    console.warn('[Chat Memory] Chunk transcript exceeds warning threshold', {
+      chatId,
+      startSeq,
+      endSeq,
+      purpose,
+      transcriptChars: formattedTranscript.length,
+      warningThresholdChars: CHUNK_TRANSCRIPT_WARNING_CHAR_THRESHOLD,
+    })
+  }
+
+  return formattedTranscript
 }
 
 /**
@@ -295,14 +325,13 @@ export async function createChunkSummary({
     )
   }
 
-  const sanitizedChunk = chunkMessages.map((msg) => ({
-    role: msg.role,
-    content: truncateText(msg.content, MESSAGE_CHAR_LIMIT),
-  })) as MessageTranscriptRow[]
-
-  const formattedTranscript = sanitizedChunk
-    .map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`)
-    .join('\n')
+  const formattedTranscript = formatChunkTranscript({
+    messages: chunkMessages,
+    chatId,
+    startSeq,
+    endSeq,
+    purpose: 'summary',
+  })
 
   const summaryPromptContent = `Summarize the following conversation segment:\n\n${formattedTranscript}`
 
@@ -324,7 +353,7 @@ export async function createChunkSummary({
     prompt: summaryPromptContent,
     maxTokens: CHUNK_SUMMARY_MAX_TOKENS,
     fallbackLabel: `chunk ${startSeq}-${endSeq}`,
-    fallbackTextFactory: () => buildChunkFallbackSummary(sanitizedChunk),
+    fallbackTextFactory: () => buildChunkFallbackSummary(chunkMessages),
     promptCache,
   })
 
@@ -405,9 +434,13 @@ export async function createChunkFacts({
     return
   }
 
-  const formattedTranscript = chunkMessages
-    .map((msg) => `${msg.role.toUpperCase()}: ${truncateText(msg.content, MESSAGE_CHAR_LIMIT)}`)
-    .join('\n')
+  const formattedTranscript = formatChunkTranscript({
+    messages: chunkMessages,
+    chatId,
+    startSeq,
+    endSeq,
+    purpose: 'facts',
+  })
 
   logFactsExtractionDebug('[Facts Extraction] Starting fact extraction', {
     chatId,

@@ -45,6 +45,7 @@ function buildSupabase({
   user,
   chats,
   characters,
+  apiKeys,
   personas,
   turns,
   messages,
@@ -53,6 +54,7 @@ function buildSupabase({
   user: { id: string } | null
   chats?: Array<Record<string, unknown>>
   characters?: Array<Record<string, unknown>>
+  apiKeys?: Array<Record<string, unknown>>
   personas?: Array<Record<string, unknown>>
   turns?: Array<Record<string, unknown>>
   messages?: Array<Record<string, unknown>>
@@ -70,6 +72,10 @@ function buildSupabase({
       },
       characters: {
         rows: characters ?? [],
+        primaryKeys: ['id'],
+      },
+      api_keys: {
+        rows: apiKeys ?? [],
         primaryKeys: ['id'],
       },
       personas: {
@@ -196,6 +202,10 @@ describe('dashboard chats actions', () => {
         characterId: 'char-1',
         personaId: null,
         greetingIndex: 0,
+        modelSelection: {
+          apiKeyId: 'key-1',
+          modelName: 'gpt-5.5',
+        },
       }),
     ).resolves.toEqual({ error: '로그인이 필요합니다' })
   })
@@ -220,6 +230,14 @@ describe('dashboard chats actions', () => {
           name: '승엽',
         },
       ],
+      apiKeys: [
+        {
+          id: 'key-1',
+          user_id: 'user-1',
+          provider: 'openai',
+          is_active: true,
+        },
+      ],
     })
     createClientMock.mockResolvedValue(supabase)
     const { createChat } = await import('./actions')
@@ -229,6 +247,10 @@ describe('dashboard chats actions', () => {
         characterId: 'char-1',
         personaId: 'persona-1',
         greetingIndex: 0,
+        modelSelection: {
+          apiKeyId: 'key-1',
+          modelName: 'gpt-5.5',
+        },
       }),
     ).resolves.toEqual({ chatId: 'chat-1' })
 
@@ -240,6 +262,13 @@ describe('dashboard chats actions', () => {
         persona_id: 'persona-1',
         title: 'Guide와의 대화',
         model_config: {
+          alternateModels: {
+            enabled: false,
+            primaryApiKeyId: 'key-1',
+            primaryModelName: 'gpt-5.5',
+            secondaryApiKeyId: null,
+            secondaryModelName: null,
+          },
           memory: {
             mode: 'prefix_live_blocks',
             retainTailMessages: 4,
@@ -273,6 +302,14 @@ describe('dashboard chats actions', () => {
           archived_at: null,
         },
       ],
+      apiKeys: [
+        {
+          id: 'key-1',
+          user_id: 'user-1',
+          provider: 'openai',
+          is_active: true,
+        },
+      ],
     })
     createClientMock.mockResolvedValue(supabase)
     const { createChat } = await import('./actions')
@@ -282,12 +319,96 @@ describe('dashboard chats actions', () => {
         characterId: 'char-1',
         personaId: null,
         greetingIndex: 1,
+        modelSelection: {
+          apiKeyId: 'key-1',
+          modelName: 'gpt-5.5',
+        },
       }),
     ).resolves.toEqual({ chatId: 'chat-1' })
 
     expect(getChatRows(supabase)).toHaveLength(1)
     expect(getTurnRows(supabase)).toEqual([])
     expect(getMessageRows(supabase)).toEqual([])
+  })
+
+  it('rejects a model selection that does not use an active owned API key', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      characters: [
+        {
+          id: 'char-1',
+          user_id: 'user-1',
+          name: 'Guide',
+          greeting_message: null,
+          metadata: null,
+          archived_at: null,
+        },
+      ],
+      apiKeys: [
+        {
+          id: 'key-1',
+          user_id: 'user-1',
+          provider: 'openai',
+          is_active: false,
+        },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { createChat } = await import('./actions')
+
+    await expect(
+      createChat({
+        characterId: 'char-1',
+        personaId: null,
+        greetingIndex: 0,
+        modelSelection: {
+          apiKeyId: 'key-1',
+          modelName: 'gpt-5.5',
+        },
+      }),
+    ).resolves.toEqual({ error: '선택한 API 키를 사용할 수 없습니다' })
+
+    expect(getChatRows(supabase)).toEqual([])
+  })
+
+  it('rejects a model that is not selectable for the credential provider', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      characters: [
+        {
+          id: 'char-1',
+          user_id: 'user-1',
+          name: 'Guide',
+          greeting_message: null,
+          metadata: null,
+          archived_at: null,
+        },
+      ],
+      apiKeys: [
+        {
+          id: 'key-1',
+          user_id: 'user-1',
+          provider: 'openai',
+          is_active: true,
+        },
+      ],
+    })
+    createClientMock.mockResolvedValue(supabase)
+    const { createChat } = await import('./actions')
+
+    await expect(
+      createChat({
+        characterId: 'char-1',
+        personaId: null,
+        greetingIndex: 0,
+        modelSelection: {
+          apiKeyId: 'key-1',
+          modelName: 'claude-sonnet-5',
+        },
+      }),
+    ).resolves.toEqual({ error: '선택한 모델을 사용할 수 없습니다' })
+
+    expect(getChatRows(supabase)).toEqual([])
   })
 
   it('returns an error when creating a chat for an unavailable character', async () => {
@@ -312,6 +433,10 @@ describe('dashboard chats actions', () => {
         characterId: 'char-1',
         personaId: null,
         greetingIndex: 0,
+        modelSelection: {
+          apiKeyId: 'key-1',
+          modelName: 'gpt-5.5',
+        },
       }),
     ).resolves.toEqual({ error: '캐릭터를 찾을 수 없습니다' })
 

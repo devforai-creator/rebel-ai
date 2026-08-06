@@ -1,6 +1,35 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment jsdom
 
-import { resolveInitialChatSettings } from './useChatInterfaceSettings'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { resolveInitialChatSettings, useChatInterfaceSettings } from './useChatInterfaceSettings'
+
+const mocks = vi.hoisted(() => ({
+  toastError: vi.fn(),
+  updateChatModelConfig: vi.fn(),
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: (...args: unknown[]) => mocks.toastError(...args),
+  },
+}))
+
+vi.mock('../actions', () => ({
+  updateChatModelConfig: (...args: unknown[]) => mocks.updateChatModelConfig(...args),
+}))
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return { promise, reject, resolve }
+}
 
 const apiKeys = [
   {
@@ -25,6 +54,12 @@ const apiKeys = [
     service_tier: 'standard',
   },
 ] as const
+
+beforeEach(() => {
+  localStorage.clear()
+  mocks.toastError.mockReset()
+  mocks.updateChatModelConfig.mockReset()
+})
 
 describe('resolveInitialChatSettings', () => {
   it('prefers config primary and secondary ids when both are valid', () => {
@@ -121,5 +156,116 @@ describe('resolveInitialChatSettings', () => {
       secondaryModelName: 'gpt-5.5',
       alternateModelsEnabled: false,
     })
+  })
+})
+
+describe('useChatInterfaceSettings model config persistence', () => {
+  const initialModelConfig = {
+    alternateModels: {
+      enabled: false,
+      primaryApiKeyId: 'key-1',
+      primaryModelName: 'gpt-5.5',
+      secondaryApiKeyId: 'key-2',
+      secondaryModelName: 'claude-opus-4-5',
+    },
+    memory: {
+      mode: 'prefix_live_blocks' as const,
+      retainTailMessages: 4,
+    },
+  }
+
+  it('serializes rapid model saves so the latest selection is persisted last', async () => {
+    const firstSave = createDeferred<{ success: true }>()
+    const secondSave = createDeferred<{ success: true }>()
+    mocks.updateChatModelConfig
+      .mockImplementationOnce(() => firstSave.promise)
+      .mockImplementationOnce(() => secondSave.promise)
+
+    const { result } = renderHook(() =>
+      useChatInterfaceSettings({
+        chatId: 'chat-1',
+        apiKeys: [...apiKeys],
+        initialModelConfig,
+        isDeveloper: false,
+      }),
+    )
+
+    act(() => {
+      result.current.handleSelectPrimaryModel({ apiKeyId: 'key-1', modelName: 'gpt-5.4' })
+    })
+    act(() => {
+      result.current.handleSelectPrimaryModel({
+        apiKeyId: 'key-2',
+        modelName: 'claude-opus-4-5',
+      })
+    })
+
+    await waitFor(() => expect(mocks.updateChatModelConfig).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      firstSave.resolve({ success: true })
+      await firstSave.promise
+    })
+    await waitFor(() => expect(mocks.updateChatModelConfig).toHaveBeenCalledTimes(2))
+
+    expect(mocks.updateChatModelConfig.mock.calls[1]?.[1]).toMatchObject({
+      alternateModels: {
+        primaryApiKeyId: 'key-2',
+        primaryModelName: 'claude-opus-4-5',
+      },
+    })
+    expect(mocks.updateChatModelConfig.mock.calls[1]?.[1]).not.toHaveProperty('experimental')
+
+    await act(async () => {
+      secondSave.resolve({ success: true })
+      await secondSave.promise
+    })
+  })
+
+  it('rolls the optimistic model selection back when the latest save fails', async () => {
+    mocks.updateChatModelConfig.mockResolvedValueOnce({ error: '모델 설정 저장 실패' })
+
+    const { result } = renderHook(() =>
+      useChatInterfaceSettings({
+        chatId: 'chat-1',
+        apiKeys: [...apiKeys],
+        initialModelConfig,
+        isDeveloper: false,
+      }),
+    )
+
+    act(() => {
+      result.current.handleSelectPrimaryModel({
+        apiKeyId: 'key-2',
+        modelName: 'claude-opus-4-5',
+      })
+    })
+    expect(result.current.selectedApiKeyId).toBe('key-2')
+
+    await waitFor(() => {
+      expect(result.current.selectedApiKeyId).toBe('key-1')
+      expect(result.current.selectedModelName).toBe('gpt-5.5')
+    })
+    expect(mocks.toastError).toHaveBeenCalledWith('모델 설정 저장 실패')
+  })
+
+  it('rolls back and reports an unexpected server action rejection', async () => {
+    mocks.updateChatModelConfig.mockRejectedValueOnce(new Error('network unavailable'))
+
+    const { result } = renderHook(() =>
+      useChatInterfaceSettings({
+        chatId: 'chat-1',
+        apiKeys: [...apiKeys],
+        initialModelConfig,
+        isDeveloper: false,
+      }),
+    )
+
+    act(() => {
+      result.current.handleSelectPrimaryModel({ apiKeyId: 'key-1', modelName: 'gpt-5.4' })
+    })
+
+    await waitFor(() => expect(result.current.selectedModelName).toBe('gpt-5.5'))
+    expect(mocks.toastError).toHaveBeenCalledWith('network unavailable')
   })
 })

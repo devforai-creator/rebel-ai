@@ -7,6 +7,9 @@ import { MESSAGE_STATUS_COMPLETED } from '@/lib/chat/message-status'
 import { createChatTurn } from '@/lib/chat/turns'
 import { buildOperatorDefaultChatModelConfig } from '@/lib/chat/model-config'
 import { importChatForUser } from '@/lib/chat/import-service'
+import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
+import type { LlmModelSelection } from '@/lib/llm/model-selection'
+import { listUiModelIdsByProvider } from '@/lib/models'
 import type { ChatImportResult } from '@/types/risu-chat'
 import { getCharacterGreetingOptions } from './new/greeting-options'
 
@@ -14,10 +17,12 @@ export async function createChat({
   characterId,
   personaId,
   greetingIndex,
+  modelSelection,
 }: {
   characterId: string
   personaId?: string | null
   greetingIndex: number
+  modelSelection: LlmModelSelection
 }) {
   const supabase = await createClient()
 
@@ -34,24 +39,46 @@ export async function createChat({
     return { error: '캐릭터를 찾을 수 없습니다' }
   }
 
+  if (
+    !modelSelection ||
+    typeof modelSelection.apiKeyId !== 'string' ||
+    typeof modelSelection.modelName !== 'string'
+  ) {
+    return { error: '사용할 모델을 선택해주세요' }
+  }
+
   const normalizedPersonaId = personaId?.trim() || null
+  const normalizedApiKeyId = modelSelection.apiKeyId.trim()
+  const requestedModelName = modelSelection.modelName.trim()
   const safeGreetingIndex =
     Number.isInteger(greetingIndex) && greetingIndex >= 0 ? greetingIndex : 0
 
-  const [{ data: character, error: characterError }, personaResult] = await Promise.all([
-    supabase
-      .from('characters')
-      .select('id, user_id, name, greeting_message, metadata, archived_at')
-      .eq('id', normalizedCharacterId)
-      .maybeSingle(),
-    normalizedPersonaId
-      ? supabase
-          .from('personas')
-          .select('id, user_id, name')
-          .eq('id', normalizedPersonaId)
-          .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
-  ])
+  if (!normalizedApiKeyId || !requestedModelName) {
+    return { error: '사용할 모델을 선택해주세요' }
+  }
+
+  const [{ data: character, error: characterError }, personaResult, apiKeyResult] =
+    await Promise.all([
+      supabase
+        .from('characters')
+        .select('id, user_id, name, greeting_message, metadata, archived_at')
+        .eq('id', normalizedCharacterId)
+        .maybeSingle(),
+      normalizedPersonaId
+        ? supabase
+            .from('personas')
+            .select('id, user_id, name')
+            .eq('id', normalizedPersonaId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      supabase
+        .from('api_keys')
+        .select('id, provider')
+        .eq('id', normalizedApiKeyId)
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle(),
+    ])
 
   if (characterError && characterError.message !== 'No rows found') {
     return { error: '캐릭터를 불러오지 못했습니다' }
@@ -74,6 +101,23 @@ export async function createChat({
     return { error: '페르소나를 찾을 수 없습니다' }
   }
 
+  const selectedApiKey = apiKeyResult.data
+  if (
+    apiKeyResult.error ||
+    !selectedApiKey ||
+    typeof selectedApiKey.provider !== 'string' ||
+    !isKnownLLMProvider(selectedApiKey.provider)
+  ) {
+    return { error: '선택한 API 키를 사용할 수 없습니다' }
+  }
+
+  const selectedModelName = listUiModelIdsByProvider(selectedApiKey.provider).find(
+    (modelName) => modelName.toLowerCase() === requestedModelName.toLowerCase(),
+  )
+  if (!selectedModelName) {
+    return { error: '선택한 모델을 사용할 수 없습니다' }
+  }
+
   const { data: chat, error: chatError } = await supabase
     .from('chats')
     .insert({
@@ -81,7 +125,15 @@ export async function createChat({
       character_id: character.id,
       persona_id: persona?.id ?? null,
       title: `${character.name}와의 대화`,
-      model_config: buildOperatorDefaultChatModelConfig({}),
+      model_config: buildOperatorDefaultChatModelConfig({
+        alternateModels: {
+          enabled: false,
+          primaryApiKeyId: normalizedApiKeyId,
+          primaryModelName: selectedModelName,
+          secondaryApiKeyId: null,
+          secondaryModelName: null,
+        },
+      }),
     })
     .select('id')
     .single()

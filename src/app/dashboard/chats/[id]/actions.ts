@@ -2,12 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { hasPersistableChatModelConfig, normalizeChatModelConfig } from '@/lib/chat/model-config'
+import { hasPersistableChatModelConfig, mergeChatModelConfigPatch } from '@/lib/chat/model-config'
 import { ACTIVE_QUEUE_JOB_STATUSES } from '@/lib/queue/admission'
-
-function hasOwnModelConfigKey(input: unknown, key: string): boolean {
-  return !!input && typeof input === 'object' && Object.prototype.hasOwnProperty.call(input, key)
-}
 
 export async function updateChatPersona(chatId: string, personaId: string | null) {
   const supabase = await createClient()
@@ -100,14 +96,7 @@ export async function updateChatModelConfig(chatId: string, modelConfig: unknown
     return { error: 'Chat not found or access denied' }
   }
 
-  const normalizedInput = normalizeChatModelConfig(modelConfig)
-  const existingNormalized = normalizeChatModelConfig(chat.model_config)
-  const normalized = hasOwnModelConfigKey(modelConfig, 'experimental')
-    ? normalizedInput
-    : {
-        ...normalizedInput,
-        experimental: existingNormalized.experimental ?? undefined,
-      }
+  const normalized = mergeChatModelConfigPatch(chat.model_config, modelConfig)
   const hasConfig = hasPersistableChatModelConfig(normalized)
 
   const { error: updateError } = await supabase

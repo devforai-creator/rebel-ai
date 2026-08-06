@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type {
-  AgenticTranscriptRecallOverrideMode,
-  ChatModelConfig,
-  ChatMemoryMode,
-} from '@/lib/chat/model-config'
+import type { ChatModelConfig, ChatMemoryMode } from '@/lib/chat/model-config'
 import {
-  buildAgenticTranscriptRecallOverrideModelConfigPatch,
   buildOperatorDefaultChatModelConfig,
   normalizeChatModelConfig,
-  resolveAgenticTranscriptRecallOverrideMode,
   resolveChatMemoryConfig,
 } from '@/lib/chat/model-config'
 import {
@@ -41,6 +35,19 @@ export type InitialChatSettings = {
   secondaryApiKeyId: string
   secondaryModelName: string
   alternateModelsEnabled: boolean
+}
+
+type ChatInterfaceSettingsSnapshot = {
+  selectedModel: LlmModelSelection
+  secondaryModel: LlmModelSelection
+  alternateModelsEnabled: boolean
+  memoryMode: ChatMemoryMode
+}
+
+function getModelConfigSaveErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message
+    ? error.message
+    : '모델 설정을 저장하지 못했습니다.'
 }
 
 export function resolveInitialChatSettings({
@@ -151,10 +158,6 @@ export function useChatInterfaceSettings({
       }),
     [isDeveloper, normalizedModelConfig],
   )
-  const initialAgenticTranscriptRecallMode = useMemo(
-    () => resolveAgenticTranscriptRecallOverrideMode(normalizedModelConfig),
-    [normalizedModelConfig],
-  )
   const didPersistOperatorDefaultMemoryRef = useRef(false)
   const initialSettings = useMemo(
     () =>
@@ -179,10 +182,17 @@ export function useChatInterfaceSettings({
     initialSettings.alternateModelsEnabled,
   )
   const [memoryMode, setMemoryMode] = useState<ChatMemoryMode>(initialResolvedMemoryConfig.mode)
-  const agenticTranscriptRecallMode = initialAgenticTranscriptRecallMode
   const [memoryRetainTailMessages] = useState(initialResolvedMemoryConfig.retainTailMessages)
   const [anthropicBatchModeEnabled, setAnthropicBatchModeEnabled] = useState(false)
   const [developerMode, setDeveloperMode] = useState(false)
+  const confirmedSettingsRef = useRef<ChatInterfaceSettingsSnapshot>({
+    selectedModel,
+    secondaryModel,
+    alternateModelsEnabled,
+    memoryMode,
+  })
+  const modelConfigSaveQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const latestModelConfigSaveRevisionRef = useRef(0)
 
   useEffect(() => {
     if (
@@ -196,11 +206,15 @@ export function useChatInterfaceSettings({
     didPersistOperatorDefaultMemoryRef.current = true
     const operatorDefaultConfig = buildOperatorDefaultChatModelConfig(normalizedModelConfig)
 
-    void updateChatModelConfig(chatId, operatorDefaultConfig).then((result) => {
-      if (result?.error) {
-        toast.error(result.error)
-      }
-    })
+    void updateChatModelConfig(chatId, { memory: operatorDefaultConfig.memory })
+      .then((result) => {
+        if (result?.error) {
+          toast.error(result.error)
+        }
+      })
+      .catch((error: unknown) => {
+        toast.error(getModelConfigSaveErrorMessage(error))
+      })
   }, [chatId, isDeveloper, normalizedModelConfig])
 
   useEffect(() => {
@@ -209,40 +223,51 @@ export function useChatInterfaceSettings({
   }, [])
 
   const persistModelConfig = useCallback(
-    async (
-      nextEnabled: boolean,
-      nextPrimary: LlmModelSelection,
-      nextSecondary: LlmModelSelection,
-      nextMemoryMode: ChatMemoryMode,
-      nextAgenticTranscriptRecallMode: AgenticTranscriptRecallOverrideMode,
-    ) => {
-      const config = {
-        alternateModels: {
-          enabled: nextEnabled,
-          primaryApiKeyId: nextPrimary.apiKeyId || null,
-          primaryModelName: nextPrimary.modelName || null,
-          secondaryApiKeyId: nextSecondary.apiKeyId || null,
-          secondaryModelName: nextSecondary.modelName || null,
-        },
-        memory:
-          nextMemoryMode === 'prefix_live_blocks'
-            ? {
-                mode: nextMemoryMode,
-                retainTailMessages: memoryRetainTailMessages,
-              }
-            : null,
-        ...buildAgenticTranscriptRecallOverrideModelConfigPatch(
-          normalizedModelConfig,
-          nextAgenticTranscriptRecallMode,
-        ),
+    (snapshot: ChatInterfaceSettingsSnapshot) => {
+      const revision = latestModelConfigSaveRevisionRef.current + 1
+      latestModelConfigSaveRevisionRef.current = revision
+
+      const save = async () => {
+        try {
+          const result = await updateChatModelConfig(chatId, {
+            alternateModels: {
+              enabled: snapshot.alternateModelsEnabled,
+              primaryApiKeyId: snapshot.selectedModel.apiKeyId || null,
+              primaryModelName: snapshot.selectedModel.modelName || null,
+              secondaryApiKeyId: snapshot.secondaryModel.apiKeyId || null,
+              secondaryModelName: snapshot.secondaryModel.modelName || null,
+            },
+            memory:
+              snapshot.memoryMode === 'prefix_live_blocks'
+                ? {
+                    mode: snapshot.memoryMode,
+                    retainTailMessages: memoryRetainTailMessages,
+                  }
+                : null,
+          })
+
+          if (result?.error) {
+            throw new Error(result.error)
+          }
+
+          confirmedSettingsRef.current = snapshot
+        } catch (error) {
+          if (latestModelConfigSaveRevisionRef.current !== revision) {
+            return
+          }
+
+          const confirmed = confirmedSettingsRef.current
+          setSelectedModel(confirmed.selectedModel)
+          setSecondaryModel(confirmed.secondaryModel)
+          setAlternateModelsEnabled(confirmed.alternateModelsEnabled)
+          setMemoryMode(confirmed.memoryMode)
+          toast.error(getModelConfigSaveErrorMessage(error))
+        }
       }
 
-      const result = await updateChatModelConfig(chatId, config)
-      if (result?.error) {
-        toast.error(result.error)
-      }
+      modelConfigSaveQueueRef.current = modelConfigSaveQueueRef.current.then(save, save)
     },
-    [chatId, memoryRetainTailMessages, normalizedModelConfig],
+    [chatId, memoryRetainTailMessages],
   )
 
   const selectedApiKey = useMemo(
@@ -293,21 +318,13 @@ export function useChatInterfaceSettings({
     }
 
     setAlternateModelsEnabled(nextEnabled)
-    void persistModelConfig(
-      nextEnabled,
+    persistModelConfig({
+      alternateModelsEnabled: nextEnabled,
       selectedModel,
       secondaryModel,
       memoryMode,
-      agenticTranscriptRecallMode,
-    )
-  }, [
-    agenticTranscriptRecallMode,
-    alternateModelsEnabled,
-    memoryMode,
-    persistModelConfig,
-    secondaryModel,
-    selectedModel,
-  ])
+    })
+  }, [alternateModelsEnabled, memoryMode, persistModelConfig, secondaryModel, selectedModel])
 
   const handleSelectPrimaryModel = useCallback(
     (nextModel: LlmModelSelection) => {
@@ -315,21 +332,14 @@ export function useChatInterfaceSettings({
       if (alternateModelsEnabled && isSameLlmModelSelection(nextModel, secondaryModel)) {
         toast.error('교대 모드는 서로 다른 모델 선택이 필요합니다.')
       }
-      void persistModelConfig(
+      persistModelConfig({
         alternateModelsEnabled,
-        nextModel,
+        selectedModel: nextModel,
         secondaryModel,
         memoryMode,
-        agenticTranscriptRecallMode,
-      )
+      })
     },
-    [
-      agenticTranscriptRecallMode,
-      alternateModelsEnabled,
-      memoryMode,
-      persistModelConfig,
-      secondaryModel,
-    ],
+    [alternateModelsEnabled, memoryMode, persistModelConfig, secondaryModel],
   )
 
   const handleSelectSecondaryModel = useCallback(
@@ -338,41 +348,27 @@ export function useChatInterfaceSettings({
       if (alternateModelsEnabled && isSameLlmModelSelection(nextModel, selectedModel)) {
         toast.error('교대 모드는 서로 다른 모델 선택이 필요합니다.')
       }
-      void persistModelConfig(
+      persistModelConfig({
         alternateModelsEnabled,
         selectedModel,
-        nextModel,
+        secondaryModel: nextModel,
         memoryMode,
-        agenticTranscriptRecallMode,
-      )
+      })
     },
-    [
-      agenticTranscriptRecallMode,
-      alternateModelsEnabled,
-      memoryMode,
-      persistModelConfig,
-      selectedModel,
-    ],
+    [alternateModelsEnabled, memoryMode, persistModelConfig, selectedModel],
   )
 
   const handleSelectMemoryMode = useCallback(
     (nextMode: ChatMemoryMode) => {
       setMemoryMode(nextMode)
-      void persistModelConfig(
+      persistModelConfig({
         alternateModelsEnabled,
         selectedModel,
         secondaryModel,
-        nextMode,
-        agenticTranscriptRecallMode,
-      )
+        memoryMode: nextMode,
+      })
     },
-    [
-      agenticTranscriptRecallMode,
-      alternateModelsEnabled,
-      persistModelConfig,
-      secondaryModel,
-      selectedModel,
-    ],
+    [alternateModelsEnabled, persistModelConfig, secondaryModel, selectedModel],
   )
 
   const handleToggleAnthropicBatchMode = useCallback(() => {

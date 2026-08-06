@@ -104,7 +104,7 @@ describe('NewChatForm', () => {
     expect(returnUrl.searchParams.get('greeting')).toBe('1')
   })
 
-  it('passes the selected credential and model to the new chat URL', async () => {
+  it('persists the selected credential and model before opening the new chat', async () => {
     createChatMock.mockResolvedValue({ chatId: 'chat-1' })
     render(<NewChatForm character={character} apiKeys={apiKeys} personas={personas} />)
 
@@ -114,7 +114,16 @@ describe('NewChatForm', () => {
     fireEvent.click(screen.getByRole('button', { name: '채팅 시작' }))
 
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith('/dashboard/chats/chat-1?apiKey=key-1&model=gpt-5.4')
+      expect(createChatMock).toHaveBeenCalledWith({
+        characterId: 'char-1',
+        personaId: null,
+        greetingIndex: 0,
+        modelSelection: {
+          apiKeyId: 'key-1',
+          modelName: 'gpt-5.4',
+        },
+      })
+      expect(pushMock).toHaveBeenCalledWith('/dashboard/chats/chat-1')
     })
   })
 })

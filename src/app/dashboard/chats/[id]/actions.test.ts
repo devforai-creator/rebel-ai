@@ -263,7 +263,24 @@ describe('chat actions', () => {
   it('persists an explicit ATR off override when callers set it directly', async () => {
     const supabase = buildSupabase({
       user: { id: 'user-1' },
-      chats: [{ id: 'chat-1', user_id: 'user-1', model_config: null }],
+      chats: [
+        {
+          id: 'chat-1',
+          user_id: 'user-1',
+          model_config: {
+            alternateModels: {
+              enabled: false,
+              primaryApiKeyId: 'primary-key',
+              primaryModelName: 'gpt-5.5',
+              secondaryApiKeyId: null,
+              secondaryModelName: null,
+            },
+            memory: {
+              mode: 'prefix_live_blocks',
+            },
+          },
+        },
+      ],
     })
     createClientMock.mockResolvedValue(supabase)
     const { updateChatModelConfig } = await import('./actions')
@@ -281,6 +298,16 @@ describe('chat actions', () => {
     expect(getChatRows(supabase)[0]).toMatchObject({
       id: 'chat-1',
       model_config: {
+        alternateModels: {
+          enabled: false,
+          primaryApiKeyId: 'primary-key',
+          primaryModelName: 'gpt-5.5',
+          secondaryApiKeyId: null,
+          secondaryModelName: null,
+        },
+        memory: {
+          mode: 'prefix_live_blocks',
+        },
         experimental: {
           agenticTranscriptRecall: {
             enabled: false,
@@ -315,9 +342,6 @@ describe('chat actions', () => {
 
     await expect(
       updateChatModelConfig('chat-1', {
-        memory: {
-          mode: 'prefix_live_blocks',
-        },
         experimental: {},
       }),
     ).resolves.toEqual({ success: true })

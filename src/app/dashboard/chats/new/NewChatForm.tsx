@@ -90,6 +90,7 @@ export default function NewChatForm({
         characterId,
         personaId: personaId || null,
         greetingIndex,
+        modelSelection,
       })
 
       if (result.error) {
@@ -104,11 +105,7 @@ export default function NewChatForm({
         return
       }
 
-      const chatParams = new URLSearchParams({
-        apiKey: modelSelection.apiKeyId,
-        model: modelSelection.modelName,
-      })
-      router.push(`/dashboard/chats/${result.chatId}?${chatParams.toString()}`)
+      router.push(`/dashboard/chats/${result.chatId}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : '채팅 생성에 실패했습니다'
       setError(message)

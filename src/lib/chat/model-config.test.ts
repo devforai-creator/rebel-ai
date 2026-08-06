@@ -12,6 +12,7 @@ import {
   DEFAULT_PREFIX_LIVE_BLOCKS_RETAIN_TAIL_MESSAGES,
   OPERATOR_DEFAULT_CHAT_MEMORY_MODE,
   hasPersistableChatModelConfig,
+  mergeChatModelConfigPatch,
   normalizeChatModelConfig,
   resolveChatMemoryConfig,
 } from './model-config'
@@ -198,6 +199,54 @@ describe('resolveChatMemoryConfig', () => {
     expect(CHAT_MEMORY_MODE_SUPPORT_TIERS).toEqual({
       summary_window: 'fallback',
       prefix_live_blocks: 'core',
+    })
+  })
+})
+
+describe('mergeChatModelConfigPatch', () => {
+  const current = {
+    alternateModels: {
+      enabled: false,
+      primaryApiKeyId: 'primary',
+      primaryModelName: 'model-primary',
+      secondaryApiKeyId: 'secondary',
+      secondaryModelName: 'model-secondary',
+    },
+    memory: {
+      mode: 'prefix_live_blocks',
+      retainTailMessages: 6,
+    },
+    experimental: {
+      agenticTranscriptRecall: {
+        enabled: true,
+        maxToolCalls: 1,
+      },
+    },
+  }
+
+  it('updates experimental settings without removing model or memory settings', () => {
+    expect(
+      mergeChatModelConfigPatch(current, {
+        experimental: {
+          agenticTranscriptRecall: {
+            enabled: false,
+          },
+        },
+      }),
+    ).toEqual({
+      ...current,
+      experimental: {
+        agenticTranscriptRecall: {
+          enabled: false,
+        },
+      },
+    })
+  })
+
+  it('removes only explicitly cleared branches', () => {
+    expect(mergeChatModelConfigPatch(current, { experimental: {} })).toEqual({
+      alternateModels: current.alternateModels,
+      memory: current.memory,
     })
   })
 })

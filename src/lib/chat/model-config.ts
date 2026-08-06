@@ -176,6 +176,30 @@ export function normalizeChatModelConfig(input: unknown): ChatModelConfig {
   return normalized
 }
 
+function hasOwnModelConfigKey(input: unknown, key: keyof ChatModelConfig): boolean {
+  return !!input && typeof input === 'object' && Object.prototype.hasOwnProperty.call(input, key)
+}
+
+export function mergeChatModelConfigPatch(current: unknown, patch: unknown): ChatModelConfig {
+  const normalizedCurrent = normalizeChatModelConfig(current)
+  const normalizedPatch = normalizeChatModelConfig(patch)
+  const alternateModels = hasOwnModelConfigKey(patch, 'alternateModels')
+    ? normalizedPatch.alternateModels
+    : normalizedCurrent.alternateModels
+  const memory = hasOwnModelConfigKey(patch, 'memory')
+    ? normalizedPatch.memory
+    : normalizedCurrent.memory
+  const experimental = hasOwnModelConfigKey(patch, 'experimental')
+    ? normalizedPatch.experimental
+    : normalizedCurrent.experimental
+
+  return {
+    ...(alternateModels ? { alternateModels } : {}),
+    ...(memory ? { memory } : {}),
+    ...(experimental ? { experimental } : {}),
+  }
+}
+
 export function resolveChatMemoryConfig(
   input: unknown,
   options?: { defaultMode?: ChatMemoryMode },

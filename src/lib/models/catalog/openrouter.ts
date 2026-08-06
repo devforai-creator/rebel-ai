@@ -7,6 +7,12 @@ export const openRouterModelCatalog = defineProviderCatalog({
   },
   models: [
     {
+      id: 'moonshotai/kimi-k3',
+      displayName: 'Kimi K3',
+      pricing: flatPricing({ input: 3, output: 15, cachedInput: 0.3 }),
+      features: { promptCaching: 'standard', reasoning: true },
+    },
+    {
       id: 'z-ai/glm-5.2',
       displayName: 'GLM-5.2',
       pricing: flatPricing({ input: 1.4, output: 4.4, cachedInput: 0.26 }),

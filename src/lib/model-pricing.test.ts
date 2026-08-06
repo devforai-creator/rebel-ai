@@ -415,6 +415,27 @@ describe('estimateUsageCost', () => {
     })
   })
 
+  describe('OpenRouter models', () => {
+    it('uses the current Kimi K3 cache-hit price', () => {
+      const params: UsageCostParams = {
+        provider: 'openrouter',
+        modelName: 'moonshotai/kimi-k3',
+        promptTokens: 100000,
+        completionTokens: 10000,
+        cachedInputTokens: 80000,
+      }
+      const result = estimateUsageCost(params)
+      expect(result).not.toBeNull()
+
+      // Input rate: $3/M, Cached rate: $0.30/M, Output rate: $15/M.
+      // Fresh input: 100000 - 80000 = 20000 tokens.
+      expect(result!.promptCost).toBeCloseTo(0.06, 6)
+      expect(result!.cachedInputCost).toBeCloseTo(0.024, 6)
+      expect(result!.completionCost).toBeCloseTo(0.15, 6)
+      expect(result!.totalCost).toBeCloseTo(0.234, 6)
+    })
+  })
+
   describe('DeepSeek models', () => {
     it('uses the current V4 Flash cache-hit price', () => {
       const params: UsageCostParams = {

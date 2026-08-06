@@ -544,6 +544,43 @@ describe('Model Registry', () => {
     })
   })
 
+  describe('Kimi K3 registration', () => {
+    it('is found by exact OpenRouter ID', () => {
+      const model = findModelDefinition({ modelName: 'moonshotai/kimi-k3' })
+
+      expect(model).not.toBeNull()
+      expect(model?.id).toBe('moonshotai/kimi-k3')
+      expect(model?.provider).toBe('openrouter')
+      expect(model?.features?.reasoning).toBe(true)
+      expect(model?.features?.promptCaching).toBe('standard')
+    })
+
+    it('has correct OpenRouter pricing', () => {
+      const tiers = getModelPricingTiers({
+        provider: 'openrouter',
+        modelName: 'moonshotai/kimi-k3',
+      })
+
+      expect(tiers).not.toBeNull()
+      expect(tiers![0].rates.input).toBe(3)
+      expect(tiers![0].rates.output).toBe(15)
+      expect(tiers![0].rates.cachedInput).toBe(0.3)
+    })
+
+    it('appears first in the OpenRouter UI model list', () => {
+      const ids = listUiModelIdsByProvider('openrouter')
+
+      expect(ids[0]).toBe('moonshotai/kimi-k3')
+      expect(ids).toContain('z-ai/glm-5.2')
+      expect(ids).toContain('z-ai/glm-5.1')
+      expect(ids).toContain('z-ai/glm-5')
+    })
+
+    it('keeps the existing OpenRouter provider default', () => {
+      expect(getDefaultModelForProvider('openrouter')).toBe('z-ai/glm-5')
+    })
+  })
+
   describe('GLM 5.2 registration', () => {
     it('is found by exact OpenRouter ID', () => {
       const model = findModelDefinition({ modelName: 'z-ai/glm-5.2' })
@@ -566,10 +603,10 @@ describe('Model Registry', () => {
       expect(tiers![0].rates.cachedInput).toBe(0.26)
     })
 
-    it('appears first in the OpenRouter UI model list', () => {
+    it('appears after Kimi K3 in the OpenRouter UI model list', () => {
       const ids = listUiModelIdsByProvider('openrouter')
 
-      expect(ids[0]).toBe('z-ai/glm-5.2')
+      expect(ids[1]).toBe('z-ai/glm-5.2')
       expect(ids).toContain('z-ai/glm-5.1')
       expect(ids).toContain('z-ai/glm-5')
     })

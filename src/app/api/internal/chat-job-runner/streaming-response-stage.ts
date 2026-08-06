@@ -5,6 +5,7 @@ import {
   CHAT_JOB_LIFECYCLE_STAGE_CONTENT_FILTERED,
   CHAT_JOB_LIFECYCLE_STAGE_EMPTY_RESPONSE,
   CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
+  CHAT_JOB_LIFECYCLE_STAGE_TIMED_OUT,
 } from '@/lib/chat/job-lifecycle'
 import type { LlmProvider } from '@/types/database.types'
 import {
@@ -45,6 +46,106 @@ function buildProviderStreamExecutionError({
         isGoogleExplicitCacheToolConflict(error),
     },
   )
+}
+
+function formatProviderStreamTimeout(timeoutMs: number): string {
+  if (timeoutMs % 60_000 === 0) {
+    const minutes = timeoutMs / 60_000
+    return `${minutes} minute${minutes === 1 ? '' : 's'}`
+  }
+
+  const seconds = Math.round(timeoutMs / 1000)
+  return `${seconds} second${seconds === 1 ? '' : 's'}`
+}
+
+function buildProviderStreamTimeoutExecutionError({
+  timeoutMs,
+  streamedTextLength,
+}: {
+  timeoutMs: number
+  streamedTextLength: number
+}) {
+  const duration = formatProviderStreamTimeout(timeoutMs)
+  const message = `The model provider did not finish within ${duration}. Please try again.`
+
+  return new ChatJobExecutionError(message, CHAT_JOB_LIFECYCLE_STAGE_TIMED_OUT, {
+    streamedTextLength,
+    providerStreamTimeoutMs: timeoutMs,
+  })
+}
+
+function resolveProviderStreamExecutionError({
+  provider,
+  error,
+  streamedTextLength,
+  providerAbortSignal,
+  providerStreamTimeoutMs,
+}: {
+  provider: LlmProvider
+  error: unknown
+  streamedTextLength: number
+  providerAbortSignal: AbortSignal
+  providerStreamTimeoutMs: number
+}) {
+  if (providerAbortSignal.aborted) {
+    return buildProviderStreamTimeoutExecutionError({
+      timeoutMs: providerStreamTimeoutMs,
+      streamedTextLength,
+    })
+  }
+
+  if (error instanceof ChatJobExecutionError) {
+    return error
+  }
+
+  return buildProviderStreamExecutionError({
+    provider,
+    error,
+    streamedTextLength,
+  })
+}
+
+function resolveStreamedTextLength(error: unknown, fallback: number): number {
+  if (
+    error instanceof ChatJobExecutionError &&
+    typeof error.details?.streamedTextLength === 'number'
+  ) {
+    return error.details.streamedTextLength
+  }
+
+  return fallback
+}
+
+async function broadcastProviderStreamFailure({
+  supabase,
+  chatId,
+  jobId,
+  regenerateAssistantMessageId,
+  streamError,
+  allowGoogleExplicitCacheRecovery,
+}: {
+  supabase: AdminSupabaseClient
+  chatId: string
+  jobId: string
+  regenerateAssistantMessageId: string | null
+  streamError: ChatJobExecutionError
+  allowGoogleExplicitCacheRecovery?: boolean
+}) {
+  const shouldSuppressBroadcast =
+    allowGoogleExplicitCacheRecovery === true &&
+    streamError.lifecycleStage === CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR &&
+    streamError.details?.googleExplicitCacheToolConflict === true &&
+    (streamError.details?.streamedTextLength ?? 0) === 0
+
+  if (!shouldSuppressBroadcast) {
+    await broadcastAssistantStreamError({
+      supabase,
+      chatId,
+      jobId,
+      error: streamError.message,
+      regenerateAssistantMessageId,
+    })
+  }
 }
 
 export type StreamingResponseStageResult = {
@@ -200,6 +301,8 @@ export async function consumeStreamingResponseStage({
   chatId,
   jobId,
   stream,
+  providerAbortSignal,
+  providerStreamTimeoutMs,
   provider,
   regenerateAssistantMessageId,
   debugMetrics,
@@ -212,6 +315,8 @@ export async function consumeStreamingResponseStage({
   chatId: string
   jobId: string
   stream: ProviderTextStream
+  providerAbortSignal: AbortSignal
+  providerStreamTimeoutMs: number
   provider: LlmProvider
   regenerateAssistantMessageId: string | null
   debugMetrics?: Record<string, DebugMetricValue>
@@ -235,33 +340,57 @@ export async function consumeStreamingResponseStage({
       now,
     })
   } catch (error) {
-    const streamError =
-      error instanceof ChatJobExecutionError
-        ? error
-        : new ChatJobExecutionError(
-            error instanceof Error ? error.message : String(error),
-            CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
-          )
-    const shouldSuppressBroadcast =
-      allowGoogleExplicitCacheRecovery === true &&
-      streamError.lifecycleStage === CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR &&
-      streamError.details?.googleExplicitCacheToolConflict === true &&
-      (streamError.details?.streamedTextLength ?? 0) === 0
-
-    if (!shouldSuppressBroadcast) {
-      await broadcastAssistantStreamError({
-        supabase,
-        chatId,
-        jobId,
-        error: streamError.message,
-        regenerateAssistantMessageId,
-      })
-    }
+    const streamError = resolveProviderStreamExecutionError({
+      provider,
+      error,
+      streamedTextLength: resolveStreamedTextLength(error, fullText.length),
+      providerAbortSignal,
+      providerStreamTimeoutMs,
+    })
+    await broadcastProviderStreamFailure({
+      supabase,
+      chatId,
+      jobId,
+      regenerateAssistantMessageId,
+      streamError,
+      allowGoogleExplicitCacheRecovery,
+    })
     throw streamError
   }
 
-  const finishReason = await stream.finishReason
-  const providerMetadata = await stream.providerMetadata
+  let finishReason: Awaited<ProviderTextStream['finishReason']>
+  let providerMetadata: Awaited<ProviderTextStream['providerMetadata']>
+
+  try {
+    ;[finishReason, providerMetadata] = await Promise.all([
+      stream.finishReason,
+      stream.providerMetadata,
+    ])
+
+    if (providerAbortSignal.aborted) {
+      throw buildProviderStreamTimeoutExecutionError({
+        timeoutMs: providerStreamTimeoutMs,
+        streamedTextLength: fullText.length,
+      })
+    }
+  } catch (error) {
+    const streamError = resolveProviderStreamExecutionError({
+      provider,
+      error,
+      streamedTextLength: fullText.length,
+      providerAbortSignal,
+      providerStreamTimeoutMs,
+    })
+    await broadcastProviderStreamFailure({
+      supabase,
+      chatId,
+      jobId,
+      regenerateAssistantMessageId,
+      streamError,
+      allowGoogleExplicitCacheRecovery,
+    })
+    throw streamError
+  }
 
   const anthropicProviderMetadata =
     provider === 'anthropic' &&

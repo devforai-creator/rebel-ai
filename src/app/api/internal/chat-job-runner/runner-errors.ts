@@ -5,6 +5,7 @@ export type ChatJobExecutionErrorDetails = {
   normalizedProviderError?: NormalizedProviderError
   streamedTextLength?: number
   googleExplicitCacheToolConflict?: boolean
+  providerStreamTimeoutMs?: number
 }
 
 export class ChatJobExecutionError extends Error {

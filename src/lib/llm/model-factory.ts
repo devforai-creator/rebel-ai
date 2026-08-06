@@ -8,6 +8,7 @@ import {
   googleCachedContentOwnsRequestContract,
   stripGoogleCachedRequestContractMarker,
 } from '@/lib/llm/google-cache'
+import { createOpenRouterRequestFetch } from '@/lib/llm/openrouter'
 import type { ApiServiceTier, LlmProvider } from '@/types/database.types'
 import { wrapLanguageModel, type LanguageModel } from 'ai'
 
@@ -73,9 +74,11 @@ export function buildLanguageModel({
       return deepseekProvider(modelName)
     }
     case 'openrouter': {
+      const requestFetch = createOpenRouterRequestFetch({ modelName })
       const openrouterProvider = createOpenAI({
         apiKey,
         baseURL: OPENROUTER_BASE_URL,
+        ...(requestFetch ? { fetch: requestFetch } : {}),
       })
       return openrouterProvider.chat(modelName)
     }

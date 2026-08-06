@@ -10,6 +10,7 @@ import {
   CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE,
   type ChatJobLifecycleStage,
 } from '@/lib/chat/job-lifecycle'
+import { CHAT_RUNNER_LIMITS } from '@/lib/chat/runtime-limits'
 import { persistChatJobLifecycleStage } from '@/lib/chat/job-lifecycle-store'
 import { pollDueAnthropicBatchJobs } from './anthropic-batch-orchestrator'
 import { loadChatJobExecutionContext } from './execution-context'
@@ -67,7 +68,11 @@ function shouldRetryGoogleExplicitCacheCompatibility(
   )
 }
 
-export async function processChatJobs(limit: number = 1) {
+export async function processChatJobs(
+  limit: number = 1,
+  { now = () => performance.now() }: { now?: () => number } = {},
+) {
+  const runnerStartedAt = now()
   const supabase = createAdminClient()
   const processed: Array<{ jobId: string; status: string; error?: string }> = []
   const origin = resolveInternalApiOrigin()
@@ -79,6 +84,16 @@ export async function processChatJobs(limit: number = 1) {
   processed.push(...batchResults)
 
   for (let index = 0; index < jobLimit; index += 1) {
+    const runnerElapsedMs = now() - runnerStartedAt
+    if (runnerElapsedMs >= CHAT_RUNNER_LIMITS.latestJobStartMs) {
+      logChatJobRunnerDebug('[Chat Job Runner] Stopping batch before the next queue claim', {
+        iteration: index + 1,
+        runnerElapsedMs,
+        latestJobStartMs: CHAT_RUNNER_LIMITS.latestJobStartMs,
+      })
+      break
+    }
+
     const claimMetrics: Record<string, DebugMetricValue> = {}
     const claimStart = performance.now()
     const job = await claimPendingJob(supabase, {
@@ -245,6 +260,8 @@ async function executeJob({
 
     let {
       stream,
+      providerAbortSignal,
+      providerStreamTimeoutMs,
       promptCache,
       anthropicCache,
       googleExplicitCacheEnabled,
@@ -261,6 +278,8 @@ async function executeJob({
         chatId,
         jobId,
         stream,
+        providerAbortSignal,
+        providerStreamTimeoutMs,
         provider,
         regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
         debugMetrics,
@@ -294,6 +313,8 @@ async function executeJob({
 
       ;({
         stream,
+        providerAbortSignal,
+        providerStreamTimeoutMs,
         promptCache,
         anthropicCache,
         googleExplicitCacheEnabled,
@@ -308,6 +329,8 @@ async function executeJob({
         chatId,
         jobId,
         stream,
+        providerAbortSignal,
+        providerStreamTimeoutMs,
         provider,
         regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
         debugMetrics,

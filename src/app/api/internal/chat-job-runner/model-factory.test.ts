@@ -201,6 +201,53 @@ describe('buildLanguageModel', () => {
     expect(model).toBe(openrouterModel)
   })
 
+  it('forces max OpenRouter reasoning for Kimi K3 at the request boundary', async () => {
+    const openrouterModel = { provider: 'openrouter-model' } as unknown as LanguageModel
+    const openrouterChatMock = vi.fn(() => openrouterModel)
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}'))
+    vi.stubGlobal('fetch', fetchMock)
+    createOpenAIMock.mockReturnValue({ chat: openrouterChatMock })
+
+    try {
+      const { buildLanguageModel } = await import('./model-factory')
+
+      buildLanguageModel({
+        provider: 'openrouter',
+        modelName: 'moonshotai/kimi-k3',
+        apiKey: 'or-key',
+        serviceTier: 'standard',
+      })
+
+      expect(createOpenAIMock).toHaveBeenCalledWith({
+        apiKey: 'or-key',
+        baseURL: 'https://openrouter.ai/api/v1',
+        fetch: expect.any(Function),
+      })
+
+      const requestFetch = createOpenAIMock.mock.calls[0]?.[0]?.fetch as typeof globalThis.fetch
+      await requestFetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'moonshotai/kimi-k3',
+          messages: [{ role: 'user', content: 'Hello' }],
+          reasoning: { exclude: true },
+        }),
+      })
+
+      const forwardedInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+      expect(JSON.parse(String(forwardedInit.body))).toEqual({
+        model: 'moonshotai/kimi-k3',
+        messages: [{ role: 'user', content: 'Hello' }],
+        reasoning: {
+          exclude: true,
+          effort: 'max',
+        },
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('throws for unsupported providers', async () => {
     const { buildLanguageModel } = await import('./model-factory')
 

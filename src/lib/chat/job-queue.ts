@@ -2,6 +2,7 @@ import type { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/database.types'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from './delivery-mode'
 import { CHAT_JOB_LIFECYCLE_STAGE_TIMED_OUT } from './job-lifecycle'
+import { CHAT_RUNNER_LIMITS } from './runtime-limits'
 
 export type RawChatJobRecord = { id: string; payload: unknown }
 type ChatJobQueueSupabaseClient = Pick<ReturnType<typeof createAdminClient>, 'from' | 'rpc'>
@@ -10,7 +11,7 @@ type ChatGenerationJobUpdate = Database['public']['Tables']['chat_generation_job
 type StuckJobRow = Pick<ChatGenerationJobRow, 'id' | 'chat_id' | 'created_at' | 'delivery_mode'>
 type TerminalChatJobRow = Pick<ChatGenerationJobRow, 'id' | 'status' | 'created_at'>
 
-const FALLBACK_TIMEOUT_MS = 10 * 60 * 1000
+const FALLBACK_TIMEOUT_MS = CHAT_RUNNER_LIMITS.stuckProcessingJobTimeoutMs
 const DAY_MS = 24 * 60 * 60 * 1000
 const FALLBACK_SUCCESS_RETENTION_DAYS = 7
 const FALLBACK_ERROR_RETENTION_DAYS = 14

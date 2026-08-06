@@ -3,7 +3,7 @@ import { streamText } from 'ai'
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from '@/lib/chat/delivery-mode'
-import { CHAT_RUNNER_LIMITS } from '@/lib/chat/runtime-limits'
+import { resolveChatProviderStreamTimeoutMs } from '@/lib/chat/runtime-limits'
 import { googleCachedContentOwnsRequestContract } from '@/lib/llm/google-cache'
 import { ANTHROPIC_INTERLEAVED_THINKING_BETA, getProviderOptions } from '@/lib/llm/provider-options'
 import { resolveInvocationSamplingOptions } from '@/lib/llm/invocation-sampling'
@@ -85,6 +85,8 @@ export type ProviderRequestStageResult =
   | ({
       status: 'streaming'
       stream: Awaited<ReturnType<typeof streamText>>
+      providerAbortSignal: AbortSignal
+      providerStreamTimeoutMs: number
     } & ProviderRequestArtifacts)
 
 function disableAnthropicThinkingForRequiredToolChoice(
@@ -601,7 +603,9 @@ export async function requestProviderStage({
     }
 
     let stream: Awaited<ReturnType<typeof streamText>>
-    const providerAbortSignal = AbortSignal.timeout(CHAT_RUNNER_LIMITS.providerStreamTimeoutMs)
+    const providerStreamTimeoutMs = resolveChatProviderStreamTimeoutMs({ provider, modelName })
+    const providerAbortSignal = AbortSignal.timeout(providerStreamTimeoutMs)
+    debugMetrics['provider_stream_hard_timeout_ms'] = providerStreamTimeoutMs
 
     try {
       stream = await streamText({
@@ -644,6 +648,8 @@ export async function requestProviderStage({
     return {
       status: 'streaming',
       stream,
+      providerAbortSignal,
+      providerStreamTimeoutMs,
       promptCache,
       anthropicCache,
       googleExplicitCacheEnabled,

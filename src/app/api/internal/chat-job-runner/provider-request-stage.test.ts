@@ -244,24 +244,65 @@ describe('requestProviderStage', () => {
     })
   })
 
-  it('sets a provider stream abort timeout below the route execution limit', async () => {
+  it('keeps the default provider stream budget below the route execution limit', async () => {
     const { requestProviderStage } = await import('./provider-request-stage')
-    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout')
+    const context = buildContext()
 
-    try {
-      await requestProviderStage({
-        supabase: createChatJobRunnerSupabaseMock() as never,
-        jobId: 'job-timeout-signal',
-        payload: buildPayload(),
-        context: buildContext(),
-        timings: {},
-      })
-      expect(timeoutSpy).toHaveBeenCalledWith(CHAT_RUNNER_LIMITS.providerStreamTimeoutMs)
-    } finally {
-      timeoutSpy.mockRestore()
+    const result = await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-timeout-signal',
+      payload: buildPayload(),
+      context,
+      timings: {},
+    })
+
+    const request = streamTextMock.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(request).toEqual(
+      expect.objectContaining({
+        abortSignal: expect.any(AbortSignal),
+      }),
+    )
+    expect(request).not.toHaveProperty('includeRawChunks')
+    expect(context.debugMetrics).toMatchObject({
+      provider_stream_hard_timeout_ms: CHAT_RUNNER_LIMITS.providerStreamTimeoutMs,
+    })
+    if (result.status === 'streaming') {
+      expect(result.providerAbortSignal).toBe(request.abortSignal)
+      expect(result.providerStreamTimeoutMs).toBe(CHAT_RUNNER_LIMITS.providerStreamTimeoutMs)
     }
 
-    expect(CHAT_RUNNER_LIMITS.providerStreamTimeoutMs).toBeLessThan(300_000)
+    expect(CHAT_RUNNER_LIMITS.providerStreamTimeoutMs).toBeLessThan(
+      CHAT_RUNNER_LIMITS.routeMaxDurationSeconds * 1000,
+    )
+  })
+
+  it('uses the extended Kimi K3 deadline without raw chunk tracking', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const context = buildContext()
+
+    const result = await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-kimi-stream-policy',
+      payload: buildPayload({
+        provider: 'openrouter',
+        modelName: 'moonshotai/kimi-k3',
+      }),
+      context,
+      timings: {},
+    })
+
+    const request = streamTextMock.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(request.abortSignal).toEqual(expect.any(AbortSignal))
+    expect(request).not.toHaveProperty('includeRawChunks')
+    expect(request).not.toHaveProperty('onChunk')
+
+    expect(context.debugMetrics).toMatchObject({
+      provider_stream_hard_timeout_ms: CHAT_RUNNER_LIMITS.kimiK3ProviderStreamTimeoutMs,
+    })
+    if (result.status === 'streaming') {
+      expect(result.providerAbortSignal).toBe(request.abortSignal)
+      expect(result.providerStreamTimeoutMs).toBe(CHAT_RUNNER_LIMITS.kimiK3ProviderStreamTimeoutMs)
+    }
   })
 
   it('records anthropic adaptive-thinking request metrics when anthropic options are present', async () => {

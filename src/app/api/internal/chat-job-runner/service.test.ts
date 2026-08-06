@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
-import { createChatJobRunnerSupabaseMock } from '@/tests/mocks/supabase'
+import { CHAT_RUNNER_LIMITS } from '@/lib/chat/runtime-limits'
 import { DEFAULT_OPENAI_TEXT_VERBOSITY } from '@/lib/llm/provider-options'
+import { createChatJobRunnerSupabaseMock } from '@/tests/mocks/supabase'
 
 const claimPendingJobMock = vi.fn()
 const parseChatJobPayloadMock = vi.fn()
@@ -477,6 +478,30 @@ describe('processChatJobs', () => {
 
     expect(result.processedCount).toBe(5)
     expect(claimPendingJobMock).toHaveBeenCalledTimes(5)
+  })
+
+  it('does not claim another sequential job after the safe route-duration window', async () => {
+    const supabase = createChatJobRunnerSupabaseMock({
+      rpc: { get_decrypted_secret: () => decryptSecretMock() },
+    })
+    createAdminClientMock.mockReturnValue(supabase)
+
+    claimPendingJobMock
+      .mockResolvedValueOnce({ id: 'job-1', payload: { bad: 'data' } })
+      .mockResolvedValueOnce({ id: 'job-2', payload: { bad: 'data' } })
+    parseChatJobPayloadMock.mockReturnValue(null)
+    const now = vi
+      .fn()
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValue(CHAT_RUNNER_LIMITS.latestJobStartMs)
+
+    const { processChatJobs } = await import('./service')
+
+    const result = await processChatJobs(2, { now })
+
+    expect(result.processedCount).toBe(1)
+    expect(claimPendingJobMock).toHaveBeenCalledTimes(1)
   })
 
   it('marks job as error when payload parsing fails', async () => {

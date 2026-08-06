@@ -8,7 +8,9 @@ import { requireAnyBearerToken } from '@/lib/http/api-contract'
 import { processChatJobs } from '../service'
 
 export const runtime = 'nodejs'
-export const maxDuration = 300
+// Static literal required by Next.js route-segment analysis. Keep synchronized
+// with CHAT_RUNNER_LIMITS.routeMaxDurationSeconds.
+export const maxDuration = 800
 
 export async function GET(req: NextRequest) {
   const adminSecret = process.env.CHAT_ADMIN_SECRET

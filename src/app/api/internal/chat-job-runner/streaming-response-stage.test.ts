@@ -41,6 +41,24 @@ async function* fullDeltaStream(
   }
 }
 
+function createProviderTimeoutContext({
+  timedOut = false,
+  timeoutMs = 240_000,
+}: {
+  timedOut?: boolean
+  timeoutMs?: number
+} = {}) {
+  const controller = new AbortController()
+  if (timedOut) {
+    controller.abort(new DOMException('Timed out', 'TimeoutError'))
+  }
+
+  return {
+    providerAbortSignal: controller.signal,
+    providerStreamTimeoutMs: timeoutMs,
+  }
+}
+
 describe('consumeStreamingResponseStage', () => {
   beforeEach(() => {
     broadcastAssistantStreamSnapshotMock.mockReset()
@@ -63,6 +81,7 @@ describe('consumeStreamingResponseStage', () => {
       supabase: {} as never,
       chatId: 'chat-1',
       jobId: 'job-1',
+      ...createProviderTimeoutContext(),
       stream: {
         textStream: textDeltaStream(['hello', ' world']),
         finishReason: Promise.resolve('stop'),
@@ -112,6 +131,7 @@ describe('consumeStreamingResponseStage', () => {
       supabase: {} as never,
       chatId: 'chat-1',
       jobId: 'job-anthropic-thinking',
+      ...createProviderTimeoutContext(),
       stream: {
         textStream: textDeltaStream(['ok']),
         finishReason: Promise.resolve('stop'),
@@ -143,6 +163,7 @@ describe('consumeStreamingResponseStage', () => {
       supabase: {} as never,
       chatId: 'chat-1',
       jobId: 'job-anthropic-streamed-thinking',
+      ...createProviderTimeoutContext(),
       stream: {
         textStream: textDeltaStream([]),
         fullStream: fullDeltaStream([
@@ -187,6 +208,7 @@ describe('consumeStreamingResponseStage', () => {
         supabase: {} as never,
         chatId: 'chat-1',
         jobId: 'job-err',
+        ...createProviderTimeoutContext(),
         stream: {
           textStream: textDeltaStream([]),
           fullStream: fullDeltaStream([{ type: 'error', error: new Error('socket down') }]),
@@ -216,6 +238,71 @@ describe('consumeStreamingResponseStage', () => {
     )
   })
 
+  it('classifies a hard timeout even when the SDK surfaces NoOutputGeneratedError', async () => {
+    const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
+    await expect(
+      consumeStreamingResponseStage({
+        supabase: {} as never,
+        chatId: 'chat-1',
+        jobId: 'job-hard-timeout',
+        ...createProviderTimeoutContext({ timedOut: true, timeoutMs: 12 * 60 * 1000 }),
+        stream: {
+          textStream: textDeltaStream([]),
+          finishReason: Promise.reject(new Error('No output generated.')),
+          providerMetadata: Promise.resolve({}),
+          usage: Promise.resolve(null),
+        } as never,
+        provider: 'openrouter',
+        regenerateAssistantMessageId: null,
+      }),
+    ).rejects.toMatchObject({
+      message: 'The model provider did not finish within 12 minutes. Please try again.',
+      lifecycleStage: 'timed_out',
+      details: {
+        streamedTextLength: 0,
+        providerStreamTimeoutMs: 12 * 60 * 1000,
+      },
+    })
+
+    expect(broadcastAssistantStreamErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 'job-hard-timeout',
+        error: 'The model provider did not finish within 12 minutes. Please try again.',
+      }),
+    )
+  })
+
+  it('classifies finish metadata failures as provider stream failures', async () => {
+    const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
+
+    await expect(
+      consumeStreamingResponseStage({
+        supabase: {} as never,
+        chatId: 'chat-1',
+        jobId: 'job-finish-error',
+        ...createProviderTimeoutContext(),
+        stream: {
+          textStream: textDeltaStream([]),
+          finishReason: Promise.reject(new Error('No output generated.')),
+          providerMetadata: Promise.resolve({}),
+          usage: Promise.resolve(null),
+        } as never,
+        provider: 'openrouter',
+        regenerateAssistantMessageId: null,
+      }),
+    ).rejects.toMatchObject({
+      message: 'Friendly stream error',
+      lifecycleStage: 'provider_stream_error',
+    })
+
+    expect(broadcastAssistantStreamErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 'job-finish-error',
+        error: 'Friendly stream error',
+      }),
+    )
+  })
+
   it('suppresses the first Google stream error broadcast for explicit-cache tool conflicts', async () => {
     const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
 
@@ -234,6 +321,7 @@ describe('consumeStreamingResponseStage', () => {
         supabase: {} as never,
         chatId: 'chat-1',
         jobId: 'job-google-cache-tool-conflict',
+        ...createProviderTimeoutContext(),
         stream: {
           textStream: textDeltaStream([]),
           fullStream: fullDeltaStream([
@@ -275,6 +363,7 @@ describe('consumeStreamingResponseStage', () => {
         supabase: {} as never,
         chatId: 'chat-1',
         jobId: 'job-filtered',
+        ...createProviderTimeoutContext(),
         stream: {
           textStream: textDeltaStream([]),
           finishReason: Promise.resolve('content-filter'),
@@ -301,6 +390,7 @@ describe('consumeStreamingResponseStage', () => {
         supabase: {} as never,
         chatId: 'chat-1',
         jobId: 'job-empty',
+        ...createProviderTimeoutContext(),
         stream: {
           textStream: textDeltaStream([]),
           finishReason: Promise.resolve('stop'),

@@ -1,33 +1,34 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
-import type { ChangeEvent, FormEvent } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import type { ChangeEvent, FormEvent, SetStateAction } from 'react'
 import { toast } from 'sonner'
 import type { Message } from '@/types/database.types'
 import type { AlternateModelsConfig } from '@/lib/chat/model-config'
 import { CHAT_DELIVERY_MODE_STREAMING, type ChatDeliveryMode } from '@/lib/chat/delivery-mode'
 import type { AssistantStreamBroadcastPayload } from '@/lib/chat/assistant-stream'
-import {
+import type {
+  ActiveChatJob,
+  DebugInfo,
   DisplayMessage,
   MessageChangePayload,
-  DebugInfo,
   StreamingAssistantDraft,
-  ActiveChatJob,
-  mapMessageToDisplay,
 } from '../utils'
 import { MESSAGE_STATUS_COMPLETED, isVisibleMessageStatus } from '@/lib/chat/message-status'
 import { resolveAlternateModelSelection } from '@/lib/chat/alternate-models'
 import { pollJobStatus as pollJobStatusPure } from './job-poller'
 import { fetchChatJobStatus, fetchLatestChatMessage, requestQueuedChatJob } from './queued-chat-api'
 import {
-  createStreamingAssistantDraft,
   getQueuedChatPollerConfig,
   getQueuedChatSlowProgressMessage,
   resolveQueuedChatPollSleepDelay,
-  updateStreamingDraftFromEvent,
 } from './queued-chat-runtime'
+import type { AssistantMessageSnapshot } from './reconcile-assistant-message'
 import {
-  reconcileAssistantMessage,
-  type AssistantMessageSnapshot,
-} from './reconcile-assistant-message'
+  createInitialQueuedChatLifecycleState,
+  getQueuedChatRegenerationTarget,
+  isQueuedChatLifecycleLoading,
+  queuedChatLifecycleReducer,
+  type QueuedChatLifecycleAction,
+} from './queued-chat-lifecycle'
 
 export interface UseQueuedChatParams {
   chatId: string
@@ -76,31 +77,27 @@ export function useQueuedChat({
   debugInfoMap,
   persistedMessageIds,
 }: UseQueuedChatParams): UseQueuedChatReturn {
-  const [messages, setMessages] = useState<DisplayMessage[]>(() =>
-    initialMessages.map(mapMessageToDisplay),
+  const [lifecycle, reactDispatch] = useReducer(
+    queuedChatLifecycleReducer,
+    {
+      initialMessages,
+      initialActiveJob,
+      createdAt: new Date().toISOString(),
+    },
+    createInitialQueuedChatLifecycleState,
   )
+  const lifecycleStateRef = useRef(lifecycle)
   const [input, setInput] = useState('')
-  const [sending, setSending] = useState(false)
-  const [pendingJobId, setPendingJobId] = useState<string | null>(initialActiveJob?.id ?? null)
-  const pendingJobIdRef = useRef<string | null>(initialActiveJob?.id ?? null)
-  const pendingRegenerationTargetIdRef = useRef<string | null>(
-    initialActiveJob?.regenerateAssistantMessageId ?? null,
-  )
   const resumedInitialJobIdRef = useRef<string | null>(null)
   const lastStreamProgressAtRef = useRef<number | null>(null)
   const [isPageVisible, setIsPageVisible] = useState(
     () => typeof document === 'undefined' || !document.hidden,
   )
-  const [streamingDraft, setStreamingDraft] = useState<StreamingAssistantDraft | null>(() =>
-    initialActiveJob
-      ? createStreamingAssistantDraft(
-          initialActiveJob.id,
-          initialActiveJob.regenerateAssistantMessageId,
-          initialActiveJob.deliveryMode,
-        )
-      : null,
-  )
-  const [error, setError] = useState<Error | null>(null)
+
+  const dispatchLifecycle = useCallback((action: QueuedChatLifecycleAction) => {
+    lifecycleStateRef.current = queuedChatLifecycleReducer(lifecycleStateRef.current, action)
+    reactDispatch(action)
+  }, [])
 
   useEffect(() => {
     if (typeof document === 'undefined') {
@@ -116,6 +113,15 @@ export function useQueuedChat({
       document.removeEventListener('visibilitychange', syncPageVisibility)
     }
   }, [])
+
+  const setMessages = useCallback(
+    (update: SetStateAction<DisplayMessage[]>) => {
+      const currentMessages = lifecycleStateRef.current.messages
+      const messages = typeof update === 'function' ? update(currentMessages) : update
+      dispatchLifecycle({ type: 'MESSAGES_REPLACED', messages })
+    },
+    [dispatchLifecycle],
+  )
 
   const handleInputChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     setInput(event.target.value)
@@ -149,57 +155,35 @@ export function useQueuedChat({
       }
 
       const messageStatus = assistantMessage.message_status ?? MESSAGE_STATUS_COMPLETED
-
-      setMessages((prev) => {
-        const pendingRegenerationTargetId = pendingRegenerationTargetIdRef.current
-        const { nextMessages, idsToForget } = reconcileAssistantMessage({
-          prevMessages: prev,
-          assistantMessage,
-          pendingRegenerationTargetId,
-        })
-
-        if (isVisibleMessageStatus(messageStatus)) {
-          persistedMessageIds.current.add(assistantMessage.id)
-        }
-
-        for (const id of idsToForget) {
-          persistedMessageIds.current.delete(id)
-          debugInfoMap.current.delete(id)
-
-          if (pendingRegenerationTargetId === id) {
-            pendingRegenerationTargetIdRef.current = null
-          }
-        }
-
-        return nextMessages
-      })
-
-      if (
-        pendingJobIdRef.current &&
-        isVisibleMessageStatus(messageStatus) &&
-        assistantMessage.id !== pendingRegenerationTargetIdRef.current
-      ) {
-        setStreamingDraft(null)
-      }
-    },
-    [debugInfoMap, persistedMessageIds],
-  )
-
-  const startStreamingDraft = useCallback(
-    (jobId: string, regenerateAssistantMessageId: string | null) => {
-      lastStreamProgressAtRef.current = null
-      setStreamingDraft(
-        createStreamingAssistantDraft(jobId, regenerateAssistantMessageId, deliveryMode),
+      const lifecycleState = lifecycleStateRef.current
+      const regenerationTargetId = getQueuedChatRegenerationTarget(lifecycleState)
+      const messageWasAlreadyVisible = lifecycleState.messages.some(
+        (message) => message.id === assistantMessage.id,
       )
-    },
-    [deliveryMode],
-  )
 
-  const clearPendingJob = useCallback(() => {
-    pendingJobIdRef.current = null
-    lastStreamProgressAtRef.current = null
-    setPendingJobId(null)
-  }, [])
+      if (isVisibleMessageStatus(messageStatus)) {
+        persistedMessageIds.current.add(assistantMessage.id)
+
+        if (
+          regenerationTargetId &&
+          regenerationTargetId !== assistantMessage.id &&
+          !messageWasAlreadyVisible
+        ) {
+          persistedMessageIds.current.delete(regenerationTargetId)
+          debugInfoMap.current.delete(regenerationTargetId)
+        }
+      } else if (regenerationTargetId !== assistantMessage.id) {
+        persistedMessageIds.current.delete(assistantMessage.id)
+        debugInfoMap.current.delete(assistantMessage.id)
+      }
+
+      dispatchLifecycle({
+        type: 'PERSISTED_ASSISTANT_UPSERTED',
+        message: assistantMessage,
+      })
+    },
+    [debugInfoMap, dispatchLifecycle, persistedMessageIds],
+  )
 
   const fetchLatestMessage = useCallback(async () => {
     return fetchLatestChatMessage(chatId) as Promise<(Message & { debug_info?: DebugInfo }) | null>
@@ -211,43 +195,10 @@ export function useQueuedChat({
         debugInfoMap.current.set(userMessage.id, userMessage.debug_info)
       }
       persistedMessageIds.current.add(userMessage.id)
-
-      setMessages((prev) => {
-        const mappedMessage = mapMessageToDisplay(userMessage)
-        const existingIndex = prev.findIndex((message) => message.id === userMessage.id)
-
-        if (existingIndex !== -1) {
-          const next = [...prev]
-          next[existingIndex] = mappedMessage
-          return next
-        }
-
-        const next = [...prev]
-        for (let index = next.length - 1; index >= 0; index -= 1) {
-          if (
-            next[index].temp &&
-            next[index].role === 'user' &&
-            next[index].content === userMessage.content
-          ) {
-            next[index] = mappedMessage
-            return next
-          }
-        }
-
-        return [...next, mappedMessage]
-      })
+      dispatchLifecycle({ type: 'PERSISTED_USER_UPSERTED', message: userMessage })
     },
-    [debugInfoMap, persistedMessageIds],
+    [debugInfoMap, dispatchLifecycle, persistedMessageIds],
   )
-
-  const syncLatestUserMessage = useCallback(async () => {
-    const latest = await fetchLatestMessage()
-    if (!latest || latest.role !== 'user') {
-      return
-    }
-
-    upsertUserMessage(latest)
-  }, [fetchLatestMessage, upsertUserMessage])
 
   const appendAssistantMessage = useCallback(async () => {
     const latest = await fetchLatestMessage()
@@ -267,17 +218,16 @@ export function useQueuedChat({
           },
           getLastProgressAt: () => lastStreamProgressAtRef.current,
           onSuccess: async () => {
-            // Realtime can miss the completed reply or deliver unrelated assistant updates first.
-            // Reconcile the authoritative latest message before clearing the streaming draft.
+            // Realtime can miss the completed reply. Reconcile the authoritative latest
+            // message before marking this exact job terminal.
             await appendAssistantMessage()
             await fetchLatestUsage()
-            clearPendingJob()
-            setStreamingDraft(null)
+            lastStreamProgressAtRef.current = null
+            dispatchLifecycle({ type: 'JOB_SUCCEEDED', jobId })
           },
           onError: (error) => {
-            clearPendingJob()
-            pendingRegenerationTargetIdRef.current = null
-            setStreamingDraft(null)
+            lastStreamProgressAtRef.current = null
+            dispatchLifecycle({ type: 'JOB_FAILED', jobId, error })
             const isTimeout = error.message.includes('timed out')
             toast.error(error.message, {
               duration: isTimeout ? 10000 : 5000,
@@ -314,7 +264,7 @@ export function useQueuedChat({
         throw result.error
       }
     },
-    [appendAssistantMessage, clearPendingJob, fetchLatestUsage, isPageVisible],
+    [appendAssistantMessage, dispatchLifecycle, fetchLatestUsage, isPageVisible],
   )
 
   useEffect(() => {
@@ -366,28 +316,35 @@ export function useQueuedChat({
         (oldMessage?.role === 'assistant' || oldMessage?.role === 'user') &&
         typeof oldMessage.id === 'string'
       ) {
-        setMessages((prev) => prev.filter((msg) => msg.id !== oldMessage.id))
         persistedMessageIds.current.delete(oldMessage.id)
         debugInfoMap.current.delete(oldMessage.id)
+        dispatchLifecycle({ type: 'MESSAGE_DELETED', messageId: oldMessage.id })
       }
     },
-    [debugInfoMap, persistedMessageIds, upsertAssistantMessage, upsertUserMessage],
+    [
+      debugInfoMap,
+      dispatchLifecycle,
+      persistedMessageIds,
+      upsertAssistantMessage,
+      upsertUserMessage,
+    ],
   )
 
-  const handleAssistantStreamEvent = useCallback((payload: AssistantStreamBroadcastPayload) => {
-    if (!pendingJobIdRef.current || payload.jobId !== pendingJobIdRef.current) {
-      return
-    }
+  const handleAssistantStreamEvent = useCallback(
+    (payload: AssistantStreamBroadcastPayload) => {
+      const activeJob = lifecycleStateRef.current.activeJob
+      if (payload.kind === 'snapshot' && activeJob?.id === payload.jobId) {
+        lastStreamProgressAtRef.current = Date.now()
+      }
 
-    if (payload.kind === 'error') {
-      setStreamingDraft(null)
-      return
-    }
-
-    lastStreamProgressAtRef.current = Date.now()
-
-    setStreamingDraft((current) => updateStreamingDraftFromEvent(current, payload))
-  }, [])
+      dispatchLifecycle({
+        type: 'STREAM_EVENT_RECEIVED',
+        payload,
+        receivedAt: new Date().toISOString(),
+      })
+    },
+    [dispatchLifecycle],
+  )
 
   const resolveNextModel = useCallback(
     () =>
@@ -397,84 +354,81 @@ export function useQueuedChat({
           apiKeyId: selectedApiKeyId,
           modelName: selectedModelName,
         },
-        messages,
+        messages: lifecycle.messages,
       }),
-    [alternateModels, messages, selectedApiKeyId, selectedModelName],
+    [alternateModels, lifecycle.messages, selectedApiKeyId, selectedModelName],
+  )
+
+  const failSubmission = useCallback(
+    (error: Error) => {
+      dispatchLifecycle({ type: 'SUBMIT_FAILED', error })
+      if (!error.message.includes('timed out') && !error.message.includes('Failed to generate')) {
+        toast.error(error.message)
+      }
+    },
+    [dispatchLifecycle],
   )
 
   const sendChatRequest = useCallback(
     async ({
       userMessage,
+      clientMessageId,
       isRegeneration = false,
       regenerateAssistantMessageId = null,
-      removeTempMessage,
-      syncUser = false,
     }: {
       userMessage?: string
+      clientMessageId?: string
       isRegeneration?: boolean
       regenerateAssistantMessageId?: string | null
-      removeTempMessage?: () => void
-      syncUser?: boolean
     }) => {
       const resolvedModel = resolveNextModel()
       if (!resolvedModel.apiKeyId || !resolvedModel.modelName) {
-        const err = new Error('Please select a model.')
-        setError(err)
-        toast.error(err.message)
-        removeTempMessage?.()
-        throw err
+        const error = new Error('Please select a model.')
+        failSubmission(error)
+        throw error
       }
 
-      setSending(true)
-      setError(null)
+      let data: Awaited<ReturnType<typeof requestQueuedChatJob>>
       try {
-        const data = await requestQueuedChatJob({
+        data = await requestQueuedChatJob({
           chatId,
           apiKeyId: resolvedModel.apiKeyId,
           modelName: resolvedModel.modelName,
           userMessage,
+          clientMessageId,
           deliveryMode,
           isRegeneration,
           regenerateAssistantMessageId,
         })
-
-        if (!isRegeneration && syncUser) {
-          await syncLatestUserMessage()
-        }
-
-        pendingJobIdRef.current = data.jobId
-        setPendingJobId(data.jobId)
-        startStreamingDraft(data.jobId, regenerateAssistantMessageId)
-        await pollJobStatus(data.jobId, deliveryMode)
-      } catch (err) {
-        const normalized = err instanceof Error ? err : new Error('Chat request failed.')
-        setError(normalized)
-        if (isRegeneration) {
-          pendingRegenerationTargetIdRef.current = null
-        }
-        clearPendingJob()
-        setStreamingDraft(null)
-        // Only show toast if not already shown by pollJobStatus
-        if (
-          !normalized.message.includes('timed out') &&
-          !normalized.message.includes('Failed to generate')
-        ) {
-          toast.error(normalized.message)
-        }
-        removeTempMessage?.()
+      } catch (error) {
+        const normalized = error instanceof Error ? error : new Error('Chat request failed.')
+        failSubmission(normalized)
         throw normalized
-      } finally {
-        setSending(false)
       }
+
+      if (data.userMessageId) {
+        persistedMessageIds.current.add(data.userMessageId)
+      }
+
+      lastStreamProgressAtRef.current = null
+      dispatchLifecycle({
+        type: 'SUBMIT_ACCEPTED',
+        jobId: data.jobId,
+        deliveryMode,
+        userMessageId: data.userMessageId,
+        createdAt: new Date().toISOString(),
+      })
+
+      await pollJobStatus(data.jobId, deliveryMode)
     },
     [
       chatId,
-      clearPendingJob,
       deliveryMode,
+      dispatchLifecycle,
+      failSubmission,
+      persistedMessageIds,
       pollJobStatus,
       resolveNextModel,
-      startStreamingDraft,
-      syncLatestUserMessage,
     ],
   )
 
@@ -482,33 +436,30 @@ export function useQueuedChat({
     (event?: FormEvent<HTMLFormElement>) => {
       event?.preventDefault()
       const trimmed = input.trim()
-      if (!trimmed || sending || pendingJobId) {
+      if (!trimmed || isQueuedChatLifecycleLoading(lifecycleStateRef.current)) {
         return
       }
 
-      const tempMessage: DisplayMessage = {
-        id: `temp-${Date.now()}`,
+      const clientMessageId = crypto.randomUUID()
+      const optimisticMessage: DisplayMessage = {
+        id: clientMessageId,
         role: 'user',
         content: trimmed,
         created_at: new Date().toISOString(),
         temp: true,
       }
 
-      const nextMessages = [...messages, tempMessage]
-      setMessages(nextMessages)
+      dispatchLifecycle({ type: 'MESSAGE_SUBMIT_STARTED', optimisticMessage })
       setInput('')
 
       void sendChatRequest({
         userMessage: trimmed,
-        syncUser: true,
-        removeTempMessage: () => {
-          setMessages((prev) => prev.filter((msg) => msg.id !== tempMessage.id))
-        },
+        clientMessageId,
       }).catch(() => {
-        // No-op: error state already set in sendChatRequest
+        // Error state and user feedback are handled by the submit or poll adapters.
       })
     },
-    [input, messages, pendingJobId, sending, sendChatRequest],
+    [dispatchLifecycle, input, sendChatRequest],
   )
 
   const reload = useCallback(
@@ -519,32 +470,42 @@ export function useQueuedChat({
       }
 
       if (!persistedMessageIds.current.has(targetId)) {
-        setError(new Error('Message not yet saved. Please try again in a moment.'))
+        dispatchLifecycle({
+          type: 'ERROR_SET',
+          error: new Error('Message not yet saved. Please try again in a moment.'),
+        })
         return
       }
 
-      pendingRegenerationTargetIdRef.current = targetId
+      if (isQueuedChatLifecycleLoading(lifecycleStateRef.current)) {
+        return
+      }
+
+      dispatchLifecycle({
+        type: 'REGENERATION_SUBMIT_STARTED',
+        regenerateAssistantMessageId: targetId,
+      })
 
       void sendChatRequest({
         isRegeneration: true,
         regenerateAssistantMessageId: targetId,
       }).catch(() => {
-        // Error state handled inside sendChatRequest
+        // Error state and user feedback are handled by the submit or poll adapters.
       })
     },
-    [persistedMessageIds, sendChatRequest],
+    [dispatchLifecycle, persistedMessageIds, sendChatRequest],
   )
 
   return {
-    messages,
+    messages: lifecycle.messages,
     setMessages,
-    streamingDraft,
+    streamingDraft: lifecycle.streamingDraft,
     input,
     insertInputText,
     handleInputChange,
     handleSubmit,
-    isLoading: sending || pendingJobId !== null,
-    error,
+    isLoading: isQueuedChatLifecycleLoading(lifecycle),
+    error: lifecycle.error,
     reload,
     handleRealtimeMessageChange,
     handleAssistantStreamEvent,

@@ -79,6 +79,7 @@ export async function POST(req: Request) {
       rawDeliveryMode,
       isRegeneration,
       regenerateAssistantMessageId,
+      clientMessageId,
       normalizedUserMessage,
       messageToPersist,
     } = parsedRequest.value
@@ -126,6 +127,7 @@ export async function POST(req: Request) {
       deliveryMode,
       isRegeneration,
       regenerateAssistantMessageId,
+      clientMessageId,
       messageToPersist,
       normalizedUserMessage,
       payloadSanitizedMessages,
@@ -140,6 +142,7 @@ export async function POST(req: Request) {
       {
         jobId: submissionResult.jobId,
         requestId,
+        userMessageId: submissionResult.userMessageId,
       },
       { status: 202 },
     )

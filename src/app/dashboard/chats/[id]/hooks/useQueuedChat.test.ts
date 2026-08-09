@@ -71,6 +71,19 @@ function createJsonResponse(payload: unknown) {
   }
 }
 
+function createQueueAcceptedResponse(requestInit?: RequestInit) {
+  const requestBody = JSON.parse(String(requestInit?.body)) as {
+    clientMessageId?: string
+    isRegeneration?: boolean
+  }
+
+  return createJsonResponse({
+    jobId: 'job-1',
+    requestId: 'request-1',
+    userMessageId: requestBody.isRegeneration ? null : requestBody.clientMessageId,
+  })
+}
+
 async function flushChatRequestStart() {
   await act(async () => {
     await Promise.resolve()
@@ -334,13 +347,14 @@ describe('useQueuedChat', () => {
       content: 'optimistic message',
       temp: true,
     })
+    const optimisticMessageId = result.current.messages[1].id
 
     act(() => {
       result.current.handleRealtimeMessageChange({
         eventType: 'INSERT',
         old: null,
         new: createMessage({
-          id: 'user-2',
+          id: optimisticMessageId,
           content: 'optimistic message',
           sequence: 2,
         }),
@@ -350,16 +364,16 @@ describe('useQueuedChat', () => {
     expect(result.current.messages).toHaveLength(2)
     expect(result.current.messages[1]).toEqual(
       expect.objectContaining({
-        id: 'user-2',
+        id: optimisticMessageId,
         role: 'user',
         content: 'optimistic message',
       }),
     )
     expect(result.current.messages[1].temp).toBeUndefined()
-    expect(persistedMessageIds.current.has('user-2')).toBe(true)
+    expect(persistedMessageIds.current.has(optimisticMessageId)).toBe(true)
   })
 
-  it('does not replace an optimistic message with a different realtime user message', () => {
+  it('does not replace an optimistic message with a different ID even when content matches', () => {
     const fetchMock = vi.fn(() => new Promise(() => {}))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -387,7 +401,7 @@ describe('useQueuedChat', () => {
         old: null,
         new: createMessage({
           id: 'user-2',
-          content: 'sent from another device',
+          content: 'local pending message',
           sequence: 2,
         }),
       })
@@ -403,7 +417,7 @@ describe('useQueuedChat', () => {
       expect.objectContaining({
         id: 'user-2',
         role: 'user',
-        content: 'sent from another device',
+        content: 'local pending message',
       }),
     ])
   })
@@ -494,27 +508,19 @@ describe('useQueuedChat', () => {
     })
 
     const fetchLatestUsage = vi.fn(async () => {})
-    const latestUser = createMessage({
-      id: 'user-2',
-      role: 'user',
-      content: 'queued hello',
-      sequence: 2,
-    })
     const assistantMessage = createMessage({
       id: 'assistant-1',
       role: 'assistant',
       content: 'assistant reply',
       sequence: 3,
     })
-    let latestFetchCount = 0
-    const fetchMock = vi.fn(async (input: unknown) => {
+    const fetchMock = vi.fn(async (input: unknown, requestInit?: RequestInit) => {
       const url = String(input)
       if (url === '/api/chat') {
-        return createJsonResponse({ jobId: 'job-1' })
+        return createQueueAcceptedResponse(requestInit)
       }
       if (url === '/api/chats/chat-1/messages/latest') {
-        latestFetchCount += 1
-        return createJsonResponse(latestFetchCount === 1 ? latestUser : assistantMessage)
+        return createJsonResponse(assistantMessage)
       }
       if (url === '/api/chat/jobs/job-1') {
         return createJsonResponse({ status: 'success' })
@@ -559,7 +565,6 @@ describe('useQueuedChat', () => {
 
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
       '/api/chat',
-      '/api/chats/chat-1/messages/latest',
       '/api/chat/jobs/job-1',
       '/api/chats/chat-1/messages/latest',
     ])
@@ -579,27 +584,19 @@ describe('useQueuedChat', () => {
     })
 
     const fetchLatestUsage = vi.fn(async () => {})
-    const latestUser = createMessage({
-      id: 'user-2',
-      role: 'user',
-      content: 'queued hello',
-      sequence: 2,
-    })
     const latestAssistant = createMessage({
       id: 'assistant-1',
       role: 'assistant',
       content: 'assistant reply',
       sequence: 3,
     })
-    let latestFetchCount = 0
-    const fetchMock = vi.fn(async (input: unknown) => {
+    const fetchMock = vi.fn(async (input: unknown, requestInit?: RequestInit) => {
       const url = String(input)
       if (url === '/api/chat') {
-        return createJsonResponse({ jobId: 'job-1' })
+        return createQueueAcceptedResponse(requestInit)
       }
       if (url === '/api/chats/chat-1/messages/latest') {
-        latestFetchCount += 1
-        return createJsonResponse(latestFetchCount === 1 ? latestUser : latestAssistant)
+        return createJsonResponse(latestAssistant)
       }
       if (url === '/api/chat/jobs/job-1') {
         return createJsonResponse({ status: 'success' })
@@ -635,7 +632,6 @@ describe('useQueuedChat', () => {
 
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
       '/api/chat',
-      '/api/chats/chat-1/messages/latest',
       '/api/chat/jobs/job-1',
       '/api/chats/chat-1/messages/latest',
     ])
@@ -644,7 +640,62 @@ describe('useQueuedChat', () => {
     expect(result.current.messages.map((message) => message.id)).toContain('assistant-1')
   })
 
-  it('recovers the completed reply after an unrelated assistant update clears the draft', async () => {
+  it('preserves the acknowledged user message when the generation job fails', async () => {
+    vi.useFakeTimers()
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      value: false,
+    })
+
+    const persistedMessageIds = { current: new Set<string>(['user-1']) }
+    const fetchMock = vi.fn(async (input: unknown, requestInit?: RequestInit) => {
+      const url = String(input)
+      if (url === '/api/chat') {
+        return createQueueAcceptedResponse(requestInit)
+      }
+      if (url === '/api/chat/jobs/job-1') {
+        return createJsonResponse({ status: 'error', error: 'provider failed' })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() =>
+      useQueuedChat(
+        createHookParams({
+          initialMessages: [createMessage({ id: 'user-1', content: 'existing message' })],
+          selectedApiKeyId: 'key-1',
+          persistedMessageIds,
+        }),
+      ),
+    )
+
+    act(() => {
+      result.current.handleInputChange({
+        target: { value: 'queued hello' },
+      } as Parameters<typeof result.current.handleInputChange>[0])
+    })
+    act(() => {
+      result.current.handleSubmit()
+    })
+
+    await flushChatRequestStart()
+    const submittedMessage = result.current.messages.at(-1)
+    expect(submittedMessage).toMatchObject({ content: 'queued hello' })
+    expect(submittedMessage).not.toHaveProperty('temp')
+
+    await flushPendingPollCycle()
+
+    expect(result.current.isLoading).toBe(false)
+    expect(result.current.messages.at(-1)).toMatchObject({
+      id: submittedMessage?.id,
+      content: 'queued hello',
+    })
+    expect(persistedMessageIds.current.has(submittedMessage?.id ?? '')).toBe(true)
+    expect(result.current.error?.message).toContain('provider failed')
+  })
+
+  it('keeps the draft through an unrelated assistant update and reconciles completion', async () => {
     vi.useFakeTimers()
     Object.defineProperty(document, 'hidden', {
       configurable: true,
@@ -657,12 +708,6 @@ describe('useQueuedChat', () => {
       content: 'previous reply',
       sequence: 2,
     })
-    const latestUser = createMessage({
-      id: 'user-2',
-      role: 'user',
-      content: 'queued hello',
-      sequence: 3,
-    })
     const latestAssistant = createMessage({
       id: 'assistant-new',
       role: 'assistant',
@@ -670,14 +715,14 @@ describe('useQueuedChat', () => {
       sequence: 4,
     })
     let latestFetchCount = 0
-    const fetchMock = vi.fn(async (input: unknown) => {
+    const fetchMock = vi.fn(async (input: unknown, requestInit?: RequestInit) => {
       const url = String(input)
       if (url === '/api/chat') {
-        return createJsonResponse({ jobId: 'job-1' })
+        return createQueueAcceptedResponse(requestInit)
       }
       if (url === '/api/chats/chat-1/messages/latest') {
         latestFetchCount += 1
-        return createJsonResponse(latestFetchCount === 1 ? latestUser : latestAssistant)
+        return createJsonResponse(latestAssistant)
       }
       if (url === '/api/chat/jobs/job-1') {
         return createJsonResponse({ status: 'success' })
@@ -720,11 +765,11 @@ describe('useQueuedChat', () => {
       })
     })
 
-    expect(result.current.streamingDraft).toBeNull()
+    expect(result.current.streamingDraft).not.toBeNull()
 
     await flushPendingPollCycle()
 
-    expect(latestFetchCount).toBe(2)
+    expect(latestFetchCount).toBe(1)
     expect(result.current.isLoading).toBe(false)
     expect(result.current.messages).toContainEqual(
       expect.objectContaining({
@@ -755,10 +800,10 @@ describe('useQueuedChat', () => {
     })
 
     let latestFetchCount = 0
-    const fetchMock = vi.fn(async (input: unknown) => {
+    const fetchMock = vi.fn(async (input: unknown, requestInit?: RequestInit) => {
       const url = String(input)
       if (url === '/api/chat') {
-        return createJsonResponse({ jobId: 'job-1' })
+        return createQueueAcceptedResponse(requestInit)
       }
       if (url === '/api/chats/chat-1/messages/latest') {
         latestFetchCount += 1
@@ -796,6 +841,9 @@ describe('useQueuedChat', () => {
       apiKeyId: 'key-1',
       modelName: 'gpt-5-mini',
       userMessage: 'queued hello',
+      clientMessageId: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      ),
       deliveryMode: 'streaming',
       isRegeneration: false,
       regenerateAssistantMessageId: null,
@@ -815,10 +863,10 @@ describe('useQueuedChat', () => {
       content: 'assistant reply',
       sequence: 2,
     })
-    const fetchMock = vi.fn(async (input: unknown) => {
+    const fetchMock = vi.fn(async (input: unknown, requestInit?: RequestInit) => {
       const url = String(input)
       if (url === '/api/chat') {
-        return createJsonResponse({ jobId: 'job-1' })
+        return createQueueAcceptedResponse(requestInit)
       }
       if (url === '/api/chats/chat-1/messages/latest') {
         return createJsonResponse(assistantMessage)
@@ -862,5 +910,80 @@ describe('useQueuedChat', () => {
       isRegeneration: true,
       regenerateAssistantMessageId: 'assistant-1',
     })
+  })
+
+  it('keeps the regeneration target persisted through an older assistant update', async () => {
+    vi.useFakeTimers()
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      value: false,
+    })
+
+    const olderAssistant = createMessage({
+      id: 'assistant-old',
+      role: 'assistant',
+      content: 'older reply',
+      sequence: 2,
+    })
+    const regenerationTarget = createMessage({
+      id: 'assistant-target',
+      role: 'assistant',
+      content: 'reply to regenerate',
+      sequence: 4,
+    })
+    const fetchMock = vi.fn(async (input: unknown, requestInit?: RequestInit) => {
+      const url = String(input)
+      if (url === '/api/chat') {
+        return createQueueAcceptedResponse(requestInit)
+      }
+      throw new Error(`Unexpected fetch before the first poll: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const persistedMessageIds = {
+      current: new Set<string>(['user-1', olderAssistant.id, regenerationTarget.id]),
+    }
+    const debugInfoMap = {
+      current: new Map<string, DebugInfo>([
+        [regenerationTarget.id, { rawResponse: 'original response' }],
+      ]),
+    }
+    const { result } = renderHook(() =>
+      useQueuedChat(
+        createHookParams({
+          initialMessages: [createMessage({ id: 'user-1' }), olderAssistant, regenerationTarget],
+          selectedApiKeyId: 'key-1',
+          persistedMessageIds,
+          debugInfoMap,
+        }),
+      ),
+    )
+
+    act(() => {
+      result.current.reload({
+        body: {
+          isRegeneration: true,
+          regenerateAssistantMessageId: regenerationTarget.id,
+        },
+      })
+    })
+    await flushChatRequestStart()
+
+    act(() => {
+      result.current.handleRealtimeMessageChange({
+        eventType: 'UPDATE',
+        old: { id: olderAssistant.id, role: 'assistant' },
+        new: {
+          id: olderAssistant.id,
+          role: 'assistant',
+          message_status: 'completed',
+          debug_info: { rawResponse: 'metadata update' },
+        },
+      })
+    })
+
+    expect(persistedMessageIds.current.has(regenerationTarget.id)).toBe(true)
+    expect(debugInfoMap.current.has(regenerationTarget.id)).toBe(true)
+    expect(result.current.streamingDraft).not.toBeNull()
   })
 })

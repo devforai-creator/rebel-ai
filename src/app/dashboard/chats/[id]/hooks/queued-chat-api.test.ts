@@ -95,8 +95,14 @@ describe('queued-chat-api', () => {
     ).rejects.toThrow('Unauthorized')
   })
 
-  it('returns the job id when queue creation succeeds with a slim userMessage payload', async () => {
-    const fetchMock = vi.fn(async () => createJsonResponse({ jobId: 'job-1' }))
+  it('returns the queue acknowledgement when creation succeeds with a stable message ID', async () => {
+    const fetchMock = vi.fn(async () =>
+      createJsonResponse({
+        jobId: 'job-1',
+        requestId: 'request-1',
+        userMessageId: '11111111-1111-4111-8111-111111111111',
+      }),
+    )
     vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
 
     await expect(
@@ -105,9 +111,14 @@ describe('queued-chat-api', () => {
         apiKeyId: 'key-1',
         modelName: 'gpt-5-mini',
         userMessage: 'hello',
+        clientMessageId: '11111111-1111-4111-8111-111111111111',
         deliveryMode: 'streaming',
       }),
-    ).resolves.toEqual({ jobId: 'job-1' })
+    ).resolves.toEqual({
+      jobId: 'job-1',
+      requestId: 'request-1',
+      userMessageId: '11111111-1111-4111-8111-111111111111',
+    })
 
     expect(fetchMock).toHaveBeenCalledWith('/api/chat', {
       method: 'POST',
@@ -117,13 +128,16 @@ describe('queued-chat-api', () => {
         apiKeyId: 'key-1',
         modelName: 'gpt-5-mini',
         userMessage: 'hello',
+        clientMessageId: '11111111-1111-4111-8111-111111111111',
         deliveryMode: 'streaming',
       }),
     })
   })
 
   it('sends regeneration requests without a transcript payload', async () => {
-    const fetchMock = vi.fn(async () => createJsonResponse({ jobId: 'job-1' }))
+    const fetchMock = vi.fn(async () =>
+      createJsonResponse({ jobId: 'job-1', requestId: 'request-1', userMessageId: null }),
+    )
     vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
 
     await expect(
@@ -135,7 +149,7 @@ describe('queued-chat-api', () => {
         isRegeneration: true,
         regenerateAssistantMessageId: 'assistant-1',
       }),
-    ).resolves.toEqual({ jobId: 'job-1' })
+    ).resolves.toEqual({ jobId: 'job-1', requestId: 'request-1', userMessageId: null })
 
     expect(fetchMock).toHaveBeenCalledWith('/api/chat', {
       method: 'POST',
@@ -149,5 +163,41 @@ describe('queued-chat-api', () => {
         regenerateAssistantMessageId: 'assistant-1',
       }),
     })
+  })
+
+  it('rejects a successful HTTP response that violates the queue response contract', async () => {
+    stubFetch(async () => createJsonResponse({ jobId: 'job-1' }))
+
+    await expect(
+      requestQueuedChatJob({
+        chatId: 'chat-1',
+        apiKeyId: 'key-1',
+        modelName: 'gpt-5-mini',
+        userMessage: 'hello',
+        clientMessageId: '11111111-1111-4111-8111-111111111111',
+        deliveryMode: 'streaming',
+      }),
+    ).rejects.toThrow('Chat request returned an invalid response.')
+  })
+
+  it('rejects a queue acknowledgement that changes the client message ID', async () => {
+    stubFetch(async () =>
+      createJsonResponse({
+        jobId: 'job-1',
+        requestId: 'request-1',
+        userMessageId: '22222222-2222-4222-8222-222222222222',
+      }),
+    )
+
+    await expect(
+      requestQueuedChatJob({
+        chatId: 'chat-1',
+        apiKeyId: 'key-1',
+        modelName: 'gpt-5-mini',
+        userMessage: 'hello',
+        clientMessageId: '11111111-1111-4111-8111-111111111111',
+        deliveryMode: 'streaming',
+      }),
+    ).rejects.toThrow('Chat request returned an invalid response.')
   })
 })

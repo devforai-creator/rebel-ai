@@ -1113,6 +1113,24 @@ describe('POST /api/chat', () => {
     await expectJsonError(response, 400, 'Invalid request body')
   })
 
+  it('returns 400 when clientMessageId is not a UUID', async () => {
+    createSupabaseMock(buildDefaultAuthenticatedFixture())
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        userMessage: 'hello',
+        clientMessageId: 'not-a-uuid',
+      }),
+    })
+
+    const response = await POST(request)
+
+    await expectJsonError(response, 400, 'Invalid clientMessageId')
+  })
+
   it('returns 400 when userMessage exceeds the byte-size limit', async () => {
     createSupabaseMock(buildDefaultAuthenticatedFixture())
 
@@ -1605,16 +1623,24 @@ describe('POST /api/chat', () => {
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
         userMessage: '최신 질문',
+        clientMessageId: '11111111-1111-4111-8111-111111111111',
       }),
     })
 
     const response = await POST(request)
     expect(response.status).toBe(202)
-    const body = (await response.json()) as { jobId: string }
+    const body = (await response.json()) as {
+      jobId: string
+      requestId: string
+      userMessageId: string | null
+    }
     expect(body.jobId).toBeDefined()
+    expect(body.requestId).toBeDefined()
+    expect(body.userMessageId).toBe('11111111-1111-4111-8111-111111111111')
 
     expect(supabase.messages).toHaveLength(1)
     expect(supabase.messages[0]).toMatchObject({
+      id: '11111111-1111-4111-8111-111111111111',
       role: 'user',
       content: '최신 질문',
     })
@@ -2351,6 +2377,25 @@ describe('POST /api/chat', () => {
     const response = await POST(request)
 
     await expectJsonError(response, 400, 'userMessage is not allowed for regeneration')
+  })
+
+  it('rejects clientMessageId on regeneration requests', async () => {
+    createSupabaseMock(buildDefaultAuthenticatedFixture())
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        chatId: 'chat-1',
+        apiKeyId: 'api-key-1',
+        isRegeneration: true,
+        regenerateAssistantMessageId: 'assistant-1',
+        clientMessageId: '11111111-1111-4111-8111-111111111111',
+      }),
+    })
+
+    const response = await POST(request)
+
+    await expectJsonError(response, 400, 'clientMessageId is not allowed for regeneration')
   })
 
   it('returns 400 when regeneration targets a non-latest assistant turn', async () => {

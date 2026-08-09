@@ -13,8 +13,11 @@ const chatRequestSchema = z
     deliveryMode: z.unknown().optional(),
     isRegeneration: z.unknown().optional(),
     regenerateAssistantMessageId: z.unknown().optional(),
+    clientMessageId: z.unknown().optional(),
   })
   .strict()
+
+const clientMessageIdSchema = z.string().uuid()
 
 export interface ParsedChatRequest {
   chatId: string
@@ -23,6 +26,7 @@ export interface ParsedChatRequest {
   rawDeliveryMode: unknown
   isRegeneration: boolean
   regenerateAssistantMessageId: string | null
+  clientMessageId: string | null
   normalizedUserMessage: string
   messageToPersist: string | null
   payloadSanitizedMessages: SanitizedMessage[]
@@ -62,6 +66,7 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
     deliveryMode: rawDeliveryMode,
     isRegeneration: rawIsRegeneration,
     regenerateAssistantMessageId: rawRegenerateAssistantMessageId,
+    clientMessageId: rawClientMessageId,
   } = parsed.data
 
   if (typeof chatId !== 'string' || !chatId) {
@@ -105,6 +110,13 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
   }
 
   if (isRegeneration) {
+    if (typeof rawClientMessageId !== 'undefined') {
+      return {
+        status: 'error',
+        response: createErrorResponse('clientMessageId is not allowed for regeneration', 400),
+      }
+    }
+
     if (normalizedUserMessage) {
       return {
         status: 'error',
@@ -121,12 +133,27 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
         rawDeliveryMode,
         isRegeneration,
         regenerateAssistantMessageId,
+        clientMessageId: null,
         normalizedUserMessage,
         messageToPersist: null,
         payloadSanitizedMessages: [],
       },
     }
   }
+
+  const parsedClientMessageId =
+    typeof rawClientMessageId === 'undefined'
+      ? null
+      : clientMessageIdSchema.safeParse(rawClientMessageId)
+
+  if (parsedClientMessageId && !parsedClientMessageId.success) {
+    return {
+      status: 'error',
+      response: createErrorResponse('Invalid clientMessageId', 400),
+    }
+  }
+
+  const clientMessageId = parsedClientMessageId?.data ?? null
 
   if (!normalizedUserMessage) {
     return {
@@ -151,6 +178,7 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
       rawDeliveryMode,
       isRegeneration,
       regenerateAssistantMessageId,
+      clientMessageId,
       normalizedUserMessage,
       messageToPersist: normalizedUserMessage,
       payloadSanitizedMessages: [

@@ -588,7 +588,7 @@ describe('useQueuedChat', () => {
       id: 'assistant-1',
       role: 'assistant',
       content: 'assistant reply',
-      sequence: 3,
+      sequence: 4,
     })
     const fetchMock = vi.fn(async (input: unknown, requestInit?: RequestInit) => {
       const url = String(input)
@@ -608,7 +608,15 @@ describe('useQueuedChat', () => {
     const { result } = renderHook(() =>
       useQueuedChat(
         createHookParams({
-          initialMessages: [createMessage({ id: 'user-1', content: 'existing message' })],
+          initialMessages: [
+            createMessage({ id: 'user-1', content: 'existing message', sequence: 1 }),
+            createMessage({
+              id: 'assistant-old',
+              role: 'assistant',
+              content: 'existing reply',
+              sequence: 2,
+            }),
+          ],
           selectedApiKeyId: 'key-1',
           fetchLatestUsage,
         }),
@@ -628,6 +636,9 @@ describe('useQueuedChat', () => {
     })
 
     await flushChatRequestStart()
+    const submittedMessageId = result.current.messages.at(-1)?.id
+    expect(submittedMessageId).toBeTruthy()
+
     await flushPendingPollCycle()
 
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
@@ -637,7 +648,12 @@ describe('useQueuedChat', () => {
     ])
     expect(fetchLatestUsage).toHaveBeenCalledOnce()
     expect(result.current.isLoading).toBe(false)
-    expect(result.current.messages.map((message) => message.id)).toContain('assistant-1')
+    expect(result.current.messages.map((message) => message.id)).toEqual([
+      'user-1',
+      'assistant-old',
+      submittedMessageId,
+      'assistant-1',
+    ])
   })
 
   it('preserves the acknowledged user message when the generation job fails', async () => {

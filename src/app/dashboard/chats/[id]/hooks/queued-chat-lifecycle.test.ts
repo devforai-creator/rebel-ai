@@ -132,6 +132,37 @@ describe('queuedChatLifecycleReducer', () => {
     expect(accepted.messages[0]).not.toHaveProperty('temp')
   })
 
+  it('preserves insertion order when an assistant reply arrives before the user sequence', () => {
+    const initialMessages = [
+      createMessage({ id: 'user-1', sequence: 1 }),
+      createMessage({
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'first reply',
+        sequence: 2,
+      }),
+    ]
+    const accepted = acceptSubmission(
+      startMessageSubmission(createInitialState(initialMessages), { sequence: null }),
+    )
+    const withAssistantReply = queuedChatLifecycleReducer(accepted, {
+      type: 'PERSISTED_ASSISTANT_UPSERTED',
+      message: createMessage({
+        id: 'assistant-2',
+        role: 'assistant',
+        content: 'second reply',
+        sequence: 4,
+      }),
+    })
+
+    expect(withAssistantReply.messages.map((message) => message.id)).toEqual([
+      'user-1',
+      'assistant-1',
+      '11111111-1111-4111-8111-111111111111',
+      'assistant-2',
+    ])
+  })
+
   it('does not reconcile a different persisted message merely because its content matches', () => {
     const submitted = startMessageSubmission(createInitialState())
     const withRemoteMessage = queuedChatLifecycleReducer(submitted, {

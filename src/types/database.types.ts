@@ -184,11 +184,39 @@ export interface Database extends Omit<GeneratedDatabase, 'public'> {
       >
       messages: OverrideTable<RawMessageTable, Message, MessageInsert, MessageUpdate>
     }
-    Functions: Omit<PublicFunctions, 'match_chat_facts' | 'update_character_with_modules'> & {
+    Functions: Omit<
+      PublicFunctions,
+      'match_chat_facts' | 'submit_chat_generation_job' | 'update_character_with_modules'
+    > & {
       match_chat_facts: Omit<PublicFunctions['match_chat_facts'], 'Args'> & {
         Args: Omit<PublicFunctions['match_chat_facts']['Args'], 'query_embedding'> & {
           query_embedding: number[]
         }
+      }
+      submit_chat_generation_job: Omit<
+        PublicFunctions['submit_chat_generation_job'],
+        'Args' | 'Returns'
+      > & {
+        Args: Omit<
+          PublicFunctions['submit_chat_generation_job']['Args'],
+          | 'p_regenerate_assistant_message_id'
+          | 'p_turn_id'
+          | 'p_user_message_content'
+          | 'p_user_message_id'
+        > & {
+          p_regenerate_assistant_message_id: string | null
+          p_turn_id: string | null
+          p_user_message_content: string | null
+          p_user_message_id: string | null
+        }
+        Returns: Array<
+          Omit<
+            PublicFunctions['submit_chat_generation_job']['Returns'][number],
+            'user_message_id'
+          > & {
+            user_message_id: string | null
+          }
+        >
       }
       update_character_with_modules: Omit<
         PublicFunctions['update_character_with_modules'],

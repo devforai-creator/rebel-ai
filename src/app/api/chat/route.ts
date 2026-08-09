@@ -3,7 +3,6 @@ import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import { checkUserRateLimit, checkAnonRateLimit } from '@/lib/chat/rate-limiter'
 import { CHAT_REQUEST_LIMITS } from '@/lib/chat/runtime-limits'
 import { NextResponse } from 'next/server'
-import { ensureChatRequestAdmission, resolveRegenerationTargetTurnId } from './chat-admission'
 import { resolveChatDeliveryModeAdmission } from './delivery-mode-admission'
 import { parseChatRequest } from './request-contract'
 import { extractClientIdentifier, parseDeclaredContentLength } from './request-metadata'
@@ -96,30 +95,6 @@ export async function POST(req: Request) {
       return createErrorResponse('API key not found or inactive', 404)
     }
 
-    const admissionResult = await ensureChatRequestAdmission({
-      supabase,
-      chatId,
-      userId: user.id,
-      requestId,
-    })
-
-    if (admissionResult.status === 'error') {
-      return admissionResult.response
-    }
-
-    const regenerationTarget = await resolveRegenerationTargetTurnId({
-      supabase,
-      chatId,
-      regenerateAssistantMessageId,
-      requestId,
-    })
-
-    if (regenerationTarget.status === 'error') {
-      return regenerationTarget.response
-    }
-
-    const targetTurnId = regenerationTarget.turnId
-
     if (resolvedConfig.status === 'unsupported_provider') {
       return createErrorResponse('Unsupported provider', 400)
     }
@@ -142,7 +117,6 @@ export async function POST(req: Request) {
     const { deliveryMode } = deliveryModeResult
 
     const submissionResult = await submitChatGenerationRequest({
-      supabase,
       requestId,
       chatId,
       userId: user.id,
@@ -152,7 +126,6 @@ export async function POST(req: Request) {
       deliveryMode,
       isRegeneration,
       regenerateAssistantMessageId,
-      targetTurnId,
       messageToPersist,
       normalizedUserMessage,
       payloadSanitizedMessages,

@@ -1,39 +1,21 @@
+import 'server-only'
+
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { serializeChatJobPayload } from '@/lib/chat/job-payload'
-import { MESSAGE_STATUS_COMPLETED } from '@/lib/chat/message-status'
-import { ConcurrentChatTurnConflictError, createChatTurn } from '@/lib/chat/turns'
-import { isChatJobUserLimitViolation, isUniqueViolation } from '@/lib/queue/admission'
-import { createClient } from '@/lib/supabase/server'
 import {
-  PersistenceRollbackError,
-  rollbackPersistedChatTurn,
-  rollbackPersistedUserMessage,
-} from './persistence-rollback'
-import { CHAT_JOB_LIFECYCLE_STAGE_QUEUED } from '@/lib/chat/job-lifecycle'
+  getChatSubmissionValidationMessage,
+  isActiveChatJobConflict,
+  isChatJobUserLimitViolation,
+  isChatSubmissionNotFound,
+} from '@/lib/queue/admission'
+import { createAdminClient } from '@/lib/supabase/admin'
 
-type RouteSupabaseClient = Awaited<ReturnType<typeof createClient>>
-
-type PersistUserTurnResult =
-  | {
-      status: 'success'
-      turnId: string
-      userMessageId: string
-    }
-  | {
-      status: 'conflict'
-    }
-  | {
-      status: 'error'
-      responseMessage:
-        | 'Failed to create chat turn'
-        | 'Failed to save user message'
-        | 'Failed to rollback persisted chat data'
-    }
-
-type EnqueueChatGenerationJobResult =
+type SubmitChatGenerationJobResult =
   | {
       status: 'success'
       jobId: string
+      turnId: string
+      userMessageId: string | null
     }
   | {
       status: 'conflict'
@@ -42,194 +24,91 @@ type EnqueueChatGenerationJobResult =
       status: 'user-limit'
     }
   | {
+      status: 'not-found'
+    }
+  | {
+      status: 'invalid-regeneration'
+      responseMessage:
+        | 'Invalid regeneration target'
+        | 'Only the latest assistant message can be regenerated'
+    }
+  | {
       status: 'error'
-      responseMessage: 'Failed to queue chat response' | 'Failed to rollback persisted chat data'
+      responseMessage: 'Failed to queue chat response'
     }
 
-async function rollbackPersistedChatData({
-  supabase,
-  chatId,
-  requestId,
-  insertedTurnId,
-  insertedUserMessageId,
-  isRegeneration,
-}: {
-  supabase: RouteSupabaseClient
-  chatId: string
-  requestId: string
-  insertedTurnId: string | null
-  insertedUserMessageId: string | null
-  isRegeneration: boolean
-}): Promise<void> {
-  if (insertedTurnId && !isRegeneration) {
-    await rollbackPersistedChatTurn(supabase, insertedTurnId, chatId, requestId)
-    return
-  }
-
-  if (insertedUserMessageId) {
-    await rollbackPersistedUserMessage(supabase, insertedUserMessageId, chatId, requestId)
-  }
-}
-
-export async function persistUserTurn({
-  supabase,
+export async function submitChatGenerationJobAtomically({
   chatId,
   userId,
   requestId,
-  content,
-}: {
-  supabase: RouteSupabaseClient
-  chatId: string
-  userId: string
-  requestId: string
-  content: string
-}): Promise<PersistUserTurnResult> {
-  const userMessageId = crypto.randomUUID()
-  const turnId = crypto.randomUUID()
-
-  try {
-    await createChatTurn({
-      supabase,
-      chatId,
-      userId,
-      turnId,
-      userMessageId,
-    })
-  } catch (turnError) {
-    if (turnError instanceof ConcurrentChatTurnConflictError) {
-      console.warn('[Chat API] Concurrent chat turn admission conflict', {
-        chatId,
-        requestId,
-      })
-      return { status: 'conflict' }
-    }
-
-    console.error('[Chat API] Failed to create chat turn', {
-      chatId,
-      requestId,
-      error: turnError instanceof Error ? turnError.message : String(turnError),
-    })
-    return { status: 'error', responseMessage: 'Failed to create chat turn' }
-  }
-
-  const { data: insertedMessage, error: insertUserError } = await supabase
-    .from('messages')
-    .insert({
-      id: userMessageId,
-      chat_id: chatId,
-      role: 'user',
-      content,
-      turn_id: turnId,
-      user_id: userId,
-      message_status: MESSAGE_STATUS_COMPLETED,
-    })
-    .select('id')
-    .single()
-
-  if (insertUserError || !insertedMessage) {
-    try {
-      await rollbackPersistedChatTurn(supabase, turnId, chatId, requestId)
-    } catch (rollbackError) {
-      console.error('[Chat API] Failed to persist user message and rollback chat turn', {
-        chatId,
-        requestId,
-        insertError: insertUserError?.message,
-        rollbackError:
-          rollbackError instanceof PersistenceRollbackError
-            ? rollbackError.message
-            : rollbackError instanceof Error
-              ? rollbackError.message
-              : String(rollbackError),
-      })
-      return { status: 'error', responseMessage: 'Failed to rollback persisted chat data' }
-    }
-
-    console.error('[Chat API] Failed to persist user message', {
-      chatId,
-      requestId,
-      error: insertUserError?.message,
-    })
-    return { status: 'error', responseMessage: 'Failed to save user message' }
-  }
-
-  return {
-    status: 'success',
-    turnId,
-    userMessageId: insertedMessage.id,
-  }
-}
-
-export async function enqueueChatGenerationJob({
-  supabase,
-  chatId,
-  userId,
-  requestId,
+  turnId,
+  userMessageId,
+  userMessageContent,
   payload,
-  insertedTurnId,
-  insertedUserMessageId,
 }: {
-  supabase: RouteSupabaseClient
   chatId: string
   userId: string
   requestId: string
+  turnId: string | null
+  userMessageId: string | null
+  userMessageContent: string | null
   payload: ChatGenerationJobPayload
-  insertedTurnId: string | null
-  insertedUserMessageId: string | null
-}): Promise<EnqueueChatGenerationJobResult> {
-  const { data: job, error: jobError } = await supabase
-    .from('chat_generation_jobs')
-    .insert({
-      chat_id: chatId,
-      user_id: userId,
-      status: 'pending',
-      lifecycle_stage: CHAT_JOB_LIFECYCLE_STAGE_QUEUED,
-      failure_stage: null,
-      delivery_mode: payload.deliveryMode,
-      payload: serializeChatJobPayload(payload),
-    })
-    .select('id')
-    .single()
+}): Promise<SubmitChatGenerationJobResult> {
+  const adminSupabase = createAdminClient()
+  const { data, error } = await adminSupabase.rpc('submit_chat_generation_job', {
+    p_chat_id: chatId,
+    p_requester: userId,
+    p_turn_id: turnId,
+    p_user_message_id: userMessageId,
+    p_user_message_content: userMessageContent,
+    p_job_payload: serializeChatJobPayload(payload),
+    p_delivery_mode: payload.deliveryMode,
+    p_is_regeneration: payload.isRegeneration,
+    p_regenerate_assistant_message_id: payload.regenerateAssistantMessageId,
+  })
 
-  if (jobError || !job) {
-    try {
-      await rollbackPersistedChatData({
-        supabase,
-        chatId,
-        requestId,
-        insertedTurnId,
-        insertedUserMessageId,
-        isRegeneration: payload.isRegeneration,
-      })
-    } catch (rollbackError) {
-      console.error('[Chat API] Failed to rollback persisted chat data after job enqueue failure', {
-        chatId,
-        requestId,
-        enqueueError: jobError?.message,
-        rollbackError:
-          rollbackError instanceof PersistenceRollbackError
-            ? rollbackError.message
-            : rollbackError instanceof Error
-              ? rollbackError.message
-              : String(rollbackError),
-      })
-      return { status: 'error', responseMessage: 'Failed to rollback persisted chat data' }
-    }
-
-    if (isUniqueViolation(jobError)) {
+  if (error) {
+    if (isActiveChatJobConflict(error)) {
       return { status: 'conflict' }
     }
 
-    if (isChatJobUserLimitViolation(jobError)) {
+    if (isChatJobUserLimitViolation(error)) {
       return { status: 'user-limit' }
     }
 
-    console.error('[Chat API] Failed to enqueue chat generation job', {
+    if (isChatSubmissionNotFound(error)) {
+      return { status: 'not-found' }
+    }
+
+    const validationMessage = getChatSubmissionValidationMessage(error)
+    if (validationMessage) {
+      return {
+        status: 'invalid-regeneration',
+        responseMessage: validationMessage,
+      }
+    }
+
+    console.error('[Chat API] Failed to submit chat generation job atomically', {
       chatId,
       requestId,
-      error: jobError?.message,
+      error: error.message,
     })
     return { status: 'error', responseMessage: 'Failed to queue chat response' }
   }
 
-  return { status: 'success', jobId: job.id }
+  const submission = data?.[0]
+  if (!submission?.job_id || !submission.turn_id) {
+    console.error('[Chat API] Atomic chat submission returned no result', {
+      chatId,
+      requestId,
+    })
+    return { status: 'error', responseMessage: 'Failed to queue chat response' }
+  }
+
+  return {
+    status: 'success',
+    jobId: submission.job_id,
+    turnId: submission.turn_id,
+    userMessageId: submission.user_message_id,
+  }
 }

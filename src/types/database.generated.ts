@@ -1592,6 +1592,24 @@ export type Database = {
         }
         Returns: undefined
       }
+      submit_chat_generation_job: {
+        Args: {
+          p_chat_id: string
+          p_delivery_mode: string
+          p_is_regeneration: boolean
+          p_job_payload: Json
+          p_regenerate_assistant_message_id: string
+          p_requester: string
+          p_turn_id: string
+          p_user_message_content: string
+          p_user_message_id: string
+        }
+        Returns: {
+          job_id: string
+          turn_id: string
+          user_message_id: string
+        }[]
+      }
       update_character_with_modules: {
         Args: {
           p_character_id: string

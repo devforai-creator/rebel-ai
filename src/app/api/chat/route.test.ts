@@ -164,6 +164,7 @@ interface SupabaseFixture {
   }>
   chatTurns?: ChatTurnRow[]
   chatJobs?: ChatJobRow[]
+  chatSubmissionError?: { message: string; code?: string | null; details?: string | null }
   chatJobInsertError?: { message: string; code?: string | null }
   activeChatJobsError?: { message: string; code?: string | null }
   activeUserJobsError?: { message: string; code?: string | null }
@@ -208,10 +209,7 @@ fetchMock.mockImplementation(async (input) => {
 })
 
 class SupabaseRouteMock {
-  constructor(
-    fixture: SupabaseFixture,
-    private readonly adminMock: SupabaseAdminMock,
-  ) {
+  constructor(fixture: SupabaseFixture) {
     this.fixture = fixture
     if (fixture.messages) {
       this.messages.push(
@@ -287,7 +285,10 @@ class SupabaseRouteMock {
 }
 
 class SupabaseAdminMock {
-  constructor(private readonly fixture: SupabaseFixture) {}
+  constructor(
+    private readonly fixture: SupabaseFixture,
+    private readonly routeMock: SupabaseRouteMock,
+  ) {}
 
   readonly rpcCalls: Array<{ name: string; params: Record<string, unknown> }> = []
 
@@ -363,6 +364,145 @@ class SupabaseAdminMock {
               retry_after: retryAfter,
             },
           ],
+          error: null,
+        })
+      }
+      case 'submit_chat_generation_job': {
+        const configuredError = this.fixture.chatSubmissionError ?? this.fixture.chatJobInsertError
+        if (configuredError) {
+          return Promise.resolve({ data: null, error: configuredError })
+        }
+
+        const chatId = String(params.p_chat_id ?? '')
+        const requester = String(params.p_requester ?? '')
+        const chat = this.fixture.chats.find(
+          (candidate) => candidate.id === chatId && candidate.user_id === requester,
+        )
+        if (!chat) {
+          return Promise.resolve({
+            data: null,
+            error: { code: 'P0002', message: 'Chat not found' },
+          })
+        }
+
+        const activeJobs = this.routeMock.chatJobs.filter(
+          (job) => job.status === 'pending' || job.status === 'processing',
+        )
+        if (activeJobs.some((job) => job.chat_id === chatId)) {
+          return Promise.resolve({
+            data: null,
+            error: {
+              code: '23505',
+              message:
+                'duplicate key value violates unique constraint "chat_generation_jobs_active_chat_idx"',
+            },
+          })
+        }
+
+        if (activeJobs.filter((job) => job.user_id === requester).length >= 3) {
+          return Promise.resolve({
+            data: null,
+            error: {
+              code: 'P0001',
+              message: 'User already has 3 active chat generation jobs',
+            },
+          })
+        }
+
+        const isRegeneration = params.p_is_regeneration === true
+        let turnId: string
+        let userMessageId: string | null = null
+
+        if (isRegeneration) {
+          const regenerateAssistantMessageId = String(
+            params.p_regenerate_assistant_message_id ?? '',
+          )
+          const targetTurn = this.routeMock.chatTurns.find(
+            (turn) =>
+              turn.chat_id === chatId &&
+              turn.active_assistant_message_id === regenerateAssistantMessageId,
+          )
+          if (!targetTurn) {
+            return Promise.resolve({
+              data: null,
+              error: { code: '22023', message: 'Invalid regeneration target' },
+            })
+          }
+
+          const latestTurn = this.routeMock.chatTurns
+            .filter((turn) => turn.chat_id === chatId)
+            .sort((left, right) => right.turn_index - left.turn_index)[0]
+          if (latestTurn?.id !== targetTurn.id) {
+            return Promise.resolve({
+              data: null,
+              error: {
+                code: '22023',
+                message: 'Only the latest assistant message can be regenerated',
+              },
+            })
+          }
+
+          turnId = targetTurn.id
+        } else {
+          if (this.fixture.chatTurnInsertError) {
+            return Promise.resolve({ data: null, error: this.fixture.chatTurnInsertError })
+          }
+          if (this.fixture.messageInsertError) {
+            return Promise.resolve({ data: null, error: this.fixture.messageInsertError })
+          }
+
+          turnId = String(params.p_turn_id ?? '')
+          userMessageId = String(params.p_user_message_id ?? '')
+          const nextTurnIndex =
+            Math.max(
+              0,
+              ...this.routeMock.chatTurns
+                .filter((turn) => turn.chat_id === chatId)
+                .map((turn) => turn.turn_index),
+            ) + 1
+
+          this.routeMock.chatTurns.push({
+            id: turnId,
+            chat_id: chatId,
+            user_id: requester,
+            turn_index: nextTurnIndex,
+            user_message_id: userMessageId,
+            active_assistant_message_id: null,
+          })
+          this.routeMock.messages.push({
+            id: userMessageId,
+            chat_id: chatId,
+            role: 'user',
+            content: String(params.p_user_message_content ?? ''),
+            turn_id: turnId,
+            variant_index: null,
+            supersedes_message_id: null,
+            message_status: 'completed',
+            model_used: null,
+            prompt_tokens: null,
+            completion_tokens: null,
+            error_code: null,
+          })
+        }
+
+        const payload = {
+          ...((params.p_job_payload as Record<string, unknown>) ?? {}),
+          turnId,
+        }
+        const jobId = `job-${this.routeMock.chatJobs.length + 1}`
+        this.routeMock.chatJobs.push({
+          id: jobId,
+          chat_id: chatId,
+          user_id: requester,
+          status: 'pending',
+          delivery_mode: String(params.p_delivery_mode ?? ''),
+          lifecycle_stage: 'queued',
+          failure_stage: null,
+          payload,
+        })
+
+        return Promise.resolve({
+          data: [{ job_id: jobId, turn_id: turnId, user_message_id: userMessageId }],
           error: null,
         })
       }
@@ -777,8 +917,8 @@ class GlobalVariablesTable {
 function createSupabaseMock(fixture: SupabaseFixture): SupabaseRouteMock & {
   adminRpcCalls: Array<{ name: string; params: Record<string, unknown> }>
 } {
-  const adminMock = new SupabaseAdminMock(fixture)
-  const routeMock = new SupabaseRouteMock(fixture, adminMock)
+  const routeMock = new SupabaseRouteMock(fixture)
+  const adminMock = new SupabaseAdminMock(fixture, routeMock)
   createClientMock.mockReturnValue(routeMock)
   createAdminClientMock.mockReturnValue(adminMock)
   ;(
@@ -1758,11 +1898,11 @@ describe('POST /api/chat', () => {
     expect(supabase.chatJobs).toHaveLength(1)
   })
 
-  it('returns 500 when checking the active chat job fails', async () => {
-    createSupabaseMock(
+  it('returns 500 when the atomic submission RPC fails', async () => {
+    const supabase = createSupabaseMock(
       buildDefaultAuthenticatedFixture({
-        activeChatJobsError: {
-          message: 'failed to read active chat jobs',
+        chatSubmissionError: {
+          message: 'atomic submission failed',
           code: 'XX001',
         },
       }),
@@ -1773,37 +1913,16 @@ describe('POST /api/chat', () => {
       body: JSON.stringify({
         chatId: 'chat-1',
         apiKeyId: 'api-key-1',
-        userMessage: 'blocked',
+        userMessage: 'fail atomically',
       }),
     })
 
     const response = await POST(request)
 
-    await expectJsonError(response, 500, 'Failed to inspect active chat jobs')
-  })
-
-  it('returns 500 when checking the active user job count fails', async () => {
-    createSupabaseMock(
-      buildDefaultAuthenticatedFixture({
-        activeUserJobsError: {
-          message: 'failed to count active user jobs',
-          code: 'XX001',
-        },
-      }),
-    )
-
-    const request = new Request('http://localhost/api/chat', {
-      method: 'POST',
-      body: JSON.stringify({
-        chatId: 'chat-1',
-        apiKeyId: 'api-key-1',
-        userMessage: 'blocked',
-      }),
-    })
-
-    const response = await POST(request)
-
-    await expectJsonError(response, 500, 'Failed to inspect active chat jobs')
+    await expectJsonError(response, 500, 'Failed to queue chat response')
+    expect(supabase.messages).toHaveLength(0)
+    expect(supabase.chatTurns).toHaveLength(0)
+    expect(supabase.chatJobs).toHaveLength(0)
   })
 
   it('returns 429 when the user already has too many active chat jobs', async () => {
@@ -1837,7 +1956,7 @@ describe('POST /api/chat', () => {
     expect(supabase.chatJobs).toHaveLength(3)
   })
 
-  it('rolls back the persisted user message when chat job insert hits an active-job race', async () => {
+  it('returns 409 without persisting chat data when atomic admission hits an active-job race', async () => {
     const supabase = createSupabaseMock(
       buildDefaultAuthenticatedFixture({
         chatJobInsertError: {
@@ -1861,38 +1980,6 @@ describe('POST /api/chat', () => {
 
     await expectJsonError(response, 409, 'This chat already has a pending or in-progress response.')
     expect(supabase.messages).toHaveLength(0)
-    expect(supabase.chatJobs).toHaveLength(0)
-  })
-
-  it('returns 500 when enqueue rollback fails after an active-job race', async () => {
-    const supabase = createSupabaseMock(
-      buildDefaultAuthenticatedFixture({
-        chatJobInsertError: {
-          code: '23505',
-          message:
-            'duplicate key value violates unique constraint "chat_generation_jobs_active_chat_idx"',
-        },
-        chatTurnDeleteError: {
-          message: 'failed to delete turn during rollback',
-          code: 'XX002',
-        },
-      }),
-    )
-
-    const request = new Request('http://localhost/api/chat', {
-      method: 'POST',
-      body: JSON.stringify({
-        chatId: 'chat-1',
-        apiKeyId: 'api-key-1',
-        userMessage: 'rollback race me',
-      }),
-    })
-
-    const response = await POST(request)
-
-    await expectJsonError(response, 500, 'Failed to rollback persisted chat data')
-    expect(supabase.messages).toHaveLength(1)
-    expect(supabase.chatTurns).toHaveLength(1)
     expect(supabase.chatJobs).toHaveLength(0)
   })
 
@@ -2328,7 +2415,7 @@ describe('POST /api/chat', () => {
     await expectJsonError(response, 400, 'Only the latest assistant message can be regenerated')
   })
 
-  it('returns 500 when creating the chat turn fails', async () => {
+  it('returns 500 without partial data when creating the chat turn fails in the RPC', async () => {
     const supabase = createSupabaseMock(
       buildDefaultAuthenticatedFixture({
         chatTurnInsertError: {
@@ -2349,12 +2436,13 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    await expectJsonError(response, 500, 'Failed to create chat turn')
+    await expectJsonError(response, 500, 'Failed to queue chat response')
     expect(supabase.messages).toHaveLength(0)
     expect(supabase.chatTurns).toHaveLength(0)
+    expect(supabase.chatJobs).toHaveLength(0)
   })
 
-  it('returns 409 when chat turn admission keeps colliding on turn_index', async () => {
+  it('does not misclassify an unrelated unique violation as an active-job conflict', async () => {
     const supabase = createSupabaseMock(
       buildDefaultAuthenticatedFixture({
         chatTurnInsertError: {
@@ -2376,12 +2464,13 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    await expectJsonError(response, 409, 'This chat already has a pending or in-progress response.')
+    await expectJsonError(response, 500, 'Failed to queue chat response')
     expect(supabase.messages).toHaveLength(0)
     expect(supabase.chatTurns).toHaveLength(0)
+    expect(supabase.chatJobs).toHaveLength(0)
   })
 
-  it('rolls back the chat turn when saving the user message fails', async () => {
+  it('returns 500 without partial data when saving the user message fails in the RPC', async () => {
     const supabase = createSupabaseMock(
       buildDefaultAuthenticatedFixture({
         messageInsertError: {
@@ -2402,39 +2491,9 @@ describe('POST /api/chat', () => {
 
     const response = await POST(request)
 
-    await expectJsonError(response, 500, 'Failed to save user message')
+    await expectJsonError(response, 500, 'Failed to queue chat response')
     expect(supabase.messages).toHaveLength(0)
     expect(supabase.chatTurns).toHaveLength(0)
-  })
-
-  it('returns 500 when chat turn rollback fails after user message persistence fails', async () => {
-    const supabase = createSupabaseMock(
-      buildDefaultAuthenticatedFixture({
-        messageInsertError: {
-          message: 'failed to insert message',
-          code: 'XX001',
-        },
-        chatTurnDeleteError: {
-          message: 'failed to delete turn during rollback',
-          code: 'XX002',
-        },
-      }),
-    )
-
-    const request = new Request('http://localhost/api/chat', {
-      method: 'POST',
-      body: JSON.stringify({
-        chatId: 'chat-1',
-        apiKeyId: 'api-key-1',
-        userMessage: 'persist me badly',
-      }),
-    })
-
-    const response = await POST(request)
-
-    await expectJsonError(response, 500, 'Failed to rollback persisted chat data')
-    expect(supabase.messages).toHaveLength(0)
-    expect(supabase.chatTurns).toHaveLength(1)
     expect(supabase.chatJobs).toHaveLength(0)
   })
 

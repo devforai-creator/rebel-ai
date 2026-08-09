@@ -88,6 +88,11 @@ const FORBIDDEN_FUNCTION_GRANTS = [
   ['public.recalculate_chat_last_message_at(uuid)', 'service_role'],
   ['public.record_service_health_status(text,boolean,text,jsonb)', 'anon'],
   ['public.record_service_health_status(text,boolean,text,jsonb)', 'authenticated'],
+  ['public.submit_chat_generation_job(uuid,uuid,uuid,uuid,text,jsonb,text,boolean,uuid)', 'anon'],
+  [
+    'public.submit_chat_generation_job(uuid,uuid,uuid,uuid,text,jsonb,text,boolean,uuid)',
+    'authenticated',
+  ],
   ['public.update_character_with_modules(uuid,text,text,text,text,uuid[],uuid)', 'anon'],
 ]
 
@@ -111,6 +116,10 @@ const REQUIRED_FUNCTION_GRANTS = [
   ['public.match_chat_facts(uuid,uuid,public.vector,double precision,integer)', 'authenticated'],
   ['public.match_chat_facts(uuid,uuid,public.vector,double precision,integer)', 'service_role'],
   ['public.record_service_health_status(text,boolean,text,jsonb)', 'service_role'],
+  [
+    'public.submit_chat_generation_job(uuid,uuid,uuid,uuid,text,jsonb,text,boolean,uuid)',
+    'service_role',
+  ],
   ['public.update_character_with_modules(uuid,text,text,text,text,uuid[],uuid)', 'authenticated'],
   ['public.update_character_with_modules(uuid,text,text,text,text,uuid[],uuid)', 'service_role'],
 ]

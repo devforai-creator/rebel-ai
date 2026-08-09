@@ -4,13 +4,10 @@ import {
   ACTIVE_CHAT_JOB_CONFLICT_MESSAGE,
   buildActiveChatJobLimitMessage,
 } from '@/lib/queue/admission'
-import { createClient } from '@/lib/supabase/server'
 import { scheduleChatJobRunnerTrigger } from './background-trigger'
-import { enqueueChatGenerationJob, persistUserTurn } from './job-persistence'
+import { submitChatGenerationJobAtomically } from './job-persistence'
 import { dispatchPostSubmitChatEffects } from './post-submit-effects'
 import { createErrorResponse } from './responses'
-
-type RouteSupabaseClient = Awaited<ReturnType<typeof createClient>>
 
 type SubmitChatGenerationRequestResult =
   | {
@@ -23,7 +20,6 @@ type SubmitChatGenerationRequestResult =
     }
 
 export async function submitChatGenerationRequest({
-  supabase,
   requestId,
   chatId,
   userId,
@@ -33,13 +29,11 @@ export async function submitChatGenerationRequest({
   deliveryMode,
   isRegeneration,
   regenerateAssistantMessageId,
-  targetTurnId,
   messageToPersist,
   normalizedUserMessage,
   payloadSanitizedMessages,
   logDebug,
 }: {
-  supabase: RouteSupabaseClient
   requestId: string
   chatId: string
   userId: string
@@ -49,15 +43,14 @@ export async function submitChatGenerationRequest({
   deliveryMode: ChatGenerationJobPayload['deliveryMode']
   isRegeneration: boolean
   regenerateAssistantMessageId: string | null
-  targetTurnId: string | null
   messageToPersist: string | null
   normalizedUserMessage: string
   payloadSanitizedMessages: SanitizedMessage[]
   logDebug: (...args: unknown[]) => void
 }): Promise<SubmitChatGenerationRequestResult> {
   let effectivePayloadSanitizedMessages = payloadSanitizedMessages
-  let insertedUserMessageId: string | null = null
-  let insertedTurnId: string | null = targetTurnId
+  const insertedUserMessageId = isRegeneration ? null : crypto.randomUUID()
+  const insertedTurnId = isRegeneration ? null : crypto.randomUUID()
 
   if (!isRegeneration) {
     if (!messageToPersist) {
@@ -66,31 +59,6 @@ export async function submitChatGenerationRequest({
         response: createErrorResponse('Invalid user message', 400),
       }
     }
-
-    const persistResult = await persistUserTurn({
-      supabase,
-      chatId,
-      userId,
-      requestId,
-      content: messageToPersist,
-    })
-
-    if (persistResult.status === 'conflict') {
-      return {
-        status: 'error',
-        response: createErrorResponse(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, 409),
-      }
-    }
-
-    if (persistResult.status === 'error') {
-      return {
-        status: 'error',
-        response: createErrorResponse(persistResult.responseMessage, 500),
-      }
-    }
-
-    insertedUserMessageId = persistResult.userMessageId
-    insertedTurnId = persistResult.turnId
 
     if (normalizedUserMessage && insertedUserMessageId) {
       effectivePayloadSanitizedMessages = [
@@ -118,44 +86,58 @@ export async function submitChatGenerationRequest({
     regenerateAssistantMessageId,
   }
 
-  const enqueueResult = await enqueueChatGenerationJob({
-    supabase,
+  const submissionResult = await submitChatGenerationJobAtomically({
     chatId,
     userId,
     requestId,
+    turnId: insertedTurnId,
+    userMessageId: insertedUserMessageId,
+    userMessageContent: isRegeneration ? null : messageToPersist,
     payload: jobPayload,
-    insertedTurnId,
-    insertedUserMessageId,
   })
 
-  if (enqueueResult.status !== 'success') {
-    if (enqueueResult.status === 'conflict') {
+  if (submissionResult.status !== 'success') {
+    if (submissionResult.status === 'conflict') {
       return {
         status: 'error',
         response: createErrorResponse(ACTIVE_CHAT_JOB_CONFLICT_MESSAGE, 409),
       }
     }
 
-    if (enqueueResult.status === 'user-limit') {
+    if (submissionResult.status === 'user-limit') {
       return {
         status: 'error',
         response: createErrorResponse(buildActiveChatJobLimitMessage(), 429),
       }
     }
 
+    if (submissionResult.status === 'not-found') {
+      return {
+        status: 'error',
+        response: createErrorResponse('Chat not found', 404),
+      }
+    }
+
+    if (submissionResult.status === 'invalid-regeneration') {
+      return {
+        status: 'error',
+        response: createErrorResponse(submissionResult.responseMessage, 400),
+      }
+    }
+
     return {
       status: 'error',
-      response: createErrorResponse(enqueueResult.responseMessage, 500),
+      response: createErrorResponse(submissionResult.responseMessage, 500),
     }
   }
 
-  const jobId = enqueueResult.jobId
+  const jobId = submissionResult.jobId
 
   dispatchPostSubmitChatEffects({
     chatId,
     jobId,
     userId,
-    insertedUserMessageId,
+    insertedUserMessageId: submissionResult.userMessageId,
   })
 
   scheduleChatJobRunnerTrigger({

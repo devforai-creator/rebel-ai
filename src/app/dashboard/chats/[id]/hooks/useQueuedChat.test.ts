@@ -795,11 +795,20 @@ describe('useQueuedChat', () => {
     )
   })
 
-  it('uses a slim userMessage request shape for normal sends', async () => {
+  it('uses a slim userMessage request shape when randomUUID is unavailable', async () => {
     vi.useFakeTimers()
     Object.defineProperty(document, 'hidden', {
       configurable: true,
       value: false,
+    })
+    vi.stubGlobal('crypto', {
+      getRandomValues(array: Uint8Array) {
+        array.set([
+          0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+          0x0f,
+        ])
+        return array
+      },
     })
 
     const latestUser = createMessage({
@@ -850,6 +859,7 @@ describe('useQueuedChat', () => {
 
     await flushChatRequestStart()
 
+    expect(result.current.messages.at(-1)?.id).toBe('00010203-0405-4607-8809-0a0b0c0d0e0f')
     const firstCall = fetchMock.mock.calls[0] as unknown as [unknown, RequestInit]
     const requestInit = firstCall[1]
     expect(JSON.parse(String(requestInit.body))).toEqual({
@@ -857,9 +867,7 @@ describe('useQueuedChat', () => {
       apiKeyId: 'key-1',
       modelName: 'gpt-5-mini',
       userMessage: 'queued hello',
-      clientMessageId: expect.stringMatching(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-      ),
+      clientMessageId: '00010203-0405-4607-8809-0a0b0c0d0e0f',
       deliveryMode: 'streaming',
       isRegeneration: false,
       regenerateAssistantMessageId: null,

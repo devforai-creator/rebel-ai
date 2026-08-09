@@ -29,6 +29,7 @@ import {
   queuedChatLifecycleReducer,
   type QueuedChatLifecycleAction,
 } from './queued-chat-lifecycle'
+import { createClientMessageId } from './client-message-id'
 
 export interface UseQueuedChatParams {
   chatId: string
@@ -440,7 +441,7 @@ export function useQueuedChat({
         return
       }
 
-      const clientMessageId = crypto.randomUUID()
+      const clientMessageId = createClientMessageId()
       const optimisticMessage: DisplayMessage = {
         id: clientMessageId,
         role: 'user',

@@ -96,9 +96,8 @@ for the current queue and the archive split.
 
 - [backlogs/README.md](./backlogs/README.md): backlog structure, current entry
   point, and archive policy
-- current active queue:
-  [recent-conversation-characters-backlog-2026-06-30.md](./backlogs/active/recent-conversation-characters-backlog-2026-06-30.md)
+- current active queue: none
 - most recently parked queue:
-  [character-saves-backlog-2026-07-03.md](./backlogs/parked/2026/character-saves-backlog-2026-07-03.md)
+  [recent-conversation-characters-backlog-2026-06-30.md](./backlogs/parked/2026/recent-conversation-characters-backlog-2026-06-30.md)
 - most recently archived queue:
   [memory-structure-inspector-backlog-2026-05-08.md](./backlogs/archive/2026/memory-structure-inspector-backlog-2026-05-08.md)

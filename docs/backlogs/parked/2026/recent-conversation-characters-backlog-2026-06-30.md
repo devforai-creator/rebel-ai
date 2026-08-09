@@ -1,7 +1,10 @@
 # Recent Conversation Characters Backlog
 
-Created: 2026-06-30  
-Status: Active  
+Created: 2026-06-30
+Status: Parked
+Parked: 2026-08-10
+Reason: Temporarily deferred while higher-priority chat correctness work is addressed.
+Restart point: P1-1, specify pagination and preview semantics.
 Working mode: ATD (the learner writes the implementation; the tutor explains, hints, and reviews)
 
 ## Outcome

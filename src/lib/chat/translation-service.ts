@@ -1,6 +1,7 @@
 import { generateText, type LanguageModel } from 'ai'
 import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import { createLanguageModelFromSecretConfig } from '@/lib/llm/language-model-access'
+import { LLM_OUTPUT_LIMITS } from '@/lib/llm/output-limits'
 import { TRANSLATION_SYSTEM_PROMPT } from '@/lib/chat/bilingual-context'
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { ApiKeyUpdate, MessageUpdate, Profile } from '@/types/database.types'
@@ -100,6 +101,7 @@ export async function translateMessageForUser({
       model,
       system: TRANSLATION_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: messageContent }],
+      maxOutputTokens: LLM_OUTPUT_LIMITS.utility,
     })
 
     translatedText = trimOutput ? text.trim() : text

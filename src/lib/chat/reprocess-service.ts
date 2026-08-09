@@ -2,6 +2,7 @@ import { streamText } from 'ai'
 import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import { CHAT_REPROCESS_LIMITS } from '@/lib/chat/runtime-limits'
 import { createLanguageModelFromSecretConfig } from '@/lib/llm/language-model-access'
+import { LLM_OUTPUT_LIMITS } from '@/lib/llm/output-limits'
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { createClient } from '@/lib/supabase/server'
 
@@ -110,6 +111,7 @@ export async function reprocessAssistantMessageForUser({
       model,
       system: profile.reprocess_prompt,
       messages: [{ role: 'user', content: message.content }],
+      maxOutputTokens: LLM_OUTPUT_LIMITS.utility,
     })
 
     let fullText = ''

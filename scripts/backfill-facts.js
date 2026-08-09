@@ -83,7 +83,7 @@ If there are no significant facts to record, respond with only "기록할 사실
 // CRITICAL: DO NOT USE A LOWER VALUE.
 // Gemini 2.5 Pro reserves ~1000-2000 tokens for internal 'thinking'
 // BEFORE generating output. Setting to 1024 will cause a SILENT FAILURE.
-const CHUNK_SUMMARY_MAX_TOKENS = 8192
+const UTILITY_MAX_OUTPUT_TOKENS = 16_384
 const MESSAGE_CHAR_LIMIT = 1200
 
 function truncateText(text, maxLength) {
@@ -122,16 +122,16 @@ async function extractFactsForChunk(chatId, userId, startSeq, endSeq, model) {
       model,
       system: DEFAULT_FACT_EXTRACTION_PROMPT,
       prompt: formattedTranscript,
-      maxTokens: CHUNK_SUMMARY_MAX_TOKENS,
+      maxOutputTokens: UTILITY_MAX_OUTPUT_TOKENS,
       temperature: 0,
     })
 
     // 🚨 Critical: Detect MAX_TOKENS failure before it silently fails
-    if (finishReason === 'max_tokens' && (!text || text.trim() === '')) {
+    if (finishReason === 'length' && (!text || text.trim() === '')) {
       console.error(
         `  ❌ [Critical Failure] Fact extraction failed due to MAX_TOKENS. ` +
           `Model consumed all tokens without generating output. ` +
-          `maxTokens: ${CHUNK_SUMMARY_MAX_TOKENS}`,
+          `maxOutputTokens: ${UTILITY_MAX_OUTPUT_TOKENS}`,
       )
       return null
     }

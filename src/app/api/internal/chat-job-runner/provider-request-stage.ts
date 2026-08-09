@@ -8,6 +8,7 @@ import { googleCachedContentOwnsRequestContract } from '@/lib/llm/google-cache'
 import { ANTHROPIC_INTERLEAVED_THINKING_BETA, getProviderOptions } from '@/lib/llm/provider-options'
 import { resolveInvocationSamplingOptions } from '@/lib/llm/invocation-sampling'
 import { normalizeProviderError } from '@/lib/llm/provider-error'
+import { LLM_OUTPUT_LIMITS } from '@/lib/llm/output-limits'
 import {
   resolveAnthropicCacheDecision,
   resolvePromptCacheDecision,
@@ -613,6 +614,7 @@ export async function requestProviderStage({
         ...samplingOptions,
         ...finalStreamRequest,
         ...experimentalStreamTextSettings,
+        maxOutputTokens: LLM_OUTPUT_LIMITS.chat,
         abortSignal: providerAbortSignal,
       })
     } catch (error) {
@@ -641,6 +643,7 @@ export async function requestProviderStage({
         model,
         ...samplingOptions,
         ...standardStreamRequest,
+        maxOutputTokens: LLM_OUTPUT_LIMITS.chat,
         abortSignal: providerAbortSignal,
       })
     }

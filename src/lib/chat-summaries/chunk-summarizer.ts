@@ -79,12 +79,14 @@ export async function generateSummaryWithFallback({
   promptCache,
 }: SummaryWithFallbackOptions): Promise<SummaryWithFallbackResult> {
   try {
-    // OpenAI GPT-5.x compatibility is stricter around max_tokens and sampling settings,
-    // so keep summary calls minimal there and avoid explicit sampling parameters elsewhere.
-    const baseParams =
-      provider === 'openai'
-        ? { model, system: systemPrompt, prompt }
-        : { model, system: systemPrompt, prompt, maxTokens }
+    // Keep sampling parameters implicit for provider compatibility while enforcing one
+    // provider-agnostic output ceiling through the AI SDK.
+    const baseParams = {
+      model,
+      system: systemPrompt,
+      prompt,
+      maxOutputTokens: maxTokens,
+    }
 
     const providerOptions = getProviderOptions(provider, {
       modelName,
@@ -458,8 +460,6 @@ export async function createChunkFacts({
   })
 
   try {
-    const llmConfig = provider === 'openai' ? {} : DEFAULT_LLM_CONFIG
-
     const promptCache = resolvePromptCacheDecision({
       provider,
       modelName,
@@ -481,7 +481,7 @@ export async function createChunkFacts({
       system: factPrompt,
       prompt: formattedTranscript,
       providerOptions,
-      ...llmConfig,
+      ...DEFAULT_LLM_CONFIG,
     })
 
     logFactsExtractionDebug('[Facts Extraction] LLM response received', {
@@ -497,7 +497,7 @@ export async function createChunkFacts({
       throw new Error(
         `[Critical Failure] Fact extraction failed due to MAX_TOKENS. ` +
           `Model consumed all tokens without generating output. ` +
-          `maxTokens: ${DEFAULT_LLM_CONFIG.maxTokens}`,
+          `maxOutputTokens: ${DEFAULT_LLM_CONFIG.maxOutputTokens}`,
       )
     }
 

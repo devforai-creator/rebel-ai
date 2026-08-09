@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LanguageModel } from 'ai'
+import { LLM_OUTPUT_LIMITS } from '@/lib/llm/output-limits'
 
 import { CHUNK_SIZE, CHUNK_TRANSCRIPT_WARNING_CHAR_THRESHOLD, SUMMARY_LEVEL_CHUNK } from './config'
 import type { PromptCacheDecision } from '@/lib/llm/prompt-cache'
@@ -81,7 +82,7 @@ describe('chunk-summarizer', () => {
       tokenCount: 12,
       finishReason: 'stop',
     })
-    expect(generateTextMock).toHaveBeenCalledWith(expect.objectContaining({ maxTokens: 123 }))
+    expect(generateTextMock).toHaveBeenCalledWith(expect.objectContaining({ maxOutputTokens: 123 }))
     expect(generateTextMock.mock.calls[0][0]).not.toHaveProperty('temperature')
   })
 
@@ -113,6 +114,7 @@ describe('chunk-summarizer', () => {
             promptCacheKey: 'summary:chat-1:1-10',
           },
         },
+        maxOutputTokens: 123,
       }),
     )
   })
@@ -270,6 +272,10 @@ describe('chunk-summarizer', () => {
       summary_status: 'ok',
     })
     expect(generateTextMock.mock.calls[0][0]).not.toHaveProperty('temperature')
+    expect(generateTextMock.mock.calls[0][0]).toHaveProperty(
+      'maxOutputTokens',
+      LLM_OUTPUT_LIMITS.utility,
+    )
   })
 
   it('passes complete long source messages to chunk summarization', async () => {
@@ -740,6 +746,7 @@ describe('chunk-summarizer', () => {
             promptCacheKey: 'facts:chat-1:1-2',
           },
         },
+        maxOutputTokens: LLM_OUTPUT_LIMITS.utility,
       }),
     )
   })

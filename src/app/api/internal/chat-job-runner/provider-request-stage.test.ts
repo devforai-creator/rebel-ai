@@ -6,6 +6,7 @@ import {
 } from '@/lib/chat/delivery-mode'
 import { CHAT_JOB_PAYLOAD_VERSION, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { CHAT_RUNNER_LIMITS } from '@/lib/chat/runtime-limits'
+import { LLM_OUTPUT_LIMITS } from '@/lib/llm/output-limits'
 import { createChatJobRunnerSupabaseMock } from '@/tests/mocks/supabase'
 import type { LoadedChatJobExecutionContext } from './execution-context'
 
@@ -227,6 +228,7 @@ describe('requestProviderStage', () => {
         temperature: 0.7,
         system: 'FINAL',
         messages: [{ role: 'user', content: 'Hello' }],
+        maxOutputTokens: LLM_OUTPUT_LIMITS.chat,
         abortSignal: expect.any(AbortSignal),
       }),
     )
@@ -1091,6 +1093,7 @@ describe('requestProviderStage', () => {
             cacheControl: { type: 'ephemeral', ttl: '1h' },
           },
         },
+        maxOutputTokens: LLM_OUTPUT_LIMITS.chat,
       }),
     )
     expect(streamTextMock).toHaveBeenNthCalledWith(
@@ -1104,6 +1107,7 @@ describe('requestProviderStage', () => {
             cacheControl: { type: 'ephemeral', ttl: '1h' },
           },
         },
+        maxOutputTokens: LLM_OUTPUT_LIMITS.chat,
       }),
     )
     expect(context.debugMetrics).toMatchObject({

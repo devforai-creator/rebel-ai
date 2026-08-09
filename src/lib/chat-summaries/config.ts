@@ -1,4 +1,5 @@
 import { CHAT_CONTEXT_WINDOW } from '@/lib/chat-context-window'
+import { LLM_OUTPUT_LIMITS } from '@/lib/llm/output-limits'
 
 // Core configuration constants
 export const CONTEXT_WINDOW = CHAT_CONTEXT_WINDOW
@@ -15,18 +16,17 @@ export const SUMMARY_LEVEL_SUPER_META = 2
 // Token estimation
 export const TOKEN_ESTIMATE_DIVISOR = 3
 
-// Generous allocation considering reasoning tokens
-// Models like Gemini 2.0 Flash Thinking can use 1500+ tokens for thinking
-export const CHUNK_SUMMARY_MAX_TOKENS = 8192 // thinking (~2000) + output (~6000) buffer
-export const META_SUMMARY_MAX_TOKENS = 16384 // meta summaries can be longer
+// Shared utility-call ceiling leaves room for reasoning without allowing runaway output.
+export const CHUNK_SUMMARY_MAX_TOKENS = LLM_OUTPUT_LIMITS.utility
+export const META_SUMMARY_MAX_TOKENS = LLM_OUTPUT_LIMITS.utility
 
 // CRITICAL: DO NOT USE A LOWER VALUE FOR LLM CALLS.
 // Gemini 2.5 Pro reserves ~1000-2000 tokens for internal 'thinking'
 // BEFORE generating output. Setting to 1024 will cause a SILENT FAILURE.
-// Use this constant for non-OpenAI generateText calls in this module (except meta summaries).
+// Use this constant for utility generateText calls in this module.
 // Sampling parameters are intentionally omitted to avoid provider-specific incompatibilities.
 export const DEFAULT_LLM_CONFIG = {
-  maxTokens: CHUNK_SUMMARY_MAX_TOKENS,
+  maxOutputTokens: CHUNK_SUMMARY_MAX_TOKENS,
 } as const
 
 // Text limits and observability thresholds

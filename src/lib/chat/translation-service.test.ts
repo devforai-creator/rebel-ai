@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createSupabaseMock, type SupabaseClientType } from '@/tests/mocks/supabase'
+import { LLM_OUTPUT_LIMITS } from '@/lib/llm/output-limits'
 
 const generateTextMock = vi.fn()
 const createGoogleProviderMock = vi.fn()
@@ -318,6 +319,9 @@ describe('translateMessageForUser', () => {
     expect(result).toEqual({ status: 'success', content: 'translated text' })
     expect(getDefaultModelForProviderMock).toHaveBeenCalledWith('google', { lightweight: true })
     expect(generateTextMock).toHaveBeenCalledTimes(1)
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({ maxOutputTokens: LLM_OUTPUT_LIMITS.utility }),
+    )
     expect(generateTextMock.mock.calls[0][0]).not.toHaveProperty('temperature')
 
     const messages = state.messages as Array<Record<string, unknown>>

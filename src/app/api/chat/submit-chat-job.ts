@@ -13,6 +13,7 @@ type SubmitChatGenerationRequestResult =
   | {
       status: 'success'
       jobId: string
+      userMessageId: string | null
     }
   | {
       status: 'error'
@@ -29,6 +30,7 @@ export async function submitChatGenerationRequest({
   deliveryMode,
   isRegeneration,
   regenerateAssistantMessageId,
+  clientMessageId,
   messageToPersist,
   normalizedUserMessage,
   payloadSanitizedMessages,
@@ -43,13 +45,14 @@ export async function submitChatGenerationRequest({
   deliveryMode: ChatGenerationJobPayload['deliveryMode']
   isRegeneration: boolean
   regenerateAssistantMessageId: string | null
+  clientMessageId: string | null
   messageToPersist: string | null
   normalizedUserMessage: string
   payloadSanitizedMessages: SanitizedMessage[]
   logDebug: (...args: unknown[]) => void
 }): Promise<SubmitChatGenerationRequestResult> {
   let effectivePayloadSanitizedMessages = payloadSanitizedMessages
-  const insertedUserMessageId = isRegeneration ? null : crypto.randomUUID()
+  const insertedUserMessageId = isRegeneration ? null : (clientMessageId ?? crypto.randomUUID())
   const insertedTurnId = isRegeneration ? null : crypto.randomUUID()
 
   if (!isRegeneration) {
@@ -150,5 +153,6 @@ export async function submitChatGenerationRequest({
   return {
     status: 'success',
     jobId,
+    userMessageId: submissionResult.userMessageId,
   }
 }

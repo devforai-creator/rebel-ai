@@ -13,9 +13,16 @@ export interface QueueChatRequestPayload {
   apiKeyId: string
   modelName: string
   userMessage?: string
+  clientMessageId?: string
   deliveryMode: ChatDeliveryMode
   isRegeneration?: boolean
   regenerateAssistantMessageId?: string | null
+}
+
+export interface QueuedChatJobResponse {
+  jobId: string
+  requestId: string
+  userMessageId: string | null
 }
 
 export async function fetchLatestChatMessage(chatId: string): Promise<Message | null> {
@@ -51,7 +58,7 @@ export async function fetchChatJobStatus(jobId: string): Promise<ChatJobStatusRe
 
 export async function requestQueuedChatJob(
   payload: QueueChatRequestPayload,
-): Promise<{ jobId: string }> {
+): Promise<QueuedChatJobResponse> {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -62,5 +69,24 @@ export async function requestQueuedChatJob(
     throw await createApiError(response, 'Chat request failed.')
   }
 
-  return (await response.json()) as { jobId: string }
+  const result = (await response.json()) as Partial<QueuedChatJobResponse>
+  const hasExpectedUserMessageId = payload.isRegeneration
+    ? result.userMessageId === null
+    : typeof result.userMessageId === 'string' &&
+      (typeof payload.clientMessageId !== 'string' ||
+        result.userMessageId === payload.clientMessageId)
+
+  if (
+    typeof result.jobId !== 'string' ||
+    typeof result.requestId !== 'string' ||
+    !hasExpectedUserMessageId
+  ) {
+    throw new Error('Chat request returned an invalid response.')
+  }
+
+  return {
+    jobId: result.jobId,
+    requestId: result.requestId,
+    userMessageId: result.userMessageId ?? null,
+  }
 }

@@ -16,6 +16,10 @@ type ReconcileAssistantMessageResult = {
 export type AssistantMessageSnapshot = Pick<Message, 'id' | 'role'> & Partial<Message>
 
 function sortBySequence(messages: DisplayMessage[]) {
+  if (!messages.every((message) => typeof message.sequence === 'number')) {
+    return messages
+  }
+
   messages.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
   return messages
 }

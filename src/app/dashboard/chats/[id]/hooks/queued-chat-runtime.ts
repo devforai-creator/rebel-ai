@@ -20,6 +20,7 @@ export function createStreamingAssistantDraft(
   jobId: string,
   regenerateAssistantMessageId: string | null,
   deliveryMode: ChatDeliveryMode,
+  createdAt = new Date().toISOString(),
 ): StreamingAssistantDraft {
   const isBatchMode = deliveryMode === CHAT_DELIVERY_MODE_ANTHROPIC_BATCH
 
@@ -30,7 +31,7 @@ export function createStreamingAssistantDraft(
     content: isBatchMode
       ? 'Claude Batch 처리 중입니다. 이 모드는 스트리밍 없이 완료 후 한 번에 표시됩니다.'
       : '',
-    created_at: new Date().toISOString(),
+    created_at: createdAt,
     streaming: true,
     replaceMessageId: regenerateAssistantMessageId,
     deliveryMode,
@@ -40,6 +41,7 @@ export function createStreamingAssistantDraft(
 export function updateStreamingDraftFromEvent(
   current: StreamingAssistantDraft | null,
   payload: Extract<AssistantStreamBroadcastPayload, { kind: 'snapshot' }>,
+  createdAt = new Date().toISOString(),
 ): StreamingAssistantDraft {
   if (!current || current.jobId !== payload.jobId) {
     return {
@@ -47,7 +49,7 @@ export function updateStreamingDraftFromEvent(
       jobId: payload.jobId,
       role: 'assistant',
       content: payload.content,
-      created_at: new Date().toISOString(),
+      created_at: createdAt,
       streaming: true,
       replaceMessageId: payload.regenerateAssistantMessageId,
       deliveryMode: current?.deliveryMode,

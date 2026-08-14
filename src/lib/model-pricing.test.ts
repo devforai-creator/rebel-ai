@@ -3,8 +3,31 @@ import { estimateUsageCost, type UsageCostParams } from './model-pricing'
 
 describe('estimateUsageCost', () => {
   describe('Google Gemini models', () => {
+    describe('gemini-3.7-flash', () => {
+      it('should calculate cached input at 10% of the promotional input rate', () => {
+        const params: UsageCostParams = {
+          provider: 'google',
+          modelName: 'gemini-3.7-flash',
+          promptTokens: 10000,
+          completionTokens: 1000,
+          cachedInputTokens: 8000,
+        }
+        const result = estimateUsageCost(params)
+        expect(result).not.toBeNull()
+
+        // Input rate: $0.75/M, Cached rate: $0.075/M
+        // Fresh input: 10000 - 8000 = 2000 tokens
+        // Fresh cost: (2000 / 1M) * 0.75 = $0.0015
+        // Cached cost: (8000 / 1M) * 0.075 = $0.0006
+        // Output cost: (1000 / 1M) * 3.75 = $0.00375
+        expect(result!.promptCost).toBeCloseTo(0.0015, 6)
+        expect(result!.cachedInputCost).toBeCloseTo(0.0006, 6)
+        expect(result!.completionCost).toBeCloseTo(0.00375, 6)
+      })
+    })
+
     describe('gemini-3.6-flash', () => {
-      it('should calculate cached input at 10% of input rate', () => {
+      it('should calculate cached input at 10% of the promotional input rate', () => {
         const params: UsageCostParams = {
           provider: 'google',
           modelName: 'gemini-3.6-flash',
@@ -15,14 +38,14 @@ describe('estimateUsageCost', () => {
         const result = estimateUsageCost(params)
         expect(result).not.toBeNull()
 
-        // Input rate: $1.50/M, Cached rate: $0.15/M
+        // Input rate: $0.75/M, Cached rate: $0.075/M
         // Fresh input: 10000 - 8000 = 2000 tokens
-        // Fresh cost: (2000 / 1M) * 1.5 = $0.003
-        // Cached cost: (8000 / 1M) * 0.15 = $0.0012
-        // Output cost: (1000 / 1M) * 7.5 = $0.0075
-        expect(result!.promptCost).toBeCloseTo(0.003, 6)
-        expect(result!.cachedInputCost).toBeCloseTo(0.0012, 6)
-        expect(result!.completionCost).toBeCloseTo(0.0075, 6)
+        // Fresh cost: (2000 / 1M) * 0.75 = $0.0015
+        // Cached cost: (8000 / 1M) * 0.075 = $0.0006
+        // Output cost: (1000 / 1M) * 3.75 = $0.00375
+        expect(result!.promptCost).toBeCloseTo(0.0015, 6)
+        expect(result!.cachedInputCost).toBeCloseTo(0.0006, 6)
+        expect(result!.completionCost).toBeCloseTo(0.00375, 6)
       })
     })
 

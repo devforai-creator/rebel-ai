@@ -39,6 +39,14 @@ const GEMINI_25_PRO_PRICING: ModelPricingTier[] = [
   },
 ]
 
+// Promotional rates through 2026-12-31. Standard rates return to
+// $1.50 input, $7.50 output, and $0.15 cached input on 2027-01-01.
+const GEMINI_36_37_FLASH_PRICING = flatPricing({
+  input: 0.75,
+  output: 3.75,
+  cachedInput: 0.075,
+})
+
 export const googleModelCatalog = defineProviderCatalog({
   provider: 'google',
   defaults: {
@@ -47,9 +55,15 @@ export const googleModelCatalog = defineProviderCatalog({
   },
   models: [
     {
+      id: 'gemini-3.7-flash',
+      displayName: 'Gemini 3.7 Flash',
+      pricing: GEMINI_36_37_FLASH_PRICING,
+      features: { promptCacheMinTokens: 4096 },
+    },
+    {
       id: 'gemini-3.6-flash',
       displayName: 'Gemini 3.6 Flash',
-      pricing: flatPricing({ input: 1.5, output: 7.5, cachedInput: 0.15 }),
+      pricing: GEMINI_36_37_FLASH_PRICING,
       features: { promptCacheMinTokens: 1024 },
     },
     {

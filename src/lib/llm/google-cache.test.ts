@@ -67,6 +67,10 @@ describe('google-cache', () => {
   })
 
   describe('getGoogleCacheMinTokens', () => {
+    it('uses the registered 4096-token threshold for Gemini 3.7 Flash', () => {
+      expect(getGoogleCacheMinTokens('gemini-3.7-flash')).toBe(4096)
+    })
+
     it('returns 1024 for Flash models', () => {
       expect(getGoogleCacheMinTokens('gemini-3.6-flash')).toBe(1024)
       expect(getGoogleCacheMinTokens('gemini-3.5-flash-lite')).toBe(1024)

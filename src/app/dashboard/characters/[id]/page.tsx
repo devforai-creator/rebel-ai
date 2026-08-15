@@ -1,8 +1,9 @@
-import { Suspense } from 'react'
+import React, { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveSingleCharacterAvatarUrl } from '@/lib/assets/character-avatar'
+import { resolveCharacterDetailReturnDestination } from '@/lib/navigation/character-detail-return'
 import Link from 'next/link'
 import CharacterDetailContent from './CharacterDetailContent'
 
@@ -20,10 +21,12 @@ const CHARACTER_DETAIL_FIELDS = `
 
 interface Props {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ returnTo?: string | string[] }>
 }
 
-export default async function CharacterDetailPage({ params }: Props) {
-  const { id } = await params
+export default async function CharacterDetailPage({ params, searchParams }: Props) {
+  const [{ id }, { returnTo }] = await Promise.all([params, searchParams])
+  const backDestination = resolveCharacterDetailReturnDestination(returnTo)
   const supabase = await createClient()
   const adminSupabase = createAdminClient()
 
@@ -63,10 +66,10 @@ export default async function CharacterDetailPage({ params }: Props) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-4">
             <Link
-              href="/dashboard/characters"
+              href={backDestination.href}
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
             >
-              ← 캐릭터 목록
+              {backDestination.label}
             </Link>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
               {characterWithAvatar.name}

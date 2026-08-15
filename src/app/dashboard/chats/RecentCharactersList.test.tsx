@@ -77,7 +77,9 @@ describe('RecentCharactersList', () => {
     )
 
     const link = screen.getByRole('link', { name: /Guide/ })
-    expect(link.getAttribute('href')).toBe('/dashboard/characters/one')
+    const destination = new URL(link.getAttribute('href')!, 'https://rebel-ai.local')
+    expect(destination.pathname).toBe('/dashboard/characters/one')
+    expect(destination.searchParams.get('returnTo')).toBe('/dashboard/chats')
     expect(screen.getByText('Guide: <b>Hello</b> there')).toBeTruthy()
     expect(document.querySelector('b')).toBeNull()
 

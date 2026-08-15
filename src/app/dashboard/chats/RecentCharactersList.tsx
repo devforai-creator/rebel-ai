@@ -12,6 +12,7 @@ import {
   type RecentConversationCharacter,
   type RecentConversationCharactersPage,
 } from '@/lib/chat/recent-character-types'
+import { buildRecentCharacterDetailHref } from '@/lib/navigation/character-detail-return'
 import {
   formatRecentCharacterPreview,
   formatRecentCharacterRelativeTime,
@@ -163,7 +164,7 @@ export default function RecentCharactersList({
             <li key={character.characterId}>
               <SurfaceCard padding="none" className="overflow-hidden">
                 <Link
-                  href={`/dashboard/characters/${character.characterId}`}
+                  href={buildRecentCharacterDetailHref(character.characterId)}
                   prefetch={false}
                   className="flex items-center gap-4 p-4 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:hover:bg-gray-700/50 sm:p-5"
                 >

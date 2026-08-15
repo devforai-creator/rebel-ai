@@ -5,11 +5,10 @@ Updated: 2026-08-15
 Status: Active
 Reactivated: 2026-08-15
 Reason: The higher-priority chat correctness work has landed; finish the partially deployed recency work and close the per-character pagination gap.
-Current handoff: Commit, push, linked migrations, Production deployment, and read-only Production
-verification are complete. One acceptance check remains: either explicitly authorize an isolated
-temporary Production user/fixture for the authenticated recent-list scenario, or accept the local
-authenticated E2E plus Production read-only evidence and archive the backlog without live fixture
-writes.
+Current handoff: Authenticated Production acceptance confirmed the new recent list and uncovered a
+return-navigation break: character detail always returned to the legacy character picker. The
+context-aware return patch is implemented and verified locally; publish it, verify the deployment,
+then archive this backlog.
 Working mode: Implementation and verification
 
 ## Outcome
@@ -445,7 +444,7 @@ Post-deploy, and only after all local database gates in `docs/DB_CHANGE_WORKFLOW
 - [x] verify `supabase db diff --linked --schema public` reports no schema changes
 - [x] run `npm run ops:smoke`; the trigger-writing runner path was already deployed with migration
       91 and is unchanged by this branch
-- [ ] repeat the core recent-list scenario against the active deployment
+- [x] repeat the core recent-list scenario against the active deployment
 
 Production evidence (2026-08-15):
 
@@ -462,9 +461,32 @@ Production evidence (2026-08-15):
   `/auth/login`, `/api/chats/recent-characters` returns JSON `401 Unauthorized`, the page is not
   blank, no framework overlay appears, and browser console/page-error checks are empty. Vercel
   reported no runtime error clusters for the new page or API in the inspected one-hour window.
-- An isolated temporary Production user/fixture was proposed for the final authenticated scenario,
-  but it was not executed because deployment authorization alone does not authorize creation of
-  live test records. No Production test user or row was created.
+- Maintainer acceptance confirmed the authenticated recent-list entry and character navigation in
+  Production. It also found that the character-detail back link discarded the entry context and
+  returned to the legacy character picker. No temporary Production user or fixture was needed or
+  created.
+
+### P6-1. Preserve the recent-list return path
+
+- [x] add an explicit, URL-safe return target to recent-list character links
+- [x] show `← Recent Conversations` only when the exact recent-list target supplied the entry
+      context
+- [x] preserve `← 캐릭터 목록` for direct links, legacy picker entry, repeated query values, unsafe
+      external URLs, and unsupported dashboard targets
+- [x] cover link construction, target validation, recent-entry rendering, and legacy fallback in
+      focused tests
+- [x] verify the full recent list -> character detail -> recent list click path in a local browser
+- [ ] publish the follow-up and verify the exact Production deployment SHA
+
+Local follow-up evidence (2026-08-15):
+
+- Focused Vitest: 3 files and 13 tests passed.
+- Typecheck, focused ESLint, Prettier, and `git diff --check` passed.
+- Authenticated local browser verified the encoded `returnTo=/dashboard/chats` link,
+  `← Recent Conversations` rendering and click destination, and the direct-entry
+  `← 캐릭터 목록` fallback. Browser page errors and framework overlays were absent.
+- The isolated local user, character, chat, and profile rows were removed; independent row counts
+  were zero and the temporary auth user was deleted.
 
 ## Deferred Until Real Usage
 

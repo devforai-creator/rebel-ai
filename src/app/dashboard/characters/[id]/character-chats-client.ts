@@ -1,12 +1,6 @@
 import { createApiError } from '@/lib/http/api-contract'
-import type { CharacterChat } from './character-detail-types'
+import type { CharacterChatsPage } from '@/lib/chat/character-chat-types'
 import type { ChatImportResult } from '@/types/risu-chat'
-
-export type CharacterChatsPage = {
-  chats: CharacterChat[]
-  hasMore: boolean
-  nextCursor: string | null
-}
 
 export async function fetchCharacterChatsPage(
   characterId: string,
@@ -14,7 +8,7 @@ export async function fetchCharacterChatsPage(
   fetchImpl: typeof fetch = fetch,
 ): Promise<CharacterChatsPage> {
   const response = await fetchImpl(
-    `/api/characters/${characterId}/chats?before=${encodeURIComponent(cursor)}`,
+    `/api/characters/${characterId}/chats?cursor=${encodeURIComponent(cursor)}`,
   )
 
   if (!response.ok) {

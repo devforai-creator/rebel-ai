@@ -1549,6 +1549,23 @@ export type Database = {
         Args: { requester?: string; secret_name: string }
         Returns: string
       }
+      list_character_chats: {
+        Args: {
+          p_character_id: string
+          p_cursor_chat_id?: string
+          p_cursor_recency_at?: string
+          p_page_size?: number
+        }
+        Returns: {
+          created_at: string
+          id: string
+          last_message_at: string
+          preview_content: string
+          preview_role: string
+          recency_at: string
+          title: string
+        }[]
+      }
       list_current_user_modules: {
         Args: never
         Returns: {
@@ -1562,6 +1579,23 @@ export type Database = {
           regex_count: number
           source_file: string
           updated_at: string
+        }[]
+      }
+      list_recent_conversation_characters: {
+        Args: {
+          p_cursor_character_id?: string
+          p_cursor_last_message_at?: string
+          p_page_size?: number
+        }
+        Returns: {
+          avatar_url: string
+          character_id: string
+          character_name: string
+          last_message_at: string
+          latest_chat_id: string
+          latest_chat_title: string
+          preview_content: string
+          preview_role: string
         }[]
       }
       match_chat_facts: {

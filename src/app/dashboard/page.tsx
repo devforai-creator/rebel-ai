@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import React from 'react'
 import { logout } from '../auth/actions'
 import QuickStartGuide from './QuickStartGuide'
 import SecurityNoticeBanner from './SecurityNoticeBanner'
@@ -175,6 +176,36 @@ export default async function DashboardPage() {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Start Chat</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Choose a character to start a conversation
+            </p>
+          </Link>
+
+          {/* 최근 대화 */}
+          <Link
+            href="/dashboard/chats"
+            className="block p-6 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700"
+          >
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 bg-cyan-100 dark:bg-cyan-900 rounded-lg flex items-center justify-center">
+                <svg
+                  className="w-6 h-6 text-cyan-600 dark:text-cyan-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Recent Conversations
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Find characters you have chatted with recently
             </p>
           </Link>
 

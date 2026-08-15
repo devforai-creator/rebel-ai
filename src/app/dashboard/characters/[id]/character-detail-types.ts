@@ -1,13 +1,8 @@
 import type { Character } from '@/types/database.types'
+import type { CharacterChat } from '@/lib/chat/character-chat-types'
 import type { EditableCharacterFields } from '../CharacterForm'
 
-export interface CharacterChat {
-  id: string
-  title: string | null
-  updated_at: string
-  created_at: string
-  lastMessage: { content: string; role: string } | null
-}
+export type { CharacterChat } from '@/lib/chat/character-chat-types'
 
 export interface CharacterModuleOption {
   id: string

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { CHARACTER_CHAT_PAGE_SIZE } from '@/lib/chat/constants'
-import { toCharacterChatPreview } from '@/app/dashboard/characters/character-chat-preview'
+import { InvalidCharacterChatsCursorError, loadCharacterChats } from '@/lib/chat/character-chats'
 
 export async function GET(
   request: Request,
@@ -34,39 +33,16 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const beforeParam = new URL(request.url).searchParams.get('before')
+  try {
+    const cursor = new URL(request.url).searchParams.get('cursor')
+    const page = await loadCharacterChats({ supabase, characterId, cursor })
+    return NextResponse.json(page)
+  } catch (error) {
+    if (error instanceof InvalidCharacterChatsCursorError) {
+      return NextResponse.json({ error: 'Invalid pagination cursor' }, { status: 400 })
+    }
 
-  let query = supabase
-    .from('chats')
-    .select('id, title, updated_at, created_at, messages(content, role)')
-    .eq('user_id', user.id)
-    .eq('character_id', characterId)
-    .order('updated_at', { ascending: false })
-    .order('sequence', { referencedTable: 'messages', ascending: false })
-    .limit(CHARACTER_CHAT_PAGE_SIZE + 1)
-
-  if (beforeParam) {
-    query = query.lt('updated_at', beforeParam)
-  }
-
-  const { data: chatData, error: chatsError } = await query
-
-  if (chatsError) {
-    console.error('[Character chats] Failed to load chats', chatsError)
+    console.error('[Character chats] Failed to load chats', error)
     return NextResponse.json({ error: 'Failed to load chats' }, { status: 500 })
   }
-
-  const rawChats = chatData ?? []
-  const hasMore = rawChats.length > CHARACTER_CHAT_PAGE_SIZE
-  const trimmedChats = hasMore ? rawChats.slice(0, CHARACTER_CHAT_PAGE_SIZE) : rawChats
-
-  const chats = trimmedChats.map((chat) => toCharacterChatPreview(chat))
-
-  const nextCursor = hasMore ? (chats[chats.length - 1]?.updated_at ?? null) : null
-
-  return NextResponse.json({
-    chats,
-    hasMore,
-    nextCursor,
-  })
 }

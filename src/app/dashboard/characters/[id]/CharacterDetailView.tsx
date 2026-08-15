@@ -184,7 +184,8 @@ export default function CharacterDetailView({
                           </p>
                         )}
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                          {new Date(chat.updated_at).toLocaleString('en-US')}
+                          {chat.last_message_at === null ? 'Created: ' : 'Last message: '}
+                          {new Date(chat.recency_at).toLocaleString('en-US')}
                         </p>
                       </div>
                       <svg

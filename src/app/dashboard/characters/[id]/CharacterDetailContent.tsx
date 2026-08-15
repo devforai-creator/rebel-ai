@@ -1,19 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { CHARACTER_CHAT_PAGE_SIZE } from '@/lib/chat/constants'
+import { loadCharacterChats } from '@/lib/chat/character-chats'
 import CharacterDetailView from './CharacterDetailView'
 import type { CharacterDetail } from './character-detail-types'
-import { toCharacterChatPreview } from '../character-chat-preview'
-
-const CHARACTER_CHAT_FIELDS = `
-  id,
-  title,
-  updated_at,
-  created_at,
-  messages (
-    content,
-    role
-  )
-`
 
 interface Props {
   character: CharacterDetail & { user_id: string | null }
@@ -24,14 +12,10 @@ export default async function CharacterDetailContent({ character, userId }: Prop
   const supabase = await createClient()
 
   const [chatsResult, modulesResult, characterModulesResult] = await Promise.all([
-    supabase
-      .from('chats')
-      .select(CHARACTER_CHAT_FIELDS)
-      .eq('user_id', userId)
-      .eq('character_id', character.id)
-      .order('updated_at', { ascending: false })
-      .order('sequence', { referencedTable: 'messages', ascending: false })
-      .limit(CHARACTER_CHAT_PAGE_SIZE + 1),
+    loadCharacterChats({ supabase, characterId: character.id }).catch((error) => {
+      console.error('Error fetching chats:', error)
+      return { chats: [], hasMore: false, nextCursor: null }
+    }),
     supabase.from('modules').select('id, name').eq('user_id', userId).order('name'),
     supabase
       .from('character_modules')
@@ -41,9 +25,6 @@ export default async function CharacterDetailContent({ character, userId }: Prop
       .order('priority', { ascending: false }),
   ])
 
-  if (chatsResult.error) {
-    console.error('Error fetching chats:', chatsResult.error)
-  }
   if (modulesResult.error) {
     console.error('Error fetching modules:', modulesResult.error)
   }
@@ -51,29 +32,20 @@ export default async function CharacterDetailContent({ character, userId }: Prop
     console.error('Error fetching character modules:', characterModulesResult.error)
   }
 
-  const chats = chatsResult.data ?? []
   const modules = modulesResult.data ?? []
   const characterModules = characterModulesResult.data ?? []
 
   const selectedModuleIds = characterModules.map((cm) => cm.module_id)
 
-  const chatsWithLastMessage = chats
-    .slice(0, CHARACTER_CHAT_PAGE_SIZE)
-    .map((chat) => toCharacterChatPreview(chat))
-  const hasMoreChats = chats.length > CHARACTER_CHAT_PAGE_SIZE
-  const nextChatCursor = hasMoreChats
-    ? (chatsWithLastMessage[chatsWithLastMessage.length - 1]?.updated_at ?? null)
-    : null
-
   return (
     <CharacterDetailView
       character={character}
-      chats={chatsWithLastMessage}
+      chats={chatsResult.chats}
       isStarter={character.user_id === null}
       modules={modules}
       initialModuleIds={selectedModuleIds}
-      hasMoreChats={hasMoreChats}
-      initialChatCursor={nextChatCursor}
+      hasMoreChats={chatsResult.hasMore}
+      initialChatCursor={chatsResult.nextCursor}
     />
   )
 }

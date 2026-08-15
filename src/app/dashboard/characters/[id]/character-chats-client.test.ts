@@ -24,8 +24,9 @@ describe('character-chats-client', () => {
           {
             id: 'chat-2',
             title: 'Imported',
-            updated_at: '2026-01-01',
             created_at: '2026-01-01',
+            last_message_at: null,
+            recency_at: '2026-01-01',
             lastMessage: null,
           },
         ],
@@ -39,15 +40,16 @@ describe('character-chats-client', () => {
         {
           id: 'chat-2',
           title: 'Imported',
-          updated_at: '2026-01-01',
           created_at: '2026-01-01',
+          last_message_at: null,
+          recency_at: '2026-01-01',
           lastMessage: null,
         },
       ],
       hasMore: true,
       nextCursor: 'cursor-2',
     })
-    expect(fetchMock).toHaveBeenCalledWith('/api/characters/char-1/chats?before=cursor-1')
+    expect(fetchMock).toHaveBeenCalledWith('/api/characters/char-1/chats?cursor=cursor-1')
   })
 
   it('throws the API error when page loading fails', async () => {

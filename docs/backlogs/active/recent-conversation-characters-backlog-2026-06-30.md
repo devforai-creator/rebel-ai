@@ -1,11 +1,13 @@
 # Recent Conversation Characters Backlog
 
 Created: 2026-06-30
-Status: Parked
-Parked: 2026-08-10
-Reason: Temporarily deferred while higher-priority chat correctness work is addressed.
-Restart point: P1-1, specify pagination and preview semantics.
-Working mode: ATD (the learner writes the implementation; the tutor explains, hints, and reviews)
+Updated: 2026-08-15
+Status: Active
+Reactivated: 2026-08-15
+Reason: The higher-priority chat correctness work has landed; finish the partially deployed recency work and close the per-character pagination gap.
+Current handoff: Local implementation and verification are complete; obtain explicit publish
+authorization before linked migration or application deployment.
+Working mode: Implementation and verification
 
 ## Outcome
 
@@ -32,6 +34,9 @@ The first release is complete when:
   a character. A direct `continue latest chat` action is not part of v1.
 - Do not add a recent-conversations section to the dashboard home until the standalone page has
   been used and evaluated.
+- Keep message-free chat rooms visible on a character detail page. Use their `created_at` as the
+  explicit ordering/display fallback, while continuing to exclude them from `/dashboard/chats`
+  until the first eligible message exists.
 
 ## Recency Contract
 
@@ -56,10 +61,13 @@ a deliberate product decision before changing the trigger.
 ## Current Repository Baseline
 
 - `/dashboard/chats` has nested chat routes and an error boundary, but no list `page.tsx`.
-- The existing per-character chat list orders by `chats.updated_at`.
-- `chats.updated_at` changes when chat metadata is updated, not when messages are inserted, so it is
-  not a valid conversation-recency signal.
-- The next migration number is `91` as of this backlog's creation.
+- The existing per-character chat list still orders and paginates by `chats.updated_at` alone.
+- The `last_message_at` trigger now also causes the generic chat `updated_at` trigger to run, so
+  `updated_at` mixes message recency, metadata edits, and the migration backfill timestamp. It is not
+  a stable conversation-recency cursor.
+- Migrations `00` through `94`, including `91_add_chat_last_message_at.sql`, are aligned with linked
+  Production as of 2026-08-15. This branch adds locally validated migrations `95` and `96`; neither
+  has been applied to linked Production.
 - Character icons may come from private storage and must be resolved through
   `src/lib/assets/character-avatar.ts`; returning raw stored paths is not sufficient.
 - Database work must follow `docs/DB_CHANGE_WORKFLOW.md`, including the generated
@@ -94,6 +102,15 @@ Out of scope:
 - Do not check an item off when code merely compiles. Its `Done when` conditions must hold.
 - If a task reveals a product or security decision not settled here, stop and record the decision
   before implementation continues.
+
+## Priority Order
+
+1. Correct the user-visible per-character chat ordering and timestamp-only cursor gap from P5.
+2. Port and revalidate the preserved P1-1 query semantics.
+3. Implement and test the P1 database boundary.
+4. Build the shared P2 loader/API, the P3 page, and the P4 dashboard entry.
+5. Run P6 verification, deploy only after the repository and linked database gates pass, then
+   archive this backlog.
 
 ## Execution Queue
 
@@ -207,42 +224,68 @@ The representative chat is the user's chat with the greatest
 
 #### P1-1. Specify pagination and preview semantics
 
-- [ ] Define an opaque cursor containing both `last_message_at` and `character_id`; a timestamp-only
+- [x] Define an opaque cursor containing both `last_message_at` and `character_id`; a timestamp-only
       cursor is not acceptable because equal timestamps can skip rows.
-- [ ] Define the preview as the newest non-system, completed, non-superseded message in the
+- [x] Define the preview as the newest non-system, completed, non-superseded message in the
       representative chat, ordered deterministically by `sequence`.
-- [ ] Clamp page size at the server boundary and use `limit + 1` to determine `hasMore`.
-- [ ] Exclude archived characters and chats with `last_message_at IS NULL`.
+- [x] Clamp page size at the server boundary and use `limit + 1` to determine `hasMore`.
+- [x] Exclude archived characters and chats with `last_message_at IS NULL`.
 
 Done when:
 
-- [ ] two characters with the same timestamp paginate without duplication or omission
-- [ ] multiple chats with one character still produce exactly one character row
-- [ ] a superseded assistant variant cannot become the visible preview
+- [x] two characters with the same timestamp paginate without duplication or omission
+- [x] multiple chats with one character still produce exactly one character row
+- [x] a superseded assistant variant cannot become the visible preview
+
+Design notes:
+
+- Treat the cursor as an application-owned opaque token. Its decoded payload contains the final
+  row's `last_message_at` and `character_id`; clients must not construct or interpret it.
+- With `(last_message_at DESC, character_id DESC)` ordering, the next page contains rows where
+  `last_message_at` is earlier than the cursor timestamp, or where the timestamp is equal and
+  `character_id` is less than the cursor character ID.
+- Select one representative chat per character using `(last_message_at DESC, chat_id DESC)`, then
+  order the resulting character rows independently by
+  `(last_message_at DESC, character_id DESC)`.
+- Select the preview only from the representative chat. It is the eligible `user` or `assistant`
+  message with the greatest `sequence` whose `message_status` is `completed`; `system`,
+  `generating`, and `superseded` messages are excluded. If none exists, return `null`.
+- Use a default page size of 15. Clamp caller-provided sizes to the inclusive range 1-50 at the
+  server boundary, request one extra row, return at most the requested size, and set `hasMore` from
+  the extra row.
+- Exclude `characters.archived_at IS NOT NULL` and `chats.last_message_at IS NULL` explicitly.
 
 #### P1-2. Implement the database query boundary
 
-- [ ] Prefer a narrowly named `SECURITY INVOKER` SQL function/RPC in the next migration over a
+- [x] Prefer a narrowly named `SECURITY INVOKER` SQL function/RPC in the next migration over a
       client-side group-and-sort query.
-- [ ] Make ownership explicit with `auth.uid()` and preserve RLS behavior; do not introduce a
+- [x] Make ownership explicit with `auth.uid()` and preserve RLS behavior; do not introduce a
       service-role query for ordinary recent-list data.
-- [ ] Set a safe function `search_path`, validate/clamp parameters, and grant only the access needed
+- [x] Set a safe function `search_path`, validate/clamp parameters, and grant only the access needed
       by authenticated users.
-- [ ] Inspect `EXPLAIN` output and adjust or remove the candidate index based on evidence.
-- [ ] Regenerate database types and `supabase/schema.sql` after the migration.
+- [x] Inspect `EXPLAIN` output and adjust or remove the candidate index based on evidence.
+- [x] Regenerate database types and `supabase/schema.sql` after the migration.
 
 Done when:
 
-- [ ] the function returns one deterministic row per accessible, non-archived character
-- [ ] rows from other users are absent even when IDs or cursor values are guessed
-- [ ] the query does not fetch every message or perform an N+1 query per character
+- [x] the function returns one deterministic row per accessible, non-archived character
+- [x] rows from other users are absent even when IDs or cursor values are guessed
+- [x] the query does not fetch every message or perform an N+1 query per character
+
+Index evidence (2026-08-15):
+
+- Compared the grouped query with `EXPLAIN (ANALYZE, BUFFERS)` over 5,000 characters and 15,000
+  chats in a rolled-back local transaction.
+- PostgreSQL did not select the candidate
+  `(user_id, character_id, last_message_at DESC, id DESC)` partial index. The measured execution
+  time changed from about 9.6 ms without it to 13.6 ms with it, so migration 95 leaves it out.
 
 #### P1-3. Test grouping, security, and cursor edges
 
-- [ ] Cover one character with several chats, several characters, tied timestamps, null recency,
+- [x] Cover one character with several chats, several characters, tied timestamps, null recency,
       archived characters, preview selection, and the final partial page.
-- [ ] Cover unauthenticated and cross-user calls.
-- [ ] Cover malformed cursors and out-of-range page sizes at the application boundary in P2.
+- [x] Cover unauthenticated and cross-user calls.
+- [x] Cover malformed cursors and out-of-range page sizes at the application boundary in P2.
 
 ### P2. Add a Shared Server Loader and API Contract
 
@@ -257,25 +300,25 @@ Suggested scope:
 
 #### P2-1. Build the canonical loader
 
-- [ ] Define the domain result and opaque cursor types in one place.
-- [ ] Parse and validate cursors without trusting raw URL input.
-- [ ] Call the typed RPC, map database errors to a narrow server error, and generate `nextCursor`
+- [x] Define the domain result and opaque cursor types in one place.
+- [x] Parse and validate cursors without trusting raw URL input.
+- [x] Call the typed RPC, map database errors to a narrow server error, and generate `nextCursor`
       only when another row exists.
-- [ ] Resolve private character icon assets in a batch with the existing avatar helper before data
+- [x] Resolve private character icon assets in a batch with the existing avatar helper before data
       reaches the UI.
 
 Done when:
 
-- [ ] the page and API route do not duplicate grouping, cursor, or avatar-resolution logic
-- [ ] avatar resolution is batched rather than performed once per row
-- [ ] internal storage paths are not exposed as browser-ready URLs
+- [x] the page and API route do not duplicate grouping, cursor, or avatar-resolution logic
+- [x] avatar resolution is batched rather than performed once per row
+- [x] internal storage paths are not exposed as browser-ready URLs
 
 #### P2-2. Add the paginated route
 
-- [ ] Return `401` when unauthenticated, `400` for an invalid cursor, and a safe `500` response for
+- [x] Return `401` when unauthenticated, `400` for an invalid cursor, and a safe `500` response for
       query failures.
-- [ ] Return a stable JSON shape: `characters`, `hasMore`, and `nextCursor`.
-- [ ] Add route tests for authentication, parsing, success, empty results, and failure logging.
+- [x] Return a stable JSON shape: `characters`, `hasMore`, and `nextCursor`.
+- [x] Add route tests for authentication, parsing, success, empty results, and failure logging.
 
 ### P3. Build `/dashboard/chats`
 
@@ -289,45 +332,45 @@ Suggested scope:
 
 #### P3-1. Server-render the first page
 
-- [ ] Authenticate with the existing server Supabase pattern and redirect signed-out users.
-- [ ] Call the shared loader directly; do not make the server component fetch its own API route.
-- [ ] Add a header and a link back to `/dashboard` consistent with neighboring dashboard pages.
-- [ ] Pass only serializable display data and pagination state to the client list.
+- [x] Authenticate with the existing server Supabase pattern and redirect signed-out users.
+- [x] Call the shared loader directly; do not make the server component fetch its own API route.
+- [x] Add a header and a link back to `/dashboard` consistent with neighboring dashboard pages.
+- [x] Pass only serializable display data and pagination state to the client list.
 
 #### P3-2. Render accessible character rows
 
-- [ ] Show avatar fallback, character name, latest chat title when present, message preview, and a
+- [x] Show avatar fallback, character name, latest chat title when present, message preview, and a
       relative last-message time.
-- [ ] Render a semantic `<time dateTime="...">` with an exact timestamp available as a title or
+- [x] Render a semantic `<time dateTime="...">` with an exact timestamp available as a title or
       accessible label.
-- [ ] Make the whole row a keyboard-accessible link to `/dashboard/characters/[characterId]`.
-- [ ] Keep preview truncation in a tested formatter and do not render untrusted message content as
+- [x] Make the whole row a keyboard-accessible link to `/dashboard/characters/[characterId]`.
+- [x] Keep preview truncation in a tested formatter and do not render untrusted message content as
       HTML.
 
 Done when:
 
-- [ ] a user can identify and open a recent character using mouse or keyboard
-- [ ] missing avatar, title, or preview data does not break layout
-- [ ] dark mode and narrow mobile width remain readable
+- [x] a user can identify and open a recent character using mouse or keyboard
+- [x] missing avatar, title, or preview data does not break layout
+- [x] dark mode and narrow mobile width remain readable
 
 #### P3-3. Add incremental pagination and states
 
-- [ ] Add `Load more` using the P2 route, with an in-flight guard and disabled/loading label.
-- [ ] Deduplicate appended rows by `character_id` defensively.
-- [ ] Add an empty state, load-more error with retry, and end-of-list behavior.
-- [ ] Add interaction tests for append, double-click protection, retry, and no-more-results.
+- [x] Add `Load more` using the P2 route, with an in-flight guard and disabled/loading label.
+- [x] Deduplicate appended rows by `character_id` defensively.
+- [x] Add an empty state, load-more error with retry, and end-of-list behavior.
+- [x] Add interaction tests for append, double-click protection, retry, and no-more-results.
 
 ### P4. Add the Real Entry Point
 
-- [ ] Add a `Recent Conversations` quick-action card on `/dashboard` linking to
+- [x] Add a `Recent Conversations` quick-action card on `/dashboard` linking to
       `/dashboard/chats`.
-- [ ] Keep the existing `Start Chat` card and its `/dashboard/characters` destination unchanged.
-- [ ] Add or update a focused dashboard rendering/link test.
+- [x] Keep the existing `Start Chat` card and its `/dashboard/characters` destination unchanged.
+- [x] Add or update a focused dashboard rendering/link test.
 
 Done when:
 
-- [ ] the new page is reachable without manually typing its URL
-- [ ] no recent-character data is queried or rendered on the dashboard home
+- [x] the new page is reachable without manually typing its URL
+- [x] no recent-character data is queried or rendered on the dashboard home
 
 ### P5. Correct the Existing Per-Character Chat Ordering
 
@@ -340,49 +383,66 @@ Primary scope:
 - `src/app/dashboard/characters/[id]/character-detail-types.ts`
 - relevant route, mapper, client, and hook tests
 
-- [ ] Replace `updated_at` ordering/display with message recency for chats that have messages.
-- [ ] Decide and document where empty chats belong; do not silently treat `updated_at` as a message
+- [x] Replace `updated_at` ordering/display with message recency for chats that have messages.
+- [x] Decide and document where empty chats belong; do not silently treat `updated_at` as a message
       timestamp fallback.
-- [ ] Replace the current timestamp-only cursor with a stable composite cursor.
-- [ ] Keep export, delete, and `Load more` behavior unchanged.
+- [x] Replace the current timestamp-only cursor with a stable composite cursor.
+- [x] Keep export, delete, and `Load more` behavior unchanged.
 
 Done when:
 
-- [ ] the character detail page and recent-character page agree on what `recent conversation` means
-- [ ] equal timestamps cannot skip chat rooms during pagination
-- [ ] empty-chat placement is intentional and covered by tests
+- [x] the character detail page and recent-character page agree on what `recent conversation` means
+- [x] equal timestamps cannot skip chat rooms during pagination
+- [x] empty-chat placement is intentional and covered by tests
 
 ### P6. Verify and Deploy Safely
 
 Pre-deploy:
 
-- [ ] `npm run format:check`
-- [ ] focused Vitest suites for recency, query, route, and UI behavior
-- [ ] `npm run test:db`
-- [ ] `npm run lint`
-- [ ] `npm run typecheck`
-- [ ] `npm run test`
-- [ ] `npm run build`
-- [ ] confirm `supabase/schema.sql` and `src/types/database.generated.ts` are included in the change
+- [x] `npm run format:check`
+- [x] focused Vitest suites for recency, query, route, and UI behavior
+- [x] `npm run test:db`
+- [x] `npm run lint`
+- [x] `npm run typecheck`
+- [x] `npm run test`
+- [x] `npm run build`
+- [x] confirm `supabase/schema.sql` and `src/types/database.generated.ts` are included in the change
 
 Manual local scenarios:
 
-- [ ] a newly sent user message moves its character to the first row
-- [ ] the assistant response preserves or advances that placement
-- [ ] two chats with one character still show one row
-- [ ] a second user cannot see the first user's recent characters
-- [ ] tied timestamps paginate correctly
-- [ ] import, regeneration, failed-send rollback, message deletion, and chat deletion leave recency
+- [x] a newly sent user message moves its character to the first row
+- [x] the assistant response preserves or advances that placement
+- [x] two chats with one character still show one row
+- [x] a second user cannot see the first user's recent characters
+- [x] tied timestamps paginate correctly
+- [x] import, regeneration, failed-send rollback, message deletion, and chat deletion leave recency
       consistent
-- [ ] archived characters are absent
-- [ ] selecting a row opens the expected character detail page
+- [x] archived characters are absent
+- [x] selecting a row opens the expected character detail page
+
+Local verification evidence (2026-08-15):
+
+- Focused Vitest: 11 files and 65 tests passed for the two RPC loaders, routes, UI pagination,
+  dashboard entry, and existing character chat interactions.
+- `npm run test:rls`: 7 files and 67 tests passed, including grouping, tied cursors, empty-chat
+  fallback, anonymous rejection, and cross-user isolation.
+- `npm run verify`: formatting, dependency boundaries, browser-client boundaries, lint, typecheck,
+  232 test files, and 2,070 tests passed.
+- `npm run build`: production build passed and emitted both `/dashboard/chats` and
+  `/api/chats/recent-characters`.
+- `npm run db:schema:check`: generated hosted schema is current after migrations 95 and 96.
+- Local browser: dashboard entry, 15-to-17 row `Load more`, row navigation, character-detail empty
+  chat placement, 390 px mobile layout, and dark mode passed. Axe reported zero WCAG A/AA
+  violations, and the browser reported no page errors.
+- The temporary browser-test user and all cascade-owned local rows were removed and independently
+  verified at zero remaining rows.
 
 Post-deploy, and only after all local database gates in `docs/DB_CHANGE_WORKFLOW.md` pass:
 
 - [ ] apply migrations with `supabase db push --linked`
 - [ ] verify `supabase db diff --linked --schema public` reports no schema changes
-- [ ] run `npm run ops:smoke:active` because runner-written assistant messages now execute the new
-      trigger
+- [ ] run `npm run ops:smoke`; the trigger-writing runner path was already deployed with migration
+      91 and is unchanged by this branch
 - [ ] repeat the core recent-list scenario against the active deployment
 
 ## Deferred Until Real Usage

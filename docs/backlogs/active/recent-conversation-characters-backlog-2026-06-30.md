@@ -5,8 +5,11 @@ Updated: 2026-08-15
 Status: Active
 Reactivated: 2026-08-15
 Reason: The higher-priority chat correctness work has landed; finish the partially deployed recency work and close the per-character pagination gap.
-Current handoff: Local implementation and verification are complete; obtain explicit publish
-authorization before linked migration or application deployment.
+Current handoff: Commit, push, linked migrations, Production deployment, and read-only Production
+verification are complete. One acceptance check remains: either explicitly authorize an isolated
+temporary Production user/fixture for the authenticated recent-list scenario, or accept the local
+authenticated E2E plus Production read-only evidence and archive the backlog without live fixture
+writes.
 Working mode: Implementation and verification
 
 ## Outcome
@@ -65,9 +68,8 @@ a deliberate product decision before changing the trigger.
 - The `last_message_at` trigger now also causes the generic chat `updated_at` trigger to run, so
   `updated_at` mixes message recency, metadata edits, and the migration backfill timestamp. It is not
   a stable conversation-recency cursor.
-- Migrations `00` through `94`, including `91_add_chat_last_message_at.sql`, are aligned with linked
-  Production as of 2026-08-15. This branch adds locally validated migrations `95` and `96`; neither
-  has been applied to linked Production.
+- Migrations `00` through `96`, including the recent-character and character-chat RPCs, are aligned
+  with linked Production as of 2026-08-15.
 - Character icons may come from private storage and must be resolved through
   `src/lib/assets/character-avatar.ts`; returning raw stored paths is not sufficient.
 - Database work must follow `docs/DB_CHANGE_WORKFLOW.md`, including the generated
@@ -439,11 +441,30 @@ Local verification evidence (2026-08-15):
 
 Post-deploy, and only after all local database gates in `docs/DB_CHANGE_WORKFLOW.md` pass:
 
-- [ ] apply migrations with `supabase db push --linked`
-- [ ] verify `supabase db diff --linked --schema public` reports no schema changes
-- [ ] run `npm run ops:smoke`; the trigger-writing runner path was already deployed with migration
+- [x] apply migrations with `supabase db push --linked`
+- [x] verify `supabase db diff --linked --schema public` reports no schema changes
+- [x] run `npm run ops:smoke`; the trigger-writing runner path was already deployed with migration
       91 and is unchanged by this branch
 - [ ] repeat the core recent-list scenario against the active deployment
+
+Production evidence (2026-08-15):
+
+- Commit `193ae85` was pushed to `origin/main`; CI run `31854622212` and CodeQL run `31854621567`
+  completed successfully.
+- Linked dry-run showed only migrations 95 and 96. Both applied successfully; a second dry-run
+  reported the remote database up to date, `supabase db diff --linked --schema public` reported
+  `No schema changes found`, and `npm run db:contract:linked` reported
+  `project_ref=ceatljsosxyulebubcng policies=10 buckets=3 sensitive_acl=locked`.
+- Vercel Production deployment `dpl_DbxovRw7bh4S6CJSiTFi3QQgvxbm` reached `READY` for the exact
+  commit and serves the `rebel-chat.vercel.app` alias.
+- `npm run ops:smoke` completed with `summary=ok`.
+- Production browser verification confirmed `/dashboard/chats` redirects a signed-out user to
+  `/auth/login`, `/api/chats/recent-characters` returns JSON `401 Unauthorized`, the page is not
+  blank, no framework overlay appears, and browser console/page-error checks are empty. Vercel
+  reported no runtime error clusters for the new page or API in the inspected one-hour window.
+- An isolated temporary Production user/fixture was proposed for the final authenticated scenario,
+  but it was not executed because deployment authorization alone does not authorize creation of
+  live test records. No Production test user or row was created.
 
 ## Deferred Until Real Usage
 

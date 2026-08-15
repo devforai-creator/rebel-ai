@@ -2,14 +2,14 @@
 
 Created: 2026-06-30
 Updated: 2026-08-15
-Status: Active
+Status: Archived
+Completed: 2026-08-15
 Reactivated: 2026-08-15
 Reason: The higher-priority chat correctness work has landed; finish the partially deployed recency work and close the per-character pagination gap.
-Current handoff: Authenticated Production acceptance confirmed the new recent list and uncovered a
-return-navigation break: character detail always returned to the legacy character picker. The
-context-aware return patch is implemented and verified locally; publish it, verify the deployment,
-then archive this backlog.
-Working mode: Implementation and verification
+Current handoff: Complete. The recent-character list, per-character chat pagination, linked
+migrations, and context-aware return navigation are live in Production. Deferred product ideas
+remain measurement-gated rather than executable backlog items.
+Working mode: Historical record
 
 ## Outcome
 
@@ -476,7 +476,7 @@ Production evidence (2026-08-15):
 - [x] cover link construction, target validation, recent-entry rendering, and legacy fallback in
       focused tests
 - [x] verify the full recent list -> character detail -> recent list click path in a local browser
-- [ ] publish the follow-up and verify the exact Production deployment SHA
+- [x] publish the follow-up and verify the exact Production deployment SHA
 
 Local follow-up evidence (2026-08-15):
 
@@ -487,6 +487,18 @@ Local follow-up evidence (2026-08-15):
   `← 캐릭터 목록` fallback. Browser page errors and framework overlays were absent.
 - The isolated local user, character, chat, and profile rows were removed; independent row counts
   were zero and the temporary auth user was deleted.
+
+Production follow-up evidence (2026-08-15):
+
+- Commit `abeece3` was pushed to `origin/main`; CI run `31857961152` and CodeQL run `31857960850`
+  completed successfully. CI detected no database-related changes and skipped its migration job.
+- Vercel Production deployment `dpl_9iBVJi7zSDPz3XWNk38XzDr9CDSg` reached `READY` for exact SHA
+  `abeece33eb5ce54c8427ce66402ea423f6b44b31` and serves the `rebel-chat.vercel.app` alias.
+- Vercel reported no runtime error clusters for `/dashboard/chats` or
+  `/dashboard/characters/[id]` in the inspected post-deploy window.
+- This follow-up changed only navigation UI and tests. It required no Supabase migration, linked
+  database write, Production fixture, or runner smoke rerun; the original feature's linked database
+  and `ops:smoke` evidence remains recorded above.
 
 ## Deferred Until Real Usage
 

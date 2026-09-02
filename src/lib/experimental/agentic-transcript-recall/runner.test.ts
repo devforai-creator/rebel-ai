@@ -157,6 +157,47 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
     })
   })
 
+  it('uses auto tool choice with a required-recall instruction for auto-only models', () => {
+    const debugMetrics: Record<string, string | number | boolean | null> = {}
+    const result = prepareExperimentalAgenticTranscriptRecallRequest({
+      supabase: createTranscriptSupabase(),
+      chatId,
+      runtimeConfig: buildRuntimeConfig(),
+      sourceHints: null,
+      sourceMap: {
+        rawContextStartOrdinal: 5,
+        cutoffOrdinal: 4,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            rangeId: 'R1',
+            startSeq: 1,
+            endSeq: 2,
+            preview: 'First exchange',
+          },
+        ],
+        navigationParents: [],
+      },
+      streamRequest: {
+        system: 'FINAL',
+        messages: [{ role: 'user', content: 'Hello' }],
+      },
+      debugMetrics,
+      requireToolByInstruction: true,
+      logDebug: vi.fn(),
+    })
+
+    expect(result.streamRequest.system).toContain(
+      'For this reply, transcript recall is required before answering.',
+    )
+    expect(result.streamRequest.system).toContain(
+      'Do not present older detail as verified unless raw transcript was fetched.',
+    )
+    expect(result.streamTextSettings?.toolChoice).toBe('auto')
+    expect(result.streamTextSettings?.prepareStep).toBeUndefined()
+  })
+
   it('augments the system prompt and exposes a bounded recall tool', async () => {
     const debugMetrics: Record<string, string | number | boolean | null> = {}
     const result = prepareExperimentalAgenticTranscriptRecallRequest({

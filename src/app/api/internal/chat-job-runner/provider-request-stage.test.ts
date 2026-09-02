@@ -601,6 +601,7 @@ describe('requestProviderStage', () => {
     })
     expect(context.debugMetrics).toMatchObject({
       experimental_agentic_transcript_recall_tool_choice_preflight: 'required',
+      experimental_agentic_transcript_recall_tool_choice_enforcement: 'native_required',
       experimental_agentic_transcript_recall_tool_choice_source: 'heuristic',
       experimental_agentic_transcript_recall_tool_choice_version: 'character-chat-v1-aggressive',
       experimental_agentic_transcript_recall_tool_choice_score: 7,
@@ -866,7 +867,132 @@ describe('requestProviderStage', () => {
       anthropic_thinking_effort: null,
       anthropic_interleaved_thinking_requested: false,
       anthropic_thinking_disabled_for_required_tool_choice: true,
+      experimental_agentic_transcript_recall_tool_choice_enforcement: 'native_required',
       experimental_agentic_transcript_recall_tool_choice_applied: true,
+    })
+  })
+
+  it('keeps Fable 5.1 thinking and requires ATR through auto tool choice plus instruction', async () => {
+    const { requestProviderStage } = await import('./provider-request-stage')
+    const payload = buildPayload({
+      provider: 'anthropic',
+      modelName: 'claude-fable-5-1',
+    })
+    const context = buildContext({
+      recentMessages: [
+        { role: 'assistant', content: '지난 약속을 떠올리며 숨을 고른다.' },
+        { role: 'user', content: '지난번에 한 약속 정확히 다시 말해줘.' },
+      ],
+      agenticTranscriptRecall: {
+        configured: true,
+        accountDefaultEnabled: false,
+        preferenceSource: 'chat_override',
+        globallyEnabled: true,
+        providerSupported: true,
+        providerAllowed: true,
+        enabled: true,
+        skipReason: null,
+        maxToolCalls: 1,
+        maxMessagesPerCall: 12,
+        maxTotalMessages: 12,
+        providerAllowlist: ['anthropic'],
+      },
+      agenticTranscriptRecallSourceHints: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        hints: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Older promise',
+          },
+        ],
+      },
+      agenticTranscriptRecallSourceMap: {
+        rawContextStartOrdinal: 21,
+        cutoffOrdinal: 20,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Older promise',
+          },
+        ],
+        navigationParents: [],
+      },
+      debugMetrics: {},
+    })
+    const anthropicProviderOptions = {
+      anthropic: {
+        thinking: { type: 'adaptive' },
+        effort: 'low',
+        cacheControl: { type: 'ephemeral', ttl: '1h' },
+      },
+    }
+
+    getProviderOptionsMock.mockReturnValueOnce(anthropicProviderOptions)
+    buildStreamPayloadPlanMock.mockReturnValueOnce({
+      strategy: 'anthropic-split-system',
+      streamRequest: {
+        messages: [{ role: 'user', content: 'Hello' }],
+        providerOptions: anthropicProviderOptions,
+      },
+      actualPayload: {
+        provider: 'anthropic',
+        strategy: 'anthropic-split-system',
+        systemMessages: [{ role: 'system', content: 'FINAL' }],
+        conversationMessages: [{ role: 'user', content: 'Hello' }],
+      },
+    })
+    prepareExperimentalAgenticTranscriptRecallRequestMock.mockReturnValueOnce({
+      streamRequest: {
+        system: 'FINAL\n\nExperimental required recall',
+        messages: [{ role: 'user', content: 'Hello' }],
+        providerOptions: anthropicProviderOptions,
+      },
+      streamTextSettings: {
+        tools: {
+          fetch_source_range: {},
+        },
+        toolChoice: 'auto',
+      },
+    })
+
+    await requestProviderStage({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      jobId: 'job-fable-instruction-required',
+      payload,
+      context,
+      timings: {},
+    })
+
+    expect(prepareExperimentalAgenticTranscriptRecallRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requireToolByInstruction: true,
+      }),
+    )
+    const streamRequest = streamTextMock.mock.calls[0]?.[0]
+    expect(streamRequest).toMatchObject({
+      system: 'FINAL\n\nExperimental required recall',
+      tools: {
+        fetch_source_range: {},
+      },
+      toolChoice: 'auto',
+      providerOptions: anthropicProviderOptions,
+    })
+    expect(streamRequest.prepareStep).toBeUndefined()
+    expect(context.debugMetrics).toMatchObject({
+      anthropic_thinking_requested: true,
+      anthropic_thinking_type: 'adaptive',
+      anthropic_thinking_effort: 'low',
+      anthropic_thinking_disabled_for_required_tool_choice: false,
+      experimental_agentic_transcript_recall_tool_choice_preflight: 'required',
+      experimental_agentic_transcript_recall_tool_choice_enforcement: 'instruction_required',
+      experimental_agentic_transcript_recall_tool_choice_applied: false,
     })
   })
 

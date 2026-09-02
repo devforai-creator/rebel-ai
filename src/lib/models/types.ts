@@ -30,6 +30,7 @@ export type ModelFeatures = {
   promptCaching?: 'standard' | 'extended'
   promptCacheMinTokens?: number
   reasoning?: boolean
+  requiredToolChoice?: boolean
   openai?: OpenAIModelPolicy
 }
 

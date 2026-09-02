@@ -42,6 +42,9 @@ preferences, chat alternate-model settings, and pending or processing chat-job p
 - `features.promptCacheMinTokens` drives provider cache thresholds.
 - `features.batchChat` controls Anthropic batch-chat admission.
 - `features.anthropicThinking` describes Anthropic thinking behavior.
+- `features.requiredToolChoice` declares whether a model accepts provider-native required tool
+  choice. Set it to `false` so experimental tool users can fall back to instruction-enforced auto
+  mode.
 - `features.openai` describes model-specific OpenAI request-shape exceptions.
 - `features.promptCaching` and `features.reasoning` describe general model support.
 

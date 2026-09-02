@@ -13,6 +13,7 @@ import {
   listModelsByProvider,
   MODEL_REGISTRY,
   PROVIDER_DEFAULTS,
+  supportsRequiredToolChoice,
 } from '@/lib/models'
 import type { Provider } from '@/types/database.types'
 
@@ -97,6 +98,17 @@ describe('model catalog contracts', () => {
         policy?.promptCacheRetention !== 'omit',
       )
       expect(options?.reasoningEffort).toBe(policy?.forwardReasoningEffortNone ? 'none' : undefined)
+    }
+  })
+
+  it('drives required tool-choice support from registered capabilities', () => {
+    for (const model of MODEL_REGISTRY) {
+      expect(
+        supportsRequiredToolChoice({
+          provider: model.provider,
+          modelName: model.id,
+        }),
+      ).toBe(model.features?.requiredToolChoice !== false)
     }
   })
 })

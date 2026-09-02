@@ -263,6 +263,23 @@ describe('estimateUsageCost', () => {
   })
 
   describe('Anthropic models', () => {
+    it('should calculate Claude Fable 5.1 pricing correctly', () => {
+      const params: UsageCostParams = {
+        provider: 'anthropic',
+        modelName: 'claude-fable-5-1',
+        promptTokens: 2000,
+        completionTokens: 500,
+        cachedInputTokens: 8000,
+      }
+      const result = estimateUsageCost(params)
+      expect(result).not.toBeNull()
+
+      // Fable 5.1: Input $10/M, Cache hit $0.25/M, Output $50/M.
+      expect(result!.promptCost).toBeCloseTo(0.02, 6)
+      expect(result!.cachedInputCost).toBeCloseTo(0.002, 6)
+      expect(result!.completionCost).toBeCloseTo(0.025, 6)
+    })
+
     it('should calculate Claude Fable 5 pricing correctly', () => {
       const params: UsageCostParams = {
         provider: 'anthropic',
@@ -439,6 +456,25 @@ describe('estimateUsageCost', () => {
   })
 
   describe('OpenRouter models', () => {
+    it('uses the current GLM 5.3 prices', () => {
+      const params: UsageCostParams = {
+        provider: 'openrouter',
+        modelName: 'z-ai/glm-5.3',
+        promptTokens: 100000,
+        completionTokens: 10000,
+        cachedInputTokens: 80000,
+      }
+      const result = estimateUsageCost(params)
+      expect(result).not.toBeNull()
+
+      // Input rate: $1.40/M, Cached rate: $0.26/M, Output rate: $4.40/M.
+      // Fresh input: 100000 - 80000 = 20000 tokens.
+      expect(result!.promptCost).toBeCloseTo(0.028, 6)
+      expect(result!.cachedInputCost).toBeCloseTo(0.0208, 6)
+      expect(result!.completionCost).toBeCloseTo(0.044, 6)
+      expect(result!.totalCost).toBeCloseTo(0.0928, 6)
+    })
+
     it('uses the current Kimi K3 cache-hit price', () => {
       const params: UsageCostParams = {
         provider: 'openrouter',

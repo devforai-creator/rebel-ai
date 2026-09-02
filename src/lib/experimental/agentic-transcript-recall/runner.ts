@@ -95,11 +95,13 @@ export function buildExperimentalInstruction({
   fetchAvailable,
   expandAvailable,
   sourceMap,
+  requireToolByInstruction = false,
 }: {
   maxToolCalls: number
   fetchAvailable: boolean
   expandAvailable: boolean
   sourceMap: AgenticTranscriptRecallSourceMap | null
+  requireToolByInstruction?: boolean
 }): string {
   const instructions = [
     '=== Experimental Transcript Recall ===',
@@ -109,6 +111,14 @@ export function buildExperimentalInstruction({
     'Common recall-friendly cases include first or last occurrence, exact wording or exact sequence, promises or agreements, plans or boundaries, relationship-changing moments, contradiction checks against earlier dialogue, and vague references to a specific older scene or incident.',
     '=== Recall Priority ===',
   ]
+
+  if (requireToolByInstruction) {
+    instructions.push(
+      'For this reply, transcript recall is required before answering. Begin by calling the appropriate available transcript-recall tool.',
+      'If the likely evidence is inside a surfaced parent range, call `expand_source_range` first and then call `fetch_source_range` with the relevant returned child id when that tool is available. Otherwise, call `fetch_source_range` directly.',
+      'Do not present older detail as verified unless raw transcript was fetched. If raw transcript cannot be fetched, say that it could not be fully verified.',
+    )
+  }
 
   if (expandAvailable) {
     instructions.push(
@@ -189,6 +199,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
   sourceMap,
   streamRequest,
   debugMetrics,
+  requireToolByInstruction = false,
   logDebug = () => undefined,
 }: {
   supabase: TurnClient
@@ -198,6 +209,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
   sourceMap: AgenticTranscriptRecallSourceMap | null
   streamRequest: TStreamRequest
   debugMetrics: Record<string, string | number | boolean | null>
+  requireToolByInstruction?: boolean
   logDebug?: (...args: unknown[]) => void
 }): ExperimentalAgenticTranscriptRecallWrapperResult<TStreamRequest> {
   logDebug('[Agentic Transcript Recall] Experimental wrapper active')
@@ -408,6 +420,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
             fetchAvailable,
             expandAvailable,
             sourceMap,
+            requireToolByInstruction,
           }),
         ]
           .filter((value): value is string => typeof value === 'string' && value.length > 0)
@@ -416,6 +429,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
 
   const streamTextSettings: ExperimentalAgenticTranscriptRecallStreamSettings = {
     tools,
+    ...(requireToolByInstruction ? { toolChoice: 'auto' as const } : {}),
     stopWhen: stepCountIs(runtimeConfig.maxToolCalls + 2),
     onStepFinish(stepResult) {
       debugMetrics['experimental_agentic_transcript_recall_step_count'] =

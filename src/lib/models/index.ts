@@ -123,6 +123,16 @@ export function getModelFeatures({
   return model ? (model.features ?? {}) : null
 }
 
+export function supportsRequiredToolChoice({
+  provider,
+  modelName,
+}: {
+  provider: Provider
+  modelName?: string | null
+}): boolean {
+  return getModelFeatures({ provider, modelName })?.requiredToolChoice !== false
+}
+
 export function getModelPricingTiers({
   provider,
   modelName,

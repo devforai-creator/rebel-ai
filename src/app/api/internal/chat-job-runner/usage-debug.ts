@@ -90,6 +90,7 @@ type AgenticTranscriptRecallDebugInfo = {
   toolLastBlockReason: string | null
   stepCount: number | null
   toolChoicePreflight: string | null
+  toolChoiceEnforcement: string | null
   toolChoiceApplied: boolean | null
   toolChoiceScore: number | null
   toolChoiceSource: string | null
@@ -274,6 +275,10 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     debugMetrics,
     'experimental_agentic_transcript_recall_tool_choice_preflight',
   )
+  const toolChoiceEnforcement = readStringMetric(
+    debugMetrics,
+    'experimental_agentic_transcript_recall_tool_choice_enforcement',
+  )
   const toolChoiceApplied = readBooleanMetric(
     debugMetrics,
     'experimental_agentic_transcript_recall_tool_choice_applied',
@@ -331,6 +336,7 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     toolLastBlockReason,
     stepCount,
     toolChoicePreflight,
+    toolChoiceEnforcement,
     toolChoiceApplied,
     toolChoiceScore,
     toolChoiceSource,
@@ -375,6 +381,7 @@ function buildExperimentalAgenticTranscriptRecallDebugInfo(
     toolLastBlockReason,
     stepCount,
     toolChoicePreflight,
+    toolChoiceEnforcement,
     toolChoiceApplied,
     toolChoiceScore,
     toolChoiceSource,

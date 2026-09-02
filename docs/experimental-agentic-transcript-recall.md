@@ -1,6 +1,6 @@
 # Experimental Agentic Transcript Recall
 
-Updated: 2026-04-21
+Updated: 2026-09-02
 
 This document is an experimental feature contract, not the top-level long-term memory doctrine.
 For the current strategy and support stance, use [LONG_TERM_MEMORY_STRATEGY.md](./LONG_TERM_MEMORY_STRATEGY.md).
@@ -68,6 +68,11 @@ It is now:
 - make it usable without SQL-only operator rituals forever
 - allow broader experimental provider coverage without pretending it is part of the supported core
 - rely on request-level debug telemetry and smoke testing for day-to-day operation
+
+When the recall gate requires a tool call, ATR uses provider-native required tool choice only for
+models whose request contract supports it. Auto-only models instead receive `toolChoice: auto` plus
+an explicit current-turn recall instruction. That fallback remains best-effort and fail-closed: if
+the model skips the tool, the chat continues without treating summarized detail as raw verification.
 
 ## Current Queued Follow-Up: Config Resolution
 

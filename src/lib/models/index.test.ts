@@ -9,6 +9,7 @@ import {
   hasReasoningSupport,
   hasExtendedOpenAICacheRetention,
   isOpenAIGpt56Model,
+  supportsRequiredToolChoice,
   MODEL_REGISTRY,
   PROVIDER_DEFAULTS,
 } from './index'
@@ -120,6 +121,9 @@ describe('Model Registry', () => {
       expect(findModelDefinition({ modelName: 'claude-opus-4.8-20260701' })?.id).toBe(
         'claude-opus-4-8',
       )
+      expect(findModelDefinition({ modelName: 'claude-fable-5-1-20260831' })?.id).toBe(
+        'claude-fable-5-1',
+      )
     })
 
     it('is case-insensitive', () => {
@@ -211,10 +215,30 @@ describe('Model Registry', () => {
   })
 
   describe('Anthropic model registration', () => {
-    it('lists Claude Fable 5 first in the Anthropic UI model list', () => {
+    it('lists Claude Fable 5.1 first in the Anthropic UI model list', () => {
       const ids = listUiModelIdsByProvider('anthropic')
 
-      expect(ids[0]).toBe('claude-fable-5')
+      expect(ids[0]).toBe('claude-fable-5-1')
+      expect(ids).toContain('claude-fable-5')
+    })
+
+    it('has flat Fable 5.1 pricing and auto-only tool-choice capability', () => {
+      const tiers = getModelPricingTiers({
+        provider: 'anthropic',
+        modelName: 'claude-fable-5-1',
+      })
+
+      expect(tiers).not.toBeNull()
+      expect(tiers).toHaveLength(1)
+      expect(tiers![0].rates.input).toBe(10)
+      expect(tiers![0].rates.output).toBe(50)
+      expect(tiers![0].rates.cachedInput).toBe(0.25)
+      expect(
+        supportsRequiredToolChoice({
+          provider: 'anthropic',
+          modelName: 'claude-fable-5-1',
+        }),
+      ).toBe(false)
     })
 
     it('has flat Fable 5 pricing', () => {
@@ -450,6 +474,17 @@ describe('Model Registry', () => {
           promptCacheMinTokens: 512,
         }),
       )
+      expect(getModelFeatures({ provider: 'anthropic', modelName: 'claude-fable-5-1' })).toEqual(
+        expect.objectContaining({
+          anthropicThinking: 'adaptive-always-on',
+          batchChat: true,
+          promptCacheMinTokens: 512,
+          requiredToolChoice: false,
+        }),
+      )
+      expect(
+        supportsRequiredToolChoice({ provider: 'anthropic', modelName: 'claude-fable-5' }),
+      ).toBe(true)
       expect(getModelFeatures({ provider: 'openai', modelName: 'gpt-5.6-terra' })?.openai).toEqual({
         promptCacheRetention: 'omit',
         forwardReasoningEffortNone: true,
@@ -607,12 +642,43 @@ describe('Model Registry', () => {
       const ids = listUiModelIdsByProvider('openrouter')
 
       expect(ids[0]).toBe('moonshotai/kimi-k3')
+      expect(ids).toContain('z-ai/glm-5.3')
       expect(ids).toContain('z-ai/glm-5.2')
       expect(ids).toContain('z-ai/glm-5.1')
       expect(ids).toContain('z-ai/glm-5')
     })
 
     it('keeps the existing OpenRouter provider default', () => {
+      expect(getDefaultModelForProvider('openrouter')).toBe('z-ai/glm-5')
+    })
+  })
+
+  describe('GLM 5.3 registration', () => {
+    it('is found by exact OpenRouter ID', () => {
+      const model = findModelDefinition({ modelName: 'z-ai/glm-5.3' })
+
+      expect(model).not.toBeNull()
+      expect(model?.id).toBe('z-ai/glm-5.3')
+      expect(model?.provider).toBe('openrouter')
+      expect(model?.features?.reasoning).toBe(true)
+    })
+
+    it('has correct OpenRouter pricing', () => {
+      const tiers = getModelPricingTiers({
+        provider: 'openrouter',
+        modelName: 'z-ai/glm-5.3',
+      })
+
+      expect(tiers).not.toBeNull()
+      expect(tiers![0].rates.input).toBe(1.4)
+      expect(tiers![0].rates.output).toBe(4.4)
+      expect(tiers![0].rates.cachedInput).toBe(0.26)
+    })
+
+    it('appears after Kimi K3 while keeping the existing provider default', () => {
+      const ids = listUiModelIdsByProvider('openrouter')
+
+      expect(ids[1]).toBe('z-ai/glm-5.3')
       expect(getDefaultModelForProvider('openrouter')).toBe('z-ai/glm-5')
     })
   })
@@ -639,10 +705,10 @@ describe('Model Registry', () => {
       expect(tiers![0].rates.cachedInput).toBe(0.26)
     })
 
-    it('appears after Kimi K3 in the OpenRouter UI model list', () => {
+    it('appears after GLM 5.3 in the OpenRouter UI model list', () => {
       const ids = listUiModelIdsByProvider('openrouter')
 
-      expect(ids[1]).toBe('z-ai/glm-5.2')
+      expect(ids[2]).toBe('z-ai/glm-5.2')
       expect(ids).toContain('z-ai/glm-5.1')
       expect(ids).toContain('z-ai/glm-5')
     })

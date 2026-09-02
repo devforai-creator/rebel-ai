@@ -207,20 +207,22 @@ describe('getProviderOptions', () => {
     expect(options).toBeUndefined()
   })
 
-  it('keeps always-on Claude Fable 5 thinking at minimum effort', () => {
-    const options = getProviderOptions('anthropic', {
-      modelName: 'claude-fable-5',
-      reasoningEffort: 'high',
-    })
+  it('keeps always-on Claude Fable thinking at minimum effort', () => {
+    for (const modelName of ['claude-fable-5-1', 'claude-fable-5']) {
+      const options = getProviderOptions('anthropic', {
+        modelName,
+        reasoningEffort: 'high',
+      })
 
-    expect(options).toEqual({
-      anthropic: {
-        thinking: {
-          type: 'adaptive',
+      expect(options).toEqual({
+        anthropic: {
+          thinking: {
+            type: 'adaptive',
+          },
+          effort: MINIMUM_ANTHROPIC_ALWAYS_ON_EFFORT,
         },
-        effort: MINIMUM_ANTHROPIC_ALWAYS_ON_EFFORT,
-      },
-    })
+      })
+    }
   })
 
   it('explicitly disables default-on Claude Sonnet 5 thinking', () => {
@@ -276,6 +278,7 @@ describe('getAnthropicMinCacheTokens', () => {
   })
 
   it('returns Fable and Mythos minimum tokens', () => {
+    expect(getAnthropicMinCacheTokens('claude-fable-5-1')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.fable)
     expect(getAnthropicMinCacheTokens('claude-fable-5')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.fable)
     expect(getAnthropicMinCacheTokens('claude-mythos-5')).toBe(ANTHROPIC_CACHE_MIN_TOKENS.mythos)
     expect(getAnthropicMinCacheTokens('claude-mythos-preview')).toBe(
@@ -311,6 +314,7 @@ describe('getAnthropicMinCacheTokens', () => {
 
 describe('supportsAnthropicAdaptiveThinking', () => {
   it('supports current adaptive-thinking Anthropic models and aliases', () => {
+    expect(supportsAnthropicAdaptiveThinking('claude-fable-5-1')).toBe(true)
     expect(supportsAnthropicAdaptiveThinking('claude-fable-5')).toBe(true)
     expect(supportsAnthropicAdaptiveThinking('claude-mythos-5')).toBe(true)
     expect(supportsAnthropicAdaptiveThinking('claude-opus-4-8')).toBe(true)

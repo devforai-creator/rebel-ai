@@ -13,6 +13,12 @@ export const openRouterModelCatalog = defineProviderCatalog({
       features: { promptCaching: 'standard', reasoning: true },
     },
     {
+      id: 'z-ai/glm-5.3',
+      displayName: 'GLM-5.3',
+      pricing: flatPricing({ input: 1.4, output: 4.4, cachedInput: 0.26 }),
+      features: { reasoning: true },
+    },
+    {
       id: 'z-ai/glm-5.2',
       displayName: 'GLM-5.2',
       pricing: flatPricing({ input: 1.4, output: 4.4, cachedInput: 0.26 }),

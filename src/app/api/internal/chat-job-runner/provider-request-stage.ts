@@ -24,6 +24,7 @@ import { FETCH_SOURCE_RANGE_TOOL_NAME } from '@/lib/experimental/agentic-transcr
 import { buildAgenticTranscriptRecallToolContract } from '@/lib/experimental/agentic-transcript-recall/tool-contract'
 import { decideAgenticTranscriptRecallToolChoice } from '@/lib/experimental/agentic-transcript-recall/tool-choice-gate'
 import type { SerializableFunctionToolContract } from '@/lib/llm/function-tool-contract'
+import { supportsRequiredToolChoice } from '@/lib/models'
 import { submitAnthropicBatchJob } from './anthropic-batch-orchestrator'
 import type { LoadedChatJobExecutionContext } from './execution-context'
 import {
@@ -41,6 +42,7 @@ type ExperimentalPrepareStep = NonNullable<
   >['prepareStep']
 >
 type DebugMetricValue = string | number | boolean | null
+type AtrToolChoiceEnforcement = 'auto' | 'native_required' | 'instruction_required'
 
 type AnthropicThinkingDebugMetricSnapshot = {
   requested: boolean | null
@@ -317,9 +319,18 @@ export async function requestProviderStage({
         hasToolCapableSourceMap,
       })
     : null
+  const atrToolChoiceEnforcement: AtrToolChoiceEnforcement | null = atrToolChoiceDecision
+    ? atrToolChoiceDecision.toolChoice === 'auto'
+      ? 'auto'
+      : supportsRequiredToolChoice({ provider, modelName })
+        ? 'native_required'
+        : 'instruction_required'
+    : null
 
   debugMetrics['experimental_agentic_transcript_recall_tool_choice_preflight'] =
     atrToolChoiceDecision?.toolChoice ?? null
+  debugMetrics['experimental_agentic_transcript_recall_tool_choice_enforcement'] =
+    atrToolChoiceEnforcement
   debugMetrics['experimental_agentic_transcript_recall_tool_choice_source'] =
     atrToolChoiceDecision?.source ?? null
   debugMetrics['experimental_agentic_transcript_recall_tool_choice_version'] =
@@ -341,7 +352,7 @@ export async function requestProviderStage({
     provider === 'google' && agenticTranscriptRecall.enabled && hasToolCapableSourceMap
       ? buildAgenticTranscriptRecallToolContract({
           sourceMap: agenticTranscriptRecallSourceMap,
-          toolChoice: atrToolChoiceDecision?.toolChoice ?? 'auto',
+          toolChoice: atrToolChoiceEnforcement === 'native_required' ? 'required' : 'auto',
         })
       : null
   const googleCacheSystemPrompt =
@@ -521,6 +532,7 @@ export async function requestProviderStage({
           sourceMap: agenticTranscriptRecallSourceMap,
           streamRequest: streamPayloadPlan.streamRequest,
           debugMetrics,
+          requireToolByInstruction: atrToolChoiceEnforcement === 'instruction_required',
           logDebug,
         })
         finalStreamRequest = experimentalResult.streamRequest
@@ -532,7 +544,7 @@ export async function requestProviderStage({
           )
         const experimentalToolsAvailable = !!experimentalStreamTextSettingsCandidate?.tools
         const shouldApplyRequiredFirstToolStep =
-          atrToolChoiceDecision?.toolChoice === 'required' &&
+          atrToolChoiceEnforcement === 'native_required' &&
           experimentalToolsAvailable &&
           !googleCachedToolContractOwnsRequest
         experimentalStreamTextSettings = shouldApplyRequiredFirstToolStep
@@ -549,7 +561,7 @@ export async function requestProviderStage({
         if (
           provider === 'google' &&
           googleCachedToolContractOwnsRequest &&
-          atrToolChoiceDecision?.toolChoice === 'required' &&
+          atrToolChoiceEnforcement === 'native_required' &&
           experimentalToolsAvailable
         ) {
           logDebug(
@@ -586,6 +598,17 @@ export async function requestProviderStage({
 
         if (debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied']) {
           logDebug('[Agentic Transcript Recall] Tool-choice preflight forced tool use', {
+            jobId,
+            provider,
+            modelName,
+            score: atrToolChoiceDecision?.score ?? null,
+            matchedRules: atrToolChoiceDecision?.matchedRuleIds ?? [],
+          })
+        } else if (
+          atrToolChoiceEnforcement === 'instruction_required' &&
+          experimentalToolsAvailable
+        ) {
+          logDebug('[Agentic Transcript Recall] Tool use required by instruction', {
             jobId,
             provider,
             modelName,

@@ -35,7 +35,7 @@ describe('buildLanguageModel', () => {
     vi.clearAllMocks()
   })
 
-  it.each(['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'])(
+  it.each(['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'])(
     'builds google model %s',
     async (modelName) => {
       const googleModel = { provider: 'google-model' } as unknown as LanguageModel

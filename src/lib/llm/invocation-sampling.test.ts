@@ -21,7 +21,7 @@ describe('resolveInvocationSamplingOptions', () => {
     ).toEqual({})
   })
 
-  it.each(['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'])(
+  it.each(['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'])(
     'does not send deprecated sampling options to %s',
     (modelName) => {
       expect(

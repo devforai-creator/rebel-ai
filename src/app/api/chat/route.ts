@@ -1,3 +1,4 @@
+import { localWorkerOnline } from '@/lib/chat/local-worker'
 import { createClient } from '@/lib/supabase/server'
 import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
 import { checkUserRateLimit, checkAnonRateLimit } from '@/lib/chat/rate-limiter'
@@ -105,6 +106,12 @@ export async function POST(req: Request) {
     }
 
     const { provider, modelName } = resolvedConfig.config
+    if (provider === 'local' && !(await localWorkerOnline(user.id))) {
+      return createErrorResponse(
+        '데스크톱 로컬 작업자가 오프라인이거나 연결이 설정되지 않았습니다.',
+        503,
+      )
+    }
     const deliveryModeResult = resolveChatDeliveryModeAdmission({
       rawDeliveryMode,
       provider,

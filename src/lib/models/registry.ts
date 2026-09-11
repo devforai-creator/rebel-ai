@@ -1,3 +1,4 @@
+import { localModelCatalog } from './catalog/local'
 import type { Provider } from '@/types/database.types'
 import { anthropicModelCatalog } from './catalog/anthropic'
 import { deepSeekModelCatalog } from './catalog/deepseek'
@@ -8,6 +9,7 @@ import { voyageModelCatalog } from './catalog/voyage'
 import type { ModelDefinition, ProviderDefaults } from './types'
 
 export const MODEL_REGISTRY: readonly ModelDefinition[] = [
+  ...localModelCatalog.models,
   ...googleModelCatalog.models,
   ...openAIModelCatalog.models,
   ...anthropicModelCatalog.models,
@@ -17,6 +19,7 @@ export const MODEL_REGISTRY: readonly ModelDefinition[] = [
 ]
 
 export const PROVIDER_DEFAULTS = {
+  local: localModelCatalog.defaults,
   google: googleModelCatalog.defaults,
   openai: openAIModelCatalog.defaults,
   anthropic: anthropicModelCatalog.defaults,

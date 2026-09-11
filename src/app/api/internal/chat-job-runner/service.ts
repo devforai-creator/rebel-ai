@@ -1,3 +1,4 @@
+import { localWorkerOwner } from '@/lib/chat/local-worker'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { claimPendingJob } from '@/lib/chat/job-queue'
@@ -80,7 +81,9 @@ export async function processChatJobs(
   // Ensure limit is reasonable
   const jobLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 5) : 1
 
-  const batchResults = await pollDueAnthropicBatchJobs({ supabase, origin, limit: jobLimit })
+  const batchResults = localWorkerOwner()
+    ? []
+    : await pollDueAnthropicBatchJobs({ supabase, origin, limit: jobLimit })
   processed.push(...batchResults)
 
   for (let index = 0; index < jobLimit; index += 1) {

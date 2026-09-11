@@ -46,13 +46,15 @@
     "cleanup:module-assets": "node scripts/cleanup-orphaned-module-assets.js",
     "backfill:facts": "node scripts/backfill-facts.js",
     "backfill:embeddings": "node scripts/backfill-embeddings.js",
-    "backfill:canonical-memory": "node scripts/backfill-canonical-memory.js"
+    "backfill:canonical-memory": "node scripts/backfill-canonical-memory.js",
+    "worker:local": "node scripts/run-local-chat-worker.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.70",
     "@ai-sdk/deepseek": "^1.0.35",
     "@ai-sdk/google": "^2.0.62",
     "@ai-sdk/openai": "^2.0.99",
+    "@ai-sdk/openai-compatible": "^1.0.54",
     "@ai-sdk/provider": "^2.0.1",
     "@google/generative-ai": "^0.24.1",
     "@safe-ugc-ui/react": "^3.0.1",

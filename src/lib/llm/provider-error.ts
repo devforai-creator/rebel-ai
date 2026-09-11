@@ -114,6 +114,27 @@ export function normalizeProviderError({
   provider: string
   error: unknown
 }): NormalizedProviderError {
+  if (provider === 'local') {
+    const messages: Record<string, string> = {
+      LOCAL_LLM_DISABLED: '로컬 모델은 설정된 로컬 실행 환경에서만 사용할 수 있습니다.',
+      LOCAL_LLM_CONFIGURATION: '로컬 추론 서버 주소 설정을 확인하세요.',
+      LOCAL_LLM_TOOLS: '로컬 RP 모델에서는 도구 호출을 지원하지 않습니다.',
+      LOCAL_LLM_MODEL: '지원하지 않는 로컬 모델입니다.',
+      LOCAL_LLM_AUTH: '로컬 추론 서버 인증 토큰을 확인하세요.',
+      LOCAL_LLM_CONTEXT: '로컬 모델의 문맥 또는 출력 길이 한도를 초과했습니다.',
+      LOCAL_LLM_BUSY: '로컬 추론 서버가 사용 중입니다. 잠시 후 다시 시도하세요.',
+    }
+    return {
+      category: 'unknown',
+      userMessage:
+        messages[error instanceof Error ? error.message : ''] ??
+        '로컬 추론 서버 연결 또는 응답을 확인하세요.',
+      technicalMessage: null,
+      providerCode: null,
+      retryable: false,
+      recognized: true,
+    }
+  }
   const parsed = parseProviderError(error)
   const message = parsed.message
   const code = parsed.code?.toLowerCase() ?? null

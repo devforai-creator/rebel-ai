@@ -1,3 +1,4 @@
+import { buildLocalModel } from './local'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
@@ -54,6 +55,8 @@ export function buildLanguageModel({
   serviceTier,
 }: BuildLanguageModelInput): LanguageModel {
   switch (provider) {
+    case 'local':
+      return buildLocalModel(apiKey, modelName)
     case 'google': {
       const googleProvider = createGoogleGenerativeAI({ apiKey })
       return wrapGoogleLanguageModel(googleProvider(modelName))

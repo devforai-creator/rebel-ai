@@ -1,3 +1,4 @@
+import { localWorkerOwner } from './local-worker'
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { Database } from '@/types/database.types'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from './delivery-mode'
@@ -48,7 +49,10 @@ export async function claimPendingJob(
   },
 ): Promise<RawChatJobRecord | null> {
   const claimStart = performance.now()
-  const { data, error } = await supabase.rpc('claim_pending_chat_job')
+  const owner = localWorkerOwner()
+  const { data, error } = owner
+    ? await supabase.rpc('claim_pending_local_chat_job', { p_owner: owner })
+    : await supabase.rpc('claim_pending_chat_job')
   const claimDurationMs = performance.now() - claimStart
   const claimedRows = Array.isArray(data) ? (data as RawChatJobRecord[]) : []
   const claimedJob = claimedRows[0] ?? null

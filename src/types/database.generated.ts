@@ -828,6 +828,21 @@ export type Database = {
           },
         ]
       }
+      local_chat_worker_status: {
+        Row: {
+          seen_at: string
+          user_id: string
+        }
+        Insert: {
+          seen_at?: string
+          user_id: string
+        }
+        Update: {
+          seen_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       lorebook_overrides: {
         Row: {
           chat_id: string
@@ -1492,6 +1507,13 @@ export type Database = {
       }
       claim_pending_chat_job: {
         Args: never
+        Returns: {
+          id: string
+          payload: Json
+        }[]
+      }
+      claim_pending_local_chat_job: {
+        Args: { p_owner: string }
         Returns: {
           id: string
           payload: Json

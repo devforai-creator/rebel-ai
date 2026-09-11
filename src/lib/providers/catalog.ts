@@ -19,6 +19,19 @@ export type ProviderCatalogEntry = {
 }
 
 export const PROVIDER_CATALOG: Record<Provider, ProviderCatalogEntry> = {
+  local: {
+    optionLabel: '로컬 모델 (개인 서버)',
+    badgeLabel: 'Local',
+    badgeColor: 'bg-slate-100 text-slate-800',
+    supportsLLM: true,
+    apiKeyRule: {
+      placeholder: '로컬 서버 전용 인증 토큰',
+      hint: '로컬 실행 환경에서 서버 연결 설정이 필요합니다.',
+      description: '영숫자, 하이픈, 언더스코어 24~200자',
+      pattern: /^[A-Za-z0-9_-]{24,200}$/,
+      maxLength: 200,
+    },
+  },
   google: {
     optionLabel: 'Google (Gemini)',
     badgeLabel: 'Google',

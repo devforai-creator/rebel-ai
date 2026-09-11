@@ -249,6 +249,29 @@ describe('api key actions', () => {
     consoleErrorSpy.mockRestore()
   })
 
+  it('rejects local key registration before Vault access when disabled', async () => {
+    vi.stubEnv('LOCAL_LLM_ENABLED', '')
+    try {
+      const admin = createAdminSupabase()
+      createAdminClientMock.mockReturnValue(admin)
+      createClientMock.mockResolvedValue(buildSupabase())
+      const { createApiKey } = await import('./actions')
+      const result = await createApiKey(
+        INITIAL_STATE,
+        buildApiKeyFormData({
+          provider: 'local',
+          model_preference: 'local-rp',
+          api_key: 'synthetic-local-token-123456',
+        }),
+      )
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('로컬')
+      expect(admin.rpc).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('returns login required when unauthenticated', async () => {
     createAdminClientMock.mockReturnValue(createAdminSupabase())
     createClientMock.mockResolvedValue(buildSupabase({ user: null }))

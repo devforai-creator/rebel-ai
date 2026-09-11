@@ -138,7 +138,13 @@ describe('providerRules', () => {
       expect(rule.pattern).toBeInstanceOf(RegExp)
     })
 
-    it.each(providers)('%s has docsUrl', (provider) => {
+    it('local uses a self-hosted token rather than an external key issuance page', () => {
+      expect(PROVIDER_RULES.local.docsUrl).toBeUndefined()
+      expect(PROVIDER_RULES.local.pattern.test('synthetic-local-token-123456')).toBe(true)
+      expect(PROVIDER_RULES.local.pattern.test('short')).toBe(false)
+    })
+
+    it.each(providers.filter((provider) => provider !== 'local'))('%s has docsUrl', (provider) => {
       const rule = PROVIDER_RULES[provider]
       expect(rule.docsUrl).toBeDefined()
       expect(rule.docsUrl).toMatch(/^https?:\/\//)

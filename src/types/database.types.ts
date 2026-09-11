@@ -27,6 +27,7 @@ export type Provider =
   | 'anthropic'
   | 'deepseek'
   | 'openrouter'
+  | 'local'
   | 'voyage_embeddings'
 export type LlmProvider = Exclude<Provider, 'voyage_embeddings'>
 export type EmbeddingOnlyProvider = Exclude<Provider, LlmProvider>

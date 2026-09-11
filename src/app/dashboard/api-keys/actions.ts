@@ -1,6 +1,8 @@
 'use server'
 
 import { z } from 'zod'
+import { localQueueEnabledFor } from '@/lib/chat/local-worker'
+import { localBaseURL } from '@/lib/llm/local'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createSecret, deleteApiKey as deleteApiKeyRpc, deleteSecret } from '@/lib/supabase/rpc'
@@ -112,6 +114,13 @@ export async function createApiKey(
   }
 
   const provider = parsedForm.data.provider as Provider
+  if (provider === 'local' && !localQueueEnabledFor(user.id)) {
+    try {
+      localBaseURL()
+    } catch {
+      return { error: '로컬 실행 환경의 추론 서버 설정을 먼저 확인하세요.', success: false }
+    }
+  }
   const keyName = parsedForm.data.key_name
   const apiKey = parsedForm.data.api_key
   const rawServiceTier = parsedForm.data.service_tier

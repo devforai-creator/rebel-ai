@@ -82,3 +82,12 @@ Ctrl+B, D로 분리합니다. tmux attach -t rebel-local-worker로 재접속합�
 실패 시 상용 모델로 자동 전환하지 않습니다. 별도 요약·임베딩 공급자는 기존 설정을 따릅니다.
 
 운영 반영 후 npm run ops:smoke 및 실제 합성 대화를 확인하세요.
+
+## 별도 실행 묶음
+
+LOCAL_WORKER_BUILD=true로 빌드하면 Next standalone 출력도 생성됩니다.
+실행 묶음은 .next/standalone, .next/static, scripts/run-local-chat-worker.js,
+Node 24 런타임을 포함할 수 있습니다. 원래 .env 파일을 통째로 복사하지 말고,
+위에 명시한 필수 백엔드 설정만 권한 600의 .env.local로 별도 주입합니다.
+LOCAL_WORKER_STANDALONE=true를 설정하면 server.js를 실행합니다.
+묶음은 백엔드 자격 증명을 포함하므로 공개 업로드·Git 추가를 하지 않습니다.

@@ -2,8 +2,8 @@
 // Trusted desktop backend. It owns admin DB credentials; it is not an untrusted agent.
 const { spawn } = require('node:child_process')
 const { setTimeout: sleep } = require('node:timers/promises')
-const dotenv = require('dotenv')
-dotenv.config({ path: '.env.local', quiet: true })
+const fs = require('node:fs')
+if (fs.existsSync('.env.local')) process.loadEnvFile('.env.local')
 
 async function main() {
   const required = [
@@ -21,19 +21,23 @@ async function main() {
   const origin = 'http://127.0.0.1:' + port
   const child = spawn(
     process.execPath,
-    [
-      require.resolve('next/dist/bin/next'),
-      'start',
-      '--hostname',
-      '127.0.0.1',
-      '--port',
-      String(port),
-    ],
+    process.env.LOCAL_WORKER_STANDALONE === 'true'
+      ? ['server.js']
+      : [
+          require.resolve('next/dist/bin/next'),
+          'start',
+          '--hostname',
+          '127.0.0.1',
+          '--port',
+          String(port),
+        ],
     {
       // Pipeline diagnostics may contain private content. Never relay them to the controller.
       stdio: ['ignore', 'ignore', 'ignore'],
       env: {
         ...process.env,
+        HOSTNAME: '127.0.0.1',
+        PORT: String(port),
         CHAT_RUNNER_TARGET: 'local',
         LOCAL_LLM_ENABLED: 'true',
         LOCAL_LLM_QUEUE_ENABLED: 'true',

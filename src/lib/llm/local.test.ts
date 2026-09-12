@@ -41,7 +41,7 @@ describe('local provider', () => {
       expect(localBaseURL()).toBe(url)
     },
   )
-  it.each(['local-rp-base', 'local-rp-step500'])(
+  it.each(['local-rp-base', 'local-rp-step200', 'local-rp-step500'])(
     'streams %s with roles, bearer auth and output limit',
     async (modelName) => {
       configure()
@@ -93,6 +93,13 @@ describe('local provider', () => {
       expect(new Headers(init.headers).get('authorization')).toBe('Bearer synthetic-test-token')
       expect(init.redirect).toBe('error')
       const body = JSON.parse(String(init.body))
+      expect(
+        Object.keys(body).every((key) =>
+          ['model', 'messages', 'temperature', 'top_p', 'max_tokens', 'seed', 'stream'].includes(
+            key,
+          ),
+        ),
+      ).toBe(true)
       expect(body.model).toBe(modelName)
       expect(body.max_tokens).toBe(2048)
       expect(body.temperature).toBe(0.7)
@@ -123,4 +130,24 @@ describe('local provider', () => {
     expect(JSON.stringify(error)).not.toContain('private detail')
     expect(error.technicalMessage).toBeNull()
   })
+})
+
+it.each([
+  [
+    'Context limit exceeded: prompt <=4096, output <=2048, total <=6144; no truncation',
+    'LOCAL_LLM_CONTEXT',
+  ],
+  ['Messages rejected by model chat template', 'LOCAL_LLM_TEMPLATE'],
+  ['private arbitrary error text', 'LOCAL_LLM_REQUEST'],
+])('classifies HTTP 400 without leaking its contents', async (message, code) => {
+  configure()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify({ error: { message } }), { status: 400 })),
+  )
+  await expect(
+    buildLocalModel('test', 'local-rp-base').doGenerate({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'synthetic' }] }],
+    }),
+  ).rejects.toThrow(code)
 })

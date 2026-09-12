@@ -1,0 +1,60 @@
+{
+  "deployment_id": "dpl_7doXmwhMC3NBmoWpNoXjhkY2aGw2",
+  "production_alias": "https://rebel-chat.vercel.app",
+  "base_git_commit": "5a6252634adb811b154009eae5976ff1c62bf9d7",
+  "tracked_file_count": 869,
+  "sorted_path_sha256_manifest_digest": "d5d32a033fca7ab0609ac44ef8dde56cdb35dd07426d21e35529f56621ea6142",
+  "modified_files": [
+    {
+      "path": "scripts/run-local-chat-worker.js",
+      "sha256": "eaef09d0924d0be8019b475005b80ae6d1c6a4d704aa2f87b7d226008dd379f7"
+    },
+    {
+      "path": "src/app/api/internal/chat-job-runner/execution-context.ts",
+      "sha256": "aa3b1f0e05b04bf0241360c8bb6b06151e51e983bb789f6af0c1670c78dc5fd8"
+    },
+    {
+      "path": "src/app/api/internal/local-worker/route.test.ts",
+      "sha256": "ce26d1e750013723360863438a400f5d791c85a0541fb5d8847a98b1dcbb0099"
+    },
+    {
+      "path": "src/app/api/internal/local-worker/route.ts",
+      "sha256": "917e9644858c048df181fba13971324a7b8b842425c03952bfe27073b2d67cb8"
+    },
+    {
+      "path": "src/lib/chat/runtime-limits.test.ts",
+      "sha256": "7584d9fd71fd5abc23dd25d7a2255bf1576e34cc0658cbac44747467f7fc30ab"
+    },
+    {
+      "path": "src/lib/chat/runtime-limits.ts",
+      "sha256": "a00a009f72645be696938be798f9f0f48c061a8e59a7f71b068e41e96f2d4f3e"
+    },
+    {
+      "path": "src/lib/internal-api-origin.test.ts",
+      "sha256": "5b7184d7cea803b6b273fe1e038934374315dbb3b41937f2e04eba2fc973ad5f"
+    },
+    {
+      "path": "src/lib/internal-api-origin.ts",
+      "sha256": "dfdc5e432cf3f163708bb1ff938c50f96864e84cf248ee174d4d46daacc32fb8"
+    },
+    {
+      "path": "src/lib/llm/local.test.ts",
+      "sha256": "039b387da0540a0c389de9feed2c26d35886d1fdc767d8d934890aec175d80d5"
+    },
+    {
+      "path": "src/lib/llm/local.ts",
+      "sha256": "c197286de78a73e1227e92697c653145bb9c39b4633a96c82eec705a5b523c09"
+    },
+    {
+      "path": "src/lib/llm/provider-error.ts",
+      "sha256": "6912016ea456d03ecace6dbda715f9e956ba7032e8a0845c93138bc4e033ecd9"
+    },
+    {
+      "path": "src/lib/models/catalog/local.ts",
+      "sha256": "f4cde65c3c6bb52a9422252fe67891f53aeb312b814aed1cf5897b9012e83a86"
+    }
+  ],
+  "local_tracked_files_match_deployment_snapshot": true,
+  "private_environment_files_uploaded": false,
+  "untracked_smoke_test_was_not_uploaded": true
+}

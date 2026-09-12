@@ -1,7 +1,7 @@
 import { beforeEach, afterAll, describe, expect, it, vi } from 'vitest'
 
 const ORIGINAL_ENV = { ...process.env }
-const CANDIDATE_ENV_KEYS = ['INTERNAL_API_ORIGIN', 'VERCEL_URL']
+const CANDIDATE_ENV_KEYS = ['INTERNAL_API_ORIGIN', 'VERCEL_URL', 'VERCEL', 'CHAT_RUNNER_TARGET']
 
 function restoreEnv() {
   for (const key of Object.keys(process.env)) {
@@ -118,4 +118,23 @@ describe('internal-api-origin', () => {
       'https://edge-deploy.vercel.app/api/internal/chat-job-runner',
     )
   })
+})
+
+it.each([
+  ['http://127.0.0.1:3100', '', true],
+  ['http://localhost:3100', '', true],
+  ['http://example.com:3100', '', false],
+  ['http://127.0.0.1:3100', '1', false],
+])('production desktop origin %s cloud=%s', async (origin, vercel, allowed) => {
+  vi.resetModules()
+  restoreEnv()
+  clearCandidateEnv()
+  process.env.INTERNAL_API_ORIGIN = origin
+  process.env.CHAT_RUNNER_TARGET = 'local'
+  process.env.VERCEL = vercel
+  ;(process.env as Record<string, string | undefined>).NODE_ENV = 'production'
+  const { resolveInternalApiOrigin } = await loadModule()
+  if (allowed) expect(resolveInternalApiOrigin()).toBe(origin)
+  else expect(() => resolveInternalApiOrigin()).toThrow()
+  restoreEnv()
 })

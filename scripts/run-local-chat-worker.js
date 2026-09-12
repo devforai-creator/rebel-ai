@@ -104,7 +104,8 @@ async function main() {
     try {
       while (!stopped) {
         try {
-          const response = await request('/api/internal/chat-job-runner', { limit: 1 }, 790000)
+          // Self-hosted: 14-minute provider budget plus 40 seconds for persistence.
+          const response = await request('/api/internal/chat-job-runner', { limit: 1 }, 880000)
           // Never print job IDs, payloads or provider error bodies.
           if (response.ok) {
             const result = await response.json()

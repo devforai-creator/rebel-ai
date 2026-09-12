@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { ApiKey, Chat, Character, Persona, Profile } from '@/types/database.types'
 import { ensureUserFirstForAnthropic } from '@/lib/chat/anthropic-user-first'
 import { buildMemoryPlan } from '@/lib/chat-memory'
-import { CHAT_RUNNER_LIMITS } from '@/lib/chat/runtime-limits'
+import { resolveChatInputTokenLimit } from '@/lib/chat/runtime-limits'
 import { getGlobalSystemPrompt } from '@/lib/chat/global-system-prompt'
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { applyBilingualContext, isBilingualEnabled } from '@/lib/chat/bilingual-context'
@@ -797,7 +797,7 @@ export async function loadChatJobExecutionContext({
   const anthropicPlaceholderTokens = anthropicPlaceholderAdded ? estimateTokens('(continue)') : 0
   const totalInputTokens = systemPromptTokens + messagesTokens + anthropicPlaceholderTokens
 
-  if (totalInputTokens > CHAT_RUNNER_LIMITS.maxTotalInputTokens) {
+  if (totalInputTokens > resolveChatInputTokenLimit(provider)) {
     throw new Error(`Input context too large (${totalInputTokens.toLocaleString()} tokens)`)
   }
 

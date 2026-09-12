@@ -107,7 +107,10 @@ function normalizeOrigin(candidate: string | null | undefined): string | null {
       parsed.hostname === 'localhost' ||
       parsed.hostname === '::1')
 
-  if (isLocalHttp && isLocalLikeEnvironment()) {
+  const isDesktopWorker =
+    process.env.CHAT_RUNNER_TARGET === 'local' && !process.env.VERCEL && !process.env.VERCEL_ENV
+
+  if (isLocalHttp && (isLocalLikeEnvironment() || isDesktopWorker)) {
     return parsed.origin
   }
 

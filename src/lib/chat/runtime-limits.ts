@@ -21,10 +21,13 @@ export const CHAT_REPROCESS_LIMITS = {
 
 export const CHAT_RUNNER_LIMITS = {
   maxTotalInputTokens: 150_000,
+  localMaxTotalInputTokens: 200_000,
   // Keep provider caps below the 800-second Pro + Fluid route duration so
   // stalls are handled by runner error flow instead of platform termination.
   routeMaxDurationSeconds: 800,
   providerStreamTimeoutMs: 240_000,
+  // Local workers are self-hosted; the Vercel route duration does not apply.
+  localProviderStreamTimeoutMs: 14 * 60 * 1000,
   kimiK3ProviderStreamTimeoutMs: 12 * 60 * 1000,
   // Leave one full Kimi budget plus 60 seconds for context loading, response
   // persistence, and runner cleanup before claiming another sequential job.
@@ -39,11 +42,20 @@ export function resolveChatProviderStreamTimeoutMs({
   provider: LlmProvider
   modelName: string
 }): number {
+  if (provider === 'local') return CHAT_RUNNER_LIMITS.localProviderStreamTimeoutMs
+
   if (provider === 'openrouter' && modelName === OPENROUTER_KIMI_K3_MODEL_ID) {
     return CHAT_RUNNER_LIMITS.kimiK3ProviderStreamTimeoutMs
   }
 
   return CHAT_RUNNER_LIMITS.providerStreamTimeoutMs
+}
+
+// This is an estimate guard; the local server checks exact templated tokens.
+export function resolveChatInputTokenLimit(provider: LlmProvider): number {
+  return provider === 'local'
+    ? CHAT_RUNNER_LIMITS.localMaxTotalInputTokens
+    : CHAT_RUNNER_LIMITS.maxTotalInputTokens
 }
 
 export const CHAT_RATE_LIMITS = {

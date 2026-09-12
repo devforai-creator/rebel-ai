@@ -37,3 +37,15 @@ it('writes only the server-configured owner', async () => {
     seen_at: expect.any(String),
   })
 })
+
+it('does not advertise readiness with an invalid internal origin', async () => {
+  vi.stubEnv('CHAT_ADMIN_SECRET', 'synthetic-secret')
+  vi.stubEnv('CHAT_RUNNER_TARGET', 'local')
+  vi.stubEnv('VERCEL', '')
+  vi.stubEnv('LOCAL_LLM_ENABLED', 'true')
+  vi.stubEnv('LOCAL_LLM_BASE_URL', 'http://127.0.0.1:8000/v1')
+  vi.stubEnv('LOCAL_LLM_OWNER_ID', '12345678-1234-1234-1234-123456789abc')
+  vi.stubEnv('INTERNAL_API_ORIGIN', 'http://untrusted.example.com')
+  expect((await POST(request('synthetic-secret'))).status).toBe(503)
+  expect(upsert).not.toHaveBeenCalled()
+})

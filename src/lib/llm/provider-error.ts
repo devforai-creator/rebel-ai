@@ -120,6 +120,8 @@ export function normalizeProviderError({
       LOCAL_LLM_CONFIGURATION: '로컬 추론 서버 주소 설정을 확인하세요.',
       LOCAL_LLM_TOOLS: '로컬 RP 모델에서는 도구 호출을 지원하지 않습니다.',
       LOCAL_LLM_MODEL: '지원하지 않는 로컬 모델입니다.',
+      LOCAL_LLM_REQUEST: '로컬 추론 서버가 요청 형식 또는 생성 설정을 거절했습니다.',
+      LOCAL_LLM_TEMPLATE: '로컬 모델의 대화 템플릿과 메시지 형식이 맞지 않습니다.',
       LOCAL_LLM_AUTH: '로컬 추론 서버 인증 토큰을 확인하세요.',
       LOCAL_LLM_CONTEXT: '로컬 모델의 문맥 또는 출력 길이 한도를 초과했습니다.',
       LOCAL_LLM_BUSY: '로컬 추론 서버가 사용 중입니다. 잠시 후 다시 시도하세요.',

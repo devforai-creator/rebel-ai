@@ -1,5 +1,6 @@
 import { requireBearerToken } from '@/lib/http/api-contract'
 import { localWorkerOwner } from '@/lib/chat/local-worker'
+import { resolveInternalApiOrigin } from '@/lib/internal-api-origin'
 import { localBaseURL } from '@/lib/llm/local'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -10,6 +11,7 @@ export async function POST(req: Request) {
     const owner = localWorkerOwner()
     if (!owner) return Response.json({ error: 'Worker disabled' }, { status: 404 })
     localBaseURL()
+    resolveInternalApiOrigin()
     const { error } = await createAdminClient()
       .from('local_chat_worker_status')
       .upsert({ user_id: owner, seen_at: new Date().toISOString() })

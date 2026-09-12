@@ -37,3 +37,10 @@ Recent history favors short imperative commit subjects such as `Fix ...`, `Switc
 ## Security & Configuration Tips
 
 Never commit secrets. Start from `.env.example`, and keep `INTERNAL_API_ORIGIN`, `CHAT_ADMIN_SECRET`, `SUMMARY_GENERATION_SECRET`, and `CRON_SECRET` aligned with the environment you are testing. Review `SECURITY.md` and `SUPABASE_SETUP.md` before changing auth, Vault usage, or internal trigger routes.
+
+## Production Source Traceability
+
+- Use the configured Git-based production deployment path: inspect the diff, commit only the intended changes, then push the commit. Record the source commit and verify the resulting deployment.
+- Do not publish a dirty working directory, a temporary source copy, or uncommitted build output through Vercel CLI. Use another deployment path only when the user explicitly requests that path after its scope is explained.
+- If approval review rejects a push, deployment, or environment change, report the rejection and stop that mutation. Do not use another tool, transport, or deployment path to achieve the rejected action.
+- Preserve unrelated working-tree changes and private environment files. Do not commit credentials or dataset/model artifacts.

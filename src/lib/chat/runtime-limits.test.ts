@@ -3,9 +3,24 @@ import {
   CHAT_JOB_POLLER_LIMITS,
   CHAT_RUNNER_LIMITS,
   resolveChatProviderStreamTimeoutMs,
+  resolveChatInputTokenLimit,
 } from './runtime-limits'
 
 describe('chat runtime limits', () => {
+  it('allows a cold 200K local request while retaining cloud budgets', () => {
+    expect(
+      resolveChatProviderStreamTimeoutMs({ provider: 'local', modelName: 'local-rp-base' }),
+    ).toBe(840_000)
+    expect(resolveChatInputTokenLimit('local')).toBe(200_000)
+    expect(resolveChatInputTokenLimit('openrouter')).toBe(150_000)
+    expect(CHAT_RUNNER_LIMITS.localProviderStreamTimeoutMs + 40_000).toBeLessThan(
+      CHAT_JOB_POLLER_LIMITS.timeoutMs,
+    )
+    expect(CHAT_JOB_POLLER_LIMITS.timeoutMs).toBeLessThan(
+      CHAT_RUNNER_LIMITS.stuckProcessingJobTimeoutMs,
+    )
+  })
+
   it('gives OpenRouter Kimi K3 a long reasoning-aware stream budget', () => {
     expect(
       resolveChatProviderStreamTimeoutMs({

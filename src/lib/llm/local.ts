@@ -40,7 +40,7 @@ export function buildLocalModel(apiKey: string, modelName: string) {
   if (!LOCAL_MODEL_IDS.some((id) => id === modelName)) throw new Error('LOCAL_LLM_MODEL')
   const model = createOpenAICompatible({
     name: 'local',
-    includeUsage: true,
+    includeUsage: false,
     baseURL,
     apiKey,
     fetch: async (input, init) => {
@@ -49,15 +49,40 @@ export function buildLocalModel(apiKey: string, modelName: string) {
         const response = await fetch(input, { ...init, redirect: 'error' })
         if (!response.ok) {
           const status = response.status
-          await response.body?.cancel()
+          // Read only a bounded error object; never propagate server response text.
+          let badRequestCode = 'LOCAL_LLM_REQUEST'
+          if (status === 400) {
+            const reader = response.body?.getReader()
+            const part = await reader?.read()
+            await reader?.cancel()
+            if (part?.value && part.value.byteLength <= 4096) {
+              try {
+                const message = JSON.parse(new TextDecoder().decode(part.value))?.error?.message
+                if (
+                  message ===
+                  'Context limit exceeded: prompt <=4096, output <=2048, total <=6144; no truncation'
+                ) {
+                  badRequestCode = 'LOCAL_LLM_CONTEXT'
+                } else if (message === 'Messages rejected by model chat template') {
+                  badRequestCode = 'LOCAL_LLM_TEMPLATE'
+                }
+              } catch {
+                /* Unknown response stays a generic request error. */
+              }
+            }
+          } else {
+            await response.body?.cancel()
+          }
           const code =
-            status === 401 || status === 403
-              ? 'LOCAL_LLM_AUTH'
-              : status === 413 || status === 422
-                ? 'LOCAL_LLM_CONTEXT'
-                : status === 409 || status === 429 || status === 503
-                  ? 'LOCAL_LLM_BUSY'
-                  : 'LOCAL_LLM_RESPONSE'
+            status === 400
+              ? badRequestCode
+              : status === 401 || status === 403
+                ? 'LOCAL_LLM_AUTH'
+                : status === 413 || status === 422
+                  ? 'LOCAL_LLM_CONTEXT'
+                  : status === 409 || status === 429 || status === 503
+                    ? 'LOCAL_LLM_BUSY'
+                    : 'LOCAL_LLM_RESPONSE'
           throw new Error(code)
         }
         return response

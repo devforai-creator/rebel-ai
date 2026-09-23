@@ -46,6 +46,7 @@ describe('Model Registry', () => {
 
       expect(Array.isArray(ids)).toBe(true)
       expect(ids.every((id) => typeof id === 'string')).toBe(true)
+      expect(ids[0]).toBe('gpt-6-sol')
       expect(ids).toContain('gpt-5.6')
       expect(ids).toContain('gpt-5.4')
       expect(ids).toContain('gpt-5.2')
@@ -114,6 +115,10 @@ describe('Model Registry', () => {
     })
 
     it('resolves configured model families before broad aliases', () => {
+      expect(findModelDefinition({ modelName: 'gpt-6-sol-20260922' })?.id).toBe('gpt-6-sol')
+      expect(findModelDefinition({ modelName: 'claude-opus-5-5-20260922' })?.id).toBe(
+        'claude-opus-5-5',
+      )
       expect(findModelDefinition({ modelName: 'gpt-5.6-terra' })?.id).toBe('gpt-5.6')
       expect(findModelDefinition({ modelName: 'claude-sonnet-5-20260701' })?.id).toBe(
         'claude-sonnet-5',
@@ -215,10 +220,23 @@ describe('Model Registry', () => {
   })
 
   describe('Anthropic model registration', () => {
-    it('lists Claude Fable 5.1 first in the Anthropic UI model list', () => {
+    it('registers Claude Opus 5.5 with always-on thinking and auto tool choice', () => {
+      expect(listUiModelIdsByProvider('anthropic')[0]).toBe('claude-opus-5-5')
+      expect(getModelFeatures({ provider: 'anthropic', modelName: 'claude-opus-5-5' })).toEqual({
+        anthropicThinking: 'adaptive-always-on',
+        batchChat: true,
+        promptCacheMinTokens: 512,
+        requiredToolChoice: false,
+      })
+      expect(
+        supportsRequiredToolChoice({ provider: 'anthropic', modelName: 'claude-opus-5-5' }),
+      ).toBe(false)
+    })
+
+    it('lists Claude Fable 5.1 after Claude Opus 5.5', () => {
       const ids = listUiModelIdsByProvider('anthropic')
 
-      expect(ids[0]).toBe('claude-fable-5-1')
+      expect(ids[1]).toBe('claude-fable-5-1')
       expect(ids).toContain('claude-fable-5')
     })
 
@@ -611,10 +629,10 @@ describe('Model Registry', () => {
       })
     })
 
-    it('appears first in the UI while keeping GPT-5.5 as the provider default', () => {
+    it('appears after GPT-6 Sol while keeping GPT-5.5 as the provider default', () => {
       const ids = listUiModelIdsByProvider('openai')
 
-      expect(ids[0]).toBe('gpt-5.6')
+      expect(ids[1]).toBe('gpt-5.6')
       expect(getDefaultModelForProvider('openai')).toBe('gpt-5.5')
     })
   })
@@ -648,7 +666,7 @@ describe('Model Registry', () => {
     it('appears after GPT-5.6 in UI model list', () => {
       const ids = listUiModelIdsByProvider('openai')
 
-      expect(ids[1]).toBe('gpt-5.5')
+      expect(ids[3]).toBe('gpt-5.4')
     })
   })
 

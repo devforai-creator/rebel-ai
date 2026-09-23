@@ -93,6 +93,22 @@ describe('getProviderOptions', () => {
     })
   })
 
+  it('omits legacy cache retention and unsupported none effort for GPT-6 Sol', () => {
+    expect(
+      getProviderOptions('openai', {
+        modelName: 'gpt-6-sol',
+        promptCacheKey: 'cache-key',
+        promptCacheRetention: '24h',
+        reasoningEffort: 'none',
+      }),
+    ).toEqual({
+      openai: {
+        textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+        promptCacheKey: 'cache-key',
+      },
+    })
+  })
+
   it('passes reasoningEffort to openai provider options', () => {
     const options = getProviderOptions('openai', {
       reasoningEffort: 'high',
@@ -207,8 +223,8 @@ describe('getProviderOptions', () => {
     expect(options).toBeUndefined()
   })
 
-  it('keeps always-on Claude Fable thinking at minimum effort', () => {
-    for (const modelName of ['claude-fable-5-1', 'claude-fable-5']) {
+  it('keeps always-on Claude thinking at minimum effort', () => {
+    for (const modelName of ['claude-opus-5-5', 'claude-fable-5-1', 'claude-fable-5']) {
       const options = getProviderOptions('anthropic', {
         modelName,
         reasoningEffort: 'high',

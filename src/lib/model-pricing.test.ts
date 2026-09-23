@@ -359,6 +359,20 @@ describe('estimateUsageCost', () => {
       expect(result!.completionCost).toBeCloseTo(0.005, 6)
     })
 
+    it('uses Claude Opus 5.5 standard and cached-input rates', () => {
+      const estimate = estimateUsageCost({
+        provider: 'anthropic',
+        modelName: 'claude-opus-5-5',
+        promptTokens: 10000,
+        completionTokens: 1000,
+        cachedInputTokens: 5000,
+      })
+
+      expect(estimate?.promptCost).toBeCloseTo(0.04, 6)
+      expect(estimate?.cachedInputCost).toBeCloseTo(0.001, 6)
+      expect(estimate?.completionCost).toBeCloseTo(0.02, 6)
+    })
+
     it('should apply 0.5x multiplier for Anthropic batch jobs', () => {
       const params: UsageCostParams = {
         provider: 'anthropic',
@@ -378,6 +392,30 @@ describe('estimateUsageCost', () => {
   })
 
   describe('OpenAI models', () => {
+    it('applies GPT-6 Sol long-context rates to the entire request above 272K input tokens', () => {
+      const atBoundary = estimateUsageCost({
+        provider: 'openai',
+        modelName: 'gpt-6-sol',
+        promptTokens: 272000,
+        completionTokens: 10000,
+        cachedInputTokens: 100000,
+      })
+      const aboveBoundary = estimateUsageCost({
+        provider: 'openai',
+        modelName: 'gpt-6-sol',
+        promptTokens: 300000,
+        completionTokens: 10000,
+        cachedInputTokens: 100000,
+      })
+
+      expect(atBoundary?.promptCost).toBeCloseTo(0.344, 6)
+      expect(atBoundary?.cachedInputCost).toBeCloseTo(0.02, 6)
+      expect(atBoundary?.completionCost).toBeCloseTo(0.1, 6)
+      expect(aboveBoundary?.promptCost).toBeCloseTo(0.8, 6)
+      expect(aboveBoundary?.cachedInputCost).toBeCloseTo(0.04, 6)
+      expect(aboveBoundary?.completionCost).toBeCloseTo(0.15, 6)
+    })
+
     it('switches GPT-5.6 pricing immediately above the 272K prompt boundary', () => {
       const atBoundary = estimateUsageCost({
         provider: 'openai',

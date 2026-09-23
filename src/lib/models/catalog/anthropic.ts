@@ -40,6 +40,18 @@ export const anthropicModelCatalog = defineProviderCatalog({
   },
   models: [
     {
+      id: 'claude-opus-5-5',
+      displayName: 'Claude Opus 5.5',
+      matches: { contains: ['claude-opus-5-5'] },
+      pricing: flatPricing({ input: 4, output: 20, cachedInput: 0.2 }),
+      features: {
+        anthropicThinking: 'adaptive-always-on',
+        batchChat: true,
+        promptCacheMinTokens: ANTHROPIC_CACHE_MIN_TOKENS.opus5,
+        requiredToolChoice: false,
+      },
+    },
+    {
       id: 'claude-fable-5-1',
       displayName: 'Claude Fable 5.1',
       matches: { contains: ['claude-fable-5-1'] },

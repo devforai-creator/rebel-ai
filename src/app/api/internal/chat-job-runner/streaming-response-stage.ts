@@ -392,6 +392,14 @@ export async function consumeStreamingResponseStage({
     throw streamError
   }
 
+  const openAIUsageMetadata =
+    provider === 'openai' &&
+    providerMetadata?.openai?.usage &&
+    typeof providerMetadata.openai.usage === 'object'
+      ? (providerMetadata.openai.usage as Record<string, unknown>)
+      : null
+  const cacheWriteTokens = openAIUsageMetadata?.cacheWriteTokens
+
   const anthropicProviderMetadata =
     provider === 'anthropic' &&
     providerMetadata?.anthropic &&
@@ -467,6 +475,7 @@ export async function consumeStreamingResponseStage({
       totalTokens: usage?.totalTokens ?? null,
       cachedInputTokens: usage?.cachedInputTokens ?? null,
       reasoningTokens: usage?.reasoningTokens ?? null,
+      ...(typeof cacheWriteTokens === 'number' ? { cacheWriteTokens } : {}),
     },
   }
 }

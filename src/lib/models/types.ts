@@ -6,6 +6,7 @@ export type ModelPricingRateSet = {
   input: number
   output: number
   cachedInput?: number
+  cacheWrite?: number
   reasoning?: number
 }
 
@@ -22,6 +23,7 @@ export type AnthropicThinkingPolicy =
 export type OpenAIModelPolicy = {
   promptCacheRetention?: 'omit'
   forwardReasoningEffortNone?: boolean
+  minimumReasoningEffort?: 'low'
 }
 
 export type ModelFeatures = {

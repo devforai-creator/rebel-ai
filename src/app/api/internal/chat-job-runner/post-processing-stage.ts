@@ -63,6 +63,7 @@ function buildUsageCost({
     completionTokens: usage.completionTokens ?? undefined,
     cachedInputTokens: usage.cachedInputTokens ?? undefined,
     reasoningTokens: usage.reasoningTokens ?? undefined,
+    ...(usage.cacheWriteTokens !== undefined ? { cacheWriteTokens: usage.cacheWriteTokens } : {}),
     serviceTier: serviceTier ?? undefined,
   })
 }
@@ -125,6 +126,7 @@ export async function runPostProcessingStage({
     totalTokens: usage.totalTokens,
     cachedInputTokens: usage.cachedInputTokens,
     reasoningTokens: usage.reasoningTokens,
+    ...(usage.cacheWriteTokens !== undefined ? { cacheWriteTokens: usage.cacheWriteTokens } : {}),
   }
   const usageCost = buildUsageCost({
     payload,

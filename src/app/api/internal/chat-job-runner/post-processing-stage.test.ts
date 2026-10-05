@@ -50,7 +50,7 @@ describe('runPostProcessingStage', () => {
     })
   })
 
-  it('builds post-generation artifacts and persists the response through the pipeline', async () => {
+  it.each([undefined, 3])('persists cache-write usage: %s', async (cacheWriteTokens) => {
     const supabase = createChatJobRunnerSupabaseMock()
     const payload = buildPayload()
 
@@ -107,6 +107,7 @@ describe('runPostProcessingStage', () => {
           totalTokens: 30,
           cachedInputTokens: 5,
           reasoningTokens: null,
+          ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
         },
       },
     })
@@ -118,6 +119,7 @@ describe('runPostProcessingStage', () => {
       completionTokens: 20,
       cachedInputTokens: 5,
       reasoningTokens: undefined,
+      ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
       serviceTier: 'standard',
     })
     expect(buildChatDebugInfoMock).toHaveBeenCalledWith(
@@ -126,6 +128,7 @@ describe('runPostProcessingStage', () => {
         anthropicConversationMessages: [{ role: 'user', content: 'Hello' }],
         rawResponse: 'raw text',
         processedResponse: 'clean text',
+        usage: expect.objectContaining(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
       }),
     )
     expect(runPostGenerationPipelineMock).toHaveBeenCalledWith(

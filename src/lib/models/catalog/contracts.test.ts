@@ -97,7 +97,9 @@ describe('model catalog contracts', () => {
       expect('promptCacheRetention' in (options ?? {})).toBe(
         policy?.promptCacheRetention !== 'omit',
       )
-      expect(options?.reasoningEffort).toBe(policy?.forwardReasoningEffortNone ? 'none' : undefined)
+      expect(options?.reasoningEffort).toBe(
+        policy?.minimumReasoningEffort ?? (policy?.forwardReasoningEffortNone ? 'none' : undefined),
+      )
     }
   })
 

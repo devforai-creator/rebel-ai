@@ -46,7 +46,8 @@ describe('Model Registry', () => {
 
       expect(Array.isArray(ids)).toBe(true)
       expect(ids.every((id) => typeof id === 'string')).toBe(true)
-      expect(ids[0]).toBe('gpt-6-sol')
+      expect(ids[0]).toBe('gpt-6.1-sol')
+      expect(ids).toContain('gpt-6-sol')
       expect(ids).toContain('gpt-5.6')
       expect(ids).toContain('gpt-5.4')
       expect(ids).toContain('gpt-5.2')
@@ -115,6 +116,7 @@ describe('Model Registry', () => {
     })
 
     it('resolves configured model families before broad aliases', () => {
+      expect(findModelDefinition({ modelName: 'gpt-6.1-sol-2026-09-29' })?.id).toBe('gpt-6.1-sol')
       expect(findModelDefinition({ modelName: 'gpt-6-sol-20260922' })?.id).toBe('gpt-6-sol')
       expect(findModelDefinition({ modelName: 'claude-opus-5-5-20260922' })?.id).toBe(
         'claude-opus-5-5',
@@ -632,7 +634,7 @@ describe('Model Registry', () => {
     it('appears after GPT-6 Sol while keeping GPT-5.5 as the provider default', () => {
       const ids = listUiModelIdsByProvider('openai')
 
-      expect(ids[1]).toBe('gpt-5.6')
+      expect(ids.indexOf('gpt-5.6')).toBe(ids.indexOf('gpt-6-sol') + 1)
       expect(getDefaultModelForProvider('openai')).toBe('gpt-5.5')
     })
   })
@@ -666,7 +668,7 @@ describe('Model Registry', () => {
     it('appears after GPT-5.6 in UI model list', () => {
       const ids = listUiModelIdsByProvider('openai')
 
-      expect(ids[3]).toBe('gpt-5.4')
+      expect(ids.indexOf('gpt-5.4')).toBeGreaterThan(ids.indexOf('gpt-5.6'))
     })
   })
 

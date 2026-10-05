@@ -54,11 +54,17 @@ export function getProviderOptions(
       }
     }
 
+    const reasoningEffort =
+      openAIModelPolicy?.minimumReasoningEffort &&
+      (overrides?.reasoningEffort === 'none' || overrides?.reasoningEffort === 'minimal')
+        ? openAIModelPolicy.minimumReasoningEffort
+        : overrides?.reasoningEffort
+
     if (
-      overrides?.reasoningEffort &&
-      (overrides.reasoningEffort !== 'none' || openAIModelPolicy?.forwardReasoningEffortNone)
+      reasoningEffort &&
+      (reasoningEffort !== 'none' || openAIModelPolicy?.forwardReasoningEffortNone)
     ) {
-      openaiOptions.reasoningEffort = overrides.reasoningEffort
+      openaiOptions.reasoningEffort = reasoningEffort
     }
 
     if (Object.keys(openaiOptions).length > 0) {

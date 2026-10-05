@@ -123,6 +123,40 @@ describe('consumeStreamingResponseStage', () => {
     })
   })
 
+  it('preserves OpenAI cache-write metadata alongside inclusive output usage', async () => {
+    const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
+
+    const result = await consumeStreamingResponseStage({
+      supabase: {} as never,
+      chatId: 'chat-1',
+      jobId: 'job-openai-cache-write',
+      ...createProviderTimeoutContext(),
+      stream: {
+        textStream: textDeltaStream(['ok']),
+        finishReason: Promise.resolve('stop'),
+        providerMetadata: Promise.resolve({ openai: { usage: { cacheWriteTokens: 1000 } } }),
+        usage: Promise.resolve({
+          inputTokens: 10000,
+          outputTokens: 1500,
+          totalTokens: 11500,
+          cachedInputTokens: 8000,
+          reasoningTokens: 500,
+        }),
+      } as never,
+      provider: 'openai',
+      regenerateAssistantMessageId: null,
+    })
+
+    expect(result.usage).toEqual({
+      promptTokens: 10000,
+      completionTokens: 1500,
+      totalTokens: 11500,
+      cachedInputTokens: 8000,
+      reasoningTokens: 500,
+      cacheWriteTokens: 1000,
+    })
+  })
+
   it('records anthropic thinking usage metrics when reasoning tokens are reported', async () => {
     const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
     const debugMetrics: Record<string, string | number | boolean | null> = {}

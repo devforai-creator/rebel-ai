@@ -21,6 +21,17 @@ Visible models receive `uiOrder` from their array position. Set `uiVisible: fals
 fallback model that should not appear in selectors; hidden models do not consume a visible order.
 The catalog helper rejects defaults that do not point to a registered model.
 
+GPT-6.1 Sol is registered as `gpt-6.1-sol`. It uses Responses for tool calling, omits legacy
+`prompt_cache_retention`, and supports reasoning efforts from `low` through `max`. An absent
+reasoning preference preserves the API default (`medium`). Provider defaults are unchanged.
+
+OpenAI pricing can declare `rates.cacheWrite`. The runner reads SDK `openai.usage.cacheWriteTokens`
+metadata and includes cache-write charges in input cost (`prompt_cost_usd`), without charging
+those tokens again at the ordinary input rate. OpenAI output-token counts include reasoning;
+usage estimation separates reasoning cost from the remaining output cost to avoid double billing.
+See the [official model documentation](https://developers.openai.com/api/docs/models/gpt-6.1-sol)
+and [prompt caching guide](https://developers.openai.com/api/docs/guides/prompt-caching).
+
 ## Retire A Model
 
 Remove a model only after its provider has ended API availability, not merely marked it deprecated.
@@ -45,7 +56,8 @@ preferences, chat alternate-model settings, and pending or processing chat-job p
 - `features.requiredToolChoice` declares whether a model accepts provider-native required tool
   choice. Set it to `false` so experimental tool users can fall back to instruction-enforced auto
   mode.
-- `features.openai` describes model-specific OpenAI request-shape exceptions.
+- `features.openai` describes model-specific OpenAI request-shape exceptions. Use
+  `minimumReasoningEffort: 'low'` to map unsupported `none` and `minimal` preferences to `low`.
 - `features.promptCaching` and `features.reasoning` describe general model support.
 
 Add a capability instead of adding a new model-name condition to a consumer. Provider APIs can

@@ -10,6 +10,7 @@ export type UsageCostParams = {
   promptTokens?: number | null
   completionTokens?: number | null
   cachedInputTokens?: number | null
+  cacheWriteTokens?: number | null
   reasoningTokens?: number | null
   serviceTier?: ApiServiceTier | null
 }
@@ -88,6 +89,10 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
   const completionTokens = sanitizeTokens(params.completionTokens)
   const cachedInputTokens = sanitizeTokens(params.cachedInputTokens)
   const reasoningTokens = sanitizeTokens(params.reasoningTokens)
+  const cacheWriteTokens =
+    params.provider === 'openai' && rates.cacheWrite !== undefined
+      ? sanitizeTokens(params.cacheWriteTokens)
+      : 0
 
   // Provider-specific token calculation:
   // - Anthropic: AI SDK returns inputTokens as uncached only (already excludes cached)
@@ -96,14 +101,23 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
   const effectivePromptTokens =
     params.provider === 'anthropic'
       ? promptTokens // Anthropic: inputTokens is already uncached
-      : Math.max(promptTokens - cachedInputTokens, 0) // Others: subtract cached from total
+      : Math.max(promptTokens - cachedInputTokens - cacheWriteTokens, 0)
+
+  // OpenAI outputTokens includes reasoning; charge those tokens only in reasoningCost.
+  const effectiveCompletionTokens =
+    params.provider === 'openai'
+      ? Math.max(completionTokens - reasoningTokens, 0)
+      : completionTokens
 
   const multiplier = getServiceTierMultiplier(params.provider, params.serviceTier)
 
-  const promptCost = calculateCost(effectivePromptTokens, rates.input, multiplier)
+  // Cache writes are input costs and are persisted with prompt_cost_usd.
+  const promptCost =
+    calculateCost(effectivePromptTokens, rates.input, multiplier) +
+    calculateCost(cacheWriteTokens, rates.cacheWrite ?? rates.input, multiplier)
   const cachedInputRate = rates.cachedInput ?? rates.input
   const cachedInputCost = calculateCost(cachedInputTokens, cachedInputRate, multiplier)
-  const completionCost = calculateCost(completionTokens, rates.output, multiplier)
+  const completionCost = calculateCost(effectiveCompletionTokens, rates.output, multiplier)
   const reasoningRate = rates.reasoning ?? rates.output
   const reasoningCost = calculateCost(reasoningTokens, reasoningRate, multiplier)
   const totalCost = promptCost + cachedInputCost + completionCost + reasoningCost

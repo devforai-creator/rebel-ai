@@ -392,6 +392,53 @@ describe('estimateUsageCost', () => {
   })
 
   describe('OpenAI models', () => {
+    it.each(['standard', 'flex'] as const)(
+      'charges GPT-6.1 Sol cache reads, writes, and reasoning once with %s processing',
+      (serviceTier) => {
+        const estimate = estimateUsageCost({
+          provider: 'openai',
+          modelName: 'gpt-6.1-sol',
+          promptTokens: 10000,
+          completionTokens: 1500,
+          cachedInputTokens: 8000,
+          cacheWriteTokens: 1000,
+          reasoningTokens: 500,
+          serviceTier,
+        })
+        const multiplier = serviceTier === 'flex' ? 0.5 : 1
+
+        // 1K ordinary input, 8K cache reads, 1K writes, and 1.5K total output (500 reasoning).
+        expect(estimate?.promptCost).toBeCloseTo(0.0045 * multiplier, 8)
+        expect(estimate?.cachedInputCost).toBeCloseTo(0.0008 * multiplier, 8)
+        expect(estimate?.completionCost).toBeCloseTo(0.01 * multiplier, 8)
+        expect(estimate?.reasoningCost).toBeCloseTo(0.005 * multiplier, 8)
+        expect(estimate?.totalCost).toBeCloseTo(0.0203 * multiplier, 8)
+      },
+    )
+
+    it.each([
+      { promptTokens: 272000, input: 2, cachedInput: 0.1, cacheWrite: 2.5, output: 10 },
+      { promptTokens: 272001, input: 4, cachedInput: 0.2, cacheWrite: 5, output: 15 },
+    ])('uses GPT-6.1 Sol rates for the full $promptTokens-token request', (rates) => {
+      const estimate = estimateUsageCost({
+        provider: 'openai',
+        modelName: 'gpt-6.1-sol-2026-09-29',
+        promptTokens: rates.promptTokens,
+        completionTokens: 10000,
+        cachedInputTokens: 100000,
+        cacheWriteTokens: 10000,
+        reasoningTokens: 3000,
+      })
+
+      expect(estimate?.promptCost).toBeCloseTo(
+        ((rates.promptTokens - 110000) * rates.input + 10000 * rates.cacheWrite) / 1000000,
+        8,
+      )
+      expect(estimate?.cachedInputCost).toBeCloseTo(0.1 * rates.cachedInput, 8)
+      expect(estimate?.completionCost).toBeCloseTo(0.007 * rates.output, 8)
+      expect(estimate?.reasoningCost).toBeCloseTo(0.003 * rates.output, 8)
+    })
+
     it('applies GPT-6 Sol long-context rates to the entire request above 272K input tokens', () => {
       const atBoundary = estimateUsageCost({
         provider: 'openai',
@@ -488,11 +535,11 @@ describe('estimateUsageCost', () => {
       // Fresh input: 10000 - 8000 = 2000 tokens
       // Fresh cost: (2000 / 1M) * 1.75 = $0.0035
       // Cached cost: (8000 / 1M) * 0.175 = $0.0014
-      // Output cost: (1000 / 1M) * 14 = $0.014
-      // Reasoning cost: (500 / 1M) * 14 = $0.007
+      // Visible output: (1000 - 500) / 1M * 14 = $0.007
+      // Reasoning cost: (500 / 1M) * 14 = $0.007 (included in total output tokens).
       expect(result!.promptCost).toBeCloseTo(0.0035, 6)
       expect(result!.cachedInputCost).toBeCloseTo(0.0014, 6)
-      expect(result!.completionCost).toBeCloseTo(0.014, 6)
+      expect(result!.completionCost).toBeCloseTo(0.007, 6)
       expect(result!.reasoningCost).toBeCloseTo(0.007, 6)
     })
 

@@ -109,6 +109,35 @@ describe('getProviderOptions', () => {
     })
   })
 
+  it.each(['none', 'minimal'])(
+    'uses low instead of unsupported %s reasoning for GPT-6.1 Sol',
+    (reasoningEffort) => {
+      for (const modelName of ['gpt-6.1-sol', 'gpt-6.1-sol-2026-09-29']) {
+        expect(
+          getProviderOptions('openai', {
+            modelName,
+            promptCacheKey: 'cache-key',
+            reasoningEffort,
+          }),
+        ).toEqual({
+          openai: {
+            textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+            promptCacheKey: 'cache-key',
+            reasoningEffort: 'low',
+          },
+        })
+      }
+    },
+  )
+
+  it.each(['low', 'medium', 'high', 'xhigh', 'max', null])(
+    'preserves GPT-6.1 Sol reasoning preference %s',
+    (reasoningEffort) => {
+      const options = getProviderOptions('openai', { modelName: 'gpt-6.1-sol', reasoningEffort })
+      expect(options?.openai?.reasoningEffort).toBe(reasoningEffort ?? undefined)
+    },
+  )
+
   it('passes reasoningEffort to openai provider options', () => {
     const options = getProviderOptions('openai', {
       reasoningEffort: 'high',

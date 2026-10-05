@@ -26,6 +26,7 @@ export type UsageMetrics = {
   totalTokens: number | null
   cachedInputTokens: number | null
   reasoningTokens: number | null
+  cacheWriteTokens?: number
 }
 
 type BuildChatDebugInfoArgs = {
@@ -561,6 +562,9 @@ export function buildChatDebugInfo(args: BuildChatDebugInfoArgs): Record<string,
         totalTokens: usage.totalTokens,
         cachedInputTokens: usage.cachedInputTokens,
         reasoningTokens: usage.reasoningTokens,
+        ...(usage.cacheWriteTokens !== undefined
+          ? { cacheWriteTokens: usage.cacheWriteTokens }
+          : {}),
       },
     },
     anthropicThinking,

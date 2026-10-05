@@ -249,7 +249,7 @@ export default function AddApiKeyForm() {
               </select>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 Controls reasoning intensity for supported models (GPT-5+). &quot;None&quot;
-                disables reasoning tokens.
+                disables reasoning where supported. Models that require reasoning use at least Low.
               </p>
             </div>
           )}

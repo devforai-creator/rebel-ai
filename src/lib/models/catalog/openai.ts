@@ -1,6 +1,29 @@
 import type { ModelPricingTier } from '../types'
 import { defineProviderCatalog, flatPricing } from './helpers'
 
+// https://developers.openai.com/api/docs/models/gpt-6.1-sol
+const OPENAI_GPT61_SOL_PRICING: ModelPricingTier[] = [
+  {
+    maxPromptTokens: 272_000,
+    rates: {
+      input: 2,
+      output: 10,
+      cachedInput: 0.1,
+      cacheWrite: 2.5,
+      reasoning: 10,
+    },
+  },
+  {
+    rates: {
+      input: 4,
+      output: 15,
+      cachedInput: 0.2,
+      cacheWrite: 5,
+      reasoning: 15,
+    },
+  },
+]
+
 const OPENAI_GPT6_SOL_PRICING: ModelPricingTier[] = [
   {
     maxPromptTokens: 272_000,
@@ -48,6 +71,20 @@ export const openAIModelCatalog = defineProviderCatalog({
     lightweightModel: 'gpt-4o-mini',
   },
   models: [
+    {
+      id: 'gpt-6.1-sol',
+      displayName: 'GPT-6.1 Sol',
+      matches: { prefixes: ['gpt-6.1-sol-'] },
+      pricing: OPENAI_GPT61_SOL_PRICING,
+      features: {
+        promptCaching: 'standard',
+        reasoning: true,
+        openai: {
+          promptCacheRetention: 'omit',
+          minimumReasoningEffort: 'low',
+        },
+      },
+    },
     {
       id: 'gpt-6-sol',
       displayName: 'GPT-6 Sol',

@@ -20,7 +20,7 @@ export const CHAT_REPROCESS_LIMITS = {
 } as const
 
 export const CHAT_RUNNER_LIMITS = {
-  maxTotalInputTokens: 150_000,
+  maxTotalInputTokens: 200_000,
   localMaxTotalInputTokens: 200_000,
   // Keep provider caps below the 800-second Pro + Fluid route duration so
   // stalls are handled by runner error flow instead of platform termination.

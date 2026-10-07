@@ -733,6 +733,30 @@ describe('loadChatJobExecutionContext', () => {
     )
   })
 
+  it('accepts cloud input at 200K tokens', async () => {
+    const { loadChatJobExecutionContext } = await import('./execution-context')
+    const supabase = createChatJobRunnerSupabaseMock()
+    const systemPrompt = 'x'.repeat(599_994)
+
+    buildMemoryPlanMock.mockResolvedValueOnce({
+      mode: 'summary_window',
+      dynamicContext: null,
+      fallbackMessages: [{ role: 'user', content: 'Hello' }],
+      fallbackSystemPrompt: systemPrompt,
+      promptBlocks: [],
+      staticSystemPrompt: systemPrompt,
+      ragInfo: null,
+    })
+
+    const result = await loadChatJobExecutionContext({
+      supabase: supabase as never,
+      payload: buildValidPayload(),
+      timings: {},
+    })
+
+    expect(result.totalInputTokens).toBe(200_000)
+  })
+
   it('fails in loading_context before provider execution when the token budget is too large', async () => {
     const { loadChatJobExecutionContext } = await import('./execution-context')
     const supabase = createChatJobRunnerSupabaseMock()

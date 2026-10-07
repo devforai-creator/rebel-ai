@@ -7,12 +7,12 @@ import {
 } from './runtime-limits'
 
 describe('chat runtime limits', () => {
-  it('allows a cold 200K local request while retaining cloud budgets', () => {
+  it('allows 200K input for local and cloud requests while retaining timeout budgets', () => {
     expect(
       resolveChatProviderStreamTimeoutMs({ provider: 'local', modelName: 'local-rp-base' }),
     ).toBe(840_000)
     expect(resolveChatInputTokenLimit('local')).toBe(200_000)
-    expect(resolveChatInputTokenLimit('openrouter')).toBe(150_000)
+    expect(resolveChatInputTokenLimit('openrouter')).toBe(200_000)
     expect(CHAT_RUNNER_LIMITS.localProviderStreamTimeoutMs + 40_000).toBeLessThan(
       CHAT_JOB_POLLER_LIMITS.timeoutMs,
     )

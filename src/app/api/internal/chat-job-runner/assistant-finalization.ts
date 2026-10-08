@@ -27,6 +27,7 @@ export type FinalizeAssistantMessageArgs = {
   regenerateAssistantMessageId: string | null
   promptTokens: number | null
   completionTokens: number | null
+  errorCode?: string | null
   debugInfo: Record<string, unknown>
   modelName: string
   messageInsertDuration: number | null
@@ -48,6 +49,7 @@ export async function finalizeAssistantMessage({
   regenerateAssistantMessageId,
   promptTokens,
   completionTokens,
+  errorCode = null,
   debugInfo,
   modelName,
   messageInsertDuration,
@@ -140,6 +142,7 @@ export async function finalizeAssistantMessage({
       model_used: modelName,
       prompt_tokens: promptTokens,
       completion_tokens: completionTokens,
+      error_code: errorCode,
       debug_info: debugInfo as Json,
       turn_id: turnId,
       variant_index: nextVariantIndex,

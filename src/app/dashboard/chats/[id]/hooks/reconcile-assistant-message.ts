@@ -68,6 +68,7 @@ function toDisplayAssistantMessage(
       assistantMessage.created_at,
       existingMessage?.created_at ?? replacementFallback?.created_at,
     ),
+    error_code: resolveSnapshotValue(assistantMessage.error_code, existingMessage?.error_code),
     debug_info: resolveSnapshotValue(assistantMessage.debug_info, existingMessage?.debug_info),
   }
 }

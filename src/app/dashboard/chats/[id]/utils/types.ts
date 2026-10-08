@@ -16,6 +16,7 @@ export type DisplayMessage = {
   model_used?: string | null
   prompt_tokens?: number | null
   completion_tokens?: number | null
+  error_code?: string | null
   created_at?: string
   debug_info?: unknown
   temp?: boolean
@@ -234,6 +235,7 @@ export function mapMessageToDisplay(message: Message): DisplayMessage {
     model_used: message.model_used,
     prompt_tokens: message.prompt_tokens,
     completion_tokens: message.completion_tokens,
+    error_code: message.error_code,
     created_at: message.created_at,
     debug_info: (message as Message & { debug_info?: unknown }).debug_info,
   }

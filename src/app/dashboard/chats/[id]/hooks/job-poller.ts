@@ -13,7 +13,7 @@ export interface JobPollerDeps {
     failureStage?: string | null
   } | null>
   onSuccess: () => Promise<void>
-  onError: (error: Error) => void
+  onError: (error: Error) => void | Promise<void>
   /** Called when polling takes longer than expected (e.g., after 30s) */
   onSlowProgress?: (elapsedMs: number) => void
   /**
@@ -104,7 +104,7 @@ export async function pollJobStatus(
     if (elapsed > config.timeoutMs) {
       const seconds = Math.round(config.timeoutMs / 1000)
       const timeoutError = new Error(`Response timed out after ${seconds}s`)
-      deps.onError(timeoutError)
+      await deps.onError(timeoutError)
       return { outcome: 'timeout', error: timeoutError }
     }
 
@@ -140,7 +140,7 @@ export async function pollJobStatus(
             failureStage: job.failureStage,
           }),
         )
-        deps.onError(jobError)
+        await deps.onError(jobError)
         return { outcome: 'error', error: jobError }
       }
 

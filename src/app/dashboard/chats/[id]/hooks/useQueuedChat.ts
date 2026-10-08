@@ -12,7 +12,11 @@ import type {
   MessageChangePayload,
   StreamingAssistantDraft,
 } from '../utils'
-import { MESSAGE_STATUS_COMPLETED, isVisibleMessageStatus } from '@/lib/chat/message-status'
+import {
+  MESSAGE_ERROR_GENERATION_INTERRUPTED,
+  MESSAGE_STATUS_COMPLETED,
+  isVisibleMessageStatus,
+} from '@/lib/chat/message-status'
 import { resolveAlternateModelSelection } from '@/lib/chat/alternate-models'
 import { pollJobStatus as pollJobStatusPure } from './job-poller'
 import { fetchChatJobStatus, fetchLatestChatMessage, requestQueuedChatJob } from './queued-chat-api'
@@ -226,7 +230,19 @@ export function useQueuedChat({
             lastStreamProgressAtRef.current = null
             dispatchLifecycle({ type: 'JOB_SUCCEEDED', jobId })
           },
-          onError: (error) => {
+          onError: async (error) => {
+            try {
+              const latest = await fetchLatestMessage()
+              const debugInfo = latest?.debug_info as Record<string, unknown> | null | undefined
+              if (
+                latest?.error_code === MESSAGE_ERROR_GENERATION_INTERRUPTED &&
+                debugInfo?.jobId === jobId
+              ) {
+                upsertAssistantMessage(latest)
+              }
+            } catch {
+              // Keep the original job error if interrupted-response recovery is unavailable.
+            }
             lastStreamProgressAtRef.current = null
             dispatchLifecycle({ type: 'JOB_FAILED', jobId, error })
             const isTimeout = error.message.includes('timed out')
@@ -265,7 +281,14 @@ export function useQueuedChat({
         throw result.error
       }
     },
-    [appendAssistantMessage, dispatchLifecycle, fetchLatestUsage, isPageVisible],
+    [
+      appendAssistantMessage,
+      dispatchLifecycle,
+      fetchLatestMessage,
+      fetchLatestUsage,
+      isPageVisible,
+      upsertAssistantMessage,
+    ],
   )
 
   useEffect(() => {

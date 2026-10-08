@@ -1,6 +1,7 @@
 export const MESSAGE_STATUS_COMPLETED = 'completed' as const
 export const MESSAGE_STATUS_GENERATING = 'generating' as const
 export const MESSAGE_STATUS_SUPERSEDED = 'superseded' as const
+export const MESSAGE_ERROR_GENERATION_INTERRUPTED = 'generation_interrupted' as const
 
 export type ChatMessageStatus =
   | typeof MESSAGE_STATUS_COMPLETED

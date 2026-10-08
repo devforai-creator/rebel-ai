@@ -25,11 +25,11 @@ export const CHAT_RUNNER_LIMITS = {
   // Keep provider caps below the 800-second Pro + Fluid route duration so
   // stalls are handled by runner error flow instead of platform termination.
   routeMaxDurationSeconds: 800,
-  providerStreamTimeoutMs: 240_000,
+  providerStreamTimeoutMs: 12 * 60 * 1000,
   // Local workers are self-hosted; the Vercel route duration does not apply.
   localProviderStreamTimeoutMs: 14 * 60 * 1000,
   kimiK3ProviderStreamTimeoutMs: 12 * 60 * 1000,
-  // Leave one full Kimi budget plus 60 seconds for context loading, response
+  // Leave one full cloud generation budget plus 60 seconds for context loading, response
   // persistence, and runner cleanup before claiming another sequential job.
   latestJobStartMs: 20_000,
   stuckProcessingJobTimeoutMs: 20 * 60 * 1000,

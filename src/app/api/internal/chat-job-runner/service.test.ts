@@ -1960,46 +1960,145 @@ describe('processChatJobs', () => {
     expect(supabase.messages).toHaveLength(0)
   })
 
-  it('rolls back inserted assistant message when stream fails mid-generation', async () => {
-    const supabase = createChatJobRunnerSupabaseMock({
-      rpc: { get_decrypted_secret: () => decryptSecretMock() },
-    })
-    createAdminClientMock.mockReturnValue(supabase)
+  it.each([false, true])(
+    'preserves received text after a stream failure (regeneration: %j)',
+    async (isRegeneration) => {
+      const supabase = createChatJobRunnerSupabaseMock({
+        initialTurns: [
+          {
+            id: 'turn-1',
+            chat_id: 'chat-1',
+            active_assistant_message_id: isRegeneration ? 'assistant-old' : null,
+          },
+        ],
+        initialMessages: isRegeneration
+          ? [
+              {
+                id: 'assistant-old',
+                chat_id: 'chat-1',
+                role: 'assistant',
+                content: 'previous answer',
+                turn_id: 'turn-1',
+                variant_index: 1,
+                message_status: 'completed',
+              },
+            ]
+          : [],
+        rpc: { get_decrypted_secret: () => decryptSecretMock() },
+      })
+      createAdminClientMock.mockReturnValue(supabase)
 
-    decryptSecretMock.mockResolvedValue('sk-test')
-    parseChatJobPayloadMock.mockReturnValue(buildValidPayload({ requestId: 'req-stream-failure' }))
-    streamTextMock.mockResolvedValue({
-      textStream: (async function* () {
-        yield 'partial answer'
-        throw new Error('stream exploded')
-      })(),
-      finishReason: Promise.resolve('stop'),
-      providerMetadata: Promise.resolve({}),
-      usage: Promise.resolve({ inputTokens: 10, outputTokens: 10, totalTokens: 20 }),
-    })
-    claimPendingJobMock.mockResolvedValueOnce({
-      id: 'job-stream-failure',
-      payload: { ok: true },
-    })
-    claimPendingJobMock.mockResolvedValueOnce(null)
+      decryptSecretMock.mockResolvedValue('sk-test')
+      parseChatJobPayloadMock.mockReturnValue(
+        buildValidPayload({
+          requestId: 'req-stream-failure',
+          turnId: 'turn-1',
+          isRegeneration,
+          regenerateAssistantMessageId: isRegeneration ? 'assistant-old' : null,
+        }),
+      )
+      streamTextMock.mockResolvedValue({
+        textStream: (async function* () {
+          yield 'partial answer'
+          throw new Error('stream exploded')
+        })(),
+        finishReason: Promise.resolve('stop'),
+        providerMetadata: Promise.resolve({}),
+        usage: Promise.resolve({ inputTokens: 10, outputTokens: 10, totalTokens: 20 }),
+      })
+      claimPendingJobMock.mockResolvedValueOnce({
+        id: 'job-stream-failure',
+        payload: { ok: true },
+      })
+      claimPendingJobMock.mockResolvedValueOnce(null)
 
-    const { processChatJobs } = await import('./service')
-    const result = await processChatJobs(1)
+      const { processChatJobs } = await import('./service')
+      const result = await processChatJobs(1)
 
-    expect(result.results[0]).toMatchObject({
-      jobId: 'job-stream-failure',
-      status: 'error',
-    })
-    expect(result.results[0].error).toContain('stream exploded')
-    expect(supabase.updates).toContainEqual(
-      expect.objectContaining({
+      expect(result.results[0]).toMatchObject({
+        jobId: 'job-stream-failure',
         status: 'error',
-        lifecycle_stage: 'provider_stream_error',
-        failure_stage: 'provider_stream_error',
-      }),
-    )
-    expect(supabase.messages).toHaveLength(0)
-  })
+      })
+      expect(result.results[0].error).toContain('stream exploded')
+      expect(supabase.updates).toContainEqual(
+        expect.objectContaining({
+          status: 'error',
+          lifecycle_stage: 'provider_stream_error',
+          failure_stage: 'provider_stream_error',
+        }),
+      )
+      expect(supabase.messages).toContainEqual(
+        expect.objectContaining({
+          content: 'partial answer',
+          turn_id: 'turn-1',
+          error_code: 'generation_interrupted',
+          message_status: 'completed',
+          debug_info: expect.objectContaining({ jobId: 'job-stream-failure' }),
+        }),
+      )
+      expect(supabase.messages).toHaveLength(isRegeneration ? 2 : 1)
+      if (isRegeneration) {
+        expect(supabase.messages.find((message) => message.id === 'assistant-old')).toMatchObject({
+          content: 'previous answer',
+          message_status: 'superseded',
+        })
+        expect(supabase.messages.at(-1)).toMatchObject({
+          variant_index: 2,
+          supersedes_message_id: 'assistant-old',
+        })
+      }
+      expect(supabase.usageEvents).toHaveLength(0)
+      expect(triggerSummaryGenerationMock).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each(['partial answer', '   '])(
+    'preserves nonempty text on a hard timeout: %j',
+    async (text) => {
+      const supabase = createChatJobRunnerSupabaseMock({
+        rpc: { get_decrypted_secret: () => decryptSecretMock() },
+      })
+      createAdminClientMock.mockReturnValue(supabase)
+      decryptSecretMock.mockResolvedValue('sk-test')
+      parseChatJobPayloadMock.mockReturnValue(buildValidPayload())
+      const controller = new AbortController()
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal)
+      streamTextMock.mockResolvedValue({
+        textStream: (async function* () {
+          yield text
+          controller.abort(new DOMException('Timed out', 'TimeoutError'))
+          throw controller.signal.reason
+        })(),
+        finishReason: Promise.resolve('error'),
+        providerMetadata: Promise.resolve({}),
+        usage: Promise.resolve(null),
+      })
+      claimPendingJobMock.mockResolvedValueOnce({ id: 'job-timeout', payload: { ok: true } })
+      claimPendingJobMock.mockResolvedValueOnce(null)
+
+      try {
+        const { processChatJobs } = await import('./service')
+        const result = await processChatJobs(1)
+
+        expect(result.results[0]).toMatchObject({
+          status: 'error',
+          error: 'The model provider did not finish within 12 minutes. Please try again.',
+        })
+        expect(supabase.updates).toContainEqual(
+          expect.objectContaining({ status: 'error', failure_stage: 'timed_out' }),
+        )
+        if (text.trim()) {
+          expect(supabase.messages).toEqual([
+            expect.objectContaining({ content: text, error_code: 'generation_interrupted' }),
+          ])
+        } else {
+          expect(supabase.messages).toHaveLength(0)
+        }
+      } finally {
+        timeoutSpy.mockRestore()
+      }
+    },
+  )
 
   it('deletes whitespace-only assistant message before returning empty-response error', async () => {
     const supabase = createChatJobRunnerSupabaseMock({

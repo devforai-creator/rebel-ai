@@ -272,6 +272,42 @@ describe('consumeStreamingResponseStage', () => {
     )
   })
 
+  it('flushes the final received text before broadcasting a stream error', async () => {
+    const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
+    const onText = vi.fn()
+
+    await expect(
+      consumeStreamingResponseStage({
+        supabase: {} as never,
+        chatId: 'chat-1',
+        jobId: 'job-partial',
+        ...createProviderTimeoutContext(),
+        stream: {
+          textStream: (async function* () {
+            yield 'first'
+            yield ' and last'
+            throw new Error('socket down')
+          })(),
+        } as never,
+        provider: 'openai',
+        regenerateAssistantMessageId: null,
+        now: () => 0,
+        onText,
+      }),
+    ).rejects.toMatchObject({
+      lifecycleStage: 'provider_stream_error',
+      details: { streamedTextLength: 14 },
+    })
+
+    expect(onText).toHaveBeenLastCalledWith('first and last')
+    expect(broadcastAssistantStreamSnapshotMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ content: 'first and last' }),
+    )
+    expect(broadcastAssistantStreamSnapshotMock.mock.invocationCallOrder[0]).toBeLessThan(
+      broadcastAssistantStreamErrorMock.mock.invocationCallOrder[0],
+    )
+  })
+
   it('classifies a hard timeout even when the SDK surfaces NoOutputGeneratedError', async () => {
     const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
     await expect(

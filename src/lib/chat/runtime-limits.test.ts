@@ -30,13 +30,13 @@ describe('chat runtime limits', () => {
     ).toBe(12 * 60 * 1000)
   })
 
-  it('keeps the existing hard cap for other provider models', () => {
+  it('gives other cloud models the same extended generation budget', () => {
     expect(
       resolveChatProviderStreamTimeoutMs({
         provider: 'openrouter',
         modelName: 'z-ai/glm-5',
       }),
-    ).toBe(240_000)
+    ).toBe(12 * 60 * 1000)
   })
 
   it('orders the provider, route, poller, and stuck-job deadlines safely', () => {
@@ -45,7 +45,10 @@ describe('chat runtime limits', () => {
     )
     expect(
       CHAT_RUNNER_LIMITS.latestJobStartMs +
-        CHAT_RUNNER_LIMITS.kimiK3ProviderStreamTimeoutMs +
+        Math.max(
+          CHAT_RUNNER_LIMITS.providerStreamTimeoutMs,
+          CHAT_RUNNER_LIMITS.kimiK3ProviderStreamTimeoutMs,
+        ) +
         60_000,
     ).toBeLessThanOrEqual(CHAT_RUNNER_LIMITS.routeMaxDurationSeconds * 1000)
     expect(CHAT_RUNNER_LIMITS.routeMaxDurationSeconds * 1000).toBeLessThan(

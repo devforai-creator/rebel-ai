@@ -9,6 +9,7 @@ import {
   CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR,
   CHAT_JOB_LIFECYCLE_STAGE_REQUESTING_PROVIDER,
   CHAT_JOB_LIFECYCLE_STAGE_STREAMING_RESPONSE,
+  CHAT_JOB_LIFECYCLE_STAGE_TIMED_OUT,
   type ChatJobLifecycleStage,
 } from '@/lib/chat/job-lifecycle'
 import { CHAT_RUNNER_LIMITS } from '@/lib/chat/runtime-limits'
@@ -20,6 +21,8 @@ import { processChatJobStage, type ProcessChatJobExecutionResult } from './proce
 import { requestProviderStage } from './provider-request-stage'
 import { ChatJobExecutionError } from './runner-errors'
 import { consumeStreamingResponseStage } from './streaming-response-stage'
+import { finalizeAssistantMessage } from './assistant-finalization'
+import { MESSAGE_ERROR_GENERATION_INTERRUPTED } from '@/lib/chat/message-status'
 
 const CHAT_JOB_RUNNER_DEBUG_ENABLED = process.env.CHAT_JOB_RUNNER_DEBUG === 'true'
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
@@ -173,6 +176,10 @@ async function executeJob({
   })
 
   let currentStage: ChatJobLifecycleStage = CHAT_JOB_LIFECYCLE_STAGE_LOADING_CONTEXT
+  let generatedText = ''
+  const onText = (text: string) => {
+    generatedText = text
+  }
   const markStage = async (stage: ChatJobLifecycleStage) => {
     currentStage = stage
     await persistChatJobLifecycleStage({
@@ -288,6 +295,7 @@ async function executeJob({
         debugMetrics,
         logDebug: logChatJobRunnerDebug,
         allowGoogleExplicitCacheRecovery: actualPayload?.strategy === 'google-explicit-cache',
+        onText,
       })
     } catch (error) {
       if (!shouldRetryGoogleExplicitCacheCompatibility(provider, error, actualPayload)) {
@@ -338,6 +346,7 @@ async function executeJob({
         regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
         debugMetrics,
         logDebug: logChatJobRunnerDebug,
+        onText,
       })
       debugMetrics['google_explicit_cache_compatibility_retry_succeeded'] = true
     }
@@ -400,6 +409,39 @@ async function executeJob({
     return { status: 'success' }
   } catch (error) {
     if (error instanceof ChatJobExecutionError) {
+      const canPreserveResponse =
+        error.lifecycleStage === CHAT_JOB_LIFECYCLE_STAGE_TIMED_OUT ||
+        (error.lifecycleStage === CHAT_JOB_LIFECYCLE_STAGE_PROVIDER_STREAM_ERROR &&
+          error.details?.normalizedProviderError?.category !== 'content_filter')
+
+      if (canPreserveResponse && generatedText.trim()) {
+        try {
+          await finalizeAssistantMessage({
+            supabase,
+            chatId,
+            userId,
+            assistantText: generatedText.trim(),
+            assistantMessageId: null,
+            turnId: payload.turnId,
+            regenerateAssistantMessageId: payload.regenerateAssistantMessageId,
+            promptTokens: null,
+            completionTokens: null,
+            errorCode: MESSAGE_ERROR_GENERATION_INTERRUPTED,
+            debugInfo: { jobId, requestId: payload.requestId, failureStage: error.lifecycleStage },
+            modelName: payload.modelName,
+            messageInsertDuration: null,
+            now: () => performance.now(),
+          })
+        } catch (persistenceError) {
+          console.error('[Chat Job Runner] Failed to preserve interrupted response', {
+            jobId,
+            error:
+              persistenceError instanceof Error
+                ? persistenceError.message
+                : 'Unknown persistence error',
+          })
+        }
+      }
       throw error
     }
 

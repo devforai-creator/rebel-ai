@@ -9,6 +9,7 @@ import type {
 } from '../utils'
 import { renderMessageContent } from '../utils'
 import type { CharacterAsset } from '@/lib/asset-resolver'
+import { MESSAGE_ERROR_GENERATION_INTERRUPTED } from '@/lib/chat/message-status'
 
 interface MessageBubbleProps {
   message: DisplayMessage
@@ -138,6 +139,11 @@ export function MessageBubble({
           </>
         )}
       </div>
+      {isAssistant && message.error_code === MESSAGE_ERROR_GENERATION_INTERRUPTED ? (
+        <p className="mt-2 text-xs text-amber-700 dark:text-amber-300" role="status">
+          Response interrupted. Text received before the interruption has been saved.
+        </p>
+      ) : null}
     </div>
   )
 }

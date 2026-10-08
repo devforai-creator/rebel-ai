@@ -198,6 +198,61 @@ describe('useQueuedChat', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it.each(['job-restored', 'job-older'])(
+    "recovers only this job's interrupted reply when realtime events were missed: %s",
+    async (savedJobId) => {
+      vi.useFakeTimers()
+      const partial = createMessage({
+        id: 'assistant-partial',
+        role: 'assistant',
+        content: 'saved partial reply',
+        error_code: 'generation_interrupted',
+        debug_info: { jobId: savedJobId },
+      })
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: unknown) => {
+          if (String(input) === '/api/chat/jobs/job-restored') {
+            return createJsonResponse({
+              status: 'error',
+              error: 'The model provider did not finish within 12 minutes.',
+              failureStage: 'timed_out',
+            })
+          }
+          if (String(input) === '/api/chats/chat-1/messages/latest') {
+            return createJsonResponse(partial)
+          }
+          throw new Error(`Unexpected fetch: ${input}`)
+        }),
+      )
+      const { result } = renderHook(() =>
+        useQueuedChat(
+          createHookParams({
+            initialActiveJob: {
+              id: 'job-restored',
+              deliveryMode: 'streaming',
+              regenerateAssistantMessageId: null,
+            },
+          }),
+        ),
+      )
+
+      await flushPendingPollCycle()
+
+      expect(result.current.isLoading).toBe(false)
+      expect(result.current.error?.message).toContain('12 minutes')
+      expect(result.current.messages.some((message) => message.id === partial.id)).toBe(
+        savedJobId === 'job-restored',
+      )
+      if (savedJobId === 'job-restored') {
+        expect(result.current.messages.at(-1)).toMatchObject({
+          content: 'saved partial reply',
+          error_code: 'generation_interrupted',
+        })
+      }
+    },
+  )
+
   it('removes the temporary user message and surfaces an error when no model is selected', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
@@ -671,6 +726,9 @@ describe('useQueuedChat', () => {
       }
       if (url === '/api/chat/jobs/job-1') {
         return createJsonResponse({ status: 'error', error: 'provider failed' })
+      }
+      if (url === '/api/chats/chat-1/messages/latest') {
+        return createJsonResponse(null)
       }
       throw new Error(`Unexpected fetch: ${url}`)
     })

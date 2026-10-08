@@ -166,6 +166,7 @@ async function collectTextFromStreamWithSnapshots({
   debugMetrics,
   updateIntervalMs = 120,
   now = () => performance.now(),
+  onText,
 }: {
   supabase: AdminSupabaseClient
   chatId: string
@@ -176,6 +177,7 @@ async function collectTextFromStreamWithSnapshots({
   debugMetrics?: Record<string, DebugMetricValue>
   updateIntervalMs?: number
   now?: () => number
+  onText?: (text: string) => void
 }) {
   let fullText = ''
   let lastBroadcastAt = now()
@@ -249,6 +251,7 @@ async function collectTextFromStreamWithSnapshots({
 
         if (part.type === 'text-delta' && typeof part.text === 'string') {
           fullText += part.text
+          onText?.(fullText)
 
           const currentTime = now()
           if (currentTime - lastBroadcastAt >= updateIntervalMs) {
@@ -268,6 +271,7 @@ async function collectTextFromStreamWithSnapshots({
     } else {
       for await (const chunk of stream.textStream) {
         fullText += chunk
+        onText?.(fullText)
 
         const currentTime = now()
         if (currentTime - lastBroadcastAt >= updateIntervalMs) {
@@ -286,11 +290,11 @@ async function collectTextFromStreamWithSnapshots({
       error,
       streamedTextLength: fullText.length,
     })
-  }
-
-  if (fullText) {
-    sendSnapshot(fullText)
-    await flushSnapshots()
+  } finally {
+    if (fullText) {
+      sendSnapshot(fullText)
+      await flushSnapshots()
+    }
   }
 
   return fullText
@@ -310,6 +314,7 @@ export async function consumeStreamingResponseStage({
   updateIntervalMs,
   now,
   allowGoogleExplicitCacheRecovery,
+  onText,
 }: {
   supabase: AdminSupabaseClient
   chatId: string
@@ -324,6 +329,7 @@ export async function consumeStreamingResponseStage({
   updateIntervalMs?: number
   now?: () => number
   allowGoogleExplicitCacheRecovery?: boolean
+  onText?: (text: string) => void
 }): Promise<StreamingResponseStageResult> {
   let fullText = ''
 
@@ -338,6 +344,10 @@ export async function consumeStreamingResponseStage({
       debugMetrics,
       updateIntervalMs,
       now,
+      onText: (text) => {
+        fullText = text
+        onText?.(text)
+      },
     })
   } catch (error) {
     const streamError = resolveProviderStreamExecutionError({

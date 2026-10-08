@@ -13,6 +13,7 @@ describe('chat display type helpers', () => {
         model_used: 'gpt-test',
         prompt_tokens: 11,
         completion_tokens: 22,
+        error_code: 'generation_interrupted',
         created_at: '2026-01-01T00:00:00.000Z',
         debug_info: { cacheHit: true },
       } as never),
@@ -25,6 +26,7 @@ describe('chat display type helpers', () => {
       model_used: 'gpt-test',
       prompt_tokens: 11,
       completion_tokens: 22,
+      error_code: 'generation_interrupted',
       created_at: '2026-01-01T00:00:00.000Z',
       debug_info: { cacheHit: true },
     })

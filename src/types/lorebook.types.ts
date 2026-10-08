@@ -35,7 +35,7 @@ export interface LorebookEntry {
   /** Import compatibility only; probabilistic activation is not evaluated by the active renderer. */
   probability?: number
   activationMsg?: number
-  /** Import compatibility only; the active renderer scans the provided chat history as a whole. */
+  /** Import compatibility only; the active renderer scans the latest 10 conversation messages. */
   scanDepth?: number
   placement?: string
   position?: number

@@ -34,11 +34,8 @@ import {
   lorebookNeedsChatHistory,
   renderActiveLorebookBlock,
 } from '@/lib/lorebook/runtime'
-import {
-  countProjectedConversationMessages,
-  loadGenerationTranscript,
-  loadProjectedConversationTail,
-} from '@/lib/chat/turns'
+import { LOREBOOK_SCAN_DEPTH } from '@/lib/lorebook-renderer'
+import { countProjectedConversationMessages, loadProjectedConversationTail } from '@/lib/chat/turns'
 import type { ProjectedConversationMessage } from '@/lib/chat/turns'
 import { buildSystemPrompt } from './system-prompt-builder'
 import { decryptSecret } from './vault'
@@ -60,18 +57,17 @@ type RunnerCharacterRow = Pick<Character, 'id' | 'name' | 'system_prompt'> & {
 }
 type MemoryPlanResult = Awaited<ReturnType<typeof buildMemoryPlan>>
 type GenerationTranscript = ChatGenerationJobPayload['sanitizedMessages']
-type TranscriptSource = 'payload' | 'payload_tail' | 'db_tail' | 'db_full'
-type LorebookHistorySource = 'payload' | 'db_full' | 'not_needed'
+type TranscriptSource = 'payload' | 'payload_tail' | 'db_tail'
+type LorebookHistorySource = 'payload' | 'db_tail' | 'not_needed'
 export type TranscriptSourceReason =
   | 'payload_covers_full_conversation'
   | 'payload_satisfies_required_window'
-  | 'lorebook_requires_full_history'
   | 'payload_missing_regeneration_exclusion'
   | 'payload_shorter_than_required_window'
 export type LorebookHistorySourceReason =
   | 'history_not_needed'
-  | 'payload_covers_full_conversation'
-  | 'lorebook_requires_full_history'
+  | 'payload_covers_recent_window'
+  | 'lorebook_requires_recent_window'
   | 'no_persisted_turn'
 
 export type LoadedChatJobExecutionContext = {
@@ -170,19 +166,16 @@ export function resolveTranscriptSourcePlan({
   payloadTranscriptLength,
   effectiveConversationMessageCount,
   payloadTranscriptCanRepresentGeneration,
-  lorebookRequiresHistory,
   visibleSummaryEnd,
 }: {
   memoryMode: ChatMemoryMode
   payloadTranscriptLength: number
   effectiveConversationMessageCount: number
   payloadTranscriptCanRepresentGeneration: boolean
-  lorebookRequiresHistory: boolean
   visibleSummaryEnd: number | null
 }): {
   requiredMessageCount: number
   payloadCoversFullConversation: boolean
-  shouldLoadFullConversationTranscript: boolean
   shouldUsePayloadWindow: boolean
   reason: TranscriptSourceReason
 } {
@@ -195,23 +188,10 @@ export function resolveTranscriptSourcePlan({
     payloadTranscriptCanRepresentGeneration &&
     payloadTranscriptLength >= effectiveConversationMessageCount
 
-  if (lorebookRequiresHistory && !payloadCoversFullConversation) {
-    return {
-      requiredMessageCount,
-      payloadCoversFullConversation,
-      shouldLoadFullConversationTranscript: true,
-      shouldUsePayloadWindow: false,
-      reason: payloadTranscriptCanRepresentGeneration
-        ? 'lorebook_requires_full_history'
-        : 'payload_missing_regeneration_exclusion',
-    }
-  }
-
   if (payloadTranscriptCanRepresentGeneration && payloadTranscriptLength >= requiredMessageCount) {
     return {
       requiredMessageCount,
       payloadCoversFullConversation,
-      shouldLoadFullConversationTranscript: false,
       shouldUsePayloadWindow: true,
       reason: payloadCoversFullConversation
         ? 'payload_covers_full_conversation'
@@ -222,7 +202,6 @@ export function resolveTranscriptSourcePlan({
   return {
     requiredMessageCount,
     payloadCoversFullConversation,
-    shouldLoadFullConversationTranscript: false,
     shouldUsePayloadWindow: false,
     reason: payloadTranscriptCanRepresentGeneration
       ? 'payload_shorter_than_required_window'
@@ -233,13 +212,11 @@ export function resolveTranscriptSourcePlan({
 export function resolveLorebookHistoryPlan({
   hasPersistedTurn,
   lorebookRequiresHistory,
-  payloadCoversFullConversation,
-  fullConversationTranscriptLoaded,
+  payloadCoversRecentWindow,
 }: {
   hasPersistedTurn: boolean
   lorebookRequiresHistory: boolean
-  payloadCoversFullConversation: boolean
-  fullConversationTranscriptLoaded: boolean
+  payloadCoversRecentWindow: boolean
 }): {
   source: LorebookHistorySource
   reason: LorebookHistorySourceReason
@@ -251,23 +228,23 @@ export function resolveLorebookHistoryPlan({
     }
   }
 
-  if (fullConversationTranscriptLoaded) {
+  if (!hasPersistedTurn) {
     return {
-      source: 'db_full',
-      reason: 'lorebook_requires_full_history',
+      source: 'payload',
+      reason: 'no_persisted_turn',
     }
   }
 
-  if (hasPersistedTurn && payloadCoversFullConversation) {
+  if (payloadCoversRecentWindow) {
     return {
       source: 'payload',
-      reason: 'payload_covers_full_conversation',
+      reason: 'payload_covers_recent_window',
     }
   }
 
   return {
-    source: 'payload',
-    reason: 'no_persisted_turn',
+    source: 'db_tail',
+    reason: 'lorebook_requires_recent_window',
   }
 }
 
@@ -521,37 +498,43 @@ export async function loadChatJobExecutionContext({
       payloadTranscriptLength: payloadTranscript.length,
       effectiveConversationMessageCount,
       payloadTranscriptCanRepresentGeneration,
-      lorebookRequiresHistory,
       visibleSummaryEnd,
     })
 
-    let fullConversationTranscript: GenerationTranscript | null = null
-
-    if (transcriptPlan.shouldLoadFullConversationTranscript) {
-      fullConversationTranscript = await loadGenerationTranscript({
-        supabase,
-        chatId,
-        turnId: payload.turnId,
-        excludeAssistantForTurnId,
-        onMetrics(metrics) {
-          debugMetrics['transcript_target_turn_index'] = metrics.targetTurnIndex
-          debugMetrics['transcript_turn_count'] = metrics.turnCount
-          debugMetrics['transcript_db_message_row_count'] = metrics.fetchedMessageCount
-        },
-      })
-    }
-
+    const requiredLorebookMessageCount = lorebookRequiresHistory
+      ? Math.min(LOREBOOK_SCAN_DEPTH, effectiveConversationMessageCount)
+      : 0
     const lorebookHistoryPlan = resolveLorebookHistoryPlan({
       hasPersistedTurn: true,
       lorebookRequiresHistory,
-      payloadCoversFullConversation: transcriptPlan.payloadCoversFullConversation,
-      fullConversationTranscriptLoaded: fullConversationTranscript !== null,
+      payloadCoversRecentWindow:
+        payloadTranscriptCanRepresentGeneration &&
+        payloadTranscript.length >= requiredLorebookMessageCount,
     })
+
+    // Share a bounded DB tail when generation and lorebook both need persisted messages.
+    const dbTailMessageCount = Math.max(
+      transcriptPlan.shouldUsePayloadWindow ? 0 : transcriptPlan.requiredMessageCount,
+      lorebookHistoryPlan.source === 'db_tail' ? requiredLorebookMessageCount : 0,
+    )
+    const dbTranscriptTail =
+      dbTailMessageCount > 0
+        ? (
+            await loadConversationTranscriptTail({
+              supabase,
+              chatId,
+              limitMessages: dbTailMessageCount,
+              excludeAssistantForTurnId,
+              totalMessages: effectiveConversationMessageCount,
+            })
+          ).transcript
+        : []
+
     lorebookHistory =
-      lorebookHistoryPlan.source === 'db_full'
-        ? fullConversationTranscript!
+      lorebookHistoryPlan.source === 'db_tail'
+        ? dbTranscriptTail.slice(-LOREBOOK_SCAN_DEPTH)
         : lorebookRequiresHistory
-          ? payloadTranscript
+          ? payloadTranscript.slice(-LOREBOOK_SCAN_DEPTH)
           : []
     debugMetrics['lorebook_history_source'] = lorebookHistoryPlan.source
     debugMetrics['lorebook_history_source_reason'] = lorebookHistoryPlan.reason
@@ -563,16 +546,7 @@ export async function loadChatJobExecutionContext({
       transcriptPlan.payloadCoversFullConversation
     debugMetrics['transcript_source_reason'] = transcriptPlan.reason
 
-    if (fullConversationTranscript) {
-      const resolvedWindow = takeTranscriptTail({
-        transcript: fullConversationTranscript,
-        totalMessages: effectiveConversationMessageCount,
-        requiredMessageCount: transcriptPlan.requiredMessageCount,
-      })
-      generationTranscript = resolvedWindow.transcript
-      transcriptStartOrdinal = resolvedWindow.transcriptStartOrdinal
-      transcriptSource = 'db_full'
-    } else if (transcriptPlan.shouldUsePayloadWindow) {
+    if (transcriptPlan.shouldUsePayloadWindow) {
       const resolvedWindow = takeTranscriptTail({
         transcript: payloadTranscript,
         totalMessages: effectiveConversationMessageCount,
@@ -585,12 +559,10 @@ export async function loadChatJobExecutionContext({
           ? 'payload'
           : 'payload_tail'
     } else {
-      const resolvedWindow = await loadConversationTranscriptTail({
-        supabase,
-        chatId,
-        limitMessages: transcriptPlan.requiredMessageCount,
-        excludeAssistantForTurnId,
+      const resolvedWindow = takeTranscriptTail({
+        transcript: dbTranscriptTail,
         totalMessages: effectiveConversationMessageCount,
+        requiredMessageCount: transcriptPlan.requiredMessageCount,
       })
       generationTranscript = resolvedWindow.transcript
       transcriptStartOrdinal = resolvedWindow.transcriptStartOrdinal
@@ -606,7 +578,7 @@ export async function loadChatJobExecutionContext({
 
     lorebookEntries = lorebookState.entries
     lorebookOverrideMap = lorebookState.overrideMap
-    lorebookHistory = lorebookRequiresHistory ? payloadTranscript : []
+    lorebookHistory = lorebookRequiresHistory ? payloadTranscript.slice(-LOREBOOK_SCAN_DEPTH) : []
 
     debugMetrics['lorebook_module_count'] = new Set(
       lorebookState.entries.map((entry) => entry.moduleId),
@@ -617,13 +589,13 @@ export async function loadChatJobExecutionContext({
     const lorebookHistoryPlan = resolveLorebookHistoryPlan({
       hasPersistedTurn: false,
       lorebookRequiresHistory,
-      payloadCoversFullConversation: true,
-      fullConversationTranscriptLoaded: false,
+      payloadCoversRecentWindow: true,
     })
     debugMetrics['lorebook_history_source'] = lorebookHistoryPlan.source
     debugMetrics['lorebook_history_source_reason'] = lorebookHistoryPlan.reason
     debugMetrics['lorebook_history_message_count'] = lorebookHistory.length
   }
+  debugMetrics['lorebook_scan_depth'] = LOREBOOK_SCAN_DEPTH
   timings['5b_load_generation_transcript'] = performance.now() - stepStart
 
   if (!('transcript_required_message_count' in debugMetrics)) {

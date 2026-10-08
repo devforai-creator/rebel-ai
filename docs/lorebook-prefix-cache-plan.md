@@ -7,6 +7,7 @@ The main goal is to avoid losing product-level chat behavior during testing, wit
 ## Current State
 
 - The active chat-generation path now includes lorebook again through a single rendered dynamic block.
+- Keyword activation scans only the latest 10 user/assistant messages. History-dependent entries no longer force a full-conversation DB read; the runner reuses the payload or fetches a bounded tail. Always-active, pinned, and disabled overrides retain their existing behavior.
 - Anthropic transport uses request-level automatic caching and adds one explicit breakpoint on the stable prefix immediately before the dynamic lorebook block.
 - `prefix_live_blocks` is working, but stable-vs-dynamic lorebook separation is still pending.
 
@@ -94,7 +95,7 @@ Only do this if Phase 2 still causes too much prompt-cache instability.
 
 Possible follow-ups:
 
-- restrict activation to recent `N` messages
+- tune the existing 10-message activation window if usage data supports a different limit
 - sticky activation for a short number of turns
 - cap the number of dynamic entries
 - consider lightweight relevance ranking before rendering

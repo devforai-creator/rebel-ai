@@ -109,7 +109,7 @@ function buildValidPayload(
 }
 
 describe('resolveTranscriptSourcePlan', () => {
-  it('requires a full DB transcript when lorebook history needs the full conversation', async () => {
+  it('requests only the generation window when the payload is too short', async () => {
     const { resolveTranscriptSourcePlan } = await import('./execution-context')
 
     expect(
@@ -118,15 +118,13 @@ describe('resolveTranscriptSourcePlan', () => {
         payloadTranscriptLength: 12,
         effectiveConversationMessageCount: 40,
         payloadTranscriptCanRepresentGeneration: true,
-        lorebookRequiresHistory: true,
         visibleSummaryEnd: null,
       }),
     ).toEqual({
       requiredMessageCount: 20,
       payloadCoversFullConversation: false,
-      shouldLoadFullConversationTranscript: true,
       shouldUsePayloadWindow: false,
-      reason: 'lorebook_requires_full_history',
+      reason: 'payload_shorter_than_required_window',
     })
   })
 
@@ -139,13 +137,11 @@ describe('resolveTranscriptSourcePlan', () => {
         payloadTranscriptLength: 8,
         effectiveConversationMessageCount: 14,
         payloadTranscriptCanRepresentGeneration: false,
-        lorebookRequiresHistory: false,
         visibleSummaryEnd: 10,
       }),
     ).toEqual({
       requiredMessageCount: 4,
       payloadCoversFullConversation: false,
-      shouldLoadFullConversationTranscript: false,
       shouldUsePayloadWindow: false,
       reason: 'payload_missing_regeneration_exclusion',
     })
@@ -160,13 +156,11 @@ describe('resolveTranscriptSourcePlan', () => {
         payloadTranscriptLength: 8,
         effectiveConversationMessageCount: 110,
         payloadTranscriptCanRepresentGeneration: true,
-        lorebookRequiresHistory: false,
         visibleSummaryEnd: 90,
       }),
     ).toEqual({
       requiredMessageCount: 20,
       payloadCoversFullConversation: false,
-      shouldLoadFullConversationTranscript: false,
       shouldUsePayloadWindow: false,
       reason: 'payload_shorter_than_required_window',
     })
@@ -181,8 +175,7 @@ describe('resolveLorebookHistoryPlan', () => {
       resolveLorebookHistoryPlan({
         hasPersistedTurn: true,
         lorebookRequiresHistory: false,
-        payloadCoversFullConversation: false,
-        fullConversationTranscriptLoaded: false,
+        payloadCoversRecentWindow: false,
       }),
     ).toEqual({
       source: 'not_needed',
@@ -197,13 +190,36 @@ describe('resolveLorebookHistoryPlan', () => {
       resolveLorebookHistoryPlan({
         hasPersistedTurn: false,
         lorebookRequiresHistory: true,
-        payloadCoversFullConversation: true,
-        fullConversationTranscriptLoaded: false,
+        payloadCoversRecentWindow: true,
       }),
     ).toEqual({
       source: 'payload',
       reason: 'no_persisted_turn',
     })
+  })
+
+  it('reuses a payload that covers the recent window without requiring the full conversation', async () => {
+    const { resolveLorebookHistoryPlan } = await import('./execution-context')
+
+    expect(
+      resolveLorebookHistoryPlan({
+        hasPersistedTurn: true,
+        lorebookRequiresHistory: true,
+        payloadCoversRecentWindow: true,
+      }),
+    ).toEqual({ source: 'payload', reason: 'payload_covers_recent_window' })
+  })
+
+  it('requests a DB tail when the payload cannot cover the recent window', async () => {
+    const { resolveLorebookHistoryPlan } = await import('./execution-context')
+
+    expect(
+      resolveLorebookHistoryPlan({
+        hasPersistedTurn: true,
+        lorebookRequiresHistory: true,
+        payloadCoversRecentWindow: false,
+      }),
+    ).toEqual({ source: 'db_tail', reason: 'lorebook_requires_recent_window' })
   })
 })
 
@@ -404,7 +420,7 @@ describe('loadChatJobExecutionContext', () => {
     expect(decryptSecretMock).not.toHaveBeenCalled()
   })
 
-  it('loads the persisted turn transcript for regeneration jobs', async () => {
+  it('loads a bounded persisted tail with the replaced assistant excluded for regeneration', async () => {
     const { loadChatJobExecutionContext } = await import('./execution-context')
     const supabase = createChatJobRunnerSupabaseMock()
     const transcript = [{ role: 'user', content: 'From transcript' }]
@@ -415,16 +431,10 @@ describe('loadChatJobExecutionContext', () => {
       sanitizedMessages: [{ role: 'user', content: 'Ignored' }],
     })
 
-    loadGenerationTranscriptMock.mockImplementationOnce(async ({ onMetrics }) => {
-      onMetrics?.({
-        targetTurnIndex: 7,
-        turnCount: 7,
-        fetchedMessageCount: 5,
-        transcriptMessageCount: transcript.length,
-        excludedAssistant: true,
-      })
-      return transcript
-    })
+    loadProjectedConversationTailMock.mockResolvedValueOnce([
+      { id: 'db-user-1', role: 'user', content: 'From transcript' },
+    ])
+    const expectedTranscript = [{ ...transcript[0], messageId: 'db-user-1' }]
 
     const result = await loadChatJobExecutionContext({
       supabase: supabase as never,
@@ -432,33 +442,34 @@ describe('loadChatJobExecutionContext', () => {
       timings: {},
     })
 
-    expect(loadGenerationTranscriptMock).toHaveBeenCalledWith(
+    expect(loadGenerationTranscriptMock).not.toHaveBeenCalled()
+    expect(loadProjectedConversationTailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         chatId: 'chat-1',
-        turnId: 'turn-1',
+        limitMessages: 1,
         excludeAssistantForTurnId: 'turn-1',
       }),
     )
     expect(buildMemoryPlanMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        sanitizedMessages: transcript,
+        sanitizedMessages: expectedTranscript,
         totalConversationMessages: 1,
         transcriptCoverage: 'full',
         transcriptStartOrdinal: 1,
       }),
     )
-    expect(result.generationTranscript).toEqual(transcript)
+    expect(result.generationTranscript).toEqual(expectedTranscript)
+    expect(renderActiveLorebookBlockMock).toHaveBeenCalledWith(
+      expect.objectContaining({ chatHistory: expectedTranscript }),
+    )
     expect(result.debugMetrics).toEqual(
       expect.objectContaining({
-        transcript_source: 'db_full',
+        transcript_source: 'db_tail',
         transcript_source_reason: 'payload_missing_regeneration_exclusion',
         transcript_required_message_count: 1,
-        lorebook_history_source: 'db_full',
-        lorebook_history_source_reason: 'lorebook_requires_full_history',
+        lorebook_history_source: 'db_tail',
+        lorebook_history_source_reason: 'lorebook_requires_recent_window',
         lorebook_history_message_count: transcript.length,
-        transcript_target_turn_index: 7,
-        transcript_turn_count: 7,
-        transcript_db_message_row_count: 5,
         transcript_message_count: transcript.length,
         transcript_excluded_assistant: true,
       }),
@@ -778,6 +789,128 @@ describe('loadChatJobExecutionContext', () => {
         timings: {},
       }),
     ).rejects.toThrow('Input context too large')
+  })
+
+  it.each([
+    ['summary_window', 20],
+    ['prefix_live_blocks', 4],
+  ] as const)(
+    'limits lorebook to ten payload messages without changing %s generation',
+    async (mode, generationCount) => {
+      const { loadChatJobExecutionContext } = await import('./execution-context')
+      const messages = Array.from({ length: 30 }, (_, index) => ({
+        role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+        content: `message-${index}`,
+        messageId: `message-${index}`,
+      }))
+      const supabase = createChatJobRunnerSupabaseMock({
+        chat: {
+          id: 'chat-1',
+          user_id: 'user-1',
+          character_id: 'char-1',
+          persona_id: null,
+          custom_system_prompt: null,
+          model_config: { memory: { mode } },
+        },
+      })
+      countProjectedConversationMessagesMock.mockResolvedValueOnce(100)
+      getLastSummaryEndMock.mockResolvedValueOnce(98).mockResolvedValueOnce(96)
+
+      const result = await loadChatJobExecutionContext({
+        supabase: supabase as never,
+        payload: buildValidPayload({ turnId: 'turn-50', sanitizedMessages: messages }),
+        timings: {},
+      })
+
+      expect(loadGenerationTranscriptMock).not.toHaveBeenCalled()
+      expect(loadProjectedConversationTailMock).not.toHaveBeenCalled()
+      expect(renderActiveLorebookBlockMock).toHaveBeenCalledWith(
+        expect.objectContaining({ chatHistory: messages.slice(-10) }),
+      )
+      expect(result.generationTranscript).toEqual(messages.slice(-generationCount))
+      expect(result.debugMetrics).toMatchObject({
+        lorebook_history_source: 'payload',
+        lorebook_history_source_reason: 'payload_covers_recent_window',
+        lorebook_history_message_count: 10,
+        lorebook_scan_depth: 10,
+      })
+    },
+  )
+
+  it.each([
+    ['summary_window', 20, 20],
+    ['prefix_live_blocks', 10, 2],
+  ] as const)(
+    'fetches one bounded tail for lorebook and %s generation',
+    async (mode, queryCount, generationCount) => {
+      const { loadChatJobExecutionContext } = await import('./execution-context')
+      const messages = Array.from({ length: queryCount }, (_, index) => ({
+        id: `db-${index}`,
+        role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+        content: `db-message-${index}`,
+      }))
+      const payloadMessages = Array.from({ length: 3 }, (_, index) => ({
+        role: 'user' as const,
+        content: `payload-${index}`,
+      }))
+      const transcript = messages.map(({ id, ...message }) => ({ ...message, messageId: id }))
+      const supabase = createChatJobRunnerSupabaseMock({
+        chat: {
+          id: 'chat-1',
+          user_id: 'user-1',
+          character_id: 'char-1',
+          persona_id: null,
+          custom_system_prompt: null,
+          model_config: { memory: { mode } },
+        },
+      })
+      countProjectedConversationMessagesMock.mockResolvedValueOnce(100)
+      getLastSummaryEndMock.mockResolvedValueOnce(98).mockResolvedValueOnce(98)
+      loadProjectedConversationTailMock.mockResolvedValueOnce(messages)
+
+      const result = await loadChatJobExecutionContext({
+        supabase: supabase as never,
+        payload: buildValidPayload({ turnId: 'turn-50', sanitizedMessages: payloadMessages }),
+        timings: {},
+      })
+
+      expect(loadGenerationTranscriptMock).not.toHaveBeenCalled()
+      expect(loadProjectedConversationTailMock).toHaveBeenCalledTimes(1)
+      expect(loadProjectedConversationTailMock).toHaveBeenCalledWith(
+        expect.objectContaining({ limitMessages: queryCount, excludeAssistantForTurnId: null }),
+      )
+      expect(renderActiveLorebookBlockMock).toHaveBeenCalledWith(
+        expect.objectContaining({ chatHistory: transcript.slice(-10) }),
+      )
+      expect(result.generationTranscript).toEqual(
+        mode === 'summary_window' ? transcript : payloadMessages.slice(-generationCount),
+      )
+      expect(result.debugMetrics).toMatchObject({
+        lorebook_history_source: 'db_tail',
+        lorebook_history_message_count: 10,
+        transcript_message_count: generationCount,
+      })
+    },
+  )
+
+  it('limits lorebook history for jobs without a persisted turn while preserving their generation input', async () => {
+    const { loadChatJobExecutionContext } = await import('./execution-context')
+    const messages = Array.from({ length: 20 }, (_, index) => ({
+      role: 'user' as const,
+      content: `message-${index}`,
+    }))
+
+    const result = await loadChatJobExecutionContext({
+      supabase: createChatJobRunnerSupabaseMock() as never,
+      payload: buildValidPayload({ sanitizedMessages: messages }),
+      timings: {},
+    })
+
+    expect(renderActiveLorebookBlockMock).toHaveBeenCalledWith(
+      expect.objectContaining({ chatHistory: messages.slice(-10) }),
+    )
+    expect(result.generationTranscript).toEqual(messages)
+    expect(loadProjectedConversationTailMock).not.toHaveBeenCalled()
   })
 
   it('uses the payload tail for summary-window chats when the latest visible window is sufficient', async () => {

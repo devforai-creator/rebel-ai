@@ -12,6 +12,8 @@
 
 import type { LorebookEntry } from '@/types/lorebook.types'
 
+export const LOREBOOK_SCAN_DEPTH = 10
+
 export interface RenderLorebookOptions {
   lorebookEntries: LorebookEntry[]
   chatHistory: Array<{ role: string; content: string }>
@@ -37,7 +39,7 @@ export interface RenderedLorebook {
  * 1. Folders (mode: "folder") are NEVER rendered
  * 2. Always active entries (alwaysActive: true) are ALWAYS included
  * 3. Keyword entries are included if ANY comma-separated key is a
- *    case-insensitive substring of the full chat history
+ *    case-insensitive substring of the latest 10 user/assistant messages
  * 4. Entries are sorted by insertorder (higher = earlier in prompt)
  */
 export function renderLorebook(options: RenderLorebookOptions): RenderedLorebook {
@@ -61,8 +63,10 @@ export function renderLorebook(options: RenderLorebookOptions): RenderedLorebook
     return true
   })
 
-  // Build chat history text for keyword matching (case-insensitive)
+  // Match only recent conversation messages, excluding injected system context.
   const historyText = chatHistory
+    .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
+    .slice(-LOREBOOK_SCAN_DEPTH)
     .map((msg) => msg.content)
     .join(' ')
     .toLowerCase()

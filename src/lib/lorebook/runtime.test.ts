@@ -9,6 +9,33 @@ import {
 } from './runtime'
 
 describe('renderActiveLorebookBlock', () => {
+  it('expires old keyword matches while preserving pinned, always-active, and disabled overrides', () => {
+    const entries: LorebookRuntimeEntry[] = [
+      { moduleId: 'module-1', key: 'old', content: 'Expired lore' },
+      { moduleId: 'module-1', key: 'old', content: 'Pinned lore' },
+      { moduleId: 'module-1', key: 'old', content: 'Always lore', alwaysActive: true },
+      { moduleId: 'module-1', key: 'recent', content: 'Disabled lore', alwaysActive: true },
+    ]
+    const overrideMap = new Map<string, boolean>([
+      [`v2:module-1:${computeLorebookEntryFingerprint('module-1', entries[1])}`, true],
+      [`v2:module-1:${computeLorebookEntryFingerprint('module-1', entries[3])}`, false],
+    ])
+
+    const result = renderActiveLorebookBlock({
+      entries,
+      overrideMap,
+      chatHistory: [
+        { role: 'user', content: 'old' },
+        ...Array.from({ length: 10 }, () => ({ role: 'assistant' as const, content: 'recent' })),
+      ],
+    })
+
+    expect(result).toContain('Pinned lore')
+    expect(result).toContain('Always lore')
+    expect(result).not.toContain('Expired lore')
+    expect(result).not.toContain('Disabled lore')
+  })
+
   it('renders active, pinned, and always-active entries in deterministic order', () => {
     const entries: LorebookRuntimeEntry[] = [
       {

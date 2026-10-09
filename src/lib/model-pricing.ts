@@ -76,19 +76,25 @@ function calculateCost(tokens: number, ratePerMillion: number, multiplier: numbe
 }
 
 export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown | null {
+  const promptTokens = sanitizeTokens(params.promptTokens)
+  const completionTokens = sanitizeTokens(params.completionTokens)
+  const cachedInputTokens = sanitizeTokens(params.cachedInputTokens)
+  const reasoningTokens = sanitizeTokens(params.reasoningTokens)
+  // Anthropic reports uncached input separately; cached reads and writes still
+  // count toward the full prompt length that determines the pricing tier.
+  const pricingPromptTokens =
+    params.provider === 'anthropic'
+      ? promptTokens + cachedInputTokens + sanitizeTokens(params.cacheWriteTokens)
+      : promptTokens
   const rates = resolveRates({
     provider: params.provider,
     modelName: params.modelName,
-    promptTokens: params.promptTokens,
+    promptTokens: pricingPromptTokens,
   })
   if (!rates) {
     return null
   }
 
-  const promptTokens = sanitizeTokens(params.promptTokens)
-  const completionTokens = sanitizeTokens(params.completionTokens)
-  const cachedInputTokens = sanitizeTokens(params.cachedInputTokens)
-  const reasoningTokens = sanitizeTokens(params.reasoningTokens)
   const cacheWriteTokens =
     params.provider === 'openai' && rates.cacheWrite !== undefined
       ? sanitizeTokens(params.cacheWriteTokens)

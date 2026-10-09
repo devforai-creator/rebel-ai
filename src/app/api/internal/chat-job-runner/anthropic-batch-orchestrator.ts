@@ -429,6 +429,7 @@ async function pollAnthropicBatchJob({
       promptTokens: promptTokens ?? undefined,
       completionTokens: completionTokens ?? undefined,
       cachedInputTokens: cachedInputTokens ?? undefined,
+      cacheWriteTokens: usage?.cache_creation_input_tokens,
       serviceTier: 'batch',
     })
 

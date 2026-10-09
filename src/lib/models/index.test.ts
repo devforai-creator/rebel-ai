@@ -222,6 +222,41 @@ describe('Model Registry', () => {
   })
 
   describe('Anthropic model registration', () => {
+    it.each([
+      ['claude-sonnet-5-5', 'Claude Sonnet 5.5', false],
+      ['claude-haiku-5-5', 'Claude Haiku 5.5', true],
+    ] as const)('registers %s with current capabilities', (modelName, displayName, required) => {
+      expect(listUiModelIdsByProvider('anthropic')).toContain(modelName)
+      expect(findModelDefinition({ provider: 'anthropic', modelName })).toMatchObject({
+        displayName,
+        features: {
+          anthropicThinking: 'adaptive-supported',
+          batchChat: true,
+          promptCacheMinTokens: 512,
+        },
+      })
+      expect(findModelDefinition({ modelName: `${modelName}-snapshot` })?.id).toBe(modelName)
+      expect(supportsRequiredToolChoice({ provider: 'anthropic', modelName })).toBe(required)
+    })
+
+    it('uses Sonnet 5.5 cache pricing without matching the older Sonnet 5 family', () => {
+      expect(
+        getModelPricingTiers({ provider: 'anthropic', modelName: 'claude-sonnet-5-5-snapshot' }),
+      ).toEqual([{ rates: { input: 2, output: 10, cachedInput: 0.1 } }])
+    })
+
+    it('uses Haiku 5.5 pricing tiers around 100K input tokens', () => {
+      expect(
+        getModelPricingTiers({ provider: 'anthropic', modelName: 'claude-haiku-5-5' }),
+      ).toEqual([
+        {
+          maxPromptTokens: 100_000,
+          rates: { input: 0.1, output: 0.5, cachedInput: 0.01 },
+        },
+        { rates: { input: 0.5, output: 2.5, cachedInput: 0.05 } },
+      ])
+    })
+
     it('registers Claude Opus 5.5 with always-on thinking and auto tool choice', () => {
       expect(listUiModelIdsByProvider('anthropic')[0]).toBe('claude-opus-5-5')
       expect(getModelFeatures({ provider: 'anthropic', modelName: 'claude-opus-5-5' })).toEqual({

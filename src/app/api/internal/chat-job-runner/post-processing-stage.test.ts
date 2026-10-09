@@ -52,7 +52,7 @@ describe('runPostProcessingStage', () => {
 
   it.each([undefined, 3])('persists cache-write usage: %s', async (cacheWriteTokens) => {
     const supabase = createChatJobRunnerSupabaseMock()
-    const payload = buildPayload()
+    const payload = buildPayload({ modelName: 'claude-haiku-5-5' })
 
     const result = await runPostProcessingStage({
       supabase: supabase as never,
@@ -114,12 +114,12 @@ describe('runPostProcessingStage', () => {
 
     expect(estimateUsageCostMock).toHaveBeenCalledWith({
       provider: 'anthropic',
-      modelName: 'claude-opus-4-5',
+      modelName: 'claude-haiku-5-5',
       promptTokens: 10,
       completionTokens: 20,
       cachedInputTokens: 5,
       reasoningTokens: undefined,
-      ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
+      cacheWriteTokens: 123,
       serviceTier: 'standard',
     })
     expect(buildChatDebugInfoMock).toHaveBeenCalledWith(
@@ -137,7 +137,7 @@ describe('runPostProcessingStage', () => {
         chatId: 'chat-1',
         userId: 'user-1',
         provider: 'anthropic',
-        modelName: 'claude-opus-4-5',
+        modelName: 'claude-haiku-5-5',
         debugInfo: { requestId: 'req-1', debug: true },
         usageCost: { totalCost: 1.23 },
         promptTokens: 10,

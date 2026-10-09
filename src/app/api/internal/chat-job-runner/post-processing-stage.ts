@@ -51,10 +51,12 @@ function buildUsageCost({
   payload,
   serviceTier,
   usage,
+  anthropicCacheCreationInputTokens,
 }: {
   payload: ChatGenerationJobPayload
   serviceTier: PostProcessingContext['apiKeyData']['service_tier']
   usage: UsageMetrics
+  anthropicCacheCreationInputTokens: number | null
 }): UsageCostBreakdown | null {
   return estimateUsageCost({
     provider: payload.provider,
@@ -63,7 +65,10 @@ function buildUsageCost({
     completionTokens: usage.completionTokens ?? undefined,
     cachedInputTokens: usage.cachedInputTokens ?? undefined,
     reasoningTokens: usage.reasoningTokens ?? undefined,
-    ...(usage.cacheWriteTokens !== undefined ? { cacheWriteTokens: usage.cacheWriteTokens } : {}),
+    cacheWriteTokens:
+      payload.provider === 'anthropic'
+        ? (anthropicCacheCreationInputTokens ?? undefined)
+        : usage.cacheWriteTokens,
     serviceTier: serviceTier ?? undefined,
   })
 }
@@ -132,6 +137,7 @@ export async function runPostProcessingStage({
     payload,
     serviceTier: apiKeyData.service_tier,
     usage: usageMetrics,
+    anthropicCacheCreationInputTokens,
   })
   const debugConversationMessages =
     payload.provider === 'anthropic' ? anthropicConversationMessages : null

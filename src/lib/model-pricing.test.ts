@@ -359,6 +359,56 @@ describe('estimateUsageCost', () => {
       expect(result!.completionCost).toBeCloseTo(0.005, 6)
     })
 
+    it('uses Claude Sonnet 5.5 reduced cache-read pricing', () => {
+      const estimate = estimateUsageCost({
+        provider: 'anthropic',
+        modelName: 'claude-sonnet-5-5',
+        promptTokens: 2_000,
+        completionTokens: 500,
+        cachedInputTokens: 8_000,
+      })
+
+      expect(estimate?.promptCost).toBeCloseTo(0.004, 8)
+      expect(estimate?.cachedInputCost).toBeCloseTo(0.0008, 8)
+      expect(estimate?.completionCost).toBeCloseTo(0.005, 8)
+    })
+
+    it.each([
+      [99_999, 0, 0, 0.1, 0.5, 0.01],
+      [100_000, 0, 0, 0.1, 0.5, 0.01],
+      [100_001, 0, 0, 0.5, 2.5, 0.05],
+      [1_000, 99_000, 0, 0.1, 0.5, 0.01],
+      [1_000, 99_001, 0, 0.5, 2.5, 0.05],
+      [1_000, 50_000, 49_000, 0.1, 0.5, 0.01],
+      [1_000, 50_000, 49_001, 0.5, 2.5, 0.05],
+    ])(
+      'selects Haiku 5.5 rates for %i uncached, %i cached, and %i cache-write tokens',
+      (promptTokens, cachedInputTokens, cacheWriteTokens, input, output, cachedInput) => {
+        for (const serviceTier of ['standard', 'batch'] as const) {
+          const multiplier = serviceTier === 'batch' ? 0.5 : 1
+          const estimate = estimateUsageCost({
+            provider: 'anthropic',
+            modelName: 'claude-haiku-5-5',
+            promptTokens,
+            cachedInputTokens,
+            cacheWriteTokens,
+            completionTokens: 1_000,
+            serviceTier,
+          })
+
+          expect(estimate?.promptCost).toBeCloseTo(
+            (promptTokens / 1_000_000) * input * multiplier,
+            8,
+          )
+          expect(estimate?.cachedInputCost).toBeCloseTo(
+            (cachedInputTokens / 1_000_000) * cachedInput * multiplier,
+            8,
+          )
+          expect(estimate?.completionCost).toBeCloseTo(0.001 * output * multiplier, 8)
+        }
+      },
+    )
+
     it('uses Claude Opus 5.5 standard and cached-input rates', () => {
       const estimate = estimateUsageCost({
         provider: 'anthropic',

@@ -10,7 +10,9 @@ export const ANTHROPIC_CACHE_MIN_TOKENS: Record<string, number> = {
   opus: 4096,
   opusLegacy: 1024,
   sonnet: 1024,
+  sonnet55: 512,
   haiku: 4096,
+  haiku55: 512,
   haikuLegacy: 2048,
 }
 
@@ -29,6 +31,16 @@ const CLAUDE_OPUS_46_PRICING: ModelPricingTier[] = [
       output: 37.5,
       cachedInput: 1,
     },
+  },
+]
+
+const CLAUDE_HAIKU_55_PRICING: ModelPricingTier[] = [
+  {
+    maxPromptTokens: 100_000,
+    rates: { input: 0.1, output: 0.5, cachedInput: 0.01 },
+  },
+  {
+    rates: { input: 0.5, output: 2.5, cachedInput: 0.05 },
   },
 ]
 
@@ -133,6 +145,18 @@ export const anthropicModelCatalog = defineProviderCatalog({
       },
     },
     {
+      id: 'claude-sonnet-5-5',
+      displayName: 'Claude Sonnet 5.5',
+      matches: { contains: ['claude-sonnet-5-5'] },
+      pricing: flatPricing({ input: 2, output: 10, cachedInput: 0.1 }),
+      features: {
+        anthropicThinking: 'adaptive-supported',
+        batchChat: true,
+        promptCacheMinTokens: ANTHROPIC_CACHE_MIN_TOKENS.sonnet55,
+        requiredToolChoice: false,
+      },
+    },
+    {
       id: 'claude-sonnet-5',
       displayName: 'Claude Sonnet 5',
       matches: { contains: ['claude-sonnet-5'] },
@@ -150,6 +174,17 @@ export const anthropicModelCatalog = defineProviderCatalog({
       matches: { contains: ['claude-sonnet-4-5', 'claude-sonnet-4.5'] },
       pricing: flatPricing({ input: 3, output: 15, cachedInput: 0.3 }),
       features: { promptCacheMinTokens: ANTHROPIC_CACHE_MIN_TOKENS.sonnet },
+    },
+    {
+      id: 'claude-haiku-5-5',
+      displayName: 'Claude Haiku 5.5',
+      matches: { contains: ['claude-haiku-5-5'] },
+      pricing: CLAUDE_HAIKU_55_PRICING,
+      features: {
+        anthropicThinking: 'adaptive-supported',
+        batchChat: true,
+        promptCacheMinTokens: ANTHROPIC_CACHE_MIN_TOKENS.haiku55,
+      },
     },
     {
       id: 'claude-haiku-4-5',

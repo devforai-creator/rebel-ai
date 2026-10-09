@@ -1049,17 +1049,17 @@ describe('processChatJobs', () => {
     expect(call?.params?.output_config).toEqual({ effort: 'low' })
   })
 
-  it('polls completed Anthropic Batch jobs and records batch-priced usage', async () => {
+  it('polls completed Haiku 5.5 Batch jobs and includes cache writes in the pricing tier', async () => {
     const batchPayload = buildValidPayload({
       requestId: 'req-batch-complete',
       provider: 'anthropic',
-      modelName: 'claude-opus-4-5',
+      modelName: 'claude-haiku-5-5',
       deliveryMode: 'anthropic_batch',
     })
     const batchMetadata = {
       customId: 'job-complete-batch',
       submittedRequest: {
-        model: 'claude-opus-4-5',
+        model: 'claude-haiku-5-5',
         max_tokens: 8192,
         messages: [{ role: 'user', content: 'Hello' }],
       },
@@ -1087,7 +1087,7 @@ describe('processChatJobs', () => {
         user_id: 'user-1',
         is_active: true,
         provider: 'anthropic',
-        model_preference: 'claude-opus-4-5',
+        model_preference: 'claude-haiku-5-5',
         vault_secret_name: 'vault-key',
         service_tier: 'standard',
       },
@@ -1129,7 +1129,7 @@ describe('processChatJobs', () => {
           id: 'msg-batch',
           type: 'message',
           role: 'assistant',
-          model: 'claude-opus-4-5',
+          model: 'claude-haiku-5-5',
           content: [{ type: 'text', text: 'batch answer' }],
           stop_reason: 'end_turn',
           stop_sequence: null,
@@ -1137,6 +1137,7 @@ describe('processChatJobs', () => {
             input_tokens: 100,
             output_tokens: 20,
             cache_read_input_tokens: 10,
+            cache_creation_input_tokens: 99_891,
           },
         },
       },
@@ -1173,7 +1174,7 @@ describe('processChatJobs', () => {
       completion_tokens: 20,
       total_tokens: 120,
     })
-    expect(Number(supabase.usageEvents[0].total_cost_usd)).toBeGreaterThan(0)
+    expect(Number(supabase.usageEvents[0].total_cost_usd)).toBeCloseTo(0.00005025, 8)
   })
 
   it('uses google explicit cache strategy when cache creation succeeds', async () => {

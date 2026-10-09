@@ -252,6 +252,15 @@ describe('getProviderOptions', () => {
     expect(options).toBeUndefined()
   })
 
+  it.each(['claude-sonnet-5-5', 'claude-haiku-5-5'])(
+    'preserves default adaptive thinking and the 512-token cache minimum for %s',
+    (modelName) => {
+      expect(getProviderOptions('anthropic', { modelName })).toBeUndefined()
+      expect(supportsAnthropicAdaptiveThinking(modelName)).toBe(true)
+      expect(getAnthropicMinCacheTokens(modelName)).toBe(512)
+    },
+  )
+
   it('keeps always-on Claude thinking at minimum effort', () => {
     for (const modelName of ['claude-opus-5-5', 'claude-fable-5-1', 'claude-fable-5']) {
       const options = getProviderOptions('anthropic', {

@@ -487,7 +487,7 @@ export async function requestProviderStage({
       }
 
       if (anthropicCache?.enabled) {
-        logDebug('[Chat Job Runner] Anthropic prompt caching enabled (automatic)', {
+        logDebug('[Chat Job Runner] Anthropic prompt caching enabled (static system only)', {
           ttl: anthropicCache.ttl,
           staticPromptTokens,
           dynamicContextTokens,
@@ -555,6 +555,7 @@ export async function requestProviderStage({
           sourceHints: agenticTranscriptRecallSourceHints,
           sourceMap: agenticTranscriptRecallSourceMap,
           streamRequest: streamPayloadPlan.streamRequest,
+          systemInstructionPlacement: provider === 'anthropic' ? 'after-system-messages' : 'system',
           debugMetrics,
           requireToolByInstruction: atrToolChoiceEnforcement === 'instruction_required',
           logDebug,

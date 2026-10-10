@@ -1040,11 +1040,13 @@ describe('processChatJobs', () => {
       jobId: 'job-anthropic-batch-cache-ttl',
       status: 'processing',
     })
-    expect(call?.params?.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' })
+    expect(call?.params).not.toHaveProperty('cache_control')
     expect(call?.params?.system?.[0]?.cache_control).toEqual({
       type: 'ephemeral',
       ttl: '1h',
     })
+    expect(call?.params?.system?.[1]).not.toHaveProperty('cache_control')
+    expect(call?.params?.system?.filter((block) => block.cache_control)).toHaveLength(1)
     expect(call?.params?.thinking).toEqual({ type: 'adaptive' })
     expect(call?.params?.output_config).toEqual({ effort: 'low' })
   })

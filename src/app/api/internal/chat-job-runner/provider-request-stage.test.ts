@@ -898,9 +898,7 @@ describe('requestProviderStage', () => {
       expect(requests[0].thinking).toEqual(
         atr === 'forced' ? { type: 'disabled' } : originalProviderOptions.deepseek.thinking,
       )
-      expect(requests[0].reasoning_effort).toBe(
-        atr === 'forced' || thinking === 'disabled' ? undefined : 'low',
-      )
+      expect(requests[0].reasoning_effort).toBe(atr === 'forced' ? undefined : 'low')
       expect(requests[0].tool_choice).toBe(
         atr === 'forced' ? 'required' : atr === 'auto' ? 'auto' : undefined,
       )
@@ -1078,6 +1076,9 @@ describe('requestProviderStage', () => {
       experimental_agentic_transcript_recall_tool_choice_enforcement: 'native_required',
       experimental_agentic_transcript_recall_tool_choice_applied: true,
     })
+    expect(prepareExperimentalAgenticTranscriptRecallRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({ systemInstructionPlacement: 'after-system-messages' }),
+    )
   })
 
   it.each(['claude-fable-5-1', 'claude-sonnet-5-5'])(

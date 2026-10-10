@@ -212,7 +212,7 @@ function buildAnthropicBatchRequest({
     throw new Error('Anthropic Batch can only submit Anthropic payloads')
   }
 
-  const cacheControl = extractAnthropicRequestCacheControl(streamPayloadPlan)
+  const cacheControl = extractAnthropicSystemCacheControl(streamPayloadPlan)
   const thinkingConfig = extractAnthropicRequestThinkingConfig(streamPayloadPlan)
   const systemCacheControl: NonNullable<AnthropicTextBlock['cache_control']> = cacheControl ?? {
     type: 'ephemeral',
@@ -246,7 +246,6 @@ function buildAnthropicBatchRequest({
       })),
     ...(thinkingConfig.thinking ? { thinking: thinkingConfig.thinking } : {}),
     ...(thinkingConfig.effort ? { output_config: { effort: thinkingConfig.effort } } : {}),
-    ...(cacheControl ? { cache_control: cacheControl } : {}),
   }
 
   if (params.messages.length === 0) {
@@ -281,10 +280,13 @@ function extractAnthropicRequestThinkingConfig(
   return { thinking, effort }
 }
 
-function extractAnthropicRequestCacheControl(
+function extractAnthropicSystemCacheControl(
   streamPayloadPlan: ReturnType<typeof buildStreamPayloadPlan>,
 ): AnthropicBatchMessageParams['cache_control'] | null {
-  const anthropicOptions = streamPayloadPlan.streamRequest.providerOptions?.anthropic as
+  const cachedSystemMessage = streamPayloadPlan.streamRequest.messages.find(
+    (message) => message.role === 'system' && message.providerOptions?.anthropic?.cacheControl,
+  )
+  const anthropicOptions = cachedSystemMessage?.providerOptions?.anthropic as
     | Record<string, unknown>
     | undefined
   const cacheControl = anthropicOptions?.cacheControl

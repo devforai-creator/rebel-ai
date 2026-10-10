@@ -8,7 +8,7 @@ The main goal is to avoid losing product-level chat behavior during testing, wit
 
 - The active chat-generation path now includes lorebook again through a single rendered dynamic block.
 - Keyword activation scans only the latest 10 user/assistant messages. History-dependent entries no longer force a full-conversation DB read; the runner reuses the payload or fetches a bounded tail. Always-active, pinned, and disabled overrides retain their existing behavior.
-- Anthropic transport uses request-level automatic caching and adds one explicit breakpoint on the stable prefix immediately before the dynamic lorebook block.
+- Anthropic transport uses one explicit breakpoint at the end of the static system prompt and does not enable request-level automatic caching. Summaries, facts, lorebook, ATR range inventory, and live conversation remain outside the cached prefix.
 - `prefix_live_blocks` is working, but stable-vs-dynamic lorebook separation is still pending.
 
 ## Problem
@@ -64,7 +64,7 @@ Why this phase exists:
 Tradeoff:
 
 - Cache behavior will be worse than the ideal architecture because the whole lorebook contribution is treated as changing suffix context.
-- The explicit guard before lorebook protects the stable prefix, but the lorebook block itself still churns as one unit.
+- The static-system breakpoint protects the fixed prompt. Neither the lorebook block nor the sealed memory and conversation after that boundary are cached.
 
 ### Phase 2: Split Stable and Dynamic Lorebook
 
@@ -80,8 +80,8 @@ Recommended prompt order:
 3. explicit cache breakpoint
 4. sealed summaries/facts
 5. dynamic lorebook recall block
-6. live conversation
-7. automatic caching
+6. ATR instructions and current range inventory
+7. live conversation, without automatic caching
 
 Why this order:
 

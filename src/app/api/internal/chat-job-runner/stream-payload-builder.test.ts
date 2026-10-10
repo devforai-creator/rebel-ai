@@ -15,7 +15,7 @@ const BASE_ARGS = {
 }
 
 describe('buildStreamPayloadPlan', () => {
-  it('builds anthropic split-system payload with automatic cache control at request level', () => {
+  it('caches only the static system prompt in the summary-window payload', () => {
     const providerOptions: SharedV2ProviderOptions = {
       anthropic: { version: '2025-01-01' },
     }
@@ -65,7 +65,6 @@ describe('buildStreamPayloadPlan', () => {
     expect(result.streamRequest.providerOptions).toEqual({
       anthropic: {
         version: '2025-01-01',
-        cacheControl: { type: 'ephemeral' },
       },
     })
 
@@ -77,7 +76,9 @@ describe('buildStreamPayloadPlan', () => {
       role: 'system',
       content: 'STATIC',
     })
-    expect(result.streamRequest.messages[0]).not.toHaveProperty('providerOptions')
+    expect(result.streamRequest.messages[0]).toMatchObject({
+      providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } },
+    })
 
     // System 2: summaries+facts
     expect(result.streamRequest.messages[1]).toMatchObject({
@@ -90,7 +91,7 @@ describe('buildStreamPayloadPlan', () => {
       provider: 'anthropic',
       strategy: 'anthropic-split-system',
       systemMessages: [
-        { role: 'system', content: 'STATIC' },
+        { role: 'system', content: 'STATIC', cached: true },
         { role: 'system', content: 'SUMMARIES_FACTS' },
       ],
       conversationMessages: [
@@ -131,13 +132,13 @@ describe('buildStreamPayloadPlan', () => {
       role: 'system',
       content: 'STATIC',
     })
-    expect(result.streamRequest.messages[0]).not.toHaveProperty('providerOptions')
-    expect(result.streamRequest.providerOptions).toEqual({
-      anthropic: {
-        cacheControl: { type: 'ephemeral' },
-      },
+    expect(result.streamRequest.messages[0]).toMatchObject({
+      providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } },
     })
-    expect(result.actualPayload.systemMessages).toEqual([{ role: 'system', content: 'STATIC' }])
+    expect(result.streamRequest.providerOptions).toBeUndefined()
+    expect(result.actualPayload.systemMessages).toEqual([
+      { role: 'system', content: 'STATIC', cached: true },
+    ])
   })
 
   it('no cache applied when anthropicCache is null', () => {
@@ -332,7 +333,7 @@ describe('buildStreamPayloadPlan', () => {
     })
   })
 
-  it('uses request-level automatic cache control for prefix mode', () => {
+  it('excludes sealed memory and live conversation from caching in prefix mode', () => {
     const result = buildStreamPayloadPlan({
       ...BASE_ARGS,
       provider: 'anthropic',
@@ -380,18 +381,16 @@ describe('buildStreamPayloadPlan', () => {
     })
 
     expect(result.streamRequest.messages).toHaveLength(5)
-    expect(result.streamRequest.messages[0]).not.toHaveProperty('providerOptions')
+    expect(result.streamRequest.messages[0]).toMatchObject({
+      providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } },
+    })
     expect(result.streamRequest.messages[1]).not.toHaveProperty('providerOptions')
     expect(result.streamRequest.messages[4]).toMatchObject({
       role: 'user',
       content: 'latest user',
     })
     expect(result.streamRequest.messages[4]).not.toHaveProperty('providerOptions')
-    expect(result.streamRequest.providerOptions).toEqual({
-      anthropic: {
-        cacheControl: { type: 'ephemeral' },
-      },
-    })
+    expect(result.streamRequest.providerOptions).toBeUndefined()
     expect(result.actualPayload.conversationMessages).toEqual([
       { role: 'user', content: 'older live' },
       { role: 'assistant', content: 'older reply' },
@@ -399,7 +398,7 @@ describe('buildStreamPayloadPlan', () => {
     ])
   })
 
-  it('adds an explicit system breakpoint before dynamic lorebook while keeping automatic caching', () => {
+  it('keeps the single breakpoint before sealed memory and dynamic lorebook', () => {
     const result = buildStreamPayloadPlan({
       ...BASE_ARGS,
       provider: 'anthropic',
@@ -445,27 +444,21 @@ describe('buildStreamPayloadPlan', () => {
       ],
     })
 
-    expect(result.streamRequest.providerOptions).toEqual({
-      anthropic: {
-        cacheControl: { type: 'ephemeral' },
-      },
-    })
+    expect(result.streamRequest.providerOptions).toBeUndefined()
 
     expect(result.streamRequest.messages).toHaveLength(5)
     expect(result.streamRequest.messages[0]).toMatchObject({
       role: 'system',
       content: 'STATIC',
     })
-    expect(result.streamRequest.messages[0]).not.toHaveProperty('providerOptions')
+    expect(result.streamRequest.messages[0]).toMatchObject({
+      providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } },
+    })
     expect(result.streamRequest.messages[1]).toMatchObject({
       role: 'system',
       content: 'SEALED',
-      providerOptions: {
-        anthropic: {
-          cacheControl: { type: 'ephemeral' },
-        },
-      },
     })
+    expect(result.streamRequest.messages[1]).not.toHaveProperty('providerOptions')
     expect(result.streamRequest.messages[2]).toMatchObject({
       role: 'system',
       content: 'LOREBOOK',
@@ -473,9 +466,92 @@ describe('buildStreamPayloadPlan', () => {
     expect(result.streamRequest.messages[2]).not.toHaveProperty('providerOptions')
 
     expect(result.actualPayload.systemMessages).toEqual([
-      { role: 'system', content: 'STATIC' },
-      { role: 'system', content: 'SEALED', cached: true },
+      { role: 'system', content: 'STATIC', cached: true },
+      { role: 'system', content: 'SEALED' },
       { role: 'system', content: 'LOREBOOK' },
     ])
+  })
+
+  it.each([null, '5m', '1h'] as const)(
+    'uses the static-only fallback layout with cache TTL %s',
+    (ttl) => {
+      const result = buildStreamPayloadPlan({
+        ...BASE_ARGS,
+        provider: 'anthropic',
+        finalSystemPrompt: 'STATIC\n\nDYNAMIC',
+        staticSystemPrompt: 'STATIC',
+        dynamicContext: 'DYNAMIC',
+        anthropicCache: ttl ? { enabled: true, ttl, minTokens: 2048 } : null,
+        anthropicConversationMessages: [{ role: 'user', content: 'hello' }],
+      })
+
+      expect(result.streamRequest.providerOptions).toBeUndefined()
+      expect(result.streamRequest.messages[0]).toEqual({
+        role: 'system',
+        content: 'STATIC',
+        ...(ttl
+          ? {
+              providerOptions: {
+                anthropic: {
+                  cacheControl: { type: 'ephemeral', ...(ttl === '1h' ? { ttl } : {}) },
+                },
+              },
+            }
+          : {}),
+      })
+      expect(result.streamRequest.messages.slice(1)).toEqual([
+        { role: 'system', content: 'DYNAMIC' },
+        { role: 'user', content: 'hello' },
+      ])
+      expect(result.actualPayload.systemMessages.filter((message) => message.cached)).toHaveLength(
+        ttl ? 1 : 0,
+      )
+    },
+  )
+
+  it('marks only the end of consecutive static system blocks', () => {
+    const result = buildStreamPayloadPlan({
+      ...BASE_ARGS,
+      provider: 'anthropic',
+      finalSystemPrompt: 'RULES\nCHARACTER\nMEMORY\nLATE',
+      staticSystemPrompt: 'RULES\nCHARACTER',
+      dynamicContext: 'MEMORY\nLATE',
+      anthropicCache: { enabled: true, ttl: '1h', minTokens: 2048 },
+      anthropicConversationMessages: [{ role: 'user', content: 'hello' }],
+      promptBlocks: [
+        { role: 'system', content: 'RULES', stability: 'static', cachePreference: 'prefer-cache' },
+        {
+          role: 'system',
+          content: 'CHARACTER',
+          stability: 'static',
+          cachePreference: 'prefer-cache',
+        },
+        { role: 'system', content: 'MEMORY', stability: 'sealed', cachePreference: 'prefer-cache' },
+        { role: 'system', content: 'LATE', stability: 'static', cachePreference: 'prefer-cache' },
+      ],
+    })
+
+    expect(result.actualPayload.systemMessages.filter((message) => message.cached)).toEqual([
+      { role: 'system', content: 'CHARACTER', cached: true },
+    ])
+    expect(result.streamRequest.messages[1]).toMatchObject({
+      providerOptions: { anthropic: { cacheControl: { type: 'ephemeral', ttl: '1h' } } },
+    })
+  })
+
+  it('does not create a cache point when the static system prompt is empty', () => {
+    const result = buildStreamPayloadPlan({
+      ...BASE_ARGS,
+      provider: 'anthropic',
+      finalSystemPrompt: 'DYNAMIC',
+      staticSystemPrompt: '',
+      dynamicContext: 'DYNAMIC',
+      anthropicCache: { enabled: true, ttl: '5m', minTokens: 2048 },
+      anthropicConversationMessages: [{ role: 'user', content: 'hello' }],
+    })
+
+    expect(result.streamRequest.providerOptions).toBeUndefined()
+    expect(result.streamRequest.messages.every((message) => !message.providerOptions)).toBe(true)
+    expect(result.actualPayload.systemMessages.some((message) => message.cached)).toBe(false)
   })
 })

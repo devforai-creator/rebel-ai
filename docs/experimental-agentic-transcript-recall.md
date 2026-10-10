@@ -6,6 +6,8 @@ This document is an experimental feature contract, not the top-level long-term m
 For the current strategy and support stance, use [LONG_TERM_MEMORY_STRATEGY.md](./LONG_TERM_MEMORY_STRATEGY.md).
 ATR stands for Agentic Transcript Recall.
 
+For Anthropic, ATR instructions and the current range inventory are appended after the initial system blocks. They remain after the single static-system cache breakpoint and are not prepended through the SDK's top-level `system` option.
+
 This document defines the contract and pre-backlog plan for an experimental feature that lets the model selectively re-open older raw chat messages when summaries or facts are not specific enough.
 
 This is intentionally not a new core memory mode.

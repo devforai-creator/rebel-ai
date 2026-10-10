@@ -1,5 +1,5 @@
 import type { CoreMessage } from 'ai'
-import type { JSONValue, SharedV2ProviderOptions } from '@ai-sdk/provider'
+import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import type { MemoryPromptBlock } from '@/lib/chat-memory'
 import { buildAnthropicCacheControl } from '@/lib/llm/provider-options'
@@ -64,61 +64,20 @@ function buildAnthropicMessage(
   }
 }
 
-function withAnthropicAutomaticCaching(
-  providerOptions: SharedV2ProviderOptions | undefined,
-  anthropicCache: AnthropicCacheDecision | null,
-): SharedV2ProviderOptions | undefined {
-  if (!anthropicCache?.enabled) {
-    return providerOptions
-  }
+function findStaticSystemBreakpoint(systemBlocks: MemoryPromptBlock[]): number {
+  let breakpointIndex = -1
 
-  const anthropicOptions =
-    (providerOptions?.anthropic as Record<string, JSONValue> | undefined) ?? {}
-
-  return {
-    ...(providerOptions ?? {}),
-    anthropic: {
-      ...anthropicOptions,
-      ...buildAnthropicCacheControl(anthropicCache.ttl),
-    },
-  }
-}
-
-function findSystemBreakpointBeforeDynamicSuffix(promptBlocks: MemoryPromptBlock[]): number {
-  let systemIndex = -1
-  let lastStableSystemIndex = -1
-  let sawDynamicSystemSuffix = false
-  let hasCacheableLiveAfter = false
-
-  for (const block of promptBlocks) {
-    if (block.role === 'system') {
-      systemIndex += 1
-
-      if (!sawDynamicSystemSuffix) {
-        if (block.cachePreference === 'avoid-cache') {
-          sawDynamicSystemSuffix = true
-        } else {
-          lastStableSystemIndex = systemIndex
-        }
-      }
-
-      continue
+  for (const [index, block] of systemBlocks.entries()) {
+    if (block.stability !== 'static' || block.cachePreference === 'avoid-cache') {
+      break
     }
 
-    if (
-      sawDynamicSystemSuffix &&
-      block.stability === 'live' &&
-      block.cachePreference !== 'avoid-cache'
-    ) {
-      hasCacheableLiveAfter = true
+    if (block.content.trim()) {
+      breakpointIndex = index
     }
   }
 
-  if (!sawDynamicSystemSuffix || !hasCacheableLiveAfter) {
-    return -1
-  }
-
-  return lastStableSystemIndex
+  return breakpointIndex
 }
 
 type BuildStreamPayloadPlanArgs = {
@@ -158,9 +117,8 @@ export function buildStreamPayloadPlan({
       const systemMessages: Array<{ role: string; content: string; cached?: boolean }> = []
       const conversationMessages: Array<{ role: string; content: string }> = []
       const messagesForAnthropic: CoreMessage[] = []
-      const mergedProviderOptions = withAnthropicAutomaticCaching(providerOptions, anthropicCache)
       const explicitSystemBreakpointIndex = anthropicCache?.enabled
-        ? findSystemBreakpointBeforeDynamicSuffix(promptBlocks)
+        ? findStaticSystemBreakpoint(systemBlocks)
         : -1
 
       for (const [index, block] of systemBlocks.entries()) {
@@ -192,7 +150,7 @@ export function buildStreamPayloadPlan({
         strategy: 'anthropic-split-system',
         streamRequest: {
           messages: messagesForAnthropic,
-          providerOptions: mergedProviderOptions,
+          providerOptions,
         },
         actualPayload: {
           provider: 'anthropic',
@@ -204,12 +162,10 @@ export function buildStreamPayloadPlan({
     }
 
     const messagesForAnthropic: CoreMessage[] = []
-    const mergedProviderOptions = withAnthropicAutomaticCaching(providerOptions, anthropicCache)
+    const staticCacheTTL =
+      anthropicCache?.enabled && staticSystemPrompt.trim() ? anthropicCache.ttl : undefined
 
-    messagesForAnthropic.push({
-      role: 'system',
-      content: staticSystemPrompt,
-    })
+    messagesForAnthropic.push(buildAnthropicMessage('system', staticSystemPrompt, staticCacheTTL))
 
     if (dynamicContext) {
       messagesForAnthropic.push({
@@ -229,6 +185,7 @@ export function buildStreamPayloadPlan({
       {
         role: 'system',
         content: staticSystemPrompt,
+        cached: staticCacheTTL ? true : undefined,
       },
     ]
     if (dynamicContext) {
@@ -239,7 +196,7 @@ export function buildStreamPayloadPlan({
       strategy: 'anthropic-split-system',
       streamRequest: {
         messages: messagesForAnthropic,
-        providerOptions: mergedProviderOptions,
+        providerOptions,
       },
       actualPayload: {
         provider: 'anthropic',

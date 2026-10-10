@@ -198,6 +198,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
   sourceHints,
   sourceMap,
   streamRequest,
+  systemInstructionPlacement = 'system',
   debugMetrics,
   requireToolByInstruction = false,
   logDebug = () => undefined,
@@ -208,6 +209,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
   sourceHints: AgenticTranscriptRecallSourceHints | null
   sourceMap: AgenticTranscriptRecallSourceMap | null
   streamRequest: TStreamRequest
+  systemInstructionPlacement?: 'system' | 'after-system-messages'
   debugMetrics: Record<string, string | number | boolean | null>
   requireToolByInstruction?: boolean
   logDebug?: (...args: unknown[]) => void
@@ -403,6 +405,22 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
 
   const fetchAvailable = FETCH_SOURCE_RANGE_TOOL_NAME in tools
   const expandAvailable = EXPAND_SOURCE_RANGE_TOOL_NAME in tools
+  const instruction = buildExperimentalInstruction({
+    maxToolCalls: runtimeConfig.maxToolCalls,
+    fetchAvailable,
+    expandAvailable,
+    sourceMap,
+    requireToolByInstruction,
+  })
+  const firstConversationIndex = streamRequest.messages.findIndex(
+    (message) =>
+      typeof message !== 'object' ||
+      message === null ||
+      !('role' in message) ||
+      message.role !== 'system',
+  )
+  const systemMessageCount =
+    firstConversationIndex === -1 ? streamRequest.messages.length : firstConversationIndex
 
   const wrappedStreamRequest: TStreamRequest = hasGoogleCachedContent(streamRequest)
     ? ({
@@ -411,21 +429,23 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
         // Do not attach a second live system instruction on top of it.
         system: undefined,
       } as TStreamRequest)
-    : ({
-        ...streamRequest,
-        system: [
-          streamRequest.system,
-          buildExperimentalInstruction({
-            maxToolCalls: runtimeConfig.maxToolCalls,
-            fetchAvailable,
-            expandAvailable,
-            sourceMap,
-            requireToolByInstruction,
-          }),
-        ]
-          .filter((value): value is string => typeof value === 'string' && value.length > 0)
-          .join('\n\n'),
-      } as TStreamRequest)
+    : systemInstructionPlacement === 'after-system-messages'
+      ? ({
+          ...streamRequest,
+          // A top-level system instruction is prepended by the SDK and would
+          // make Anthropic's cached static prefix depend on the live range map.
+          messages: [
+            ...streamRequest.messages.slice(0, systemMessageCount),
+            { role: 'system', content: instruction },
+            ...streamRequest.messages.slice(systemMessageCount),
+          ],
+        } as TStreamRequest)
+      : ({
+          ...streamRequest,
+          system: [streamRequest.system, instruction]
+            .filter((value): value is string => typeof value === 'string' && value.length > 0)
+            .join('\n\n'),
+        } as TStreamRequest)
 
   const streamTextSettings: ExperimentalAgenticTranscriptRecallStreamSettings = {
     tools,

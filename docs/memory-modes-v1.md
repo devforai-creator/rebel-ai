@@ -139,11 +139,11 @@ Notes:
 Anthropic-specific cache behavior lives only in the payload builder.
 
 - Render `promptBlocks` into ordered Anthropic system/message blocks.
-- Use request-level automatic caching in V1 so the live conversation cache point moves forward automatically.
-- When a dynamic lorebook block is present in `prefix_live_blocks`, add one explicit breakpoint on the last stable system block before that lorebook suffix.
-- In Mode B, live conversation is still part of the prompt prefix and should not be force-separated into an always-uncached block.
+- When caching is enabled, use one explicit breakpoint at the end of the contiguous static system prefix in both memory modes. Do not enable request-level automatic caching.
+- Keep sealed summaries/facts, dynamic lorebook, and live conversation after that breakpoint, without cache markers.
+- Append ATR instructions and the current range inventory after the initial system blocks, so they cannot change the cached static prefix.
 
-Mode B exists for general architecture reasons, but Anthropic is the primary provider expected to benefit immediately.
+Mode B still controls live-history retention and sealing; it does not extend Anthropic's cache boundary beyond the static system prompt.
 
 ### Other Providers
 
@@ -233,8 +233,8 @@ Required coverage for V1:
 - Mode A output matches current behavior closely enough to avoid regressions
 - Mode B accumulates live messages without per-turn FIFO trimming
 - Mode B seals at the configured threshold and retains the configured tail
-- Anthropic payload builder applies request-level automatic caching for Mode B
-- Anthropic payload builder places an explicit breakpoint before dynamic lorebook blocks when present
+- Anthropic payload builder applies exactly one static-system cache breakpoint in both modes when caching is enabled
+- Anthropic wire requests preserve that prefix when summaries, lorebook, ATR ranges, and live conversation change
 
 ## Migration Notes
 

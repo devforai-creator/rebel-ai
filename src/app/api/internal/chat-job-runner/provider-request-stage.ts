@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { streamText } from 'ai'
-import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
+import { streamText, wrapLanguageModel } from 'ai'
+import type { LanguageModelV2, SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from '@/lib/chat/delivery-mode'
 import { resolveChatProviderStreamTimeoutMs } from '@/lib/chat/runtime-limits'
@@ -208,14 +208,38 @@ function applyAnthropicThinkingDebugMetrics({
 }
 
 function buildRequiredFirstToolStepOverride(
+  provider: ChatGenerationJobPayload['provider'],
   existingPrepareStep?: ExperimentalPrepareStep,
 ): ExperimentalPrepareStep {
   return async (options) => {
     const existingResult = await existingPrepareStep?.(options)
+    const requireTool = options.stepNumber === 0
 
     return {
       ...existingResult,
-      toolChoice: options.stepNumber === 0 ? ('required' as const) : ('auto' as const),
+      toolChoice: requireTool ? ('required' as const) : ('auto' as const),
+      ...(requireTool && provider === 'deepseek'
+        ? {
+            // AI SDK 5 cannot override provider options in prepareStep. Use a
+            // step-local model so later AUTO steps retain their thinking settings.
+            model: wrapLanguageModel({
+              model: (existingResult?.model ?? options.model) as LanguageModelV2,
+              middleware: {
+                middlewareVersion: 'v2',
+                transformParams: async ({ params }) => ({
+                  ...params,
+                  providerOptions: {
+                    ...params.providerOptions,
+                    deepseek: {
+                      ...params.providerOptions?.deepseek,
+                      thinking: { type: 'disabled' },
+                    },
+                  },
+                }),
+              },
+            }),
+          }
+        : {}),
     }
   }
 }
@@ -551,6 +575,7 @@ export async function requestProviderStage({
           ? {
               ...experimentalStreamTextSettingsCandidate,
               prepareStep: buildRequiredFirstToolStepOverride(
+                provider,
                 experimentalStreamTextSettingsCandidate?.prepareStep,
               ),
             }

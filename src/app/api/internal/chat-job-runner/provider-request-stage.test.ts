@@ -24,7 +24,8 @@ const buildStreamPayloadPlanMock = vi.fn()
 const submitAnthropicBatchJobMock = vi.fn()
 const prepareExperimentalAgenticTranscriptRecallRequestMock = vi.fn()
 
-vi.mock('ai', () => ({
+vi.mock('ai', async () => ({
+  ...(await vi.importActual<typeof import('ai')>('ai')),
   streamText: (...args: unknown[]) => streamTextMock(...args),
 }))
 
@@ -717,6 +718,213 @@ describe('requestProviderStage', () => {
     expect(existingPrepareStep).toHaveBeenNthCalledWith(1, firstStepArgs)
     expect(existingPrepareStep).toHaveBeenNthCalledWith(2, secondStepArgs)
   })
+
+  it.each([
+    { atr: 'forced', thinking: undefined },
+    { atr: 'forced', thinking: 'enabled' },
+    { atr: 'forced', thinking: 'disabled' },
+    { atr: 'auto', thinking: 'enabled' },
+    { atr: 'off', thinking: 'enabled' },
+  ] as const)(
+    'keeps DeepSeek thinking local to the forced ATR step ($atr, thinking=$thinking)',
+    async ({ atr, thinking }) => {
+      const { requestProviderStage } = await import('./provider-request-stage')
+      const { createDeepSeek } = await import('@ai-sdk/deepseek')
+      const sdk = await vi.importActual<typeof import('ai')>('ai')
+      const context = buildContext({
+        recentMessages: [
+          { role: 'assistant', content: '지난 약속을 떠올리며 숨을 고른다.' },
+          {
+            role: 'user',
+            content: atr === 'forced' ? '지난번에 한 약속 정확히 다시 말해줘.' : '계속해줘.',
+          },
+        ],
+        agenticTranscriptRecall: {
+          configured: true,
+          accountDefaultEnabled: false,
+          preferenceSource: 'chat_override',
+          globallyEnabled: true,
+          providerSupported: true,
+          providerAllowed: true,
+          enabled: atr !== 'off',
+          skipReason: atr === 'off' ? 'disabled_by_chat_override' : null,
+          maxToolCalls: 1,
+          maxMessagesPerCall: 12,
+          maxTotalMessages: 12,
+          providerAllowlist: ['deepseek'],
+        },
+        agenticTranscriptRecallSourceHints: {
+          rawContextStartOrdinal: 21,
+          cutoffOrdinal: 20,
+          hints: [
+            {
+              kind: 'summary',
+              label: 'summary',
+              startSeq: 1,
+              endSeq: 10,
+              preview: 'Older promise',
+            },
+          ],
+        },
+        agenticTranscriptRecallSourceMap: {
+          rawContextStartOrdinal: 21,
+          cutoffOrdinal: 20,
+          directFetchRanges: [
+            {
+              rangeId: 'R1',
+              kind: 'summary',
+              label: 'summary',
+              startSeq: 1,
+              endSeq: 10,
+              preview: 'Older promise',
+            },
+          ],
+          navigationParents: [],
+        },
+      })
+      const providerOptions = {
+        deepseek: {
+          userId: 'atr-thinking-test',
+          reasoningEffort: 'low',
+          ...(thinking ? { thinking: { type: thinking } } : {}),
+        },
+      }
+      const originalProviderOptions = structuredClone(providerOptions)
+      const requests: Array<{
+        thinking?: { type: string }
+        reasoning_effort?: string
+        tool_choice?: string
+        user_id?: string
+        messages: Array<{ role: string; content?: unknown }>
+      }> = []
+      const model = createDeepSeek({
+        apiKey: 'mock-key',
+        fetch: async (_url, init) => {
+          const body = JSON.parse(String(init?.body))
+          requests.push(body)
+
+          // Enforce DeepSeek's documented API constraint at the wire boundary.
+          if (body.tool_choice === 'required' && body.thinking?.type !== 'disabled') {
+            return new Response(
+              JSON.stringify({
+                error: { message: 'Required tool choice needs thinking disabled' },
+              }),
+              { status: 400, headers: { 'content-type': 'application/json' } },
+            )
+          }
+
+          const callTool = atr !== 'off' && requests.length === 1
+          const delta = callTool
+            ? {
+                role: 'assistant',
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'recall-call-1',
+                    type: 'function',
+                    function: { name: 'fetch_source_range', arguments: '{"rangeId":"R1"}' },
+                  },
+                ],
+              }
+            : { role: 'assistant', content: 'Verified reply.' }
+          const chunk = {
+            id: `response-${requests.length}`,
+            object: 'chat.completion.chunk',
+            created: 0,
+            model: 'deepseek-v4-flash',
+            choices: [{ index: 0, delta, finish_reason: callTool ? 'tool_calls' : 'stop' }],
+            usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+          }
+          return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, {
+            headers: { 'content-type': 'text/event-stream' },
+          })
+        },
+      })('deepseek-v4-flash')
+      const executeRecall = vi.fn(async () => ({ transcript: 'The older promise.' }))
+      const existingPrepareStep = vi.fn(() => ({
+        system: 'Existing ATR step prompt',
+        activeTools: ['fetch_source_range'],
+      }))
+      const streamRequest = {
+        system: 'FINAL',
+        messages: context.recentMessages,
+        providerOptions,
+      }
+      buildLanguageModelMock.mockReturnValueOnce(model)
+      buildStreamPayloadPlanMock.mockReturnValueOnce({
+        strategy: 'default',
+        streamRequest,
+        actualPayload: null,
+      })
+      prepareExperimentalAgenticTranscriptRecallRequestMock.mockReturnValueOnce({
+        streamRequest,
+        streamTextSettings: {
+          tools: {
+            fetch_source_range: sdk.tool({
+              inputSchema: sdk.jsonSchema<{ rangeId: string }>({
+                type: 'object',
+                properties: { rangeId: { type: 'string' } },
+                required: ['rangeId'],
+                additionalProperties: false,
+              }),
+              execute: executeRecall,
+            }),
+          },
+          stopWhen: sdk.stepCountIs(3),
+          prepareStep: existingPrepareStep,
+        },
+      })
+      streamTextMock.mockImplementationOnce(sdk.streamText)
+
+      const result = await requestProviderStage({
+        supabase: createChatJobRunnerSupabaseMock() as never,
+        jobId: 'job-deepseek-thinking',
+        payload: buildPayload({ provider: 'deepseek', modelName: 'deepseek-v4-flash' }),
+        context,
+        timings: {},
+      })
+      expect(result.status).toBe('streaming')
+      if (result.status !== 'streaming') {
+        throw new Error('Expected a streaming response')
+      }
+      let text = ''
+      for await (const chunk of result.stream.textStream) {
+        text += chunk
+      }
+
+      expect(text).toBe('Verified reply.')
+      expect(await result.stream.finishReason).toBe('stop')
+      expect(requests).toHaveLength(atr === 'off' ? 1 : 2)
+      expect(requests[0].thinking).toEqual(
+        atr === 'forced' ? { type: 'disabled' } : originalProviderOptions.deepseek.thinking,
+      )
+      expect(requests[0].reasoning_effort).toBe(
+        atr === 'forced' || thinking === 'disabled' ? undefined : 'low',
+      )
+      expect(requests[0].tool_choice).toBe(
+        atr === 'forced' ? 'required' : atr === 'auto' ? 'auto' : undefined,
+      )
+      expect(requests.at(-1)?.thinking).toEqual(originalProviderOptions.deepseek.thinking)
+      expect(requests.at(-1)?.reasoning_effort).toBe(thinking === 'disabled' ? undefined : 'low')
+      expect(requests.every((request) => request.user_id === 'atr-thinking-test')).toBe(true)
+      expect(providerOptions).toEqual(originalProviderOptions)
+      expect(executeRecall).toHaveBeenCalledTimes(atr === 'off' ? 0 : 1)
+      if (atr !== 'off') {
+        expect(requests[1].tool_choice).toBe('auto')
+        expect(requests[1].messages).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ role: 'assistant', reasoning_content: '' }),
+            expect.objectContaining({ role: 'tool' }),
+          ]),
+        )
+        expect(existingPrepareStep).toHaveBeenCalledTimes(2)
+        expect(requests[0].messages[0]).toEqual({
+          role: 'system',
+          content: 'Existing ATR step prompt',
+        })
+      }
+    },
+  )
 
   it('disables anthropic thinking when forced ATR tool choice is applied', async () => {
     const { requestProviderStage } = await import('./provider-request-stage')

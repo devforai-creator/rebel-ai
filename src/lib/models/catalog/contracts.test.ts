@@ -65,7 +65,9 @@ describe('model catalog contracts', () => {
     for (const model of MODEL_REGISTRY) {
       const minTokens = model.features?.promptCacheMinTokens
       if (typeof minTokens === 'number' && model.provider === 'google') {
-        expect(getGoogleCacheMinTokens(model.id)).toBe(minTokens)
+        expect(getGoogleCacheMinTokens(model.id)).toBe(
+          model.features?.promptCaching === 'implicit-only' ? null : minTokens,
+        )
       }
       if (typeof minTokens === 'number' && model.provider === 'anthropic') {
         expect(getAnthropicMinCacheTokens(model.id)).toBe(minTokens)

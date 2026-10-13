@@ -55,6 +55,19 @@ export const googleModelCatalog = defineProviderCatalog({
   },
   models: [
     {
+      id: 'gemini-4-argon',
+      displayName: 'Gemini 4 Argon',
+      // Introductory rates through 2026-11-30. From 2026-12-01:
+      // $4 input, $20 output (including thinking), and $0.20 cached input per 1M tokens.
+      // https://ai.google.dev/gemini-api/docs/pricing#gemini-4-argon
+      pricing: flatPricing({ input: 2, output: 10, cachedInput: 0.1 }),
+      features: {
+        promptCaching: 'implicit-only',
+        promptCacheMinTokens: 4096,
+        reasoning: true,
+      },
+    },
+    {
       id: 'gemini-3.8-flash',
       displayName: 'Gemini 3.8 Flash',
       pricing: GEMINI_36_38_FLASH_PRICING,

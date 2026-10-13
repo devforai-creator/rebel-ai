@@ -67,6 +67,17 @@ describe('google-cache', () => {
   })
 
   describe('getGoogleCacheMinTokens', () => {
+    it('does not enable explicit caching for Gemini 4 Argon', () => {
+      expect(getGoogleCacheMinTokens('gemini-4-argon')).toBeNull()
+      expect(
+        resolveGoogleCacheDecision({
+          modelName: 'gemini-4-argon',
+          systemPrompt: 'A'.repeat(30_000),
+          messagesToCache: [{ role: 'user', content: 'B'.repeat(30_000) }],
+        }),
+      ).toEqual({ enabled: false, minTokens: null })
+    })
+
     it('uses the registered 4096-token threshold for Gemini 3.8 Flash', () => {
       expect(getGoogleCacheMinTokens('gemini-3.8-flash')).toBe(4096)
     })

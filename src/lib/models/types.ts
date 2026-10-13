@@ -29,7 +29,7 @@ export type OpenAIModelPolicy = {
 export type ModelFeatures = {
   anthropicThinking?: AnthropicThinkingPolicy
   batchChat?: boolean
-  promptCaching?: 'standard' | 'extended'
+  promptCaching?: 'standard' | 'extended' | 'implicit-only'
   promptCacheMinTokens?: number
   reasoning?: boolean
   requiredToolChoice?: boolean

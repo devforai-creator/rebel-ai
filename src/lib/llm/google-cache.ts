@@ -466,10 +466,14 @@ export type CreateGoogleCacheResult = GoogleCacheResult | GoogleCacheError
  * Determines if a model supports explicit caching and returns minimum token requirement
  */
 export function getGoogleCacheMinTokens(modelName: string): number | null {
-  const configuredMinTokens = getModelFeatures({
+  const features = getModelFeatures({
     provider: 'google',
     modelName,
-  })?.promptCacheMinTokens
+  })
+  if (features?.promptCaching === 'implicit-only') {
+    return null
+  }
+  const configuredMinTokens = features?.promptCacheMinTokens
   if (typeof configuredMinTokens === 'number') {
     return configuredMinTokens
   }

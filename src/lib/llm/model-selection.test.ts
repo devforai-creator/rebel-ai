@@ -16,6 +16,23 @@ const openaiCredential = {
 } satisfies LlmCredentialOption
 
 describe('LLM model selection', () => {
+  it('offers and preserves Gemini 4 Argon with an existing Google credential', () => {
+    const credential: LlmCredentialOption = {
+      id: 'google-key',
+      provider: 'google',
+      model_preference: 'gemini-2.5-flash',
+    }
+    const selection = { apiKeyId: credential.id, modelName: 'gemini-4-argon' }
+
+    expect(buildLlmModelOptions([credential])[0]).toMatchObject({
+      credential,
+      modelName: selection.modelName,
+      displayName: 'Gemini 4 Argon',
+      value: serializeLlmModelSelection(selection),
+    })
+    expect(resolveLlmModelSelection({ credentials: [credential], ...selection })).toEqual(selection)
+  })
+
   it('expands one provider credential into every UI model for that provider', () => {
     const options = buildLlmModelOptions([openaiCredential])
 

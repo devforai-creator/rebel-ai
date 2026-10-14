@@ -160,6 +160,51 @@ describe('resolveInitialChatSettings', () => {
 })
 
 describe('useChatInterfaceSettings model config persistence', () => {
+  it('keeps independent room settings with the same credential and remembers switched models', async () => {
+    mocks.updateChatModelConfig.mockResolvedValue({ success: true })
+    const selection = { apiKeyId: 'key-1', modelName: 'gpt-5.5' }
+    const args = { apiKeys: [...apiKeys], isDeveloper: false, preselectedApiKeyId: 'key-1' }
+    const roomA = renderHook(() => useChatInterfaceSettings({ ...args, chatId: 'A' }))
+    const roomB = renderHook(() => useChatInterfaceSettings({ ...args, chatId: 'B' }))
+    act(() => roomA.result.current.handleSelectReasoning(selection, 'low'))
+    act(() => roomB.result.current.handleSelectReasoning(selection, 'medium'))
+    await waitFor(() => expect(mocks.updateChatModelConfig).toHaveBeenCalledTimes(2))
+    expect(roomA.result.current.resolveModelReasoning(selection)).toBe('low')
+    expect(roomB.result.current.resolveModelReasoning(selection)).toBe('medium')
+    act(() =>
+      roomA.result.current.handleSelectPrimaryModel({
+        apiKeyId: 'key-3',
+        modelName: 'gemini-4-argon',
+      }),
+    )
+    act(() => roomA.result.current.handleSelectPrimaryModel(selection))
+    expect(roomA.result.current.resolveModelReasoning(selection)).toBe('low')
+    expect(mocks.updateChatModelConfig).toHaveBeenCalledWith(
+      'A',
+      expect.objectContaining({ reasoning: { 'openai:gpt-5.5': 'low' } }),
+    )
+  })
+
+  it('restores reasoning when saving fails and allows explicit default to override a legacy key', async () => {
+    const selection = { apiKeyId: 'key-1', modelName: 'gpt-5.5' }
+    mocks.updateChatModelConfig
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ error: '저장 실패' })
+    const { result } = renderHook(() =>
+      useChatInterfaceSettings({
+        chatId: 'A',
+        apiKeys: [{ ...apiKeys[0], reasoning_effort: 'high' }],
+        isDeveloper: false,
+      }),
+    )
+    expect(result.current.resolveModelReasoning(selection)).toBe('high')
+    act(() => result.current.handleSelectReasoning(selection, 'default'))
+    await waitFor(() => expect(mocks.updateChatModelConfig).toHaveBeenCalledTimes(1))
+    expect(result.current.resolveModelReasoning(selection)).toBe('default')
+    act(() => result.current.handleSelectReasoning(selection, 'low'))
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('저장 실패'))
+    expect(result.current.resolveModelReasoning(selection)).toBe('default')
+  })
   const initialModelConfig = {
     alternateModels: {
       enabled: false,

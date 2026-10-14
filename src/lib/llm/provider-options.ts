@@ -1,3 +1,4 @@
+import type { ReasoningSnapshot } from './reasoning'
 import type { JSONValue, SharedV2ProviderOptions } from '@ai-sdk/provider'
 import { ANTHROPIC_CACHE_MIN_TOKENS, getModelFeatures } from '@/lib/models'
 
@@ -14,6 +15,7 @@ type ProviderOptionsInput = {
   promptCacheRetention?: '24h' | 'in_memory'
   // Provider-specific reasoning options
   reasoningEffort?: string | null
+  reasoning?: ReasoningSnapshot
   // Anthropic-specific cache options
   anthropicCacheEnabled?: boolean
   anthropicCacheTTL?: AnthropicCacheTTL
@@ -35,6 +37,9 @@ export function getProviderOptions(
   if (provider === 'google') {
     options.google = {
       safetySettings: GOOGLE_SAFETY_SETTINGS,
+      ...(overrides?.reasoning?.effort
+        ? { thinkingConfig: { thinkingLevel: overrides.reasoning.effort } }
+        : {}),
     }
   }
 
@@ -54,15 +59,18 @@ export function getProviderOptions(
       }
     }
 
-    const reasoningEffort =
-      openAIModelPolicy?.minimumReasoningEffort &&
-      (overrides?.reasoningEffort === 'none' || overrides?.reasoningEffort === 'minimal')
+    const reasoningEffort = overrides?.reasoning
+      ? overrides.reasoning.effort
+      : openAIModelPolicy?.minimumReasoningEffort &&
+          (overrides?.reasoningEffort === 'none' || overrides?.reasoningEffort === 'minimal')
         ? openAIModelPolicy.minimumReasoningEffort
         : overrides?.reasoningEffort
 
     if (
       reasoningEffort &&
-      (reasoningEffort !== 'none' || openAIModelPolicy?.forwardReasoningEffortNone)
+      (reasoningEffort !== 'none' ||
+        overrides?.reasoning ||
+        openAIModelPolicy?.forwardReasoningEffortNone)
     ) {
       openaiOptions.reasoningEffort = reasoningEffort
     }

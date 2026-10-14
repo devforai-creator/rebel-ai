@@ -11,6 +11,34 @@ afterEach(() => {
 })
 
 describe('Gemini 4 Argon SDK request contract', () => {
+  it.each(['low', 'medium', 'high'] as const)(
+    'sends %s thinking through the installed SDK',
+    async (effort) => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        Response.json({
+          candidates: [
+            { content: { role: 'model', parts: [{ text: 'ok' }] }, finishReason: 'STOP' },
+          ],
+          usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2, totalTokenCount: 12 },
+        }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      await generateText({
+        model: buildLanguageModel({
+          provider: 'google',
+          modelName: 'gemini-4-argon',
+          apiKey: 'test-key',
+        }),
+        prompt: 'ok',
+        providerOptions: getProviderOptions('google', {
+          modelName: 'gemini-4-argon',
+          reasoning: { effort, source: 'chat' },
+        }),
+      })
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+      expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: effort })
+    },
+  )
   it('preserves tool thought signatures and bills implicit cache, output, and thinking separately', async () => {
     const fetchMock = vi
       .fn()

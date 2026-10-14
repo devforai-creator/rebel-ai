@@ -2,6 +2,21 @@ import type { Provider } from '@/types/database.types'
 
 export type ModelId = string
 
+export const MODEL_REASONING_LEVELS = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const
+export type ModelReasoningLevel = (typeof MODEL_REASONING_LEVELS)[number]
+export type ModelReasoningControl = {
+  levels: readonly ModelReasoningLevel[]
+  defaultLevel: ModelReasoningLevel
+}
+
 export type ModelPricingRateSet = {
   input: number
   output: number
@@ -32,6 +47,7 @@ export type ModelFeatures = {
   promptCaching?: 'standard' | 'extended' | 'implicit-only'
   promptCacheMinTokens?: number
   reasoning?: boolean
+  reasoningControl?: ModelReasoningControl
   requiredToolChoice?: boolean
   openai?: OpenAIModelPolicy
 }

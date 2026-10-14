@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  getReasoningControl,
+  getReasoningModelKey,
+  resolveReasoningSnapshot,
+  type ChatReasoningPreferences,
+  type ReasoningPreference,
+} from '@/lib/llm/reasoning'
 import { toast } from 'sonner'
 import type { ChatModelConfig, ChatMemoryMode } from '@/lib/chat/model-config'
 import {
@@ -38,6 +45,7 @@ export type InitialChatSettings = {
 }
 
 type ChatInterfaceSettingsSnapshot = {
+  reasoningPreferences: ChatReasoningPreferences
   selectedModel: LlmModelSelection
   secondaryModel: LlmModelSelection
   alternateModelsEnabled: boolean
@@ -120,6 +128,9 @@ type UseChatInterfaceSettingsArgs = {
 }
 
 type UseChatInterfaceSettingsReturn = {
+  reasoningPreferences: ChatReasoningPreferences
+  resolveModelReasoning: (selection: LlmModelSelection) => ReasoningPreference | undefined
+  handleSelectReasoning: (selection: LlmModelSelection, preference: ReasoningPreference) => void
   selectedApiKeyId: string
   selectedModelName: string
   secondaryApiKeyId: string
@@ -170,6 +181,9 @@ export function useChatInterfaceSettings({
     [apiKeys, normalizedModelConfig, preselectedApiKeyId, preselectedModelName],
   )
 
+  const [reasoningPreferences, setReasoningPreferences] = useState<ChatReasoningPreferences>(
+    normalizedModelConfig.reasoning ?? {},
+  )
   const [selectedModel, setSelectedModel] = useState<LlmModelSelection>({
     apiKeyId: initialSettings.primaryApiKeyId,
     modelName: initialSettings.primaryModelName,
@@ -190,6 +204,7 @@ export function useChatInterfaceSettings({
     secondaryModel,
     alternateModelsEnabled,
     memoryMode,
+    reasoningPreferences,
   })
   const modelConfigSaveQueueRef = useRef<Promise<void>>(Promise.resolve())
   const latestModelConfigSaveRevisionRef = useRef(0)
@@ -230,6 +245,7 @@ export function useChatInterfaceSettings({
       const save = async () => {
         try {
           const result = await updateChatModelConfig(chatId, {
+            reasoning: snapshot.reasoningPreferences,
             alternateModels: {
               enabled: snapshot.alternateModelsEnabled,
               primaryApiKeyId: snapshot.selectedModel.apiKeyId || null,
@@ -261,6 +277,7 @@ export function useChatInterfaceSettings({
           setSecondaryModel(confirmed.secondaryModel)
           setAlternateModelsEnabled(confirmed.alternateModelsEnabled)
           setMemoryMode(confirmed.memoryMode)
+          setReasoningPreferences(confirmed.reasoningPreferences)
           toast.error(getModelConfigSaveErrorMessage(error))
         }
       }
@@ -323,8 +340,16 @@ export function useChatInterfaceSettings({
       selectedModel,
       secondaryModel,
       memoryMode,
+      reasoningPreferences,
     })
-  }, [alternateModelsEnabled, memoryMode, persistModelConfig, secondaryModel, selectedModel])
+  }, [
+    alternateModelsEnabled,
+    memoryMode,
+    persistModelConfig,
+    secondaryModel,
+    selectedModel,
+    reasoningPreferences,
+  ])
 
   const handleSelectPrimaryModel = useCallback(
     (nextModel: LlmModelSelection) => {
@@ -337,9 +362,10 @@ export function useChatInterfaceSettings({
         selectedModel: nextModel,
         secondaryModel,
         memoryMode,
+        reasoningPreferences,
       })
     },
-    [alternateModelsEnabled, memoryMode, persistModelConfig, secondaryModel],
+    [alternateModelsEnabled, memoryMode, persistModelConfig, secondaryModel, reasoningPreferences],
   )
 
   const handleSelectSecondaryModel = useCallback(
@@ -353,9 +379,10 @@ export function useChatInterfaceSettings({
         selectedModel,
         secondaryModel: nextModel,
         memoryMode,
+        reasoningPreferences,
       })
     },
-    [alternateModelsEnabled, memoryMode, persistModelConfig, selectedModel],
+    [alternateModelsEnabled, memoryMode, persistModelConfig, selectedModel, reasoningPreferences],
   )
 
   const handleSelectMemoryMode = useCallback(
@@ -366,9 +393,63 @@ export function useChatInterfaceSettings({
         selectedModel,
         secondaryModel,
         memoryMode: nextMode,
+        reasoningPreferences,
       })
     },
-    [alternateModelsEnabled, persistModelConfig, secondaryModel, selectedModel],
+    [
+      alternateModelsEnabled,
+      persistModelConfig,
+      secondaryModel,
+      selectedModel,
+      reasoningPreferences,
+    ],
+  )
+
+  const resolveModelReasoning = useCallback(
+    (selection: LlmModelSelection) => {
+      const credential = apiKeys.find((key) => key.id === selection.apiKeyId)
+      if (!credential || !getReasoningControl(credential.provider, selection.modelName))
+        return undefined
+      const preference =
+        reasoningPreferences[getReasoningModelKey(credential.provider, selection.modelName)]
+      return (
+        resolveReasoningSnapshot({
+          provider: credential.provider,
+          modelName: selection.modelName,
+          preference,
+          legacyEffort: credential.reasoning_effort,
+        }).effort ?? 'default'
+      )
+    },
+    [apiKeys, reasoningPreferences],
+  )
+
+  const handleSelectReasoning = useCallback(
+    (selection: LlmModelSelection, preference: ReasoningPreference) => {
+      const credential = apiKeys.find((key) => key.id === selection.apiKeyId)
+      if (!credential) return
+      const nextPreferences = {
+        ...reasoningPreferences,
+        [getReasoningModelKey(credential.provider, selection.modelName)]: preference,
+      }
+      setReasoningPreferences(nextPreferences)
+      persistModelConfig({
+        selectedModel,
+        secondaryModel,
+        alternateModelsEnabled,
+        memoryMode,
+        reasoningPreferences: nextPreferences,
+      })
+    },
+    [
+      apiKeys,
+      reasoningPreferences,
+      selectedModel,
+      secondaryModel,
+      alternateModelsEnabled,
+      memoryMode,
+      persistModelConfig,
+    ],
   )
 
   const handleToggleAnthropicBatchMode = useCallback(() => {
@@ -391,6 +472,9 @@ export function useChatInterfaceSettings({
   }, [developerMode])
 
   return {
+    reasoningPreferences,
+    resolveModelReasoning,
+    handleSelectReasoning,
     selectedApiKeyId: selectedModel.apiKeyId,
     selectedModelName: selectedModel.modelName,
     secondaryApiKeyId: secondaryModel.apiKeyId,

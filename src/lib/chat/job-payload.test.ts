@@ -27,6 +27,25 @@ const basePayload: ChatGenerationJobPayload = {
 }
 
 describe('chat job payload parsing', () => {
+  it('round trips explicit default and explicit effort without falling back to a live key', () => {
+    for (const effort of [null, 'low', 'none'] as const) {
+      const payload = {
+        ...basePayload,
+        modelName: 'gpt-5.5',
+        reasoning: { effort, source: 'chat' as const },
+      }
+      expect(parseChatJobPayload(serializeChatJobPayload(payload))).toEqual(payload)
+    }
+    expect(
+      parseChatJobPayload({
+        ...basePayload,
+        provider: 'google',
+        modelName: 'gemini-4-argon',
+        reasoning: { effort: 'none', source: 'chat' },
+      }),
+    ).toBeNull()
+    expect(parseChatJobPayload({ ...basePayload, reasoning: null })).toBeNull()
+  })
   it('parses a valid payload', () => {
     const parsed = parseChatJobPayload(basePayload)
 

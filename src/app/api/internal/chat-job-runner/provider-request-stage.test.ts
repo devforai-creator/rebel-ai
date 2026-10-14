@@ -148,6 +148,37 @@ function buildContext(
 }
 
 describe('requestProviderStage', () => {
+  it.each([null, 'low', 'none'] as const)(
+    'uses the queued snapshot (%s) after a key setting changes',
+    async (effort) => {
+      const { requestProviderStage } = await import('./provider-request-stage')
+      const payload = buildPayload({ modelName: 'gpt-5.5', reasoning: { effort, source: 'chat' } })
+      const context = buildContext({
+        apiKeyData: {
+          provider: 'openai',
+          vault_secret_name: 'vault-key',
+          service_tier: 'standard',
+          reasoning_effort: 'high',
+        },
+      })
+      await requestProviderStage({
+        supabase: createChatJobRunnerSupabaseMock() as never,
+        jobId: 'job-1',
+        payload,
+        context,
+        timings: {},
+      })
+      expect(getProviderOptionsMock).toHaveBeenCalledWith(
+        'openai',
+        expect.objectContaining({ reasoning: { effort, source: 'chat' } }),
+      )
+      expect(context.debugMetrics).toMatchObject({
+        reasoning_effort: effort,
+        reasoning_source: 'chat',
+        reasoning_effective_level: effort ?? 'medium',
+      })
+    },
+  )
   beforeEach(() => {
     streamTextMock.mockReset()
     resolvePromptCacheDecisionMock.mockReset()

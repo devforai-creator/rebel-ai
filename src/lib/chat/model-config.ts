@@ -1,4 +1,5 @@
 import { SUPPORT_TIER_FEATURES, type SupportTier } from '@/lib/support-tier'
+import { normalizeReasoningPreferences, type ChatReasoningPreferences } from '@/lib/llm/reasoning'
 import type { LlmProvider } from '@/types/database.types'
 
 export type AlternateModelsConfig = {
@@ -52,6 +53,7 @@ export const CHAT_MEMORY_MODE_SUPPORT_TIERS: Record<ChatMemoryMode, SupportTier>
 }
 
 export type ChatModelConfig = {
+  reasoning?: ChatReasoningPreferences | null
   alternateModels?: AlternateModelsConfig | null
   memory?: ChatMemoryConfig | null
   experimental?: ChatExperimentalConfig | null
@@ -91,12 +93,15 @@ export function normalizeChatModelConfig(input: unknown): ChatModelConfig {
   }
 
   const candidate = input as {
+    reasoning?: unknown
     alternateModels?: unknown
     memory?: unknown
     experimental?: unknown
   }
 
   const normalized: ChatModelConfig = {}
+  const reasoning = normalizeReasoningPreferences(candidate.reasoning)
+  if (Object.keys(reasoning).length > 0) normalized.reasoning = reasoning
 
   if (candidate.alternateModels && typeof candidate.alternateModels === 'object') {
     const raw = candidate.alternateModels as Record<string, unknown>
@@ -193,7 +198,12 @@ export function mergeChatModelConfigPatch(current: unknown, patch: unknown): Cha
     ? normalizedPatch.experimental
     : normalizedCurrent.experimental
 
+  const reasoning = hasOwnModelConfigKey(patch, 'reasoning')
+    ? normalizedPatch.reasoning
+    : normalizedCurrent.reasoning
+
   return {
+    ...(reasoning ? { reasoning } : {}),
     ...(alternateModels ? { alternateModels } : {}),
     ...(memory ? { memory } : {}),
     ...(experimental ? { experimental } : {}),
@@ -291,5 +301,10 @@ export function hasPersistableChatModelConfig(config: ChatModelConfig): boolean 
       hasCustomAgenticTranscriptRecallBudget ||
       (agenticTranscriptRecall.providerAllowlist?.length ?? 0) > 0)
 
-  return hasAlternate || hasNonDefaultMemory || hasExperimentalAgenticTranscriptRecall
+  return (
+    !!Object.keys(config.reasoning ?? {}).length ||
+    hasAlternate ||
+    hasNonDefaultMemory ||
+    hasExperimentalAgenticTranscriptRecall
+  )
 }

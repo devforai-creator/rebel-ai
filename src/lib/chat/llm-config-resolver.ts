@@ -11,6 +11,7 @@ type StoredActiveApiKeyRow = {
   model_preference: string | null
   service_tier: ApiServiceTier | null
   vault_secret_name: string
+  reasoning_effort?: string | null
 }
 
 export type ResolvedLlmConfig = {
@@ -19,6 +20,7 @@ export type ResolvedLlmConfig = {
   modelName: string
   serviceTier: ApiServiceTier | null
   vaultSecretName: string
+  legacyReasoningEffort?: string
 }
 
 type DefaultModelMode = 'default' | 'lightweight'
@@ -66,8 +68,8 @@ export async function resolveActiveLlmConfigForUser({
 }): Promise<ResolveActiveLlmConfigResult> {
   const { data: apiKeyRow, error: apiKeyError } = await supabase
     .from('api_keys')
-    .select<'id, provider, model_preference, service_tier, vault_secret_name'>(
-      'id, provider, model_preference, service_tier, vault_secret_name',
+    .select<'id, provider, model_preference, service_tier, vault_secret_name, reasoning_effort'>(
+      'id, provider, model_preference, service_tier, vault_secret_name, reasoning_effort',
     )
     .eq('id', apiKeyId)
     .eq('user_id', userId)
@@ -119,6 +121,7 @@ export async function resolveActiveLlmConfigForUser({
       modelName,
       serviceTier: apiKeyRow.service_tier ?? null,
       vaultSecretName: apiKeyRow.vault_secret_name,
+      ...(apiKeyRow.reasoning_effort ? { legacyReasoningEffort: apiKeyRow.reasoning_effort } : {}),
     },
   }
 }

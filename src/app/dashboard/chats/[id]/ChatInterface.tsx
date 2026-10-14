@@ -39,6 +39,8 @@ export default function ChatInterface({
   const {
     selectedApiKeyId,
     selectedModelName,
+    resolveModelReasoning,
+    handleSelectReasoning,
     secondaryApiKeyId,
     secondaryModelName,
     alternateModelsEnabled,
@@ -91,6 +93,7 @@ export default function ChatInterface({
     hasMoreHistory,
     selectedApiKeyId,
     selectedModelName,
+    resolveModelReasoning,
     deliveryMode,
     alternateModels: {
       enabled: alternateModelsEnabled,
@@ -121,6 +124,8 @@ export default function ChatInterface({
         apiKeys={apiKeys}
         selectedApiKeyId={selectedApiKeyId}
         selectedModelName={selectedModelName}
+        resolveModelReasoning={resolveModelReasoning}
+        onSelectReasoning={handleSelectReasoning}
         secondaryApiKeyId={secondaryApiKeyId}
         secondaryModelName={secondaryModelName}
         alternateModelsEnabled={alternateModelsEnabled}

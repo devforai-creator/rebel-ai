@@ -106,6 +106,7 @@ export interface DebugInfo {
     apiKeyId?: string
     provider?: string
     modelName?: string
+    reasoning?: { effort: string | null; source: string | null; effectiveLevel: string | null }
     finishReason?: string
     usage?: {
       promptTokens?: number

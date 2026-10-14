@@ -1,3 +1,4 @@
+import type { ReasoningPreference } from '@/lib/llm/reasoning'
 import type { ChatDeliveryMode } from '@/lib/chat/delivery-mode'
 import type { Message } from '@/types/database.types'
 import { createApiError } from '@/lib/http/api-contract'
@@ -12,6 +13,7 @@ export interface QueueChatRequestPayload {
   chatId: string
   apiKeyId: string
   modelName: string
+  reasoningEffort?: ReasoningPreference
   userMessage?: string
   clientMessageId?: string
   deliveryMode: ChatDeliveryMode

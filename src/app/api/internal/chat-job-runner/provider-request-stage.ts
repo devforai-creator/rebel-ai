@@ -1,3 +1,4 @@
+import { getReasoningControl, resolveReasoningSnapshot } from '@/lib/llm/reasoning'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { streamText, wrapLanguageModel } from 'ai'
 import type { LanguageModelV2, SharedV2ProviderOptions } from '@ai-sdk/provider'
@@ -396,11 +397,18 @@ export async function requestProviderStage({
     serviceTier: apiKeyData.service_tier ?? 'standard',
   })
 
+  const reasoning =
+    payload.reasoning ??
+    resolveReasoningSnapshot({ provider, modelName, legacyEffort: apiKeyData.reasoning_effort })
+  debugMetrics['reasoning_effort'] = reasoning.effort
+  debugMetrics['reasoning_source'] = reasoning.source
+  debugMetrics['reasoning_effective_level'] =
+    reasoning.effort ?? getReasoningControl(provider, modelName)?.defaultLevel ?? null
   const providerOptions = getProviderOptions(provider, {
     modelName,
     promptCacheKey: promptCache?.key,
     promptCacheRetention: promptCache?.retention,
-    reasoningEffort: apiKeyData.reasoning_effort,
+    reasoning,
   })
   const googleExplicitCache =
     provider === 'google'

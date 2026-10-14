@@ -27,6 +27,7 @@ export async function submitChatGenerationRequest({
   apiKeyId,
   provider,
   modelName,
+  reasoning,
   deliveryMode,
   isRegeneration,
   regenerateAssistantMessageId,
@@ -42,6 +43,7 @@ export async function submitChatGenerationRequest({
   apiKeyId: string
   provider: ChatGenerationJobPayload['provider']
   modelName: string
+  reasoning?: ChatGenerationJobPayload['reasoning']
   deliveryMode: ChatGenerationJobPayload['deliveryMode']
   isRegeneration: boolean
   regenerateAssistantMessageId: string | null
@@ -83,6 +85,7 @@ export async function submitChatGenerationRequest({
     apiKeyId,
     provider,
     modelName,
+    ...(reasoning ? { reasoning } : {}),
     deliveryMode,
     sanitizedMessages: effectivePayloadSanitizedMessages,
     isRegeneration,

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent, SetStateAction } from 'react'
 import { toast } from 'sonner'
 import type { Message } from '@/types/database.types'
+import type { ReasoningPreference } from '@/lib/llm/reasoning'
+import type { LlmModelSelection } from '@/lib/llm/model-selection'
 import type { AlternateModelsConfig } from '@/lib/chat/model-config'
 import { CHAT_DELIVERY_MODE_STREAMING, type ChatDeliveryMode } from '@/lib/chat/delivery-mode'
 import type { AssistantStreamBroadcastPayload } from '@/lib/chat/assistant-stream'
@@ -42,6 +44,7 @@ export interface UseQueuedChatParams {
   historyMessages: Message[]
   selectedApiKeyId: string
   selectedModelName: string
+  resolveModelReasoning?: (selection: LlmModelSelection) => ReasoningPreference | undefined
   deliveryMode?: ChatDeliveryMode
   alternateModels?: AlternateModelsConfig | null
   fetchLatestUsage: () => Promise<void>
@@ -76,6 +79,7 @@ export function useQueuedChat({
   initialActiveJob,
   selectedApiKeyId,
   selectedModelName,
+  resolveModelReasoning,
   deliveryMode = CHAT_DELIVERY_MODE_STREAMING,
   alternateModels,
   fetchLatestUsage,
@@ -418,6 +422,9 @@ export function useQueuedChat({
           chatId,
           apiKeyId: resolvedModel.apiKeyId,
           modelName: resolvedModel.modelName,
+          ...(resolveModelReasoning
+            ? { reasoningEffort: resolveModelReasoning(resolvedModel) }
+            : {}),
           userMessage,
           clientMessageId,
           deliveryMode,
@@ -453,6 +460,7 @@ export function useQueuedChat({
       persistedMessageIds,
       pollJobStatus,
       resolveNextModel,
+      resolveModelReasoning,
     ],
   )
 

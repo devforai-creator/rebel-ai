@@ -10,10 +10,11 @@ export type ChatSelectableApiKeyOption = Omit<
 
 export type ChatRuntimeApiKeyOption = ChatSelectableApiKeyOption & {
   service_tier: ApiKey['service_tier'] | null
+  reasoning_effort?: ApiKey['reasoning_effort']
 }
 
 export const CHAT_SELECTABLE_API_KEY_OPTION_COLUMNS = 'id, key_name, provider, model_preference'
-export const CHAT_RUNTIME_API_KEY_OPTION_COLUMNS = `${CHAT_SELECTABLE_API_KEY_OPTION_COLUMNS}, service_tier`
+export const CHAT_RUNTIME_API_KEY_OPTION_COLUMNS = `${CHAT_SELECTABLE_API_KEY_OPTION_COLUMNS}, service_tier, reasoning_effort`
 
 export function formatChatCredentialLabel(
   key: ChatSelectableApiKeyOption,

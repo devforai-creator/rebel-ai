@@ -65,6 +65,7 @@ export const googleModelCatalog = defineProviderCatalog({
         promptCaching: 'implicit-only',
         promptCacheMinTokens: 4096,
         reasoning: true,
+        reasoningControl: { levels: ['low', 'medium', 'high'], defaultLevel: 'medium' },
       },
     },
     {

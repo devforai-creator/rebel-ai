@@ -204,6 +204,13 @@ describe('resolveChatMemoryConfig', () => {
 })
 
 describe('mergeChatModelConfigPatch', () => {
+  it('persists reasoning-only settings and preserves them across unrelated patches', () => {
+    const config = { reasoning: { 'google:gemini-4-argon': 'low', 'openai:gpt-5.5': 'default' } }
+    expect(normalizeChatModelConfig(config)).toEqual(config)
+    expect(hasPersistableChatModelConfig(normalizeChatModelConfig(config))).toBe(true)
+    expect(mergeChatModelConfigPatch(config, { memory: null })).toEqual(config)
+    expect(mergeChatModelConfigPatch(config, { reasoning: null })).toEqual({})
+  })
   const current = {
     alternateModels: {
       enabled: false,

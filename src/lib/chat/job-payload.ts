@@ -1,3 +1,8 @@
+import {
+  isReasoningPreference,
+  supportsReasoningPreference,
+  type ReasoningSnapshot,
+} from '@/lib/llm/reasoning'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import type { Json, LlmProvider } from '@/types/database.types'
@@ -20,6 +25,7 @@ export interface ChatGenerationJobPayload {
   apiKeyId: string
   provider: LlmProvider
   modelName: string
+  reasoning?: ReasoningSnapshot
   deliveryMode: ChatDeliveryMode
   sanitizedMessages: SanitizedMessage[]
   isRegeneration: boolean
@@ -63,6 +69,7 @@ export function serializeChatJobPayload(payload: ChatGenerationJobPayload): Json
     apiKeyId: payload.apiKeyId,
     provider: payload.provider,
     modelName: payload.modelName,
+    ...(payload.reasoning ? { reasoning: { ...payload.reasoning } } : {}),
     deliveryMode: payload.deliveryMode,
     sanitizedMessages: payload.sanitizedMessages.map(serializeSanitizedMessage),
     isRegeneration: payload.isRegeneration,
@@ -89,6 +96,23 @@ export function parseChatJobPayload(payload: unknown): ChatGenerationJobPayload 
     return null
   }
 
+  let reasoning: ReasoningSnapshot | undefined
+  if (payload.reasoning !== undefined) {
+    const value = payload.reasoning
+    if (
+      !isRecord(value) ||
+      !['chat', 'legacy-key', 'model-default'].includes(String(value.source)) ||
+      !(
+        value.effort === null ||
+        (isReasoningPreference(value.effort) &&
+          value.effort !== 'default' &&
+          supportsReasoningPreference(payload.provider, payload.modelName, value.effort))
+      )
+    )
+      return null
+    reasoning = { effort: value.effort, source: value.source as ReasoningSnapshot['source'] }
+  }
+
   if (!payload.sanitizedMessages.every(isSanitizedMessage)) {
     return null
   }
@@ -102,6 +126,7 @@ export function parseChatJobPayload(payload: unknown): ChatGenerationJobPayload 
     apiKeyId: payload.apiKeyId,
     provider: payload.provider,
     modelName: payload.modelName,
+    ...(reasoning ? { reasoning } : {}),
     deliveryMode: isChatDeliveryMode(payload.deliveryMode)
       ? payload.deliveryMode
       : CHAT_DELIVERY_MODE_STREAMING,

@@ -10,7 +10,7 @@ describe('chat api key option helpers', () => {
   it('defines the shared selectable and runtime column lists', () => {
     expect(CHAT_SELECTABLE_API_KEY_OPTION_COLUMNS).toBe('id, key_name, provider, model_preference')
     expect(CHAT_RUNTIME_API_KEY_OPTION_COLUMNS).toBe(
-      'id, key_name, provider, model_preference, service_tier',
+      'id, key_name, provider, model_preference, service_tier, reasoning_effort',
     )
   })
 

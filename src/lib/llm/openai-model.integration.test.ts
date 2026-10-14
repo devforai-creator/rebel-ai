@@ -7,6 +7,40 @@ afterEach(() => {
 })
 
 describe('GPT-6.1 Sol SDK request contract', () => {
+  it.each([null, 'none', 'low', 'xhigh', 'max'] as const)(
+    'preserves a chat effort snapshot (%s) in Responses',
+    async (effort) => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        Response.json({
+          id: 'resp_test',
+          created_at: 0,
+          model: 'gpt-5.6',
+          status: 'completed',
+          output: [],
+          usage: { input_tokens: 10, output_tokens: 0, total_tokens: 10 },
+        }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      vi.resetModules()
+      const { buildLanguageModel } = await import('./model-factory')
+      const model = buildLanguageModel({
+        provider: 'openai',
+        modelName: 'gpt-5.6',
+        apiKey: 'test-key',
+      }) as LanguageModelV2
+      await model.doGenerate({
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+        providerOptions: getProviderOptions('openai', {
+          modelName: 'gpt-5.6',
+          reasoningEffort: 'high',
+          reasoning: { effort, source: 'chat' },
+        }),
+      })
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+      if (effort === null) expect(body.reasoning?.effort).toBeUndefined()
+      else expect(body.reasoning.effort).toBe(effort)
+    },
+  )
   it('uses Responses with supported reasoning, tool calling, and cache-write metadata', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       Response.json({

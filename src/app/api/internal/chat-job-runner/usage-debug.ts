@@ -555,6 +555,11 @@ export function buildChatDebugInfo(args: BuildChatDebugInfoArgs): Record<string,
       apiKeyId,
       provider,
       modelName,
+      reasoning: {
+        effort: readStringMetric(debugMetrics, 'reasoning_effort'),
+        source: readStringMetric(debugMetrics, 'reasoning_source'),
+        effectiveLevel: readStringMetric(debugMetrics, 'reasoning_effective_level'),
+      },
       finishReason: finishReason ?? null,
       usage: {
         promptTokens: usage.promptTokens,

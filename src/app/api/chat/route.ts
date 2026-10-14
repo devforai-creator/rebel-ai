@@ -1,3 +1,9 @@
+import { normalizeChatModelConfig } from '@/lib/chat/model-config'
+import {
+  getReasoningModelKey,
+  resolveReasoningSnapshot,
+  supportsReasoningPreference,
+} from '@/lib/llm/reasoning'
 import { localWorkerOnline } from '@/lib/chat/local-worker'
 import { createClient } from '@/lib/supabase/server'
 import { resolveActiveLlmConfigForUser } from '@/lib/chat/llm-config-resolver'
@@ -77,6 +83,7 @@ export async function POST(req: Request) {
       chatId,
       apiKeyId,
       modelName: requestedModelName,
+      reasoningEffort,
       rawDeliveryMode,
       isRegeneration,
       regenerateAssistantMessageId,
@@ -106,6 +113,28 @@ export async function POST(req: Request) {
     }
 
     const { provider, modelName } = resolvedConfig.config
+    if (
+      reasoningEffort !== undefined &&
+      !supportsReasoningPreference(provider, modelName, reasoningEffort)
+    ) {
+      return createErrorResponse('Unsupported reasoningEffort for model', 400)
+    }
+    const { data: reasoningChat, error: reasoningChatError } = await supabase
+      .from('chats')
+      .select('model_config')
+      .eq('id', chatId)
+      .eq('user_id', user.id)
+      .single()
+    if (reasoningChatError || !reasoningChat) return createErrorResponse('Chat not found', 404)
+    const storedPreference = normalizeChatModelConfig(reasoningChat.model_config).reasoning?.[
+      getReasoningModelKey(provider, modelName)
+    ]
+    const reasoning = resolveReasoningSnapshot({
+      provider,
+      modelName,
+      preference: reasoningEffort ?? storedPreference,
+      legacyEffort: resolvedConfig.config.legacyReasoningEffort,
+    })
     if (provider === 'local' && !(await localWorkerOnline(user.id))) {
       return createErrorResponse(
         '데스크톱 로컬 작업자가 오프라인이거나 연결이 설정되지 않았습니다.',
@@ -131,6 +160,7 @@ export async function POST(req: Request) {
       apiKeyId,
       provider,
       modelName,
+      reasoning,
       deliveryMode,
       isRegeneration,
       regenerateAssistantMessageId,

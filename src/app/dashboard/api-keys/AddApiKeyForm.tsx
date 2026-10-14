@@ -24,15 +24,7 @@ const OPENAI_SERVICE_TIER_OPTIONS = [
   },
 ] as const
 
-const REASONING_EFFORT_OPTIONS = [
-  { value: 'none', label: 'None (No reasoning)' },
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-] as const
-
 type ServiceTierValue = (typeof OPENAI_SERVICE_TIER_OPTIONS)[number]['value']
-type ReasoningEffortValue = (typeof REASONING_EFFORT_OPTIONS)[number]['value']
 
 const INITIAL_FORM_STATE: ApiKeyFormState = {
   error: null,
@@ -45,7 +37,6 @@ const INITIAL_FORM_STATE: ApiKeyFormState = {
 export default function AddApiKeyForm() {
   const [provider, setProvider] = useState<ProviderValue>('google')
   const [serviceTier, setServiceTier] = useState<ServiceTierValue>('standard')
-  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffortValue>('none')
   const [isGuideOpen, setIsGuideOpen] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [formState, formAction] = useActionState<ApiKeyFormState, FormData>(
@@ -69,7 +60,6 @@ export default function AddApiKeyForm() {
     formRef.current?.reset()
     setProvider('google')
     setServiceTier('standard')
-    setReasoningEffort('none')
     const timeout = setTimeout(() => setShowSuccess(false), 3000)
     return () => clearTimeout(timeout)
   }, [formState.error, formState.success])
@@ -77,7 +67,6 @@ export default function AddApiKeyForm() {
   useEffect(() => {
     if (provider !== 'openai') {
       setServiceTier('standard')
-      setReasoningEffort('none')
     }
   }, [provider])
 
@@ -230,29 +219,9 @@ export default function AddApiKeyForm() {
             </div>
           )}
 
-          {provider === 'openai' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Reasoning Effort
-              </label>
-              <select
-                name="reasoning_effort"
-                value={reasoningEffort}
-                onChange={(event) => setReasoningEffort(event.target.value as ReasoningEffortValue)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                {REASONING_EFFORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Controls reasoning intensity for supported models (GPT-5+). &quot;None&quot;
-                disables reasoning where supported. Models that require reasoning use at least Low.
-              </p>
-            </div>
-          )}
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            추론 수준은 채팅방의 모델 옵션에서 설정할 수 있습니다.
+          </p>
 
           {/* 제출 버튼 */}
           <SubmitButton />

@@ -93,7 +93,7 @@ export default function ApiKeyList({ apiKeys }: Props) {
                 )}
                 {key.provider === 'openai' && key.reasoning_effort && (
                   <span className="px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
-                    Reasoning:{' '}
+                    Reasoning: 이전 기본 추론:{' '}
                     {key.reasoning_effort.charAt(0).toUpperCase() + key.reasoning_effort.slice(1)}
                   </span>
                 )}

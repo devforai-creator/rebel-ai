@@ -1,3 +1,4 @@
+import { isReasoningPreference, type ReasoningPreference } from '@/lib/llm/reasoning'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import { CHAT_REQUEST_LIMITS } from '@/lib/chat/runtime-limits'
 import { z } from 'zod'
@@ -10,6 +11,7 @@ const chatRequestSchema = z
     chatId: z.unknown().optional(),
     apiKeyId: z.unknown().optional(),
     modelName: z.unknown().optional(),
+    reasoningEffort: z.unknown().optional(),
     deliveryMode: z.unknown().optional(),
     isRegeneration: z.unknown().optional(),
     regenerateAssistantMessageId: z.unknown().optional(),
@@ -23,6 +25,7 @@ export interface ParsedChatRequest {
   chatId: string
   apiKeyId: string
   modelName: string | null
+  reasoningEffort?: ReasoningPreference
   rawDeliveryMode: unknown
   isRegeneration: boolean
   regenerateAssistantMessageId: string | null
@@ -63,6 +66,7 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
     chatId,
     apiKeyId,
     modelName: rawModelName,
+    reasoningEffort: rawReasoningEffort,
     deliveryMode: rawDeliveryMode,
     isRegeneration: rawIsRegeneration,
     regenerateAssistantMessageId: rawRegenerateAssistantMessageId,
@@ -90,6 +94,11 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
       response: createErrorResponse('Invalid modelName', 400),
     }
   }
+
+  if (rawReasoningEffort !== undefined && !isReasoningPreference(rawReasoningEffort)) {
+    return { status: 'error', response: createErrorResponse('Invalid reasoningEffort', 400) }
+  }
+  const reasoningEffort = rawReasoningEffort
 
   const normalizedUserMessage = typeof rawUserMessage === 'string' ? rawUserMessage.trim() : ''
   const regenerateAssistantMessageId = normalizeRegenerationTarget(rawRegenerateAssistantMessageId)
@@ -130,6 +139,7 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
         chatId,
         apiKeyId,
         modelName,
+        ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
         rawDeliveryMode,
         isRegeneration,
         regenerateAssistantMessageId,
@@ -175,6 +185,7 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
       chatId,
       apiKeyId,
       modelName,
+      ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
       rawDeliveryMode,
       isRegeneration,
       regenerateAssistantMessageId,

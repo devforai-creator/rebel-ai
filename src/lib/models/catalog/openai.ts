@@ -79,6 +79,10 @@ export const openAIModelCatalog = defineProviderCatalog({
       features: {
         promptCaching: 'standard',
         reasoning: true,
+        reasoningControl: {
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          defaultLevel: 'medium',
+        },
         openai: {
           promptCacheRetention: 'omit',
           minimumReasoningEffort: 'low',
@@ -93,6 +97,10 @@ export const openAIModelCatalog = defineProviderCatalog({
       features: {
         promptCaching: 'standard',
         reasoning: true,
+        reasoningControl: {
+          levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+          defaultLevel: 'medium',
+        },
         openai: {
           promptCacheRetention: 'omit',
         },
@@ -107,6 +115,10 @@ export const openAIModelCatalog = defineProviderCatalog({
       features: {
         promptCaching: 'standard',
         reasoning: true,
+        reasoningControl: {
+          levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+          defaultLevel: 'medium',
+        },
         openai: {
           promptCacheRetention: 'omit',
           forwardReasoningEffortNone: true,
@@ -117,31 +129,60 @@ export const openAIModelCatalog = defineProviderCatalog({
       id: 'gpt-5.5',
       displayName: 'GPT-5.5',
       pricing: flatPricing({ input: 5, output: 30, cachedInput: 0.5, reasoning: 30 }),
-      features: { promptCaching: 'extended', reasoning: true },
+      features: {
+        promptCaching: 'extended',
+        reasoning: true,
+        reasoningControl: {
+          levels: ['none', 'low', 'medium', 'high', 'xhigh'],
+          defaultLevel: 'medium',
+        },
+      },
     },
     {
       id: 'gpt-5.4',
       displayName: 'GPT-5.4',
       pricing: flatPricing({ input: 2.5, output: 15, cachedInput: 0.25, reasoning: 15 }),
-      features: { promptCaching: 'extended', reasoning: true },
+      features: {
+        promptCaching: 'extended',
+        reasoning: true,
+        reasoningControl: {
+          levels: ['none', 'low', 'medium', 'high', 'xhigh'],
+          defaultLevel: 'none',
+        },
+      },
     },
     {
       id: 'gpt-5.2',
       displayName: 'GPT-5.2',
       pricing: flatPricing({ input: 1.75, output: 14, cachedInput: 0.175, reasoning: 14 }),
-      features: { promptCaching: 'extended', reasoning: true },
+      features: {
+        promptCaching: 'extended',
+        reasoning: true,
+        reasoningControl: {
+          levels: ['none', 'low', 'medium', 'high', 'xhigh'],
+          defaultLevel: 'none',
+        },
+      },
     },
     {
       id: 'gpt-5.1',
       displayName: 'GPT-5.1',
       pricing: flatPricing({ input: 1.25, output: 10, cachedInput: 0.125, reasoning: 10 }),
-      features: { promptCaching: 'extended', reasoning: true },
+      features: {
+        promptCaching: 'extended',
+        reasoning: true,
+        reasoningControl: { levels: ['none', 'low', 'medium', 'high'], defaultLevel: 'none' },
+      },
     },
     {
       id: 'gpt-5',
       displayName: 'GPT-5',
       pricing: flatPricing({ input: 1.25, output: 10, cachedInput: 0.125, reasoning: 10 }),
-      features: { promptCaching: 'extended', reasoning: true },
+      features: {
+        promptCaching: 'extended',
+        reasoning: true,
+        reasoningControl: { levels: ['minimal', 'low', 'medium', 'high'], defaultLevel: 'medium' },
+      },
     },
     {
       id: 'gpt-4.1',

@@ -70,6 +70,7 @@ import { POST } from './route'
 const triggerMessageTranslationMock = vi.mocked(triggerMessageTranslation)
 
 interface ApiKeyRow {
+  reasoning_effort?: string | null
   id: string
   user_id: string
   provider: 'google' | 'openai' | 'anthropic' | 'voyage_embeddings'
@@ -79,6 +80,7 @@ interface ApiKeyRow {
 }
 
 interface ChatRow {
+  model_config?: unknown
   id: string
   user_id: string
   character_id: string
@@ -1013,6 +1015,60 @@ function buildDefaultAuthenticatedFixture(
 }
 
 describe('POST /api/chat', () => {
+  it.each(['low', 'default', undefined] as const)(
+    'snapshots requested or stored reasoning (%s) when enqueuing',
+    async (reasoningEffort) => {
+      const fixture = buildDefaultAuthenticatedFixture()
+      fixture.apiKeys[0].model_preference = 'gemini-4-argon'
+      fixture.chats[0].model_config = { reasoning: { 'google:gemini-4-argon': 'high' } }
+      const supabase = createSupabaseMock(fixture)
+      const response = await POST(
+        new Request('http://localhost/api/chat', {
+          method: 'POST',
+          body: JSON.stringify({
+            chatId: 'chat-1',
+            apiKeyId: 'api-key-1',
+            userMessage: 'Hello',
+            reasoningEffort,
+          }),
+        }),
+      )
+      expect(response.status).toBe(202)
+      expect(supabase.chatJobs[0].payload).toMatchObject({
+        reasoning: {
+          effort: reasoningEffort === 'default' ? null : (reasoningEffort ?? 'high'),
+          source: 'chat',
+        },
+      })
+      fixture.chats[0].model_config = { reasoning: { 'google:gemini-4-argon': 'medium' } }
+      expect(supabase.chatJobs[0].payload).toMatchObject({
+        reasoning: { effort: reasoningEffort === 'default' ? null : (reasoningEffort ?? 'high') },
+      })
+    },
+  )
+
+  it.each(['none', 'minimal', 'bogus', null])(
+    'rejects invalid Argon reasoning (%s) before persisting messages or jobs',
+    async (reasoningEffort) => {
+      const fixture = buildDefaultAuthenticatedFixture()
+      fixture.apiKeys[0].model_preference = 'gemini-4-argon'
+      const supabase = createSupabaseMock(fixture)
+      const response = await POST(
+        new Request('http://localhost/api/chat', {
+          method: 'POST',
+          body: JSON.stringify({
+            chatId: 'chat-1',
+            apiKeyId: 'api-key-1',
+            userMessage: 'Hello',
+            reasoningEffort,
+          }),
+        }),
+      )
+      expect(response.status).toBe(400)
+      expect(supabase.chatJobs).toHaveLength(0)
+      expect(supabase.messages).toHaveLength(0)
+    },
+  )
   beforeEach(() => {
     vi.resetModules()
     restoreEnv()

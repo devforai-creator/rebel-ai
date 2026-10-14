@@ -259,7 +259,7 @@ export function useChatInterfaceSettings({
                     mode: snapshot.memoryMode,
                     retainTailMessages: memoryRetainTailMessages,
                   }
-                : null,
+                : { mode: snapshot.memoryMode },
           })
 
           if (result?.error) {

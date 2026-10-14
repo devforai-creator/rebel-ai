@@ -160,6 +160,27 @@ describe('resolveInitialChatSettings', () => {
 })
 
 describe('useChatInterfaceSettings model config persistence', () => {
+  it('preserves an explicit summary memory mode when a developer changes reasoning and reloads', async () => {
+    mocks.updateChatModelConfig.mockResolvedValue({ success: true })
+    const args = { chatId: 'A', apiKeys: [...apiKeys], isDeveloper: true }
+    const selection = { apiKeyId: 'key-1', modelName: 'gpt-5.5' }
+    const { result, unmount } = renderHook(() =>
+      useChatInterfaceSettings({
+        ...args,
+        initialModelConfig: { memory: { mode: 'summary_window' } },
+      }),
+    )
+    act(() => result.current.handleSelectReasoning(selection, 'low'))
+    await waitFor(() => expect(mocks.updateChatModelConfig).toHaveBeenCalledTimes(1))
+    const savedConfig = mocks.updateChatModelConfig.mock.calls[0][1]
+    expect(savedConfig.memory).toEqual({ mode: 'summary_window' })
+    unmount()
+    const reloaded = renderHook(() =>
+      useChatInterfaceSettings({ ...args, initialModelConfig: savedConfig }),
+    )
+    expect(reloaded.result.current.memoryMode).toBe('summary_window')
+    expect(reloaded.result.current.resolveModelReasoning(selection)).toBe('low')
+  })
   it('keeps independent room settings with the same credential and remembers switched models', async () => {
     mocks.updateChatModelConfig.mockResolvedValue({ success: true })
     const selection = { apiKeyId: 'key-1', modelName: 'gpt-5.5' }

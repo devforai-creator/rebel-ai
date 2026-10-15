@@ -106,6 +106,7 @@ function buildContext(
   overrides: Partial<LoadedChatJobExecutionContext> = {},
 ): LoadedChatJobExecutionContext {
   return {
+    requestContext: undefined,
     apiKeyData: {
       provider: 'openai',
       vault_secret_name: 'vault-key',

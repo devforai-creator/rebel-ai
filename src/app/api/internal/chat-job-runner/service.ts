@@ -215,6 +215,7 @@ async function executeJob({
       totalInputTokens,
       staticPromptTokens,
       debugMetrics,
+      requestContext,
     } = await loadChatJobExecutionContext({
       supabase,
       payload,
@@ -228,6 +229,7 @@ async function executeJob({
     debugMetrics['google_explicit_cache_compatibility_retry_reason'] = null
 
     const executionContext = {
+      requestContext,
       apiKeyData,
       decryptedApiKey,
       generationTranscript,

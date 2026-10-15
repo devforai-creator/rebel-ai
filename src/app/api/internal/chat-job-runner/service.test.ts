@@ -1380,7 +1380,7 @@ describe('processChatJobs', () => {
     })
   })
 
-  it('uses the uncached google core path when explicit cache is disabled', async () => {
+  it('forwards classified context through the runner into the Google request when explicit cache is disabled', async () => {
     const supabase = createChatJobRunnerSupabaseMock({
       rpc: { get_decrypted_secret: () => decryptSecretMock() },
     })
@@ -1396,6 +1396,11 @@ describe('processChatJobs', () => {
       }),
     )
     buildMemoryPlanMock.mockResolvedValueOnce({
+      requestContext: {
+        instructions: 'STABLE CARD',
+        memory: 'SUMMARY',
+        turnContext: 'CURRENT LORE',
+      },
       mode: 'summary_window',
       promptBlocks: [
         {
@@ -1453,10 +1458,15 @@ describe('processChatJobs', () => {
       messages?: Array<{ role: string; content: string }>
       providerOptions?: Record<string, unknown>
     }
-    expect(call.system).toBe('CTX')
+    expect(call.system).toContain('STABLE CARD')
+    expect(call.system).not.toContain('CURRENT LORE')
     expect(call.messages).toEqual([
       { role: 'assistant', content: 'previous turn' },
-      { role: 'user', content: 'latest user message' },
+      {
+        role: 'user',
+        content:
+          '<application_context>\nSUMMARY\n\nCURRENT LORE\n</application_context>\n\nlatest user message',
+      },
     ])
     expect(
       (call.providerOptions?.google as { cachedContent?: string } | undefined)?.cachedContent,

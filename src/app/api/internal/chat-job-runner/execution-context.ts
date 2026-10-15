@@ -91,7 +91,7 @@ export type LoadedChatJobExecutionContext = {
   totalInputTokens: number
   staticPromptTokens: number
   debugMetrics: Record<string, DebugMetricValue>
-  requestContext?: ChatPromptContext
+  requestContext: ChatPromptContext | undefined
 }
 
 function buildPayloadGenerationTranscript(payload: ChatGenerationJobPayload): {

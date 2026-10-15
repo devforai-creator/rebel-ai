@@ -242,7 +242,7 @@ export default function LorebookPanel({
           onClick={() => setIsMobileOpen(true)}
           variant="primary"
           size="icon"
-          className="fixed left-4 top-28 z-40 h-12 w-12 rounded-full shadow-lg lg:hidden"
+          className="fixed bottom-44 left-4 z-40 h-12 w-12 rounded-full shadow-lg lg:hidden"
           aria-label="Open lorebook"
           title="Open lorebook"
         >

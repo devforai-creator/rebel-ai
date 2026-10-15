@@ -1176,7 +1176,11 @@ describe('processChatJobs', () => {
       completion_tokens: 20,
       total_tokens: 120,
     })
-    expect(Number(supabase.usageEvents[0].total_cost_usd)).toBeCloseTo(0.00005025, 8)
+    // Include 99,891 writes at 1.25x the $0.5/M input rate and the Batch 0.5 multiplier.
+    expect(Number(supabase.usageEvents[0].total_cost_usd)).toBeCloseTo(
+      0.00005025 + (99_891 * 0.5 * 1.25 * 0.5) / 1_000_000,
+      8,
+    )
   })
 
   it('uses google explicit cache strategy when cache creation succeeds', async () => {
@@ -1462,10 +1466,10 @@ describe('processChatJobs', () => {
     expect(call.system).not.toContain('CURRENT LORE')
     expect(call.messages).toEqual([
       { role: 'assistant', content: 'previous turn' },
+      { role: 'user', content: 'latest user message' },
       {
         role: 'user',
-        content:
-          '<application_context>\nSUMMARY\n\nCURRENT LORE\n</application_context>\n\nlatest user message',
+        content: '<application_context>\nSUMMARY\n\nCURRENT LORE\n</application_context>',
       },
     ])
     expect(

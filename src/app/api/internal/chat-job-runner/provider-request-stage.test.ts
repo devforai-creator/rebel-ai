@@ -29,7 +29,8 @@ vi.mock('ai', async () => ({
   streamText: (...args: unknown[]) => streamTextMock(...args),
 }))
 
-vi.mock('@/lib/llm/prompt-cache', () => ({
+vi.mock('@/lib/llm/prompt-cache', async () => ({
+  ...(await vi.importActual<typeof import('@/lib/llm/prompt-cache')>('@/lib/llm/prompt-cache')),
   resolvePromptCacheDecision: (...args: unknown[]) => resolvePromptCacheDecisionMock(...args),
   resolveAnthropicCacheDecision: (...args: unknown[]) => resolveAnthropicCacheDecisionMock(...args),
 }))
@@ -46,7 +47,10 @@ vi.mock('@/lib/llm/google-cache', async () => {
   }
 })
 
-vi.mock('@/lib/llm/provider-options', () => ({
+vi.mock('@/lib/llm/provider-options', async () => ({
+  ...(await vi.importActual<typeof import('@/lib/llm/provider-options')>(
+    '@/lib/llm/provider-options',
+  )),
   ANTHROPIC_INTERLEAVED_THINKING_BETA: 'interleaved-thinking-2025-05-14',
   getProviderOptions: (...args: unknown[]) => getProviderOptionsMock(...args),
 }))
@@ -530,6 +534,41 @@ describe('requestProviderStage', () => {
     })
   })
 
+  it.each(['anthropic', 'openai', 'deepseek', 'google'] as const)(
+    'uses shared classified context rather than the legacy system for %s',
+    async (provider) => {
+      const { requestProviderStage } = await import('./provider-request-stage')
+      const actual = await vi.importActual<typeof import('./stream-payload-builder')>(
+        './stream-payload-builder',
+      )
+      buildStreamPayloadPlanMock.mockImplementation(actual.buildStreamPayloadPlan)
+      isGoogleExplicitCacheEnabledMock.mockReturnValue(false)
+      const context = buildContext({
+        requestContext: {
+          instructions: 'FIXED AND PERMANENT LORE',
+          memory: 'MEMORY',
+          turnContext: 'CURRENT LORE',
+        },
+        finalSystemPrompt: 'LEGACY MUST NOT BE USED',
+      })
+      const result = await requestProviderStage({
+        supabase: createChatJobRunnerSupabaseMock() as never,
+        jobId: 'shared-context',
+        payload: buildPayload({ provider }),
+        context,
+        timings: {},
+      })
+      expect(result.actualPayload?.strategy).toBe('conversation-context')
+      expect(result.actualPayload?.systemMessages[0].content).toContain('FIXED AND PERMANENT LORE')
+      expect(result.actualPayload?.systemMessages[0].content).not.toContain('CURRENT LORE')
+      expect(result.actualPayload?.conversationMessages[0].content).toBe('Hello')
+      expect(result.actualPayload?.conversationMessages.at(-1)?.content).toContain(
+        'MEMORY\n\nCURRENT LORE',
+      )
+      expect(context.recentMessages).toEqual([{ role: 'user', content: 'Hello' }])
+    },
+  )
+
   it.each([false, true])(
     'uses the same canonical Google context with explicit cache success=%s',
     async (cacheSuccess) => {
@@ -565,12 +604,13 @@ describe('requestProviderStage', () => {
           messagesToCache: [
             { role: 'user', content: 'old' },
             { role: 'assistant', content: 'answer' },
+            { role: 'user', content: 'Hello' },
           ],
         }),
       )
       const call = streamTextMock.mock.calls[0][0]
       expect(call.messages.at(-1).content).toContain('SUMMARY\n\nSCENE')
-      expect(call.messages.at(-1).content).toMatch(/Hello$/)
+      expect(call.messages.at(-1).content).not.toContain('Hello')
       expect(call.system).toEqual(cacheSuccess ? undefined : expect.stringContaining('STATIC LORE'))
       expect(result.actualPayload?.systemMessages[0].content).not.toContain('SCENE')
       expect(result.actualPayload?.contextFingerprint?.version).toBe(1)

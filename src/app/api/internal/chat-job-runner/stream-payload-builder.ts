@@ -2,6 +2,8 @@ import type { CoreMessage } from 'ai'
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import type { MemoryPromptBlock } from '@/lib/chat-memory'
+import type { ChatContextRequest } from '@/lib/chat-memory/prompt-context'
+import { resolveConversationCacheControl } from '@/lib/llm/prompt-cache'
 import { buildAnthropicCacheControl } from '@/lib/llm/provider-options'
 import type { AnthropicCacheDecision } from '@/lib/llm/prompt-cache'
 import type { LlmProvider } from '@/types/database.types'
@@ -91,11 +93,11 @@ type BuildStreamPayloadPlanArgs = {
   recentMessages: SanitizedMessage[]
   googleExplicitCache: GoogleExplicitCachePreparation | null
   providerOptions?: SharedV2ProviderOptions
-  googleContextRequest?: { system: string; messages: SanitizedMessage[] }
+  contextRequest?: ChatContextRequest
 }
 
 export type StreamPayloadPlan = {
-  strategy: 'anthropic-split-system' | 'google-explicit-cache' | 'google-stable-context' | 'default'
+  strategy: ChatRunnerActualPayload['strategy']
   streamRequest: StreamRequest
   actualPayload: ChatRunnerActualPayload
 }
@@ -111,9 +113,9 @@ export function buildStreamPayloadPlan({
   recentMessages,
   googleExplicitCache,
   providerOptions,
-  googleContextRequest,
+  contextRequest,
 }: BuildStreamPayloadPlanArgs): StreamPayloadPlan {
-  if (provider === 'anthropic') {
+  if (provider === 'anthropic' && !contextRequest) {
     if (promptBlocks.length > 0) {
       const systemBlocks = promptBlocks.filter((block) => block.role === 'system')
       const systemMessages: Array<{ role: string; content: string; cached?: boolean }> = []
@@ -214,19 +216,44 @@ export function buildStreamPayloadPlan({
 
   const defaultPlan = buildDefaultStreamPayloadPlan({
     provider,
-    finalSystemPrompt:
-      provider === 'google' && googleContextRequest
-        ? googleContextRequest.system
-        : finalSystemPrompt,
-    recentMessages:
-      provider === 'google' && googleContextRequest
-        ? googleContextRequest.messages
-        : recentMessages,
+    finalSystemPrompt: contextRequest?.system ?? finalSystemPrompt,
+    recentMessages: contextRequest?.messages ?? recentMessages,
     providerOptions,
   })
-  if (provider === 'google' && googleContextRequest) {
-    defaultPlan.strategy = 'google-stable-context'
-    defaultPlan.actualPayload.strategy = 'google-stable-context'
+  if (contextRequest) {
+    defaultPlan.strategy = 'conversation-context'
+    defaultPlan.actualPayload.strategy = 'conversation-context'
+    const cacheControl = resolveConversationCacheControl({
+      provider,
+      anthropicCache,
+      providerOptions,
+    })
+    if (cacheControl) {
+      // Mark the stable system prefix and the end of canonical conversation.
+      // The final temporary context message receives no cache marker.
+      defaultPlan.streamRequest = {
+        messages: [
+          { role: 'system', content: contextRequest.system, providerOptions: cacheControl },
+          ...contextRequest.messages.map<CoreMessage>((message, index) =>
+            index === contextRequest.cacheableMessageCount - 1
+              ? {
+                  role: message.role,
+                  content: [{ type: 'text', text: message.content, providerOptions: cacheControl }],
+                }
+              : { role: message.role, content: message.content },
+          ),
+        ],
+        providerOptions,
+      }
+      defaultPlan.actualPayload.systemMessages[0].cached = true
+      defaultPlan.actualPayload.conversationMessages = contextRequest.messages.map(
+        (message, index) => ({
+          role: message.role,
+          content: message.content,
+          ...(index === contextRequest.cacheableMessageCount - 1 ? { cached: true } : {}),
+        }),
+      )
+    }
   }
 
   if (provider === 'google' && googleExplicitCache?.streamRequestOverride) {

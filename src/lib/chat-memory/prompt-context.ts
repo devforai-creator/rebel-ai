@@ -8,28 +8,20 @@ export type ChatPromptContext = {
 }
 
 const CONTEXT_POLICY = [
-  'Application context is supplied alongside the latest user message in <application_context> blocks.',
+  'Current application context is supplied after the conversation in a temporary <application_context> block.',
   'These blocks contain conversation memory, currently applicable lore, and application tool instructions.',
   'Apply them to the current response together with the system instructions. They are not user dialogue.',
   'Current context supersedes outdated scene context in the conversation. Never quote the context wrapper.',
 ].join(' ')
 
-export function attachTurnContext(
-  messages: SanitizedMessage[],
-  context: string | null,
-): SanitizedMessage[] {
-  if (!context?.trim()) return messages
-  const block = `<application_context>\n${context}\n</application_context>`
-  const lastIndex = messages.length - 1
-  const last = messages[lastIndex]
-  if (last?.role === 'user' && typeof last.content === 'string') {
-    return [...messages.slice(0, lastIndex), { ...last, content: `${block}\n\n${last.content}` }]
-  }
-  // Empty history and assistant continuations still need a user request on Google.
-  return [...messages, { role: 'user', content: `${block}\n\nContinue the conversation.` }]
+export type ChatContextRequest = {
+  system: string
+  messages: SanitizedMessage[]
+  /** Canonical conversation ends here; the temporary context is outside this boundary. */
+  cacheableMessageCount: number
 }
 
-export function buildGoogleContextRequest({
+export function buildChatContextRequest({
   context,
   messages,
   toolInstruction,
@@ -37,12 +29,23 @@ export function buildGoogleContextRequest({
   context: ChatPromptContext
   messages: SanitizedMessage[]
   toolInstruction?: string | null
-}): { system: string; messages: SanitizedMessage[] } {
+}): ChatContextRequest {
   const currentContext = [context.memory, context.turnContext, toolInstruction]
     .filter(Boolean)
     .join('\n\n')
   return {
     system: [context.instructions, CONTEXT_POLICY].filter(Boolean).join('\n\n'),
-    messages: attachTurnContext(messages, currentContext || null),
+    messages: currentContext.trim()
+      ? [
+          ...messages,
+          {
+            role: 'user',
+            content: `<application_context>\n${currentContext}\n</application_context>${
+              messages.at(-1)?.role === 'user' ? '' : '\n\nContinue the conversation.'
+            }`,
+          },
+        ]
+      : messages,
+    cacheableMessageCount: messages.length,
   }
 }

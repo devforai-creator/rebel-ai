@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { attachTurnContext, buildGoogleContextRequest } from './prompt-context'
+import { buildChatContextRequest } from './prompt-context'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { generateText } from 'ai'
 
-describe('Google context placement', () => {
+describe('provider-independent context placement', () => {
   const messages = [
     { role: 'user' as const, content: 'old question', messageId: 'u1' },
     { role: 'assistant' as const, content: 'old answer', messageId: 'a1' },
@@ -11,7 +11,7 @@ describe('Google context placement', () => {
   ]
   it('keeps native system and history identical when memory, lore and tool inventory change', () => {
     const build = (value: string) =>
-      buildGoogleContextRequest({
+      buildChatContextRequest({
         context: {
           instructions: 'card\npermanent lore',
           memory: `memory ${value}`,
@@ -27,20 +27,36 @@ describe('Google context placement', () => {
     expect(after.messages.at(-1)?.content).toContain('memory B')
     expect(after.messages.at(-1)?.content).toContain('lore B')
     expect(after.messages.at(-1)?.content).toContain('range inventory B')
-    expect(after.messages.at(-1)?.content).toMatch(/current question$/)
+    expect(after.cacheableMessageCount).toBe(messages.length)
+    expect(after.messages.slice(0, after.cacheableMessageCount)).toEqual(messages)
+    expect(after.messages.at(-1)?.content).not.toContain('current question')
     expect(messages.at(-1)?.content).toBe('current question')
-    expect(after.messages.at(-1)?.messageId).toBe('u2')
+    expect(after.messages.at(-1)?.messageId).toBeUndefined()
   })
   it('does not mutate history or attach context to a historical user in continuations', () => {
     const history = messages.slice(0, -1)
-    const result = attachTurnContext(history, 'current lore')
-    expect(result.slice(0, -1)).toEqual(history)
-    expect(result.at(-1)).toMatchObject({
+    const result = buildChatContextRequest({
+      context: { instructions: 'fixed', memory: null, turnContext: 'current lore' },
+      messages: history,
+    })
+    expect(result.messages.slice(0, -1)).toEqual(history)
+    expect(result.messages.at(-1)).toMatchObject({
       role: 'user',
       content: expect.stringContaining('current lore'),
     })
-    expect(attachTurnContext([], 'memory')).toHaveLength(1)
-    expect(attachTurnContext(messages, null)).toBe(messages)
+    expect(result.messages.at(-1)?.content).toContain('Continue the conversation.')
+    const empty = buildChatContextRequest({
+      context: { instructions: 'fixed', memory: 'memory', turnContext: null },
+      messages: [],
+    })
+    expect(empty.messages).toHaveLength(1)
+    expect(empty.cacheableMessageCount).toBe(0)
+    const noContext = buildChatContextRequest({
+      context: { instructions: 'fixed', memory: null, turnContext: null },
+      messages,
+    })
+    expect(noContext.messages).toBe(messages)
+    expect(noContext.cacheableMessageCount).toBe(messages.length)
   })
   it('preserves the native Gemini prefix through the installed SDK conversion', async () => {
     const bodies: Array<Record<string, unknown>> = []
@@ -62,7 +78,7 @@ describe('Google context placement', () => {
     for (const turnContext of ['Lore A', 'Lore B']) {
       await generateText({
         model: google('gemini-4-argon'),
-        ...buildGoogleContextRequest({
+        ...buildChatContextRequest({
           context: { instructions: 'Fixed card and permanent lore', memory: null, turnContext },
           messages,
         }),

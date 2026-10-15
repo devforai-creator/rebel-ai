@@ -201,7 +201,7 @@ export async function pollAnthropicBatchJobForUser({
   return pollAnthropicBatchJob({ supabase, job, origin })
 }
 
-function buildAnthropicBatchRequest({
+export function buildAnthropicBatchRequest({
   modelName,
   streamPayloadPlan,
 }: {
@@ -237,12 +237,16 @@ function buildAnthropicBatchRequest({
     max_tokens: ANTHROPIC_BATCH_MAX_TOKENS,
     system: systemBlocks.length > 0 ? systemBlocks : undefined,
     messages: streamPayloadPlan.actualPayload.conversationMessages
-      .filter((message): message is { role: 'user' | 'assistant'; content: string } => {
-        return message.role === 'user' || message.role === 'assistant'
-      })
+      .filter(
+        (message): message is { role: 'user' | 'assistant'; content: string; cached?: boolean } => {
+          return message.role === 'user' || message.role === 'assistant'
+        },
+      )
       .map((message) => ({
         role: message.role,
-        content: message.content,
+        content: message.cached
+          ? [{ type: 'text' as const, text: message.content, cache_control: systemCacheControl }]
+          : message.content,
       })),
     ...(thinkingConfig.thinking ? { thinking: thinkingConfig.thinking } : {}),
     ...(thinkingConfig.effort ? { output_config: { effort: thinkingConfig.effort } } : {}),
@@ -432,6 +436,7 @@ async function pollAnthropicBatchJob({
       completionTokens: completionTokens ?? undefined,
       cachedInputTokens: cachedInputTokens ?? undefined,
       cacheWriteTokens: usage?.cache_creation_input_tokens,
+      cacheWriteTtl: metadata.debug.anthropicCache?.ttl,
       serviceTier: 'batch',
     })
 

@@ -36,6 +36,7 @@ export type AnthropicThinkingPolicy =
   | 'adaptive-default-disabled'
 
 export type OpenAIModelPolicy = {
+  promptCacheMode?: 'explicit'
   promptCacheRetention?: 'omit'
   forwardReasoningEffortNone?: boolean
   minimumReasoningEffort?: 'low'

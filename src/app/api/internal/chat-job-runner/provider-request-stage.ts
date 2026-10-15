@@ -1,6 +1,6 @@
 import { getReasoningControl, resolveReasoningSnapshot } from '@/lib/llm/reasoning'
 import { createHash } from 'node:crypto'
-import { buildGoogleContextRequest } from '@/lib/chat-memory/prompt-context'
+import { buildChatContextRequest } from '@/lib/chat-memory/prompt-context'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { streamText, wrapLanguageModel } from 'ai'
 import type { LanguageModelV2, SharedV2ProviderOptions } from '@ai-sdk/provider'
@@ -247,7 +247,7 @@ function buildRequiredFirstToolStepOverride(
   }
 }
 
-function buildGoogleCachedSystemPromptForAgenticTranscriptRecall({
+function buildSystemPromptForAgenticTranscriptRecall({
   systemPrompt,
   toolContract,
   maxToolCalls,
@@ -378,16 +378,17 @@ export async function requestProviderStage({
   debugMetrics['experimental_agentic_transcript_recall_tool_choice_applied'] = false
   debugMetrics['anthropic_thinking_disabled_for_required_tool_choice'] =
     provider === 'anthropic' ? false : null
-  const googleToolContract =
-    provider === 'google' && agenticTranscriptRecall.enabled && hasToolCapableSourceMap
+  const recallToolContract =
+    agenticTranscriptRecall.enabled && hasToolCapableSourceMap
       ? buildAgenticTranscriptRecallToolContract({
           sourceMap: agenticTranscriptRecallSourceMap,
           toolChoice: atrToolChoiceEnforcement === 'native_required' ? 'required' : 'auto',
         })
       : null
+  const googleToolContract = provider === 'google' ? recallToolContract : null
   const googleCacheSystemPrompt =
     provider === 'google'
-      ? buildGoogleCachedSystemPromptForAgenticTranscriptRecall({
+      ? buildSystemPromptForAgenticTranscriptRecall({
           systemPrompt: context.requestContext ? '' : finalSystemPrompt,
           toolContract: googleToolContract,
           maxToolCalls: agenticTranscriptRecall.maxToolCalls,
@@ -395,14 +396,20 @@ export async function requestProviderStage({
           requireToolByInstruction: atrToolChoiceEnforcement === 'instruction_required',
         })
       : finalSystemPrompt
-  const googleContextRequest =
-    provider === 'google' && context.requestContext
-      ? buildGoogleContextRequest({
-          context: context.requestContext,
-          messages: recentMessages,
-          toolInstruction: googleCacheSystemPrompt,
-        })
-      : undefined
+  const contextMessages = provider === 'anthropic' ? anthropicConversationMessages : recentMessages
+  const contextRequest = context.requestContext
+    ? buildChatContextRequest({
+        context: context.requestContext,
+        messages: contextMessages,
+        toolInstruction: buildSystemPromptForAgenticTranscriptRecall({
+          systemPrompt: '',
+          toolContract: recallToolContract,
+          maxToolCalls: agenticTranscriptRecall.maxToolCalls,
+          sourceMap: agenticTranscriptRecallSourceMap,
+          requireToolByInstruction: atrToolChoiceEnforcement === 'instruction_required',
+        }),
+      })
+    : undefined
 
   const model = buildLanguageModel({
     provider,
@@ -422,6 +429,7 @@ export async function requestProviderStage({
     modelName,
     promptCacheKey: promptCache?.key,
     promptCacheRetention: promptCache?.retention,
+    conversationCache: !!contextRequest,
     reasoning,
   })
   const googleExplicitCache =
@@ -429,8 +437,8 @@ export async function requestProviderStage({
       ? await prepareGoogleExplicitCache({
           apiKey: decryptedApiKey,
           modelName,
-          systemPrompt: googleContextRequest?.system ?? googleCacheSystemPrompt,
-          recentMessages: googleContextRequest?.messages ?? recentMessages,
+          systemPrompt: contextRequest?.system ?? googleCacheSystemPrompt,
+          recentMessages: contextRequest?.messages ?? recentMessages,
           providerOptions,
           toolContract: googleToolContract,
           toolCapableInvocation: agenticTranscriptRecall.enabled && hasToolCapableSourceMap,
@@ -501,7 +509,7 @@ export async function requestProviderStage({
       recentMessages,
       googleExplicitCache,
       providerOptions,
-      googleContextRequest,
+      contextRequest,
     })
 
     if (streamPayloadPlan.strategy === 'anthropic-split-system') {
@@ -563,8 +571,8 @@ export async function requestProviderStage({
 
     const standardStreamRequest = streamPayloadPlan.streamRequest
     // A tool failure must drop both the live recall instruction and any cached tool contract.
-    const googleFallbackPlan =
-      googleContextRequest && context.requestContext && googleToolContract
+    const contextFallbackPlan =
+      contextRequest && context.requestContext && recallToolContract
         ? buildStreamPayloadPlan({
             provider,
             finalSystemPrompt,
@@ -576,13 +584,13 @@ export async function requestProviderStage({
             recentMessages,
             googleExplicitCache: null,
             providerOptions,
-            googleContextRequest: buildGoogleContextRequest({
+            contextRequest: buildChatContextRequest({
               context: context.requestContext,
-              messages: recentMessages,
+              messages: contextMessages,
             }),
           })
         : null
-    const fallbackStreamRequest = googleFallbackPlan?.streamRequest ?? standardStreamRequest
+    const fallbackStreamRequest = contextFallbackPlan?.streamRequest ?? standardStreamRequest
     let finalStreamRequest = standardStreamRequest
     let experimentalStreamTextSettings:
       | ReturnType<typeof prepareExperimentalAgenticTranscriptRecallRequest>['streamTextSettings']
@@ -599,7 +607,7 @@ export async function requestProviderStage({
           sourceHints: agenticTranscriptRecallSourceHints,
           sourceMap: agenticTranscriptRecallSourceMap,
           streamRequest: streamPayloadPlan.streamRequest,
-          systemInstructionPlacement: googleContextRequest
+          systemInstructionPlacement: contextRequest
             ? 'already-included'
             : provider === 'anthropic'
               ? 'after-system-messages'
@@ -692,7 +700,7 @@ export async function requestProviderStage({
         }
       } catch (error) {
         finalStreamRequest = fallbackStreamRequest
-        actualPayload = googleFallbackPlan?.actualPayload ?? actualPayload
+        actualPayload = contextFallbackPlan?.actualPayload ?? actualPayload
         debugMetrics['experimental_agentic_transcript_recall_fallback_to_standard'] = true
         logDebug('[Agentic Transcript Recall] Experimental wrapper failed; falling back', {
           error: error instanceof Error ? error.message : String(error),
@@ -745,10 +753,10 @@ export async function requestProviderStage({
         maxOutputTokens: LLM_OUTPUT_LIMITS.chat,
         abortSignal: providerAbortSignal,
       })
-      actualPayload = googleFallbackPlan?.actualPayload ?? actualPayload
+      actualPayload = contextFallbackPlan?.actualPayload ?? actualPayload
     }
 
-    if (googleContextRequest && actualPayload) {
+    if (contextRequest && actualPayload) {
       const hash = (value: unknown) =>
         createHash('sha256').update(JSON.stringify(value)).digest('hex')
       actualPayload.contextFingerprint = {

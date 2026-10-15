@@ -84,6 +84,7 @@ export const openAIModelCatalog = defineProviderCatalog({
           defaultLevel: 'medium',
         },
         openai: {
+          promptCacheMode: 'explicit',
           promptCacheRetention: 'omit',
           minimumReasoningEffort: 'low',
         },
@@ -102,6 +103,7 @@ export const openAIModelCatalog = defineProviderCatalog({
           defaultLevel: 'medium',
         },
         openai: {
+          promptCacheMode: 'explicit',
           promptCacheRetention: 'omit',
         },
       },
@@ -120,6 +122,7 @@ export const openAIModelCatalog = defineProviderCatalog({
           defaultLevel: 'medium',
         },
         openai: {
+          promptCacheMode: 'explicit',
           promptCacheRetention: 'omit',
           forwardReasoningEffortNone: true,
         },

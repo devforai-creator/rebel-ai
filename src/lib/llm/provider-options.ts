@@ -13,6 +13,7 @@ type ProviderOptionsInput = {
   modelName?: string | null
   promptCacheKey?: string | null
   promptCacheRetention?: '24h' | 'in_memory'
+  conversationCache?: boolean
   // Provider-specific reasoning options
   reasoningEffort?: string | null
   reasoning?: ReasoningSnapshot
@@ -54,7 +55,9 @@ export function getProviderOptions(
 
     if (overrides?.promptCacheKey) {
       openaiOptions.promptCacheKey = overrides.promptCacheKey
-      if (openAIModelPolicy?.promptCacheRetention !== 'omit') {
+      if (overrides.conversationCache && openAIModelPolicy?.promptCacheMode === 'explicit') {
+        openaiOptions.promptCacheOptions = { mode: 'explicit', ttl: '30m' }
+      } else if (openAIModelPolicy?.promptCacheRetention !== 'omit') {
         openaiOptions.promptCacheRetention = overrides.promptCacheRetention ?? '24h'
       }
     }

@@ -11,6 +11,7 @@ export type UsageCostParams = {
   completionTokens?: number | null
   cachedInputTokens?: number | null
   cacheWriteTokens?: number | null
+  cacheWriteTtl?: '5m' | '1h'
   reasoningTokens?: number | null
   serviceTier?: ApiServiceTier | null
 }
@@ -96,7 +97,8 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
   }
 
   const cacheWriteTokens =
-    params.provider === 'openai' && rates.cacheWrite !== undefined
+    params.provider === 'anthropic' ||
+    (params.provider === 'openai' && rates.cacheWrite !== undefined)
       ? sanitizeTokens(params.cacheWriteTokens)
       : 0
 
@@ -120,7 +122,13 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
   // Cache writes are input costs and are persisted with prompt_cost_usd.
   const promptCost =
     calculateCost(effectivePromptTokens, rates.input, multiplier) +
-    calculateCost(cacheWriteTokens, rates.cacheWrite ?? rates.input, multiplier)
+    calculateCost(
+      cacheWriteTokens,
+      params.provider === 'anthropic'
+        ? rates.input * (params.cacheWriteTtl === '1h' ? 2 : 1.25)
+        : (rates.cacheWrite ?? rates.input),
+      multiplier,
+    )
   const cachedInputRate = rates.cachedInput ?? rates.input
   const cachedInputCost = calculateCost(cachedInputTokens, cachedInputRate, multiplier)
   const completionCost = calculateCost(effectiveCompletionTokens, rates.output, multiplier)

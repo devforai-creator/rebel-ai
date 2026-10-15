@@ -1,7 +1,12 @@
 import crypto from 'crypto'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import { getModelFeatures, hasExtendedOpenAICacheRetention } from '@/lib/models'
-import { getAnthropicMinCacheTokens, type AnthropicCacheTTL } from './provider-options'
+import {
+  buildAnthropicCacheControl,
+  getAnthropicMinCacheTokens,
+  type AnthropicCacheTTL,
+} from './provider-options'
+import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import { resolveProviderCacheMode } from './cache-mode'
 
 const PROMPT_CACHE_VERSION = 'v1'
@@ -103,6 +108,33 @@ export interface AnthropicCacheDecision {
   enabled: boolean
   ttl: AnthropicCacheTTL
   minTokens: number
+}
+
+/** Provider policy only: the shared prompt builder decides where conversation ends. */
+export function resolveConversationCacheControl({
+  provider,
+  anthropicCache,
+  providerOptions,
+}: {
+  provider: string
+  anthropicCache: AnthropicCacheDecision | null
+  providerOptions?: SharedV2ProviderOptions
+}): SharedV2ProviderOptions | undefined {
+  if (provider === 'anthropic' && anthropicCache?.enabled) {
+    return { anthropic: buildAnthropicCacheControl(anthropicCache.ttl) }
+  }
+  const openai = providerOptions?.openai
+  const cacheOptions = openai?.promptCacheOptions
+  if (
+    provider === 'openai' &&
+    cacheOptions &&
+    typeof cacheOptions === 'object' &&
+    !Array.isArray(cacheOptions) &&
+    cacheOptions.mode === 'explicit'
+  ) {
+    return { openai: { promptCacheBreakpoint: { mode: 'explicit' } } }
+  }
+  return undefined
 }
 
 function isAnthropicCacheEnabled(): boolean {

@@ -11,6 +11,31 @@ import {
 } from './provider-options'
 
 describe('getProviderOptions', () => {
+  it.each(['gpt-5.6', 'gpt-6-sol', 'gpt-6.1-sol'])(
+    'uses explicit cache mode only for marked chat requests on %s',
+    (modelName) => {
+      const chat = getProviderOptions('openai', {
+        modelName,
+        promptCacheKey: 'chat:test',
+        conversationCache: true,
+      })
+      expect(chat?.openai).toMatchObject({ promptCacheOptions: { mode: 'explicit', ttl: '30m' } })
+      expect(chat?.openai).not.toHaveProperty('promptCacheRetention')
+      const other = getProviderOptions('openai', { modelName, promptCacheKey: 'summary:test' })
+      expect(other?.openai).not.toHaveProperty('promptCacheOptions')
+    },
+  )
+
+  it('keeps older OpenAI models on their existing implicit cache policy', () => {
+    const options = getProviderOptions('openai', {
+      modelName: 'gpt-5.5',
+      promptCacheKey: 'chat:test',
+      conversationCache: true,
+    })
+    expect(options?.openai).not.toHaveProperty('promptCacheOptions')
+    expect(options?.openai).toHaveProperty('promptCacheRetention', '24h')
+  })
+
   it('returns undefined for unsupported providers', () => {
     const options = getProviderOptions('voyage')
     expect(options).toBeUndefined()

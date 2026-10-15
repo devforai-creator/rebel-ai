@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 
 import { buildStreamPayloadPlan } from './stream-payload-builder'
+import { buildChatContextRequest } from '@/lib/chat-memory/prompt-context'
+import { getProviderOptions } from '@/lib/llm/provider-options'
 
 const BASE_ARGS = {
   promptBlocks: [] as Array<{
@@ -15,6 +17,70 @@ const BASE_ARGS = {
 }
 
 describe('buildStreamPayloadPlan', () => {
+  it.each(['anthropic', 'openai', 'deepseek', 'google', 'openrouter', 'local'] as const)(
+    'keeps canonical dialogue before the one current note for %s',
+    (provider) => {
+      const messages = [
+        { role: 'user' as const, content: 'old question' },
+        { role: 'assistant' as const, content: 'old answer' },
+        { role: 'user' as const, content: 'current question' },
+      ]
+      const contextRequest = buildChatContextRequest({
+        context: { instructions: 'STATIC', memory: 'MEMORY', turnContext: 'CURRENT LORE' },
+        messages,
+      })
+      const result = buildStreamPayloadPlan({
+        ...BASE_ARGS,
+        provider,
+        contextRequest,
+        finalSystemPrompt: 'legacy',
+        staticSystemPrompt: 'STATIC',
+        dynamicContext: 'MEMORY',
+        anthropicCache: { enabled: true, ttl: '5m', minTokens: 1024 },
+        anthropicConversationMessages: messages,
+        providerOptions: getProviderOptions(provider, {
+          modelName: 'gpt-5.6',
+          promptCacheKey: 'chat:test',
+          conversationCache: true,
+        }),
+      })
+      expect(result.strategy).toBe('conversation-context')
+      expect(result.actualPayload.conversationMessages.map((m) => m.content).slice(0, 3)).toEqual(
+        messages.map((m) => m.content),
+      )
+      expect(result.actualPayload.conversationMessages.at(-1)?.content).toBe(
+        '<application_context>\nMEMORY\n\nCURRENT LORE\n</application_context>',
+      )
+      expect(result.actualPayload.conversationMessages.at(-1)?.cached).toBeUndefined()
+      if (provider === 'anthropic' || provider === 'openai') {
+        expect(result.actualPayload.conversationMessages[2].cached).toBe(true)
+        const last = result.streamRequest.messages.at(-1)!
+        expect(last.content).toBe(contextRequest.messages.at(-1)?.content)
+        expect(last).not.toHaveProperty('providerOptions')
+      } else {
+        expect(result.actualPayload.conversationMessages.every((m) => !m.cached)).toBe(true)
+      }
+    },
+  )
+
+  it('does not mark Anthropic conversation when caching is disabled', () => {
+    const result = buildStreamPayloadPlan({
+      ...BASE_ARGS,
+      provider: 'anthropic',
+      finalSystemPrompt: 'legacy',
+      staticSystemPrompt: 'STATIC',
+      dynamicContext: null,
+      anthropicCache: null,
+      anthropicConversationMessages: [],
+      contextRequest: buildChatContextRequest({
+        context: { instructions: 'STATIC', memory: null, turnContext: 'LORE' },
+        messages: [{ role: 'user', content: 'question' }],
+      }),
+    })
+    expect(JSON.stringify(result.streamRequest)).not.toContain('cacheControl')
+    expect(result.actualPayload.conversationMessages.every((m) => !m.cached)).toBe(true)
+  })
+
   it('caches only the static system prompt in the summary-window payload', () => {
     const providerOptions: SharedV2ProviderOptions = {
       anthropic: { version: '2025-01-01' },

@@ -12,7 +12,7 @@ export type AnthropicTextBlock = {
 
 export type AnthropicBatchMessage = {
   role: 'user' | 'assistant'
-  content: string
+  content: string | AnthropicTextBlock[]
 }
 
 export type AnthropicBatchMessageParams = {

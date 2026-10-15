@@ -2,6 +2,35 @@ import { describe, it, expect } from 'vitest'
 import { estimateUsageCost, type UsageCostParams } from './model-pricing'
 
 describe('estimateUsageCost', () => {
+  it.each(['5m', '1h'] as const)(
+    'charges Anthropic cache writes at the %s rate without double-counting reads',
+    (cacheWriteTtl) => {
+      for (const serviceTier of ['standard', 'batch'] as const) {
+        const result = estimateUsageCost({
+          provider: 'anthropic',
+          modelName: 'claude-opus-4-7',
+          promptTokens: 1000,
+          cachedInputTokens: 40000,
+          cacheWriteTokens: 10000,
+          cacheWriteTtl,
+          completionTokens: 2000,
+          serviceTier,
+        })
+        const multiplier = serviceTier === 'batch' ? 0.5 : 1
+        expect(result?.promptCost).toBeCloseTo(
+          (0.005 + (cacheWriteTtl === '1h' ? 0.1 : 0.0625)) * multiplier,
+          8,
+        )
+        expect(result?.cachedInputCost).toBeCloseTo(0.02 * multiplier, 8)
+        expect(result?.completionCost).toBeCloseTo(0.05 * multiplier, 8)
+        expect(result?.totalCost).toBeCloseTo(
+          (cacheWriteTtl === '1h' ? 0.175 : 0.1375) * multiplier,
+          8,
+        )
+      }
+    },
+  )
+
   describe('Google Gemini models', () => {
     describe('gemini-3.8-flash', () => {
       it('should calculate cached input at 10% of the promotional input rate', () => {
@@ -397,7 +426,7 @@ describe('estimateUsageCost', () => {
           })
 
           expect(estimate?.promptCost).toBeCloseTo(
-            (promptTokens / 1_000_000) * input * multiplier,
+            ((promptTokens + cacheWriteTokens * 1.25) / 1_000_000) * input * multiplier,
             8,
           )
           expect(estimate?.cachedInputCost).toBeCloseTo(

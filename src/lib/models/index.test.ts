@@ -599,6 +599,7 @@ describe('Model Registry', () => {
         supportsRequiredToolChoice({ provider: 'anthropic', modelName: 'claude-fable-5' }),
       ).toBe(true)
       expect(getModelFeatures({ provider: 'openai', modelName: 'gpt-5.6-terra' })?.openai).toEqual({
+        promptCacheMode: 'explicit',
         promptCacheRetention: 'omit',
         forwardReasoningEffortNone: true,
       })

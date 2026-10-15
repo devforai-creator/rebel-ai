@@ -120,6 +120,7 @@ describe('runPostProcessingStage', () => {
       cachedInputTokens: 5,
       reasoningTokens: undefined,
       cacheWriteTokens: 123,
+      cacheWriteTtl: '5m',
       serviceTier: 'standard',
     })
     expect(buildChatDebugInfoMock).toHaveBeenCalledWith(

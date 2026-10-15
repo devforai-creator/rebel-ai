@@ -5,10 +5,34 @@ import { computeLorebookEntryFingerprint } from './override-identity'
 import {
   buildLorebookDynamicContext,
   renderActiveLorebookBlock,
+  renderLorebookContext,
   type LorebookRuntimeEntry,
 } from './runtime'
 
 describe('renderActiveLorebookBlock', () => {
+  it('partitions effective always-active entries without changing legacy order or activation', () => {
+    const entries: LorebookRuntimeEntry[] = [
+      { moduleId: 'm', key: 'scene', content: 'scene', insertorder: 10 },
+      { moduleId: 'm', key: 'pinned', content: 'pinned', insertorder: 9 },
+      { moduleId: 'm', key: 'base', content: 'base', alwaysActive: true },
+      { moduleId: 'm', key: 'hidden', content: 'hidden', alwaysActive: true },
+    ]
+    const overrideMap = new Map<string, boolean>([
+      [`v2:m:${computeLorebookEntryFingerprint('m', entries[1])}`, true],
+      [`v2:m:${computeLorebookEntryFingerprint('m', entries[3])}`, false],
+    ])
+    const current = renderLorebookContext({
+      entries,
+      overrideMap,
+      chatHistory: [{ role: 'user', content: 'scene' }],
+    })
+    const later = renderLorebookContext({ entries, overrideMap, chatHistory: [] })
+    expect(current.combined).toBe('=== Active Lorebook Entries ===\nscene\n\npinned\n\nbase')
+    expect(current.alwaysActive).toBe(later.alwaysActive)
+    expect(current.alwaysActive).toContain('pinned\n\nbase')
+    expect(current.conditional).toBe('=== Active Lorebook Entries ===\nscene')
+    expect(later.conditional).toBeNull()
+  })
   it('expires old keyword matches while preserving pinned, always-active, and disabled overrides', () => {
     const entries: LorebookRuntimeEntry[] = [
       { moduleId: 'module-1', key: 'old', content: 'Expired lore' },

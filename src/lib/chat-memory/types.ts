@@ -1,4 +1,5 @@
 import type { ChatModelConfig } from '@/lib/chat/model-config'
+import type { ChatPromptContext } from './prompt-context'
 import type {
   BuildContextOptions,
   RagResultInfo,
@@ -25,9 +26,12 @@ export type MemoryPlan = {
   staticSystemPrompt: string
   dynamicContext: string | null
   ragInfo?: RagResultInfo
+  requestContext?: ChatPromptContext
 }
 
 export type BuildMemoryPlanOptions = BuildContextOptions & {
+  stableContext?: string[]
+  turnContext?: string[]
   modelConfig?: ChatModelConfig | null
   transcriptCoverage?: MemoryTranscriptCoverage
   transcriptStartOrdinal?: number

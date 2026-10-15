@@ -129,6 +129,16 @@ export async function loadChatLorebookState({
 }
 
 export function renderActiveLorebookBlock({
+  ...options
+}: {
+  entries: LorebookRuntimeEntry[]
+  overrideMap: Map<string, boolean>
+  chatHistory: SanitizedMessage[]
+}): string | null {
+  return renderLorebookContext(options).combined
+}
+
+export function renderLorebookContext({
   entries,
   overrideMap,
   chatHistory,
@@ -136,9 +146,10 @@ export function renderActiveLorebookBlock({
   entries: LorebookRuntimeEntry[]
   overrideMap: Map<string, boolean>
   chatHistory: SanitizedMessage[]
-}): string | null {
+}): { combined: string | null; alwaysActive: string | null; conditional: string | null } {
+  const empty = { combined: null, alwaysActive: null, conditional: null }
   if (entries.length === 0) {
-    return null
+    return empty
   }
 
   const effectiveEntries = entries
@@ -150,7 +161,7 @@ export function renderActiveLorebookBlock({
     )
 
   if (effectiveEntries.length === 0) {
-    return null
+    return empty
   }
 
   const { activeEntries } = renderLorebook({
@@ -159,20 +170,19 @@ export function renderActiveLorebookBlock({
   })
 
   if (activeEntries.length === 0) {
-    return null
+    return empty
   }
 
-  const sections = activeEntries
-    .slice()
-    .sort(compareLorebookEntries)
-    .map((entry) => entry.content.trim())
-    .filter(Boolean)
-
-  if (sections.length === 0) {
-    return null
+  const sorted = activeEntries.slice().sort(compareLorebookEntries)
+  const block = (items: typeof sorted): string | null => {
+    const sections = items.map((entry) => entry.content.trim()).filter(Boolean)
+    return sections.length ? `=== Active Lorebook Entries ===\n${sections.join('\n\n')}` : null
   }
-
-  return `=== Active Lorebook Entries ===\n${sections.join('\n\n')}`
+  return {
+    combined: block(sorted),
+    alwaysActive: block(sorted.filter((entry) => entry.alwaysActive)),
+    conditional: block(sorted.filter((entry) => !entry.alwaysActive)),
+  }
 }
 
 export function lorebookNeedsChatHistory({

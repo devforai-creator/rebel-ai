@@ -1,4 +1,6 @@
 import { getReasoningControl, resolveReasoningSnapshot } from '@/lib/llm/reasoning'
+import { createHash } from 'node:crypto'
+import { buildGoogleContextRequest } from '@/lib/chat-memory/prompt-context'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { streamText, wrapLanguageModel } from 'ai'
 import type { LanguageModelV2, SharedV2ProviderOptions } from '@ai-sdk/provider'
@@ -250,11 +252,13 @@ function buildGoogleCachedSystemPromptForAgenticTranscriptRecall({
   toolContract,
   maxToolCalls,
   sourceMap,
+  requireToolByInstruction = false,
 }: {
   systemPrompt: string
   toolContract: SerializableFunctionToolContract | null
   maxToolCalls: number
   sourceMap: LoadedChatJobExecutionContext['agenticTranscriptRecallSourceMap']
+  requireToolByInstruction?: boolean
 }): string {
   if (!toolContract || toolContract.tools.length === 0) {
     return systemPrompt
@@ -266,6 +270,7 @@ function buildGoogleCachedSystemPromptForAgenticTranscriptRecall({
     fetchAvailable: toolNames.has(FETCH_SOURCE_RANGE_TOOL_NAME),
     expandAvailable: toolNames.has(EXPAND_SOURCE_RANGE_TOOL_NAME),
     sourceMap,
+    requireToolByInstruction,
   })
 
   return [systemPrompt, instruction]
@@ -383,12 +388,21 @@ export async function requestProviderStage({
   const googleCacheSystemPrompt =
     provider === 'google'
       ? buildGoogleCachedSystemPromptForAgenticTranscriptRecall({
-          systemPrompt: finalSystemPrompt,
+          systemPrompt: context.requestContext ? '' : finalSystemPrompt,
           toolContract: googleToolContract,
           maxToolCalls: agenticTranscriptRecall.maxToolCalls,
           sourceMap: agenticTranscriptRecallSourceMap,
+          requireToolByInstruction: atrToolChoiceEnforcement === 'instruction_required',
         })
       : finalSystemPrompt
+  const googleContextRequest =
+    provider === 'google' && context.requestContext
+      ? buildGoogleContextRequest({
+          context: context.requestContext,
+          messages: recentMessages,
+          toolInstruction: googleCacheSystemPrompt,
+        })
+      : undefined
 
   const model = buildLanguageModel({
     provider,
@@ -415,8 +429,8 @@ export async function requestProviderStage({
       ? await prepareGoogleExplicitCache({
           apiKey: decryptedApiKey,
           modelName,
-          systemPrompt: googleCacheSystemPrompt,
-          recentMessages,
+          systemPrompt: googleContextRequest?.system ?? googleCacheSystemPrompt,
+          recentMessages: googleContextRequest?.messages ?? recentMessages,
           providerOptions,
           toolContract: googleToolContract,
           toolCapableInvocation: agenticTranscriptRecall.enabled && hasToolCapableSourceMap,
@@ -487,6 +501,7 @@ export async function requestProviderStage({
       recentMessages,
       googleExplicitCache,
       providerOptions,
+      googleContextRequest,
     })
 
     if (streamPayloadPlan.strategy === 'anthropic-split-system') {
@@ -547,6 +562,27 @@ export async function requestProviderStage({
     debugMetrics['experimental_agentic_transcript_recall_fallback_to_standard'] = false
 
     const standardStreamRequest = streamPayloadPlan.streamRequest
+    // A tool failure must drop both the live recall instruction and any cached tool contract.
+    const googleFallbackPlan =
+      googleContextRequest && context.requestContext && googleToolContract
+        ? buildStreamPayloadPlan({
+            provider,
+            finalSystemPrompt,
+            staticSystemPrompt,
+            dynamicContext,
+            anthropicCache,
+            anthropicConversationMessages,
+            promptBlocks,
+            recentMessages,
+            googleExplicitCache: null,
+            providerOptions,
+            googleContextRequest: buildGoogleContextRequest({
+              context: context.requestContext,
+              messages: recentMessages,
+            }),
+          })
+        : null
+    const fallbackStreamRequest = googleFallbackPlan?.streamRequest ?? standardStreamRequest
     let finalStreamRequest = standardStreamRequest
     let experimentalStreamTextSettings:
       | ReturnType<typeof prepareExperimentalAgenticTranscriptRecallRequest>['streamTextSettings']
@@ -563,7 +599,11 @@ export async function requestProviderStage({
           sourceHints: agenticTranscriptRecallSourceHints,
           sourceMap: agenticTranscriptRecallSourceMap,
           streamRequest: streamPayloadPlan.streamRequest,
-          systemInstructionPlacement: provider === 'anthropic' ? 'after-system-messages' : 'system',
+          systemInstructionPlacement: googleContextRequest
+            ? 'already-included'
+            : provider === 'anthropic'
+              ? 'after-system-messages'
+              : 'system',
           debugMetrics,
           requireToolByInstruction: atrToolChoiceEnforcement === 'instruction_required',
           logDebug,
@@ -651,6 +691,8 @@ export async function requestProviderStage({
           })
         }
       } catch (error) {
+        finalStreamRequest = fallbackStreamRequest
+        actualPayload = googleFallbackPlan?.actualPayload ?? actualPayload
         debugMetrics['experimental_agentic_transcript_recall_fallback_to_standard'] = true
         logDebug('[Agentic Transcript Recall] Experimental wrapper failed; falling back', {
           error: error instanceof Error ? error.message : String(error),
@@ -699,10 +741,22 @@ export async function requestProviderStage({
       stream = await streamText({
         model,
         ...samplingOptions,
-        ...standardStreamRequest,
+        ...fallbackStreamRequest,
         maxOutputTokens: LLM_OUTPUT_LIMITS.chat,
         abortSignal: providerAbortSignal,
       })
+      actualPayload = googleFallbackPlan?.actualPayload ?? actualPayload
+    }
+
+    if (googleContextRequest && actualPayload) {
+      const hash = (value: unknown) =>
+        createHash('sha256').update(JSON.stringify(value)).digest('hex')
+      actualPayload.contextFingerprint = {
+        version: 1,
+        system: hash(actualPayload.systemMessages.map(({ content }) => content).join('\n\n')),
+        history: hash(actualPayload.conversationMessages.slice(0, -1)),
+        turn: hash(actualPayload.conversationMessages.at(-1)?.content ?? ''),
+      }
     }
 
     return {

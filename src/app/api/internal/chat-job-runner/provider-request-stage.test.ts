@@ -529,6 +529,112 @@ describe('requestProviderStage', () => {
     })
   })
 
+  it.each([false, true])(
+    'uses the same canonical Google context with explicit cache success=%s',
+    async (cacheSuccess) => {
+      const { requestProviderStage } = await import('./provider-request-stage')
+      const { buildStreamPayloadPlan } = await vi.importActual<
+        typeof import('./stream-payload-builder')
+      >('./stream-payload-builder')
+      buildStreamPayloadPlanMock.mockImplementation(buildStreamPayloadPlan)
+      resolveGoogleCacheDecisionMock.mockReturnValue({ enabled: true, minTokens: 1024 })
+      createGoogleCacheMock.mockResolvedValue(
+        cacheSuccess
+          ? { success: true, cacheName: 'cachedContents/test', cachedTokenCount: 5000 }
+          : { success: false, error: 'unavailable', code: 503 },
+      )
+      const context = buildContext({
+        requestContext: { instructions: 'STATIC LORE', memory: 'SUMMARY', turnContext: 'SCENE' },
+        recentMessages: [
+          { role: 'user', content: 'old' },
+          { role: 'assistant', content: 'answer' },
+          { role: 'user', content: 'Hello' },
+        ],
+      })
+      const result = await requestProviderStage({
+        supabase: createChatJobRunnerSupabaseMock() as never,
+        jobId: 'job-context',
+        payload: buildPayload({ provider: 'google', modelName: 'gemini-2.5-flash' }),
+        context,
+        timings: {},
+      })
+      expect(createGoogleCacheMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          systemPrompt: expect.stringContaining('STATIC LORE'),
+          messagesToCache: [
+            { role: 'user', content: 'old' },
+            { role: 'assistant', content: 'answer' },
+          ],
+        }),
+      )
+      const call = streamTextMock.mock.calls[0][0]
+      expect(call.messages.at(-1).content).toContain('SUMMARY\n\nSCENE')
+      expect(call.messages.at(-1).content).toMatch(/Hello$/)
+      expect(call.system).toEqual(cacheSuccess ? undefined : expect.stringContaining('STATIC LORE'))
+      expect(result.actualPayload?.systemMessages[0].content).not.toContain('SCENE')
+      expect(result.actualPayload?.contextFingerprint?.version).toBe(1)
+    },
+  )
+
+  it.each(['wrapper', 'stream'] as const)(
+    'removes Google recall instructions when the %s fails',
+    async (failure) => {
+      const { requestProviderStage } = await import('./provider-request-stage')
+      const actual = await vi.importActual<typeof import('./stream-payload-builder')>(
+        './stream-payload-builder',
+      )
+      buildStreamPayloadPlanMock.mockImplementation(actual.buildStreamPayloadPlan)
+      isGoogleExplicitCacheEnabledMock.mockReturnValue(false)
+      const context = buildContext({
+        requestContext: { instructions: 'FIXED', memory: 'MEMORY', turnContext: 'LORE' },
+      })
+      context.agenticTranscriptRecall.enabled = true
+      context.agenticTranscriptRecallSourceMap = {
+        rawContextStartOrdinal: 11,
+        cutoffOrdinal: 10,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            rangeId: 'R1',
+            startSeq: 1,
+            endSeq: 10,
+            preview: 'Older memory',
+          },
+        ],
+        navigationParents: [],
+      }
+      if (failure === 'wrapper')
+        prepareExperimentalAgenticTranscriptRecallRequestMock.mockImplementationOnce(() => {
+          throw new Error('wrapper failed')
+        })
+      else {
+        prepareExperimentalAgenticTranscriptRecallRequestMock.mockImplementationOnce(
+          ({ streamRequest }) => ({
+            streamRequest,
+            streamTextSettings: { tools: { fetch_source_range: {} } },
+          }),
+        )
+        streamTextMock.mockRejectedValueOnce(new Error('tool invocation failed'))
+      }
+      const result = await requestProviderStage({
+        supabase: createChatJobRunnerSupabaseMock() as never,
+        jobId: 'fallback-google',
+        payload: buildPayload({ provider: 'google', modelName: 'gemini-4-argon' }),
+        context,
+        timings: {},
+      })
+      const call = streamTextMock.mock.calls.at(-1)?.[0]
+      expect(call.system).toContain('FIXED')
+      expect(call.messages.at(-1).content).toContain('MEMORY\n\nLORE')
+      expect(call.messages.at(-1).content).not.toContain('Experimental Transcript Recall')
+      expect(call.tools).toBeUndefined()
+      expect(result.actualPayload?.conversationMessages.at(-1)?.content).toBe(
+        call.messages.at(-1).content,
+      )
+    },
+  )
+
   it('forces required tool choice when the character-chat preflight matches older exact recall', async () => {
     const { requestProviderStage } = await import('./provider-request-stage')
     const payload = buildPayload()

@@ -209,7 +209,7 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
   sourceHints: AgenticTranscriptRecallSourceHints | null
   sourceMap: AgenticTranscriptRecallSourceMap | null
   streamRequest: TStreamRequest
-  systemInstructionPlacement?: 'system' | 'after-system-messages'
+  systemInstructionPlacement?: 'system' | 'after-system-messages' | 'already-included'
   debugMetrics: Record<string, string | number | boolean | null>
   requireToolByInstruction?: boolean
   logDebug?: (...args: unknown[]) => void
@@ -422,30 +422,33 @@ export function prepareExperimentalAgenticTranscriptRecallRequest<
   const systemMessageCount =
     firstConversationIndex === -1 ? streamRequest.messages.length : firstConversationIndex
 
-  const wrappedStreamRequest: TStreamRequest = hasGoogleCachedContent(streamRequest)
-    ? ({
-        ...streamRequest,
-        // Google cachedContent owns the full system prefix for the request.
-        // Do not attach a second live system instruction on top of it.
-        system: undefined,
-      } as TStreamRequest)
-    : systemInstructionPlacement === 'after-system-messages'
-      ? ({
-          ...streamRequest,
-          // A top-level system instruction is prepended by the SDK and would
-          // make Anthropic's cached static prefix depend on the live range map.
-          messages: [
-            ...streamRequest.messages.slice(0, systemMessageCount),
-            { role: 'system', content: instruction },
-            ...streamRequest.messages.slice(systemMessageCount),
-          ],
-        } as TStreamRequest)
-      : ({
-          ...streamRequest,
-          system: [streamRequest.system, instruction]
-            .filter((value): value is string => typeof value === 'string' && value.length > 0)
-            .join('\n\n'),
-        } as TStreamRequest)
+  const wrappedStreamRequest: TStreamRequest =
+    systemInstructionPlacement === 'already-included'
+      ? streamRequest
+      : hasGoogleCachedContent(streamRequest)
+        ? ({
+            ...streamRequest,
+            // Google cachedContent owns the full system prefix for the request.
+            // Do not attach a second live system instruction on top of it.
+            system: undefined,
+          } as TStreamRequest)
+        : systemInstructionPlacement === 'after-system-messages'
+          ? ({
+              ...streamRequest,
+              // A top-level system instruction is prepended by the SDK and would
+              // make Anthropic's cached static prefix depend on the live range map.
+              messages: [
+                ...streamRequest.messages.slice(0, systemMessageCount),
+                { role: 'system', content: instruction },
+                ...streamRequest.messages.slice(systemMessageCount),
+              ],
+            } as TStreamRequest)
+          : ({
+              ...streamRequest,
+              system: [streamRequest.system, instruction]
+                .filter((value): value is string => typeof value === 'string' && value.length > 0)
+                .join('\n\n'),
+            } as TStreamRequest)
 
   const streamTextSettings: ExperimentalAgenticTranscriptRecallStreamSettings = {
     tools,

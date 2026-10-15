@@ -66,7 +66,11 @@ vi.mock('@/lib/experimental/agentic-transcript-recall/source-map', async () => {
 vi.mock('@/lib/lorebook/runtime', () => ({
   loadChatLorebookState: (...args: unknown[]) => loadChatLorebookStateMock(...args),
   lorebookNeedsChatHistory: (...args: unknown[]) => lorebookNeedsChatHistoryMock(...args),
-  renderActiveLorebookBlock: (...args: unknown[]) => renderActiveLorebookBlockMock(...args),
+  renderLorebookContext: (...args: unknown[]) => ({
+    combined: renderActiveLorebookBlockMock(...args),
+    alwaysActive: null,
+    conditional: 'LORE',
+  }),
 }))
 
 vi.mock('@/lib/chat-summaries/db-helpers', () => ({

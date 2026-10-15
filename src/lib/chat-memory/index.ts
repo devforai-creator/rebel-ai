@@ -29,29 +29,56 @@ export async function buildMemoryPlan({
   modelConfig,
   transcriptCoverage,
   transcriptStartOrdinal,
+  stableContext,
+  turnContext,
 }: BuildMemoryPlanOptions): Promise<MemoryPlan> {
   const memory = resolveChatMemoryConfig(modelConfig)
 
-  if (memory.mode === 'summary_window') {
-    return buildSummaryWindowMemoryPlan({
-      supabase,
-      chatId,
-      sanitizedMessages,
-      totalConversationMessages,
-      baseSystemPrompt,
-      extraDynamicContext,
-    })
-  }
+  const plan =
+    memory.mode === 'summary_window'
+      ? await buildSummaryWindowMemoryPlan({
+          supabase,
+          chatId,
+          sanitizedMessages,
+          totalConversationMessages,
+          baseSystemPrompt,
+          extraDynamicContext: undefined,
+        })
+      : await buildPrefixLiveBlocksMemoryPlan({
+          supabase,
+          chatId,
+          baseSystemPrompt,
+          extraDynamicContext: undefined,
+          sanitizedMessages,
+          transcriptCoverage,
+          transcriptStartOrdinal,
+        })
 
-  return buildPrefixLiveBlocksMemoryPlan({
-    supabase,
-    chatId,
-    baseSystemPrompt,
-    extraDynamicContext,
-    sanitizedMessages,
-    transcriptCoverage,
-    transcriptStartOrdinal,
-  })
+  const extras = (extraDynamicContext ?? []).filter((part) => part.trim())
+  const firstConversationIndex = plan.promptBlocks.findIndex((block) => block.role !== 'system')
+  const boundary = firstConversationIndex < 0 ? plan.promptBlocks.length : firstConversationIndex
+  return {
+    ...plan,
+    requestContext: {
+      instructions: [plan.staticSystemPrompt, ...(stableContext ?? [])]
+        .filter(Boolean)
+        .join('\n\n'),
+      memory: plan.dynamicContext,
+      turnContext: (turnContext ?? extras).filter(Boolean).join('\n\n') || null,
+    },
+    fallbackSystemPrompt: [plan.fallbackSystemPrompt, ...extras].filter(Boolean).join('\n\n'),
+    dynamicContext: [plan.dynamicContext, ...extras].filter(Boolean).join('\n\n') || null,
+    promptBlocks: [
+      ...plan.promptBlocks.slice(0, boundary),
+      ...extras.map((content) => ({
+        role: 'system' as const,
+        content,
+        cachePreference: 'avoid-cache' as const,
+        stability: 'sealed' as const,
+      })),
+      ...plan.promptBlocks.slice(boundary),
+    ],
+  }
 }
 
 export async function updateMemoryState({

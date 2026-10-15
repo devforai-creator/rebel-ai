@@ -32,9 +32,10 @@ import {
 import {
   loadChatLorebookState,
   lorebookNeedsChatHistory,
-  renderActiveLorebookBlock,
+  renderLorebookContext,
 } from '@/lib/lorebook/runtime'
 import { LOREBOOK_SCAN_DEPTH } from '@/lib/lorebook-renderer'
+import type { ChatPromptContext } from '@/lib/chat-memory/prompt-context'
 import { countProjectedConversationMessages, loadProjectedConversationTail } from '@/lib/chat/turns'
 import type { ProjectedConversationMessage } from '@/lib/chat/turns'
 import { buildSystemPrompt } from './system-prompt-builder'
@@ -90,6 +91,7 @@ export type LoadedChatJobExecutionContext = {
   totalInputTokens: number
   staticPromptTokens: number
   debugMetrics: Record<string, DebugMetricValue>
+  requestContext?: ChatPromptContext
 }
 
 function buildPayloadGenerationTranscript(payload: ChatGenerationJobPayload): {
@@ -631,11 +633,12 @@ export async function loadChatJobExecutionContext({
   timings['6_build_system_prompt'] = performance.now() - stepStart
 
   stepStart = performance.now()
-  const lorebookDynamicContext = renderActiveLorebookBlock({
+  const lorebookContext = renderLorebookContext({
     entries: lorebookEntries,
     overrideMap: lorebookOverrideMap,
     chatHistory: lorebookHistory,
   })
+  const lorebookDynamicContext = lorebookContext.combined
   timings['6b_build_lorebook_context'] = performance.now() - stepStart
   debugMetrics['lorebook_has_context'] = lorebookDynamicContext !== null
   debugMetrics['lorebook_context_chars'] = lorebookDynamicContext?.length ?? 0
@@ -649,6 +652,7 @@ export async function loadChatJobExecutionContext({
     promptBlocks,
     staticSystemPrompt,
     ragInfo,
+    requestContext,
   } = await buildMemoryPlan({
     supabase,
     chatId,
@@ -656,6 +660,8 @@ export async function loadChatJobExecutionContext({
     totalConversationMessages: effectiveConversationMessageCount,
     baseSystemPrompt: systemPrompt,
     extraDynamicContext: lorebookDynamicContext ? [lorebookDynamicContext] : undefined,
+    stableContext: lorebookContext.alwaysActive ? [lorebookContext.alwaysActive] : [],
+    turnContext: lorebookContext.conditional ? [lorebookContext.conditional] : [],
     modelConfig: normalizedModelConfig,
     transcriptCoverage:
       generationTranscript.length >= effectiveConversationMessageCount ? 'full' : 'window',
@@ -780,6 +786,7 @@ export async function loadChatJobExecutionContext({
   return {
     apiKeyData,
     decryptedApiKey,
+    requestContext,
     generationTranscript,
     finalSystemPrompt,
     staticSystemPrompt,

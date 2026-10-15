@@ -164,15 +164,16 @@ describe('chat memory orchestration', () => {
     expect(hoistedMocks.buildContextMock).toHaveBeenCalledWith(
       expect.objectContaining({
         chatId: 'chat-1',
-        extraDynamicContext: ['Lore'],
+        extraDynamicContext: undefined,
       }),
     )
     expect(result).toMatchObject({
       mode: 'summary_window',
-      fallbackSystemPrompt: 'BASE\n\nDYNAMIC',
+      fallbackSystemPrompt: 'BASE\n\nDYNAMIC\n\nLore',
       fallbackMessages: [{ role: 'user', content: 'hello', messageId: 'msg-1' }],
       staticSystemPrompt: 'BASE',
-      dynamicContext: 'DYNAMIC',
+      dynamicContext: 'DYNAMIC\n\nLore',
+      requestContext: { instructions: 'BASE', memory: 'DYNAMIC', turnContext: 'Lore' },
       ragInfo: {
         enabled: true,
         threshold: 0.75,
@@ -189,6 +190,12 @@ describe('chat memory orchestration', () => {
       {
         role: 'system',
         content: 'DYNAMIC',
+        cachePreference: 'avoid-cache',
+        stability: 'sealed',
+      },
+      {
+        role: 'system',
+        content: 'Lore',
         cachePreference: 'avoid-cache',
         stability: 'sealed',
       },

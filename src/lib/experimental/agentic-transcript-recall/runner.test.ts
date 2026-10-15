@@ -309,6 +309,41 @@ describe('prepareExperimentalAgenticTranscriptRecallRequest', () => {
     })
   })
 
+  it('attaches tools without duplicating an instruction already included in Google turn context', () => {
+    const streamRequest = {
+      system: 'FIXED',
+      messages: [
+        { role: 'user', content: '<application_context>Recall R1</application_context>\nQuestion' },
+      ],
+    }
+    const result = prepareExperimentalAgenticTranscriptRecallRequest({
+      supabase: createTranscriptSupabase(),
+      chatId,
+      runtimeConfig: buildRuntimeConfig(),
+      sourceHints: null,
+      sourceMap: {
+        rawContextStartOrdinal: 3,
+        cutoffOrdinal: 2,
+        directFetchRanges: [
+          {
+            kind: 'summary',
+            label: 'summary',
+            rangeId: 'R1',
+            startSeq: 1,
+            endSeq: 2,
+            preview: 'First exchange',
+          },
+        ],
+        navigationParents: [],
+      },
+      streamRequest,
+      systemInstructionPlacement: 'already-included',
+      debugMetrics: {},
+    })
+    expect(result.streamRequest).toBe(streamRequest)
+    expect(result.streamTextSettings?.tools).toHaveProperty('fetch_source_range')
+  })
+
   it('does not advertise raw fetch when only parent expansion is available', () => {
     const result = prepareExperimentalAgenticTranscriptRecallRequest({
       supabase: createTranscriptSupabase(),

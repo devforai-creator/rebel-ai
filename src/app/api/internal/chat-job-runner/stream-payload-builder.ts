@@ -91,10 +91,11 @@ type BuildStreamPayloadPlanArgs = {
   recentMessages: SanitizedMessage[]
   googleExplicitCache: GoogleExplicitCachePreparation | null
   providerOptions?: SharedV2ProviderOptions
+  googleContextRequest?: { system: string; messages: SanitizedMessage[] }
 }
 
 export type StreamPayloadPlan = {
-  strategy: 'anthropic-split-system' | 'google-explicit-cache' | 'default'
+  strategy: 'anthropic-split-system' | 'google-explicit-cache' | 'google-stable-context' | 'default'
   streamRequest: StreamRequest
   actualPayload: ChatRunnerActualPayload
 }
@@ -110,6 +111,7 @@ export function buildStreamPayloadPlan({
   recentMessages,
   googleExplicitCache,
   providerOptions,
+  googleContextRequest,
 }: BuildStreamPayloadPlanArgs): StreamPayloadPlan {
   if (provider === 'anthropic') {
     if (promptBlocks.length > 0) {
@@ -212,10 +214,20 @@ export function buildStreamPayloadPlan({
 
   const defaultPlan = buildDefaultStreamPayloadPlan({
     provider,
-    finalSystemPrompt,
-    recentMessages,
+    finalSystemPrompt:
+      provider === 'google' && googleContextRequest
+        ? googleContextRequest.system
+        : finalSystemPrompt,
+    recentMessages:
+      provider === 'google' && googleContextRequest
+        ? googleContextRequest.messages
+        : recentMessages,
     providerOptions,
   })
+  if (provider === 'google' && googleContextRequest) {
+    defaultPlan.strategy = 'google-stable-context'
+    defaultPlan.actualPayload.strategy = 'google-stable-context'
+  }
 
   if (provider === 'google' && googleExplicitCache?.streamRequestOverride) {
     return {

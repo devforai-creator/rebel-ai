@@ -9,7 +9,8 @@ type DebugMetricValue = string | number | boolean | null
 
 export type ChatRunnerActualPayload = {
   provider: LlmProvider
-  strategy: 'anthropic-split-system' | 'google-explicit-cache' | 'default'
+  strategy: 'anthropic-split-system' | 'google-explicit-cache' | 'google-stable-context' | 'default'
+  contextFingerprint?: { version: number; system: string; history: string; turn: string }
   systemMessages: Array<{ role: string; content: string; cached?: boolean }>
   conversationMessages: Array<{ role: string; content: string }>
   cache?: {

@@ -5,6 +5,7 @@ import {
   REASONING_LABELS,
   type ReasoningPreference,
 } from '@/lib/llm/reasoning'
+import { supportsGoogleFlex, type GoogleServiceTier } from '@/lib/llm/service-tier'
 import React, { memo, useId, useState } from 'react'
 import Button from '@/app/dashboard/components/Button'
 import { formatChatModelOptionLabel } from '../../api-key-options'
@@ -24,6 +25,8 @@ import {
 } from '../utils'
 
 interface TokenStatsPanelProps {
+  resolveModelServiceTier?: (selection: LlmModelSelection) => GoogleServiceTier | undefined
+  onSelectServiceTier?: (selection: LlmModelSelection, tier: GoogleServiceTier) => void
   apiKeys: ApiKeyOption[]
   selectedApiKeyId: string
   selectedModelName: string
@@ -57,6 +60,8 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
   selectedModelName,
   resolveModelReasoning,
   onSelectReasoning,
+  resolveModelServiceTier,
+  onSelectServiceTier,
   secondaryApiKeyId,
   secondaryModelName,
   alternateModelsEnabled,
@@ -159,6 +164,13 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
           className="mt-2 border-t border-gray-200 pt-3 dark:border-gray-700"
         >
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+            <ServiceTierSelect
+              label="사용 모델 요금 방식"
+              selection={{ apiKeyId: selectedApiKeyId, modelName: selectedModelName }}
+              apiKeys={apiKeys}
+              resolveModelServiceTier={resolveModelServiceTier}
+              onSelectServiceTier={onSelectServiceTier}
+            />
             <ReasoningSelect
               label="사용 모델 추론"
               selection={{ apiKeyId: selectedApiKeyId, modelName: selectedModelName }}
@@ -218,6 +230,13 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                     ))}
                   </select>
                 </label>
+                <ServiceTierSelect
+                  label="보조 모델 요금 방식"
+                  selection={{ apiKeyId: secondaryApiKeyId, modelName: secondaryModelName }}
+                  apiKeys={apiKeys}
+                  resolveModelServiceTier={resolveModelServiceTier}
+                  onSelectServiceTier={onSelectServiceTier}
+                />
                 <ReasoningSelect
                   label="보조 모델 추론"
                   selection={{ apiKeyId: secondaryApiKeyId, modelName: secondaryModelName }}
@@ -348,6 +367,47 @@ function ReasoningSelect({
         ))}
       </select>
       <span className="text-gray-500">이 채팅방의 모델별로 저장됩니다.</span>
+    </label>
+  )
+}
+
+function ServiceTierSelect({
+  label,
+  selection,
+  apiKeys,
+  resolveModelServiceTier,
+  onSelectServiceTier,
+}: {
+  label: string
+  selection: LlmModelSelection
+  apiKeys: ApiKeyOption[]
+  resolveModelServiceTier?: TokenStatsPanelProps['resolveModelServiceTier']
+  onSelectServiceTier?: TokenStatsPanelProps['onSelectServiceTier']
+}) {
+  const credential = apiKeys.find((key) => key.id === selection.apiKeyId)
+  if (
+    !credential ||
+    !supportsGoogleFlex(credential.provider, selection.modelName) ||
+    !onSelectServiceTier
+  )
+    return null
+  return (
+    <label className="flex min-w-0 flex-col gap-1 text-xs text-gray-600 dark:text-gray-300">
+      {label}
+      <select
+        value={resolveModelServiceTier?.(selection) ?? 'standard'}
+        onChange={(event) =>
+          onSelectServiceTier(selection, event.target.value as GoogleServiceTier)
+        }
+        className="w-full min-w-0 rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+      >
+        <option value="standard">Standard (기본 요금)</option>
+        <option value="flex">Flex (요금 50% · 느릴 수 있음)</option>
+      </select>
+      <span className="text-xs text-gray-500 dark:text-gray-400">
+        Flex는 최대 12분 대기하며 혼잡하면 실패할 수 있습니다. 실패해도 Standard로 자동 전환하지
+        않습니다.
+      </span>
     </label>
   )
 }

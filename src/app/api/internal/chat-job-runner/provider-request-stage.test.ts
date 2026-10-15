@@ -153,6 +153,35 @@ function buildContext(
 }
 
 describe('requestProviderStage', () => {
+  it.each(['flex', undefined] as const)(
+    'uses Google queued tier %s rather than the credential tier',
+    async (serviceTier) => {
+      const { requestProviderStage } = await import('./provider-request-stage')
+      const context = buildContext({
+        apiKeyData: {
+          provider: 'google',
+          vault_secret_name: 'vault-key',
+          service_tier: 'priority',
+          reasoning_effort: null,
+        },
+      })
+      await requestProviderStage({
+        supabase: createChatJobRunnerSupabaseMock() as never,
+        jobId: 'job-1',
+        payload: buildPayload({ provider: 'google', modelName: 'gemini-4-argon', serviceTier }),
+        context,
+        timings: {},
+      })
+      expect(getProviderOptionsMock).toHaveBeenCalledWith(
+        'google',
+        expect.objectContaining({ serviceTier: serviceTier ?? 'standard' }),
+      )
+      expect(context.debugMetrics).toMatchObject({
+        google_requested_service_tier: serviceTier ?? 'standard',
+      })
+    },
+  )
+
   it.each([null, 'low', 'none'] as const)(
     'uses the queued snapshot (%s) after a key setting changes',
     async (effort) => {

@@ -1,4 +1,5 @@
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
+import { getServiceTierModelKey, supportsGoogleFlex } from '@/lib/llm/service-tier'
 import {
   getReasoningModelKey,
   resolveReasoningSnapshot,
@@ -84,6 +85,7 @@ export async function POST(req: Request) {
       apiKeyId,
       modelName: requestedModelName,
       reasoningEffort,
+      serviceTier: requestedServiceTier,
       rawDeliveryMode,
       isRegeneration,
       regenerateAssistantMessageId,
@@ -114,6 +116,13 @@ export async function POST(req: Request) {
 
     const { provider, modelName } = resolvedConfig.config
     if (
+      requestedServiceTier !== undefined &&
+      (provider !== 'google' ||
+        (requestedServiceTier === 'flex' && !supportsGoogleFlex(provider, modelName)))
+    ) {
+      return createErrorResponse('Unsupported serviceTier for model', 400)
+    }
+    if (
       reasoningEffort !== undefined &&
       !supportsReasoningPreference(provider, modelName, reasoningEffort)
     ) {
@@ -126,9 +135,14 @@ export async function POST(req: Request) {
       .eq('user_id', user.id)
       .single()
     if (reasoningChatError || !reasoningChat) return createErrorResponse('Chat not found', 404)
-    const storedPreference = normalizeChatModelConfig(reasoningChat.model_config).reasoning?.[
-      getReasoningModelKey(provider, modelName)
-    ]
+    const modelConfig = normalizeChatModelConfig(reasoningChat.model_config)
+    const serviceTier =
+      provider === 'google'
+        ? (requestedServiceTier ??
+          modelConfig.serviceTiers?.[getServiceTierModelKey(provider, modelName)] ??
+          'standard')
+        : undefined
+    const storedPreference = modelConfig.reasoning?.[getReasoningModelKey(provider, modelName)]
     const reasoning = resolveReasoningSnapshot({
       provider,
       modelName,
@@ -161,6 +175,7 @@ export async function POST(req: Request) {
       provider,
       modelName,
       reasoning,
+      serviceTier,
       deliveryMode,
       isRegeneration,
       regenerateAssistantMessageId,

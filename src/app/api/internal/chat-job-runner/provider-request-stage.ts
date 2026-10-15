@@ -426,12 +426,16 @@ export async function requestProviderStage({
   debugMetrics['reasoning_effective_level'] =
     reasoning.effort ?? getReasoningControl(provider, modelName)?.defaultLevel ?? null
   const providerOptions = getProviderOptions(provider, {
+    ...(provider === 'google' ? { serviceTier: payload.serviceTier ?? 'standard' } : {}),
     modelName,
     promptCacheKey: promptCache?.key,
     promptCacheRetention: promptCache?.retention,
     conversationCache: !!contextRequest,
     reasoning,
   })
+  if (provider === 'google') {
+    debugMetrics['google_requested_service_tier'] = payload.serviceTier ?? 'standard'
+  }
   const googleExplicitCache =
     provider === 'google'
       ? await prepareGoogleExplicitCache({

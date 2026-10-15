@@ -1,6 +1,10 @@
 import { SUPPORT_TIER_FEATURES, type SupportTier } from '@/lib/support-tier'
 import { normalizeReasoningPreferences, type ChatReasoningPreferences } from '@/lib/llm/reasoning'
 import type { LlmProvider } from '@/types/database.types'
+import {
+  normalizeServiceTierPreferences,
+  type ChatServiceTierPreferences,
+} from '@/lib/llm/service-tier'
 
 export type AlternateModelsConfig = {
   enabled: boolean
@@ -53,6 +57,7 @@ export const CHAT_MEMORY_MODE_SUPPORT_TIERS: Record<ChatMemoryMode, SupportTier>
 }
 
 export type ChatModelConfig = {
+  serviceTiers?: ChatServiceTierPreferences | null
   reasoning?: ChatReasoningPreferences | null
   alternateModels?: AlternateModelsConfig | null
   memory?: ChatMemoryConfig | null
@@ -93,6 +98,7 @@ export function normalizeChatModelConfig(input: unknown): ChatModelConfig {
   }
 
   const candidate = input as {
+    serviceTiers?: unknown
     reasoning?: unknown
     alternateModels?: unknown
     memory?: unknown
@@ -100,6 +106,8 @@ export function normalizeChatModelConfig(input: unknown): ChatModelConfig {
   }
 
   const normalized: ChatModelConfig = {}
+  const serviceTiers = normalizeServiceTierPreferences(candidate.serviceTiers)
+  if (Object.keys(serviceTiers).length > 0) normalized.serviceTiers = serviceTiers
   const reasoning = normalizeReasoningPreferences(candidate.reasoning)
   if (Object.keys(reasoning).length > 0) normalized.reasoning = reasoning
 
@@ -202,7 +210,12 @@ export function mergeChatModelConfigPatch(current: unknown, patch: unknown): Cha
     ? normalizedPatch.reasoning
     : normalizedCurrent.reasoning
 
+  const serviceTiers = hasOwnModelConfigKey(patch, 'serviceTiers')
+    ? normalizedPatch.serviceTiers
+    : normalizedCurrent.serviceTiers
+
   return {
+    ...(serviceTiers ? { serviceTiers } : {}),
     ...(reasoning ? { reasoning } : {}),
     ...(alternateModels ? { alternateModels } : {}),
     ...(memory ? { memory } : {}),
@@ -302,6 +315,7 @@ export function hasPersistableChatModelConfig(config: ChatModelConfig): boolean 
       (agenticTranscriptRecall.providerAllowlist?.length ?? 0) > 0)
 
   return (
+    !!Object.keys(config.serviceTiers ?? {}).length ||
     !!Object.keys(config.reasoning ?? {}).length ||
     hasAlternate ||
     hasNonDefaultMemory ||

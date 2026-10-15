@@ -62,6 +62,7 @@ export const googleModelCatalog = defineProviderCatalog({
       // https://ai.google.dev/gemini-api/docs/pricing#gemini-4-argon
       pricing: flatPricing({ input: 2, output: 10, cachedInput: 0.1 }),
       features: {
+        flex: true,
         promptCaching: 'implicit-only',
         promptCacheMinTokens: 4096,
         reasoning: true,
@@ -72,7 +73,7 @@ export const googleModelCatalog = defineProviderCatalog({
       id: 'gemini-3.8-flash',
       displayName: 'Gemini 3.8 Flash',
       pricing: GEMINI_36_38_FLASH_PRICING,
-      features: { promptCacheMinTokens: 4096 },
+      features: { flex: true, promptCacheMinTokens: 4096 },
     },
     {
       id: 'gemini-3.7-flash',
@@ -84,7 +85,7 @@ export const googleModelCatalog = defineProviderCatalog({
       id: 'gemini-3.6-flash',
       displayName: 'Gemini 3.6 Flash',
       pricing: GEMINI_36_38_FLASH_PRICING,
-      features: { promptCacheMinTokens: 1024 },
+      features: { flex: true, promptCacheMinTokens: 1024 },
     },
     {
       id: 'gemini-3.5-flash',
@@ -96,42 +97,42 @@ export const googleModelCatalog = defineProviderCatalog({
       id: 'gemini-3.5-flash-lite',
       displayName: 'Gemini 3.5 Flash-Lite',
       pricing: flatPricing({ input: 0.3, output: 2.5, cachedInput: 0.03 }),
-      features: { promptCacheMinTokens: 1024 },
+      features: { flex: true, promptCacheMinTokens: 1024 },
     },
     {
       id: 'gemini-3.1-flash-lite',
       displayName: 'Gemini 3.1 Flash-Lite',
       pricing: flatPricing({ input: 0.25, output: 1.5, cachedInput: 0.025 }),
-      features: { promptCacheMinTokens: 1024 },
+      features: { flex: true, promptCacheMinTokens: 1024 },
     },
     {
       id: 'gemini-3.1-pro-preview',
       displayName: 'Gemini 3.1 Pro (Preview)',
       pricing: GEMINI_31_PRO_PRICING,
-      features: { promptCacheMinTokens: 4096 },
+      features: { flex: true, promptCacheMinTokens: 4096 },
     },
     {
       id: 'gemini-3-flash-preview',
       displayName: 'Gemini 3 Flash (Preview)',
       aliases: ['gemini-3.0-flash-preview'],
       pricing: flatPricing({ input: 0.5, output: 3, cachedInput: 0.05 }),
-      features: { promptCacheMinTokens: 1024 },
+      features: { flex: true, promptCacheMinTokens: 1024 },
     },
     {
       id: 'gemini-2.5-pro',
       displayName: 'Gemini 2.5 Pro',
       pricing: GEMINI_25_PRO_PRICING,
-      features: { promptCacheMinTokens: 4096 },
+      features: { flex: true, promptCacheMinTokens: 4096 },
     },
     {
       id: 'gemini-2.5-flash',
       displayName: 'Gemini 2.5 Flash',
-      features: { promptCacheMinTokens: 1024 },
+      features: { flex: true, promptCacheMinTokens: 1024 },
     },
     {
       id: 'gemini-2.5-flash-lite',
       displayName: 'Gemini 2.5 Flash Lite',
-      features: { promptCacheMinTokens: 1024 },
+      features: { flex: true, promptCacheMinTokens: 1024 },
     },
   ],
 })

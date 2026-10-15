@@ -1,3 +1,4 @@
+import type { GoogleServiceTier } from '@/lib/llm/service-tier'
 import type { ReasoningPreference } from '@/lib/llm/reasoning'
 import type { ChatDeliveryMode } from '@/lib/chat/delivery-mode'
 import type { Message } from '@/types/database.types'
@@ -13,6 +14,7 @@ export interface QueueChatRequestPayload {
   chatId: string
   apiKeyId: string
   modelName: string
+  serviceTier?: GoogleServiceTier
   reasoningEffort?: ReasoningPreference
   userMessage?: string
   clientMessageId?: string

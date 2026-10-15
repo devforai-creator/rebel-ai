@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isGoogleServiceTier, type GoogleServiceTier } from '@/lib/llm/service-tier'
 import { streamText } from 'ai'
 import { isGoogleExplicitCacheToolConflict, normalizeProviderError } from '@/lib/llm/provider-error'
 import {
@@ -149,6 +150,7 @@ async function broadcastProviderStreamFailure({
 }
 
 export type StreamingResponseStageResult = {
+  googleServiceTier?: GoogleServiceTier
   fullText: string
   assistantText: string
   finishReason: Awaited<ProviderTextStream['finishReason']>
@@ -402,6 +404,14 @@ export async function consumeStreamingResponseStage({
     throw streamError
   }
 
+  const googleServiceTier =
+    provider === 'google' && isGoogleServiceTier(providerMetadata?.google?.serviceTier)
+      ? providerMetadata.google.serviceTier
+      : undefined
+  if (provider === 'google' && debugMetrics) {
+    debugMetrics['google_actual_service_tier'] = googleServiceTier ?? null
+  }
+
   const openAIUsageMetadata =
     provider === 'openai' &&
     providerMetadata?.openai?.usage &&
@@ -479,6 +489,7 @@ export async function consumeStreamingResponseStage({
     assistantText,
     finishReason,
     anthropicCacheCreationInputTokens,
+    ...(googleServiceTier ? { googleServiceTier } : {}),
     usage: {
       promptTokens: usage?.inputTokens ?? null,
       completionTokens: usage?.outputTokens ?? null,

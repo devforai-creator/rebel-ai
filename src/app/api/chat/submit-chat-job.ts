@@ -28,6 +28,7 @@ export async function submitChatGenerationRequest({
   provider,
   modelName,
   reasoning,
+  serviceTier,
   deliveryMode,
   isRegeneration,
   regenerateAssistantMessageId,
@@ -44,6 +45,7 @@ export async function submitChatGenerationRequest({
   provider: ChatGenerationJobPayload['provider']
   modelName: string
   reasoning?: ChatGenerationJobPayload['reasoning']
+  serviceTier?: ChatGenerationJobPayload['serviceTier']
   deliveryMode: ChatGenerationJobPayload['deliveryMode']
   isRegeneration: boolean
   regenerateAssistantMessageId: string | null
@@ -86,6 +88,7 @@ export async function submitChatGenerationRequest({
     provider,
     modelName,
     ...(reasoning ? { reasoning } : {}),
+    ...(serviceTier ? { serviceTier } : {}),
     deliveryMode,
     sanitizedMessages: effectivePayloadSanitizedMessages,
     isRegeneration,

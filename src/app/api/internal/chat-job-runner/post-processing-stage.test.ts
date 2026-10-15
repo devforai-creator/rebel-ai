@@ -35,6 +35,54 @@ function buildPayload(overrides: Record<string, unknown> = {}) {
 }
 
 describe('runPostProcessingStage', () => {
+  it.each(['flex', 'standard', undefined] as const)(
+    'prices Google using reported tier %s, falling back to the queued selection',
+    async (googleServiceTier) => {
+      await runPostProcessingStage({
+        supabase: createChatJobRunnerSupabaseMock() as never,
+        payload: buildPayload({
+          provider: 'google',
+          modelName: 'gemini-4-argon',
+          serviceTier: 'flex',
+        }) as never,
+        origin: 'https://internal.example.com',
+        context: {
+          apiKeyData: { provider: 'google', service_tier: 'standard' },
+          generationTranscript: [],
+          finalSystemPrompt: 'SYSTEM',
+          dynamicContext: '',
+          dynamicContextTokens: 0,
+          recentMessages: [],
+          ragInfo: null,
+          bilingualEnabled: false,
+          anthropicConversationMessages: [],
+          anthropicPlaceholderAdded: false,
+          totalInputTokens: 10,
+          staticPromptTokens: 10,
+          debugMetrics: {},
+        } as never,
+        providerArtifacts: { actualPayload: { provider: 'google' }, anthropicCache: null } as never,
+        streamingResponse: {
+          fullText: 'Hello',
+          assistantText: 'Hello',
+          finishReason: 'stop',
+          anthropicCacheCreationInputTokens: null,
+          googleServiceTier,
+          usage: {
+            promptTokens: 10,
+            completionTokens: 1,
+            totalTokens: 11,
+            cachedInputTokens: 0,
+            reasoningTokens: 0,
+          },
+        },
+      })
+      expect(estimateUsageCostMock).toHaveBeenCalledWith(
+        expect.objectContaining({ serviceTier: googleServiceTier ?? 'flex' }),
+      )
+    },
+  )
+
   beforeEach(() => {
     estimateUsageCostMock.mockReset()
     buildChatDebugInfoMock.mockReset()

@@ -1,4 +1,5 @@
 import { buildLocalModel } from './local'
+import { googleServiceTierMiddleware } from './google-service-tier-middleware'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
@@ -41,10 +42,13 @@ export function transformGoogleCachedToolCallParams(
 function wrapGoogleLanguageModel(model: LanguageModel): LanguageModel {
   return wrapLanguageModel({
     model: model as LanguageModelV2,
-    middleware: {
-      middlewareVersion: 'v2',
-      transformParams: async ({ params }) => transformGoogleCachedToolCallParams(params),
-    },
+    middleware: [
+      {
+        middlewareVersion: 'v2',
+        transformParams: async ({ params }) => transformGoogleCachedToolCallParams(params),
+      },
+      googleServiceTierMiddleware,
+    ],
   }) as LanguageModel
 }
 

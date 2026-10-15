@@ -74,6 +74,28 @@ describe('consumeStreamingResponseStage', () => {
     isGoogleExplicitCacheToolConflictMock.mockReturnValue(false)
   })
 
+  it('returns the provider-reported Google tier with stream metrics', async () => {
+    const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
+    const debugMetrics = {}
+    const result = await consumeStreamingResponseStage({
+      supabase: {} as never,
+      chatId: 'chat-1',
+      jobId: 'job-1',
+      ...createProviderTimeoutContext(),
+      stream: {
+        textStream: textDeltaStream(['Hello']),
+        finishReason: Promise.resolve('stop'),
+        providerMetadata: Promise.resolve({ google: { serviceTier: 'flex' } }),
+        usage: Promise.resolve({ inputTokens: 10, outputTokens: 1 }),
+      } as never,
+      provider: 'google',
+      regenerateAssistantMessageId: null,
+      updateIntervalMs: 0,
+      debugMetrics,
+    })
+    expect(result.googleServiceTier).toBe('flex')
+    expect(debugMetrics).toMatchObject({ google_actual_service_tier: 'flex' })
+  })
   it('streams snapshots and returns usage metadata for a successful response', async () => {
     const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
 

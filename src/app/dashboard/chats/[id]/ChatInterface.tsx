@@ -41,6 +41,8 @@ export default function ChatInterface({
     selectedModelName,
     resolveModelReasoning,
     handleSelectReasoning,
+    resolveModelServiceTier,
+    handleSelectServiceTier,
     secondaryApiKeyId,
     secondaryModelName,
     alternateModelsEnabled,
@@ -94,6 +96,7 @@ export default function ChatInterface({
     selectedApiKeyId,
     selectedModelName,
     resolveModelReasoning,
+    resolveModelServiceTier,
     deliveryMode,
     alternateModels: {
       enabled: alternateModelsEnabled,
@@ -126,6 +129,8 @@ export default function ChatInterface({
         selectedModelName={selectedModelName}
         resolveModelReasoning={resolveModelReasoning}
         onSelectReasoning={handleSelectReasoning}
+        resolveModelServiceTier={resolveModelServiceTier}
+        onSelectServiceTier={handleSelectServiceTier}
         secondaryApiKeyId={secondaryApiKeyId}
         secondaryModelName={secondaryModelName}
         alternateModelsEnabled={alternateModelsEnabled}

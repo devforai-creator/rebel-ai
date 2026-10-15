@@ -100,6 +100,33 @@ async function flushPendingPollCycle() {
 }
 
 describe('useQueuedChat', () => {
+  it('sends the currently selected tier even before the preference save completes', async () => {
+    const fetchMock = vi.fn<typeof fetch>(() => new Promise<Response>(() => {}))
+    vi.stubGlobal('fetch', fetchMock)
+    const selection = { apiKeyId: 'google-key', modelName: 'gemini-4-argon' }
+    const resolveModelServiceTier = vi.fn(() => 'flex' as const)
+    const { result } = renderHook(() =>
+      useQueuedChat(
+        createHookParams({
+          selectedApiKeyId: selection.apiKeyId,
+          selectedModelName: selection.modelName,
+          resolveModelServiceTier,
+        }),
+      ),
+    )
+    act(() =>
+      result.current.handleInputChange({ target: { value: 'hello' } } as Parameters<
+        typeof result.current.handleInputChange
+      >[0]),
+    )
+    act(() => result.current.handleSubmit())
+    await flushChatRequestStart()
+    expect(resolveModelServiceTier).toHaveBeenCalledWith(selection)
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+      ...selection,
+      serviceTier: 'flex',
+    })
+  })
   beforeEach(() => {
     toastErrorMock.mockReset()
     toastInfoMock.mockReset()

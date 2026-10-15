@@ -43,6 +43,7 @@ export type UseChatMessageLifecycleArgs = {
   hasMoreHistory: boolean
   selectedApiKeyId: string
   selectedModelName: string
+  resolveModelServiceTier?: Parameters<typeof useQueuedChat>[0]['resolveModelServiceTier']
   resolveModelReasoning?: Parameters<typeof useQueuedChat>[0]['resolveModelReasoning']
   deliveryMode: ChatDeliveryMode
   alternateModels?: AlternateModelsConfig | null
@@ -79,6 +80,7 @@ export function useChatMessageLifecycle({
   selectedApiKeyId,
   selectedModelName,
   resolveModelReasoning,
+  resolveModelServiceTier,
   deliveryMode,
   alternateModels,
   fetchLatestUsage,
@@ -113,6 +115,7 @@ export function useChatMessageLifecycle({
     selectedApiKeyId,
     selectedModelName,
     resolveModelReasoning,
+    resolveModelServiceTier,
     deliveryMode,
     alternateModels,
     fetchLatestUsage,

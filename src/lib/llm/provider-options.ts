@@ -1,4 +1,5 @@
 import type { ReasoningSnapshot } from './reasoning'
+import type { GoogleServiceTier } from './service-tier'
 import type { JSONValue, SharedV2ProviderOptions } from '@ai-sdk/provider'
 import { ANTHROPIC_CACHE_MIN_TOKENS, getModelFeatures } from '@/lib/models'
 
@@ -10,6 +11,7 @@ export const ANTHROPIC_INTERLEAVED_THINKING_BETA = 'interleaved-thinking-2025-05
 export const DEFAULT_OPENAI_TEXT_VERBOSITY = 'high'
 
 type ProviderOptionsInput = {
+  serviceTier?: GoogleServiceTier
   modelName?: string | null
   promptCacheKey?: string | null
   promptCacheRetention?: '24h' | 'in_memory'
@@ -37,6 +39,7 @@ export function getProviderOptions(
 
   if (provider === 'google') {
     options.google = {
+      ...(overrides?.serviceTier ? { serviceTier: overrides.serviceTier } : {}),
       safetySettings: GOOGLE_SAFETY_SETTINGS,
       ...(overrides?.reasoning?.effort
         ? { thinkingConfig: { thinkingLevel: overrides.reasoning.effort } }

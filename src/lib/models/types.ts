@@ -43,6 +43,7 @@ export type OpenAIModelPolicy = {
 }
 
 export type ModelFeatures = {
+  flex?: boolean
   anthropicThinking?: AnthropicThinkingPolicy
   batchChat?: boolean
   promptCaching?: 'standard' | 'extended' | 'implicit-only'

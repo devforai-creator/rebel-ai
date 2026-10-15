@@ -57,7 +57,7 @@ function resolveRates({
 }
 
 function getServiceTierMultiplier(provider: Provider, serviceTier?: ApiServiceTier | null): number {
-  if (provider === 'openai' && serviceTier === 'flex') {
+  if ((provider === 'openai' || provider === 'google') && serviceTier === 'flex') {
     return 0.5
   }
   if (provider === 'anthropic' && serviceTier === 'batch') {

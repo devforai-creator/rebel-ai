@@ -27,6 +27,20 @@ const basePayload: ChatGenerationJobPayload = {
 }
 
 describe('chat job payload parsing', () => {
+  it('round trips a Google tier snapshot and rejects invalid combinations', () => {
+    const payload = {
+      ...basePayload,
+      provider: 'google' as const,
+      modelName: 'gemini-4-argon',
+      serviceTier: 'flex' as const,
+    }
+    expect(parseChatJobPayload(serializeChatJobPayload(payload))).toEqual(payload)
+    expect(parseChatJobPayload({ ...payload, serviceTier: 'priority' })).toBeNull()
+    expect(parseChatJobPayload({ ...payload, provider: 'openai' })).toBeNull()
+    expect(parseChatJobPayload({ ...payload, modelName: 'gemini-3.7-flash' })).toBeNull()
+    expect(parseChatJobPayload(basePayload)?.serviceTier).toBeUndefined()
+  })
+
   it('round trips explicit default and explicit effort without falling back to a live key', () => {
     for (const effort of [null, 'low', 'none'] as const) {
       const payload = {

@@ -62,6 +62,33 @@ beforeEach(() => {
 })
 
 describe('resolveInitialChatSettings', () => {
+  it('remembers tiers per model on the same key and rolls back failed saves', async () => {
+    const selection = { apiKeyId: 'key-3', modelName: 'gemini-4-argon' }
+    const other = { apiKeyId: 'key-3', modelName: 'gemini-3.8-flash' }
+    mocks.updateChatModelConfig.mockResolvedValue({ success: true })
+    const { result } = renderHook(() =>
+      useChatInterfaceSettings({ chatId: 'chat-1', apiKeys: [...apiKeys], isDeveloper: false }),
+    )
+    expect(result.current.resolveModelServiceTier(selection)).toBe('standard')
+    act(() => result.current.handleSelectServiceTier(selection, 'flex'))
+    await waitFor(() => expect(mocks.updateChatModelConfig).toHaveBeenCalledTimes(1))
+    expect(result.current.resolveModelServiceTier(selection)).toBe('flex')
+    expect(result.current.resolveModelServiceTier(other)).toBe('standard')
+    act(() => result.current.handleSelectReasoning(selection, 'low'))
+    await waitFor(() => expect(mocks.updateChatModelConfig).toHaveBeenCalledTimes(2))
+    expect(mocks.updateChatModelConfig).toHaveBeenLastCalledWith(
+      'chat-1',
+      expect.objectContaining({
+        serviceTiers: { 'google:gemini-4-argon': 'flex' },
+        reasoning: { 'google:gemini-4-argon': 'low' },
+      }),
+    )
+    mocks.updateChatModelConfig.mockResolvedValueOnce({ error: '저장 실패' })
+    act(() => result.current.handleSelectServiceTier(selection, 'standard'))
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('저장 실패'))
+    expect(result.current.resolveModelServiceTier(selection)).toBe('flex')
+  })
+
   it('prefers config primary and secondary ids when both are valid', () => {
     expect(
       resolveInitialChatSettings({

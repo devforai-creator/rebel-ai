@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent, SetStateAction } from 'react'
 import { toast } from 'sonner'
 import type { Message } from '@/types/database.types'
+import type { GoogleServiceTier } from '@/lib/llm/service-tier'
 import type { ReasoningPreference } from '@/lib/llm/reasoning'
 import type { LlmModelSelection } from '@/lib/llm/model-selection'
 import type { AlternateModelsConfig } from '@/lib/chat/model-config'
@@ -44,6 +45,7 @@ export interface UseQueuedChatParams {
   historyMessages: Message[]
   selectedApiKeyId: string
   selectedModelName: string
+  resolveModelServiceTier?: (selection: LlmModelSelection) => GoogleServiceTier | undefined
   resolveModelReasoning?: (selection: LlmModelSelection) => ReasoningPreference | undefined
   deliveryMode?: ChatDeliveryMode
   alternateModels?: AlternateModelsConfig | null
@@ -80,6 +82,7 @@ export function useQueuedChat({
   selectedApiKeyId,
   selectedModelName,
   resolveModelReasoning,
+  resolveModelServiceTier,
   deliveryMode = CHAT_DELIVERY_MODE_STREAMING,
   alternateModels,
   fetchLatestUsage,
@@ -422,6 +425,9 @@ export function useQueuedChat({
           chatId,
           apiKeyId: resolvedModel.apiKeyId,
           modelName: resolvedModel.modelName,
+          ...(resolveModelServiceTier
+            ? { serviceTier: resolveModelServiceTier(resolvedModel) }
+            : {}),
           ...(resolveModelReasoning
             ? { reasoningEffort: resolveModelReasoning(resolvedModel) }
             : {}),
@@ -461,6 +467,7 @@ export function useQueuedChat({
       pollJobStatus,
       resolveNextModel,
       resolveModelReasoning,
+      resolveModelServiceTier,
     ],
   )
 

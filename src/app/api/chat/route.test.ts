@@ -1015,6 +1015,69 @@ function buildDefaultAuthenticatedFixture(
 }
 
 describe('POST /api/chat', () => {
+  it.each(['standard', 'flex', undefined] as const)(
+    'snapshots Google tier %s independently of subsequent config changes',
+    async (serviceTier) => {
+      const fixture = buildDefaultAuthenticatedFixture()
+      fixture.apiKeys[0].model_preference = 'gemini-4-argon'
+      fixture.chats[0].model_config = { serviceTiers: { 'google:gemini-4-argon': 'flex' } }
+      const supabase = createSupabaseMock(fixture)
+      const response = await POST(
+        new Request('http://localhost/api/chat', {
+          method: 'POST',
+          body: JSON.stringify({
+            chatId: 'chat-1',
+            apiKeyId: 'api-key-1',
+            userMessage: 'Hello',
+            serviceTier,
+          }),
+        }),
+      )
+      expect(response.status).toBe(202)
+      fixture.chats[0].model_config = { serviceTiers: { 'google:gemini-4-argon': 'standard' } }
+      expect(supabase.chatJobs[0].payload).toMatchObject({ serviceTier: serviceTier ?? 'flex' })
+    },
+  )
+
+  it.each(['priority', 'batch', null])(
+    'rejects invalid serviceTier %s before enqueueing',
+    async (serviceTier) => {
+      const supabase = createSupabaseMock(buildDefaultAuthenticatedFixture())
+      const response = await POST(
+        new Request('http://localhost/api/chat', {
+          method: 'POST',
+          body: JSON.stringify({
+            chatId: 'chat-1',
+            apiKeyId: 'api-key-1',
+            userMessage: 'Hello',
+            serviceTier,
+          }),
+        }),
+      )
+      expect(response.status).toBe(400)
+      expect(supabase.chatJobs).toHaveLength(0)
+    },
+  )
+
+  it('rejects Flex on an unsupported Google model', async () => {
+    const fixture = buildDefaultAuthenticatedFixture()
+    fixture.apiKeys[0].model_preference = 'gemini-3.7-flash'
+    const supabase = createSupabaseMock(fixture)
+    const response = await POST(
+      new Request('http://localhost/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          chatId: 'chat-1',
+          apiKeyId: 'api-key-1',
+          userMessage: 'Hello',
+          serviceTier: 'flex',
+        }),
+      }),
+    )
+    expect(response.status).toBe(400)
+    expect(supabase.chatJobs).toHaveLength(0)
+  })
+
   it.each(['low', 'default', undefined] as const)(
     'snapshots requested or stored reasoning (%s) when enqueuing',
     async (reasoningEffort) => {

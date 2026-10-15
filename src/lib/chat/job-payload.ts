@@ -4,6 +4,11 @@ import {
   type ReasoningSnapshot,
 } from '@/lib/llm/reasoning'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
+import {
+  isGoogleServiceTier,
+  supportsGoogleFlex,
+  type GoogleServiceTier,
+} from '@/lib/llm/service-tier'
 import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import type { Json, LlmProvider } from '@/types/database.types'
 import {
@@ -26,6 +31,7 @@ export interface ChatGenerationJobPayload {
   provider: LlmProvider
   modelName: string
   reasoning?: ReasoningSnapshot
+  serviceTier?: GoogleServiceTier
   deliveryMode: ChatDeliveryMode
   sanitizedMessages: SanitizedMessage[]
   isRegeneration: boolean
@@ -70,6 +76,7 @@ export function serializeChatJobPayload(payload: ChatGenerationJobPayload): Json
     provider: payload.provider,
     modelName: payload.modelName,
     ...(payload.reasoning ? { reasoning: { ...payload.reasoning } } : {}),
+    ...(payload.serviceTier ? { serviceTier: payload.serviceTier } : {}),
     deliveryMode: payload.deliveryMode,
     sanitizedMessages: payload.sanitizedMessages.map(serializeSanitizedMessage),
     isRegeneration: payload.isRegeneration,
@@ -97,6 +104,14 @@ export function parseChatJobPayload(payload: unknown): ChatGenerationJobPayload 
   }
 
   let reasoning: ReasoningSnapshot | undefined
+  if (
+    payload.serviceTier !== undefined &&
+    (!isGoogleServiceTier(payload.serviceTier) ||
+      payload.provider !== 'google' ||
+      (payload.serviceTier === 'flex' && !supportsGoogleFlex(payload.provider, payload.modelName)))
+  ) {
+    return null
+  }
   if (payload.reasoning !== undefined) {
     const value = payload.reasoning
     if (
@@ -127,6 +142,7 @@ export function parseChatJobPayload(payload: unknown): ChatGenerationJobPayload 
     provider: payload.provider,
     modelName: payload.modelName,
     ...(reasoning ? { reasoning } : {}),
+    ...(payload.serviceTier ? { serviceTier: payload.serviceTier as GoogleServiceTier } : {}),
     deliveryMode: isChatDeliveryMode(payload.deliveryMode)
       ? payload.deliveryMode
       : CHAT_DELIVERY_MODE_STREAMING,

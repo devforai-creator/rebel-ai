@@ -138,7 +138,10 @@ export async function runPostProcessingStage({
   }
   const usageCost = buildUsageCost({
     payload,
-    serviceTier: apiKeyData.service_tier,
+    serviceTier:
+      payload.provider === 'google'
+        ? (streamingResponse.googleServiceTier ?? payload.serviceTier ?? 'standard')
+        : apiKeyData.service_tier,
     usage: usageMetrics,
     anthropicCacheCreationInputTokens,
     cacheWriteTtl: providerArtifacts.anthropicCache?.ttl,

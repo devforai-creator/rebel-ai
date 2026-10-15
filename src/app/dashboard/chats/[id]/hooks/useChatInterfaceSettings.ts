@@ -6,6 +6,12 @@ import {
   type ChatReasoningPreferences,
   type ReasoningPreference,
 } from '@/lib/llm/reasoning'
+import {
+  getServiceTierModelKey,
+  supportsGoogleFlex,
+  type ChatServiceTierPreferences,
+  type GoogleServiceTier,
+} from '@/lib/llm/service-tier'
 import { toast } from 'sonner'
 import type { ChatModelConfig, ChatMemoryMode } from '@/lib/chat/model-config'
 import {
@@ -45,6 +51,7 @@ export type InitialChatSettings = {
 }
 
 type ChatInterfaceSettingsSnapshot = {
+  serviceTierPreferences: ChatServiceTierPreferences
   reasoningPreferences: ChatReasoningPreferences
   selectedModel: LlmModelSelection
   secondaryModel: LlmModelSelection
@@ -128,7 +135,10 @@ type UseChatInterfaceSettingsArgs = {
 }
 
 type UseChatInterfaceSettingsReturn = {
+  serviceTierPreferences: ChatServiceTierPreferences
   reasoningPreferences: ChatReasoningPreferences
+  resolveModelServiceTier: (selection: LlmModelSelection) => GoogleServiceTier | undefined
+  handleSelectServiceTier: (selection: LlmModelSelection, tier: GoogleServiceTier) => void
   resolveModelReasoning: (selection: LlmModelSelection) => ReasoningPreference | undefined
   handleSelectReasoning: (selection: LlmModelSelection, preference: ReasoningPreference) => void
   selectedApiKeyId: string
@@ -181,6 +191,9 @@ export function useChatInterfaceSettings({
     [apiKeys, normalizedModelConfig, preselectedApiKeyId, preselectedModelName],
   )
 
+  const [serviceTierPreferences, setServiceTierPreferences] = useState<ChatServiceTierPreferences>(
+    normalizedModelConfig.serviceTiers ?? {},
+  )
   const [reasoningPreferences, setReasoningPreferences] = useState<ChatReasoningPreferences>(
     normalizedModelConfig.reasoning ?? {},
   )
@@ -205,6 +218,7 @@ export function useChatInterfaceSettings({
     alternateModelsEnabled,
     memoryMode,
     reasoningPreferences,
+    serviceTierPreferences,
   })
   const modelConfigSaveQueueRef = useRef<Promise<void>>(Promise.resolve())
   const latestModelConfigSaveRevisionRef = useRef(0)
@@ -246,6 +260,7 @@ export function useChatInterfaceSettings({
         try {
           const result = await updateChatModelConfig(chatId, {
             reasoning: snapshot.reasoningPreferences,
+            serviceTiers: snapshot.serviceTierPreferences,
             alternateModels: {
               enabled: snapshot.alternateModelsEnabled,
               primaryApiKeyId: snapshot.selectedModel.apiKeyId || null,
@@ -278,6 +293,7 @@ export function useChatInterfaceSettings({
           setAlternateModelsEnabled(confirmed.alternateModelsEnabled)
           setMemoryMode(confirmed.memoryMode)
           setReasoningPreferences(confirmed.reasoningPreferences)
+          setServiceTierPreferences(confirmed.serviceTierPreferences)
           toast.error(getModelConfigSaveErrorMessage(error))
         }
       }
@@ -341,6 +357,7 @@ export function useChatInterfaceSettings({
       secondaryModel,
       memoryMode,
       reasoningPreferences,
+      serviceTierPreferences,
     })
   }, [
     alternateModelsEnabled,
@@ -349,6 +366,7 @@ export function useChatInterfaceSettings({
     secondaryModel,
     selectedModel,
     reasoningPreferences,
+    serviceTierPreferences,
   ])
 
   const handleSelectPrimaryModel = useCallback(
@@ -363,9 +381,17 @@ export function useChatInterfaceSettings({
         secondaryModel,
         memoryMode,
         reasoningPreferences,
+        serviceTierPreferences,
       })
     },
-    [alternateModelsEnabled, memoryMode, persistModelConfig, secondaryModel, reasoningPreferences],
+    [
+      alternateModelsEnabled,
+      memoryMode,
+      persistModelConfig,
+      secondaryModel,
+      reasoningPreferences,
+      serviceTierPreferences,
+    ],
   )
 
   const handleSelectSecondaryModel = useCallback(
@@ -380,9 +406,17 @@ export function useChatInterfaceSettings({
         secondaryModel: nextModel,
         memoryMode,
         reasoningPreferences,
+        serviceTierPreferences,
       })
     },
-    [alternateModelsEnabled, memoryMode, persistModelConfig, selectedModel, reasoningPreferences],
+    [
+      alternateModelsEnabled,
+      memoryMode,
+      persistModelConfig,
+      selectedModel,
+      reasoningPreferences,
+      serviceTierPreferences,
+    ],
   )
 
   const handleSelectMemoryMode = useCallback(
@@ -394,6 +428,7 @@ export function useChatInterfaceSettings({
         secondaryModel,
         memoryMode: nextMode,
         reasoningPreferences,
+        serviceTierPreferences,
       })
     },
     [
@@ -402,6 +437,7 @@ export function useChatInterfaceSettings({
       secondaryModel,
       selectedModel,
       reasoningPreferences,
+      serviceTierPreferences,
     ],
   )
 
@@ -439,16 +475,61 @@ export function useChatInterfaceSettings({
         alternateModelsEnabled,
         memoryMode,
         reasoningPreferences: nextPreferences,
+        serviceTierPreferences,
       })
     },
     [
       apiKeys,
       reasoningPreferences,
+      serviceTierPreferences,
       selectedModel,
       secondaryModel,
       alternateModelsEnabled,
       memoryMode,
       persistModelConfig,
+    ],
+  )
+
+  const resolveModelServiceTier = useCallback(
+    (selection: LlmModelSelection) => {
+      const credential = apiKeys.find((key) => key.id === selection.apiKeyId)
+      if (!credential || !supportsGoogleFlex(credential.provider, selection.modelName))
+        return undefined
+      return (
+        serviceTierPreferences[getServiceTierModelKey(credential.provider, selection.modelName)] ??
+        'standard'
+      )
+    },
+    [apiKeys, serviceTierPreferences],
+  )
+
+  const handleSelectServiceTier = useCallback(
+    (selection: LlmModelSelection, tier: GoogleServiceTier) => {
+      const credential = apiKeys.find((key) => key.id === selection.apiKeyId)
+      if (!credential || !supportsGoogleFlex(credential.provider, selection.modelName)) return
+      const nextPreferences = {
+        ...serviceTierPreferences,
+        [getServiceTierModelKey(credential.provider, selection.modelName)]: tier,
+      }
+      setServiceTierPreferences(nextPreferences)
+      persistModelConfig({
+        selectedModel,
+        secondaryModel,
+        alternateModelsEnabled,
+        memoryMode,
+        reasoningPreferences,
+        serviceTierPreferences: nextPreferences,
+      })
+    },
+    [
+      apiKeys,
+      serviceTierPreferences,
+      persistModelConfig,
+      selectedModel,
+      secondaryModel,
+      alternateModelsEnabled,
+      memoryMode,
+      reasoningPreferences,
     ],
   )
 
@@ -473,8 +554,11 @@ export function useChatInterfaceSettings({
 
   return {
     reasoningPreferences,
+    serviceTierPreferences,
     resolveModelReasoning,
     handleSelectReasoning,
+    resolveModelServiceTier,
+    handleSelectServiceTier,
     selectedApiKeyId: selectedModel.apiKeyId,
     selectedModelName: selectedModel.modelName,
     secondaryApiKeyId: secondaryModel.apiKeyId,

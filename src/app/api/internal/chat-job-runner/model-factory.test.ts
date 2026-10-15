@@ -57,7 +57,13 @@ describe('buildLanguageModel', () => {
   )
 
   it('strips live system and tool config when cached Google content owns the request contract', async () => {
-    const doStream = vi.fn(async (params) => params)
+    const doStream = vi.fn(async () => ({
+      stream: new ReadableStream({
+        start(controller) {
+          controller.close()
+        },
+      }),
+    }))
     const googleModel = {
       specificationVersion: 'v2',
       provider: 'google',
@@ -106,6 +112,7 @@ describe('buildLanguageModel', () => {
     })
 
     expect(doStream).toHaveBeenCalledWith({
+      includeRawChunks: true,
       prompt: [
         {
           role: 'user',

@@ -1,5 +1,6 @@
 import { isReasoningPreference, type ReasoningPreference } from '@/lib/llm/reasoning'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
+import { isGoogleServiceTier, type GoogleServiceTier } from '@/lib/llm/service-tier'
 import { CHAT_REQUEST_LIMITS } from '@/lib/chat/runtime-limits'
 import { z } from 'zod'
 import { createErrorResponse } from './responses'
@@ -12,6 +13,7 @@ const chatRequestSchema = z
     apiKeyId: z.unknown().optional(),
     modelName: z.unknown().optional(),
     reasoningEffort: z.unknown().optional(),
+    serviceTier: z.unknown().optional(),
     deliveryMode: z.unknown().optional(),
     isRegeneration: z.unknown().optional(),
     regenerateAssistantMessageId: z.unknown().optional(),
@@ -26,6 +28,7 @@ export interface ParsedChatRequest {
   apiKeyId: string
   modelName: string | null
   reasoningEffort?: ReasoningPreference
+  serviceTier?: GoogleServiceTier
   rawDeliveryMode: unknown
   isRegeneration: boolean
   regenerateAssistantMessageId: string | null
@@ -67,6 +70,7 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
     apiKeyId,
     modelName: rawModelName,
     reasoningEffort: rawReasoningEffort,
+    serviceTier: rawServiceTier,
     deliveryMode: rawDeliveryMode,
     isRegeneration: rawIsRegeneration,
     regenerateAssistantMessageId: rawRegenerateAssistantMessageId,
@@ -99,6 +103,10 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
     return { status: 'error', response: createErrorResponse('Invalid reasoningEffort', 400) }
   }
   const reasoningEffort = rawReasoningEffort
+  if (rawServiceTier !== undefined && !isGoogleServiceTier(rawServiceTier)) {
+    return { status: 'error', response: createErrorResponse('Invalid serviceTier', 400) }
+  }
+  const serviceTier = rawServiceTier
 
   const normalizedUserMessage = typeof rawUserMessage === 'string' ? rawUserMessage.trim() : ''
   const regenerateAssistantMessageId = normalizeRegenerationTarget(rawRegenerateAssistantMessageId)
@@ -140,6 +148,7 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
         apiKeyId,
         modelName,
         ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+        ...(serviceTier !== undefined ? { serviceTier } : {}),
         rawDeliveryMode,
         isRegeneration,
         regenerateAssistantMessageId,
@@ -186,6 +195,7 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
       apiKeyId,
       modelName,
       ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+      ...(serviceTier !== undefined ? { serviceTier } : {}),
       rawDeliveryMode,
       isRegeneration,
       regenerateAssistantMessageId,

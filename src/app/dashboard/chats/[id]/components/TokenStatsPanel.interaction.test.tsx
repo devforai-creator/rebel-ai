@@ -9,6 +9,7 @@ afterEach(cleanup)
 describe('chat model options', () => {
   it('discloses controls on demand, only offers supported reasoning, and forwards the selected model', () => {
     const onSelectReasoning = vi.fn()
+    const onSelectServiceTier = vi.fn()
     render(
       <TokenStatsPanel
         apiKeys={[
@@ -44,6 +45,8 @@ describe('chat model options', () => {
         onOpenAssetDiagnostics={vi.fn()}
         resolveModelReasoning={() => 'default'}
         onSelectReasoning={onSelectReasoning}
+        resolveModelServiceTier={() => 'standard'}
+        onSelectServiceTier={onSelectServiceTier}
       />,
     )
     const toggle = screen.getByRole('button', { name: /모델 옵션/ })
@@ -51,6 +54,16 @@ describe('chat model options', () => {
     expect(screen.queryByRole('combobox', { name: /사용 모델 추론/ })).toBeNull()
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    const tier = screen.getByRole('combobox', { name: /사용 모델 요금 방식/ })
+    expect(Array.from(tier.querySelectorAll('option')).map((option) => option.value)).toEqual([
+      'standard',
+      'flex',
+    ])
+    fireEvent.change(tier, { target: { value: 'flex' } })
+    expect(onSelectServiceTier).toHaveBeenCalledWith(
+      { apiKeyId: 'key', modelName: 'gemini-4-argon' },
+      'flex',
+    )
     const reasoning = screen.getByRole('combobox', { name: /사용 모델 추론/ })
     expect(Array.from(reasoning.querySelectorAll('option')).map((option) => option.value)).toEqual([
       'default',

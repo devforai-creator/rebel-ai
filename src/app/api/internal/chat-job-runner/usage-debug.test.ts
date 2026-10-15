@@ -187,7 +187,7 @@ describe('usage-debug helpers', () => {
       })
     })
 
-    it('includes google compatibility retry metrics when present', () => {
+    it.each(['flex', null])('includes Google retry metrics and actual tier %s', (actualTier) => {
       const result = buildChatDebugInfo({
         requestId: 'req-google-retry',
         finalSystemPrompt: 'SYSTEM',
@@ -222,6 +222,8 @@ describe('usage-debug helpers', () => {
         ragInfo: null,
         actualPayload: null,
         debugMetrics: {
+          google_requested_service_tier: 'flex',
+          google_actual_service_tier: actualTier,
           google_explicit_cache_compatibility_retry_attempted: true,
           google_explicit_cache_compatibility_retry_succeeded: true,
           google_explicit_cache_compatibility_retry_reason:
@@ -231,6 +233,7 @@ describe('usage-debug helpers', () => {
       })
 
       expect(result).toMatchObject({
+        modelConfig: { serviceTier: { requested: 'flex', actual: actualTier } },
         googleCache: {
           featureEnabled: false,
           cacheCreated: false,

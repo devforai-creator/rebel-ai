@@ -556,6 +556,14 @@ export function buildChatDebugInfo(args: BuildChatDebugInfoArgs): Record<string,
       apiKeyId,
       provider,
       modelName,
+      ...(provider === 'google'
+        ? {
+            serviceTier: {
+              requested: readStringMetric(debugMetrics, 'google_requested_service_tier'),
+              actual: readStringMetric(debugMetrics, 'google_actual_service_tier'),
+            },
+          }
+        : {}),
       reasoning: {
         effort: readStringMetric(debugMetrics, 'reasoning_effort'),
         source: readStringMetric(debugMetrics, 'reasoning_source'),

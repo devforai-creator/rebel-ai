@@ -106,6 +106,7 @@ export interface DebugInfo {
     apiKeyId?: string
     provider?: string
     modelName?: string
+    serviceTier?: { requested: string | null; actual: string | null }
     reasoning?: { effort: string | null; source: string | null; effectiveLevel: string | null }
     finishReason?: string
     usage?: {

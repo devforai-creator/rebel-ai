@@ -114,9 +114,9 @@ it('collects every real SDK ATR step, including mixed TTL writes, into one answe
     cachedInputTokens: 8500,
     cacheWriteTokens: 1250,
   })
-  expect(collected.anthropicUsageSteps).toHaveLength(2)
+  expect(collected.usageSteps).toHaveLength(2)
   const cost = priceAnthropicSteps({
-    steps: collected.anthropicUsageSteps!,
+    steps: collected.usageSteps!,
     modelName: 'claude-opus-4-7',
     cacheWriteTtl: '1h',
   })!

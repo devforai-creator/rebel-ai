@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { isGoogleServiceTier, type GoogleServiceTier } from '@/lib/llm/service-tier'
+import { isGoogleServiceTier } from '@/lib/llm/service-tier'
 import { streamText } from 'ai'
 import { isGoogleExplicitCacheToolConflict, normalizeProviderError } from '@/lib/llm/provider-error'
 import {
@@ -16,12 +16,15 @@ import {
 import { evaluateContentFilter } from './content-filter'
 import { ChatJobExecutionError } from './runner-errors'
 import type { UsageMetrics } from './usage-debug'
+import { readAnthropicUsageStep } from '@/lib/llm/anthropic-usage'
+import { readGoogleUsageStep } from '@/lib/llm/google-usage'
+import { readOpenAIUsageStep } from '@/lib/llm/openai-usage'
 import {
-  readAnthropicUsageStep,
-  sumAnthropicUsage,
-  type AnthropicUsageStep,
-} from '@/lib/llm/anthropic-usage'
-import { readGoogleUsageStep, sumGoogleUsage, type GoogleUsageStep } from '@/lib/llm/google-usage'
+  readSdkUsageStep,
+  sumUsageSteps,
+  type UsageStep,
+  type UsageServiceTier,
+} from '@/lib/llm/usage'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type ProviderTextStream = Awaited<ReturnType<typeof streamText>>
@@ -156,9 +159,8 @@ async function broadcastProviderStreamFailure({
 }
 
 export type StreamingResponseStageResult = {
-  anthropicUsageSteps?: AnthropicUsageStep[]
-  googleUsageSteps?: GoogleUsageStep[]
-  googleServiceTier?: GoogleServiceTier
+  usageSteps?: UsageStep[]
+  serviceTier?: UsageServiceTier
   fullText: string
   assistantText: string
   finishReason: Awaited<ProviderTextStream['finishReason']>
@@ -420,14 +422,6 @@ export async function consumeStreamingResponseStage({
     debugMetrics['google_actual_service_tier'] = googleServiceTier ?? null
   }
 
-  const openAIUsageMetadata =
-    provider === 'openai' &&
-    providerMetadata?.openai?.usage &&
-    typeof providerMetadata.openai.usage === 'object'
-      ? (providerMetadata.openai.usage as Record<string, unknown>)
-      : null
-  const cacheWriteTokens = openAIUsageMetadata?.cacheWriteTokens
-
   const anthropicProviderMetadata =
     provider === 'anthropic' &&
     providerMetadata?.anthropic &&
@@ -478,24 +472,24 @@ export async function consumeStreamingResponseStage({
   }
 
   const usage = await stream.usage
-  let googleUsageSteps: GoogleUsageStep[] | undefined
-  let googleUsage: GoogleUsageStep | undefined
-  if (provider === 'google') {
-    const steps = await stream.steps
-    googleUsageSteps = steps?.length
-      ? steps.map((step) => readGoogleUsageStep(step))
-      : [readGoogleUsageStep({ usage, providerMetadata })]
-    googleUsage = sumGoogleUsage(googleUsageSteps)
-  }
-  let anthropicUsageSteps: AnthropicUsageStep[] | undefined
-  let anthropicUsage: AnthropicUsageStep | undefined
+  const steps = await stream.steps
+  const readUsage =
+    provider === 'anthropic'
+      ? readAnthropicUsageStep
+      : provider === 'google'
+        ? readGoogleUsageStep
+        : provider === 'openai'
+          ? readOpenAIUsageStep
+          : readSdkUsageStep
+  const usageSteps: UsageStep[] = (steps?.length ? steps : [{ usage, providerMetadata }]).map(
+    (step) => readUsage(step),
+  )
+  const combinedUsage = sumUsageSteps(usageSteps)
   if (provider === 'anthropic') {
-    const steps = await stream.steps
-    anthropicUsageSteps = steps?.length
-      ? steps.map((step) => readAnthropicUsageStep(step))
-      : [readAnthropicUsageStep({ usage, providerMetadata })]
-    anthropicUsage = sumAnthropicUsage(anthropicUsageSteps)
-    anthropicCacheCreationInputTokens = anthropicUsage.cacheWriteTokens ?? null
+    anthropicCacheCreationInputTokens = combinedUsage.cacheWriteTokens ?? null
+  }
+  if (provider === 'openai' && debugMetrics) {
+    debugMetrics['openai_actual_service_tier'] = usageSteps.at(-1)?.serviceTier ?? null
   }
   if (provider === 'anthropic' && debugMetrics) {
     const thinkingBlockSeen = debugMetrics['anthropic_thinking_block_seen'] === true
@@ -516,17 +510,8 @@ export async function consumeStreamingResponseStage({
     assistantText,
     finishReason,
     anthropicCacheCreationInputTokens,
-    ...(anthropicUsageSteps ? { anthropicUsageSteps } : {}),
-    ...(googleUsageSteps ? { googleUsageSteps } : {}),
-    ...(googleServiceTier ? { googleServiceTier } : {}),
-    usage: googleUsage ??
-      anthropicUsage ?? {
-        promptTokens: usage?.inputTokens ?? null,
-        completionTokens: usage?.outputTokens ?? null,
-        totalTokens: usage?.totalTokens ?? null,
-        cachedInputTokens: usage?.cachedInputTokens ?? null,
-        reasoningTokens: usage?.reasoningTokens ?? null,
-        ...(typeof cacheWriteTokens === 'number' ? { cacheWriteTokens } : {}),
-      },
+    usageSteps,
+    ...(usageSteps.at(-1)?.serviceTier ? { serviceTier: usageSteps.at(-1)!.serviceTier } : {}),
+    usage: combinedUsage,
   }
 }

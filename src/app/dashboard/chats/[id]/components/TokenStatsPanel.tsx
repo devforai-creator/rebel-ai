@@ -286,7 +286,7 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                     <span className="text-xs text-gray-500">
                       Input: {formatTokenValue(latestUsage.prompt)} | Output:{' '}
                       {formatTokenValue(latestUsage.completion)}
-                      {latestUsage.provider === 'google' && (
+                      {(latestUsage.provider === 'google' || latestUsage.provider === 'openai') && (
                         <> | 추론: {formatTokenValue(latestUsage.reasoning)}</>
                       )}
                     </span>
@@ -298,14 +298,19 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                     </span>
                   </div>
                 </div>
-                {latestUsage.provider === 'google' ? (
-                  <GoogleUsageDetails usage={latestUsage} />
+                {latestUsage.provider === 'google' || latestUsage.provider === 'openai' ? (
+                  <TokenUsageDetails usage={latestUsage} />
                 ) : latestUsage.provider === 'anthropic' ? (
                   <AnthropicUsageDetails usage={latestUsage} />
                 ) : (
                   <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-1">
                     <div>
-                      Cache: {latestUsage.cacheHit ? '✅ Hit' : '❌ Miss'}
+                      Cache:{' '}
+                      {latestUsage.cachedPrompt === null
+                        ? '미확인'
+                        : latestUsage.cacheHit
+                          ? '✅ Hit'
+                          : '❌ Miss'}
                       {latestUsage.cachedPrompt
                         ? ` (${formatTokenValue(latestUsage.cachedPrompt)} tokens)`
                         : ''}
@@ -321,6 +326,12 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                     <div className="text-gray-400 dark:text-gray-500 italic">
                       * Estimated. Check your AI provider dashboard for actual charges.
                     </div>
+                    {(latestUsage.callCount ?? 1) > 1 && (
+                      <p>과거 대화 조회를 포함한 {latestUsage.callCount}회 호출의 합계입니다.</p>
+                    )}
+                    {latestUsage.costUsd === null && (
+                      <p>사용량 또는 단가 정보가 부족해 비용을 계산할 수 없습니다.</p>
+                    )}
                   </div>
                 )}
               </>
@@ -336,24 +347,36 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
   )
 })
 
-function GoogleUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
+function TokenUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
+  const openai = usage.provider === 'openai'
   const rows = [
-    ['일반 입력', usage.uncachedPrompt, usage.promptCostUsd],
+    [
+      '일반 입력',
+      usage.uncachedPrompt,
+      openai && !usage.usageBreakdownAvailable ? null : usage.promptCostUsd,
+    ],
     ['캐시 읽기', usage.cachedPrompt, usage.cachedPromptCostUsd],
+    ...(openai ? [['캐시 쓰기', usage.cacheWrite, usage.cacheWriteCostUsd] as const] : []),
     ['출력', usage.completion, usage.completionCostUsd],
     ['추론', usage.reasoning, usage.reasoningCostUsd],
   ] as const
   return (
     <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
-      <UsageDetailsTable label="Google 사용량과 추정 비용" rows={rows} />
+      <UsageDetailsTable label={`${openai ? 'OpenAI' : 'Google'} 사용량과 추정 비용`} rows={rows} />
       {usage.serviceTier && (
         <p className="mt-1">
           요금:{' '}
           {usage.serviceTier === 'mixed'
-            ? 'Standard / Flex 혼합'
+            ? '호출별 요금 방식 혼합'
             : usage.serviceTier === 'flex'
               ? 'Flex'
-              : 'Standard'}
+              : usage.serviceTier === 'priority'
+                ? 'Fast / Priority'
+                : usage.serviceTier === 'batch'
+                  ? 'Batch'
+                  : usage.serviceTier === 'unknown'
+                    ? '미확인'
+                    : 'Standard'}
         </p>
       )}
       {(usage.callCount ?? 1) > 1 && (
@@ -362,9 +385,13 @@ function GoogleUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
       {usage.costUsd === null && (
         <p className="mt-1">사용량 또는 단가 정보가 부족해 비용을 계산할 수 없습니다.</p>
       )}
+      {openai && !usage.usageBreakdownAvailable && (
+        <p className="mt-1">이전 기록은 캐시 쓰기와 출력의 상세 사용량을 확인할 수 없습니다.</p>
+      )}
       <p className="mt-1 text-gray-400 dark:text-gray-500">
-        출력과 추론은 별도 항목이며, 둘 다 합계 비용에 포함됩니다. 생성 요청의 토큰 비용 추정치로,
-        명시 캐시 보관료는 포함하지 않습니다.
+        {openai
+          ? '출력은 추론을 제외한 토큰입니다. 추론도 출력 단가로 계산하며, 합계에 한 번만 포함됩니다. 제공자 사용량과 공개 단가에 따른 추정 비용입니다.'
+          : '출력과 추론은 별도 항목이며, 둘 다 합계 비용에 포함됩니다. 생성 요청의 토큰 비용 추정치로, 명시 캐시 보관료는 포함하지 않습니다.'}
       </p>
     </div>
   )
@@ -421,6 +448,9 @@ function AnthropicUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
       )}
       {!usage.usageBreakdownAvailable && (
         <p className="mt-1">이전 기록은 일반 입력과 캐시 쓰기의 상세 비용을 구분할 수 없습니다.</p>
+      )}
+      {usage.costUsd === null && (
+        <p className="mt-1">사용량 또는 단가 정보가 부족해 비용을 계산할 수 없습니다.</p>
       )}
       <p className="mt-1 text-gray-400 dark:text-gray-500">
         제공자 사용량과 공개 단가에 따른 추정 비용입니다. 실제 청구액은 제공자 대시보드에서

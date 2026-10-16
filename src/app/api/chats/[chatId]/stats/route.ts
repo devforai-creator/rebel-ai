@@ -84,10 +84,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
   const latestAssistantUsage = latestAssistantUsageResult as LatestAssistantUsage | null
   const receipt = readUsageReceipt(latestAssistantUsage?.debug_info)
   if (latestAssistantUsage && receipt) {
-    const cost =
-      receipt.provider === 'google' && (receipt.input === null || receipt.output === null)
-        ? null
-        : receipt.cost
+    const cost = receipt.input === null || receipt.output === null ? null : receipt.cost
     return NextResponse.json({
       messageCount,
       summaryCount,
@@ -98,7 +95,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
         modelName: receipt.modelName,
         callCount: receipt.callCount,
         prompt: receipt.input,
-        completion: receipt.output,
+        completion:
+          receipt.provider === 'openai' ? (receipt.visibleOutput ?? null) : receipt.output,
         reasoning: receipt.reasoningTokens ?? null,
         serviceTier: receipt.serviceTier ?? null,
         total:
@@ -110,6 +108,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
         cachedPrompt: receipt.cachedInput,
         cacheWrite5m: receipt.cacheWrite5m,
         cacheWrite1h: receipt.cacheWrite1h,
+        cacheWrite: receipt.cacheWriteTokens ?? null,
         cacheHit: (receipt.cachedInput ?? 0) > 0,
         cacheKey: null,
         cacheRetention: null,
@@ -119,8 +118,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
         cachedPromptCostUsd: cost?.cacheRead ?? null,
         cacheWrite5mCostUsd: cost?.cacheWrite5m ?? null,
         cacheWrite1hCostUsd: cost?.cacheWrite1h ?? null,
+        cacheWriteCostUsd: cost?.cacheWrite ?? null,
         reasoningCostUsd: cost?.reasoning ?? null,
-        usageBreakdownAvailable: true,
+        usageBreakdownAvailable:
+          receipt.provider !== 'openai' || receipt.visibleOutput !== undefined,
       },
     })
   }
@@ -220,6 +221,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
       ? cacheDetails.cachedPromptTokens
       : toNumber(latestUsageEvent?.cached_input_tokens ?? null)
 
+  const knownUsage = latestPromptTokens !== null && latestCompletionTokens !== null
   const latestCost = {
     total: toNumber(latestUsageEvent?.total_cost_usd ?? null),
     prompt: toNumber(latestUsageEvent?.prompt_cost_usd ?? null),
@@ -239,7 +241,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
           callCount: null,
           createdAt: latestAssistantUsage.created_at,
           prompt: latestPromptTokens,
-          completion: latestCompletionTokens,
+          completion:
+            latestUsageEvent?.model_provider === 'openai'
+              ? latestCompletionTokens !== null && latestReasoningTokens !== null
+                ? Math.max(latestCompletionTokens - latestReasoningTokens, 0)
+                : null
+              : latestCompletionTokens,
           reasoning: latestReasoningTokens,
           serviceTier: null,
           total: latestTotalTokens,
@@ -247,15 +254,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
           cacheHit: (latestCachedPromptTokens ?? 0) > 0,
           cacheKey: cacheDetails.cacheKey,
           cacheRetention: cacheDetails.cacheRetention,
-          costUsd: latestCost.total,
-          promptCostUsd: latestCost.prompt,
-          completionCostUsd: latestCost.completion,
-          cachedPromptCostUsd: latestCost.cachedPrompt,
-          reasoningCostUsd: latestCost.reasoning,
+          costUsd: knownUsage ? latestCost.total : null,
+          promptCostUsd: knownUsage ? latestCost.prompt : null,
+          completionCostUsd: knownUsage ? latestCost.completion : null,
+          cachedPromptCostUsd: knownUsage ? latestCost.cachedPrompt : null,
+          reasoningCostUsd: knownUsage ? latestCost.reasoning : null,
           uncachedPrompt:
             latestUsageEvent?.model_provider === 'anthropic' ? latestPromptTokens : null,
           cacheWrite5m: null,
           cacheWrite1h: null,
+          cacheWrite: null,
+          cacheWriteCostUsd: null,
           cacheWrite5mCostUsd: null,
           cacheWrite1hCostUsd: null,
           usageBreakdownAvailable: false,

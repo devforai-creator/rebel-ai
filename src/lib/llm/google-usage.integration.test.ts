@@ -184,7 +184,7 @@ it.each(['standard', 'flex'] as const)(
     const { collected, stats } = await persistAndRead(stream, tier)
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(execute).toHaveBeenCalledTimes(1)
-    expect(collected.googleUsageSteps).toHaveLength(2)
+    expect(collected.usageSteps).toHaveLength(2)
     expect(stats).toMatchObject({
       provider: 'google',
       callCount: 2,

@@ -1,6 +1,7 @@
 import type { LanguageModelUsage } from 'ai'
-import { estimateUsageCost, type UsageCostBreakdown } from '@/lib/model-pricing'
+import type { UsageCostBreakdown } from '@/lib/model-pricing'
 import type { ApiServiceTier } from '@/types/database.types'
+import { priceUsageSteps, sumUsageSteps } from './usage'
 
 export type AnthropicUsageStep = {
   promptTokens: number | null
@@ -41,19 +42,7 @@ export function readAnthropicUsageStep({ usage, providerMetadata }: Step): Anthr
 }
 
 export function sumAnthropicUsage(steps: AnthropicUsageStep[]): AnthropicUsageStep {
-  const sum = (key: keyof AnthropicUsageStep) => {
-    const values = steps.map((s) => s[key]).filter((v): v is number => typeof v === 'number')
-    return values.length === steps.length ? values.reduce((a, b) => a + b, 0) : null
-  }
-  const writes = sum('cacheWriteTokens')
-  return {
-    promptTokens: sum('promptTokens'),
-    completionTokens: sum('completionTokens'),
-    totalTokens: sum('totalTokens'),
-    cachedInputTokens: sum('cachedInputTokens'),
-    reasoningTokens: sum('reasoningTokens'),
-    ...(writes !== null ? { cacheWriteTokens: writes } : {}),
-  }
+  return sumUsageSteps(steps)
 }
 
 export function priceAnthropicSteps({
@@ -67,18 +56,5 @@ export function priceAnthropicSteps({
   serviceTier?: ApiServiceTier | null
   cacheWriteTtl?: '5m' | '1h'
 }): UsageCostBreakdown | null {
-  if (
-    steps.length === 0 ||
-    steps.some((step) => step.promptTokens === null || step.completionTokens === null)
-  )
-    return null
-  const costs = steps.map((step) =>
-    estimateUsageCost({ ...step, provider: 'anthropic', modelName, serviceTier, cacheWriteTtl }),
-  )
-  if (costs.some((c) => c === null)) return null
-  const result = { ...costs[0] } as UsageCostBreakdown
-  for (const key of Object.keys(result) as Array<keyof UsageCostBreakdown>) {
-    result[key] = costs.reduce((sum, cost) => sum + (cost?.[key] ?? 0), 0)
-  }
-  return result
+  return priceUsageSteps({ steps, provider: 'anthropic', modelName, serviceTier, cacheWriteTtl })
 }

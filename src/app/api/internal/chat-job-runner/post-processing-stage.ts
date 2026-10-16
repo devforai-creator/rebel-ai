@@ -1,6 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { triggerMessageTranslation } from '@/lib/chat/translation-trigger'
-import { type UsageCostBreakdown, estimateUsageCost } from '@/lib/model-pricing'
 import { CHAT_JOB_LIFECYCLE_STAGE_PERSISTING_RESPONSE } from '@/lib/chat/job-lifecycle'
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import type { LoadedChatJobExecutionContext } from './execution-context'
@@ -12,9 +11,8 @@ import type { ProviderRequestStageResult } from './provider-request-stage'
 import { ChatJobExecutionError } from './runner-errors'
 import type { StreamingResponseStageResult } from './streaming-response-stage'
 import { buildChatDebugInfo, type UsageMetrics } from './usage-debug'
-import { priceAnthropicSteps } from '@/lib/llm/anthropic-usage'
 import { buildUsageReceipt } from '@/lib/chat/usage-receipt'
-import { priceGoogleSteps } from '@/lib/llm/google-usage'
+import { priceUsageSteps, summarizeUsageServiceTier } from '@/lib/llm/usage'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 
@@ -49,35 +47,6 @@ export type PostProcessingStageResult = Pick<
   PostGenerationPipelineResult,
   'messageInsertDuration' | 'usageEventInsertDurationMs' | 'summaryTriggerDurationMs'
 >
-
-function buildUsageCost({
-  payload,
-  serviceTier,
-  usage,
-  anthropicCacheCreationInputTokens,
-  cacheWriteTtl,
-}: {
-  payload: ChatGenerationJobPayload
-  serviceTier: PostProcessingContext['apiKeyData']['service_tier']
-  usage: UsageMetrics
-  anthropicCacheCreationInputTokens: number | null
-  cacheWriteTtl?: '5m' | '1h'
-}): UsageCostBreakdown | null {
-  return estimateUsageCost({
-    provider: payload.provider,
-    modelName: payload.modelName,
-    promptTokens: usage.promptTokens ?? undefined,
-    completionTokens: usage.completionTokens ?? undefined,
-    cachedInputTokens: usage.cachedInputTokens ?? undefined,
-    reasoningTokens: usage.reasoningTokens ?? undefined,
-    cacheWriteTokens:
-      payload.provider === 'anthropic'
-        ? (anthropicCacheCreationInputTokens ?? undefined)
-        : usage.cacheWriteTokens,
-    serviceTier: serviceTier ?? undefined,
-    cacheWriteTtl,
-  })
-}
 
 function normalizePersistingResponseError(error: unknown): ChatJobExecutionError {
   if (error instanceof ChatJobExecutionError) {
@@ -139,31 +108,24 @@ export async function runPostProcessingStage({
     reasoningTokens: usage.reasoningTokens,
     ...(usage.cacheWriteTokens !== undefined ? { cacheWriteTokens: usage.cacheWriteTokens } : {}),
   }
-  const googleServiceTier = streamingResponse.googleServiceTier ?? payload.serviceTier ?? 'standard'
-  const serviceTier = payload.provider === 'google' ? googleServiceTier : apiKeyData.service_tier
-  const usageCost =
-    payload.provider === 'google'
-      ? priceGoogleSteps({
-          steps: streamingResponse.googleUsageSteps ?? [
-            { ...usageMetrics, serviceTier: googleServiceTier },
-          ],
-          modelName: payload.modelName,
-          serviceTier: payload.serviceTier ?? 'standard',
-        })
-      : payload.provider === 'anthropic' && streamingResponse.anthropicUsageSteps?.length
-        ? priceAnthropicSteps({
-            steps: streamingResponse.anthropicUsageSteps,
-            modelName: payload.modelName,
-            serviceTier,
-            cacheWriteTtl: anthropicCache?.ttl,
-          })
-        : buildUsageCost({
-            payload,
-            serviceTier,
-            usage: usageMetrics,
-            anthropicCacheCreationInputTokens,
-            cacheWriteTtl: providerArtifacts.anthropicCache?.ttl,
-          })
+  const serviceTier =
+    (payload.provider === 'google' ? payload.serviceTier : apiKeyData.service_tier) ?? 'standard'
+  const usageSteps = streamingResponse.usageSteps ?? [
+    {
+      ...usageMetrics,
+      ...(payload.provider === 'anthropic' && anthropicCacheCreationInputTokens !== null
+        ? { cacheWriteTokens: anthropicCacheCreationInputTokens }
+        : {}),
+      ...(streamingResponse.serviceTier ? { serviceTier: streamingResponse.serviceTier } : {}),
+    },
+  ]
+  const usageCost = priceUsageSteps({
+    steps: usageSteps,
+    provider: payload.provider,
+    modelName: payload.modelName,
+    serviceTier,
+    cacheWriteTtl: anthropicCache?.ttl,
+  })
   const debugConversationMessages =
     payload.provider === 'anthropic' ? anthropicConversationMessages : null
   const debugInfo = buildChatDebugInfo({
@@ -195,23 +157,15 @@ export async function runPostProcessingStage({
     actualPayload,
     debugMetrics,
   })
-  const googleTiers = new Set(
-    streamingResponse.googleUsageSteps?.map(
-      (step) => step.serviceTier ?? payload.serviceTier ?? 'standard',
-    ) ?? [googleServiceTier],
-  )
   debugInfo.usageReceipt = buildUsageReceipt({
     requestId: payload.requestId,
     provider: payload.provider,
     modelName: payload.modelName,
     usage: usageMetrics,
     cost: usageCost,
-    callCount:
-      streamingResponse.googleUsageSteps?.length ??
-      streamingResponse.anthropicUsageSteps?.length ??
-      1,
-    ...(payload.provider === 'google'
-      ? { serviceTier: googleTiers.size > 1 ? 'mixed' : [...googleTiers][0] }
+    callCount: usageSteps.length,
+    ...(payload.provider === 'google' || payload.provider === 'openai'
+      ? { serviceTier: summarizeUsageServiceTier(usageSteps, serviceTier) }
       : {}),
   })
 

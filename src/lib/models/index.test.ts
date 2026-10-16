@@ -683,16 +683,18 @@ describe('Model Registry', () => {
       expect(solTiers).toEqual(tiers)
       expect(tiers![0].maxPromptTokens).toBe(272_000)
       expect(tiers![0].rates).toEqual({
-        input: 5,
-        output: 30,
-        cachedInput: 0.5,
-        reasoning: 30,
+        input: 4,
+        output: 20,
+        cachedInput: 0.4,
+        cacheWrite: 5,
+        reasoning: 20,
       })
       expect(tiers![1].rates).toEqual({
-        input: 10,
-        output: 45,
-        cachedInput: 1,
-        reasoning: 45,
+        input: 8,
+        output: 30,
+        cachedInput: 0.8,
+        cacheWrite: 10,
+        reasoning: 30,
       })
     })
 

@@ -188,19 +188,43 @@ it('includes reported reasoning in a legacy Google event total', async () => {
     costUsd: 0.0248,
   })
 })
-it('does not preserve an old false zero-dollar estimate for a Google answer without usage', async () => {
+it.each(['google', 'openai', 'anthropic', 'deepseek'])(
+  'does not preserve a false zero-dollar estimate for %s without usage',
+  async (provider) => {
+    mocks.latest.mockResolvedValue(
+      answer('google-unknown', {
+        usageReceipt: {
+          ...receipt,
+          provider,
+          input: null,
+          output: null,
+          cost: { ...receipt.cost!, total: 0 },
+        },
+      }),
+    )
+    expect((await get()).latestMessage.costUsd).toBeNull()
+  },
+)
+it('reads older OpenAI receipts without labeling inclusive output as visible output or inventing cache writes', async () => {
   mocks.latest.mockResolvedValue(
-    answer('google-unknown', {
+    answer('openai-old', {
       usageReceipt: {
         ...receipt,
-        provider: 'google',
-        input: null,
-        output: null,
-        cost: { ...receipt.cost!, total: 0 },
+        provider: 'openai',
+        input: 10000,
+        output: 1500,
+        cachedInput: 8000,
       },
     }),
   )
-  expect((await get()).latestMessage.costUsd).toBeNull()
+  expect((await get()).latestMessage).toMatchObject({
+    completion: null,
+    reasoning: null,
+    cacheWrite: null,
+    cacheWriteCostUsd: null,
+    usageBreakdownAvailable: false,
+    total: 11500,
+  })
 })
 it('enforces ownership before reading prices', async () => {
   mocks.client.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: null } }) } })

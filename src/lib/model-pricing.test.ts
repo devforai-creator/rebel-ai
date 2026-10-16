@@ -30,6 +30,7 @@ describe('estimateUsageCost', () => {
         cacheWrite1hTokens: 600,
         cacheWriteTtl: '1h',
         serviceTier,
+        completionTokens: 0,
       })!
       const multiplier = serviceTier === 'batch' ? 0.5 : 1
       expect(cost.cacheWrite5mCost).toBeCloseTo(0.0025 * multiplier, 12)
@@ -525,6 +526,111 @@ describe('estimateUsageCost', () => {
   })
 
   describe('OpenAI models', () => {
+    it.each([
+      { cachedInputTokens: 900, cacheWriteTokens: 200, reasoningTokens: 0 },
+      { cachedInputTokens: 0, cacheWriteTokens: 0, reasoningTokens: 101 },
+    ])('leaves inconsistent inclusive token counts unpriced: %j', (counts) => {
+      expect(
+        estimateUsageCost({
+          provider: 'openai',
+          modelName: 'gpt-6.1-sol',
+          promptTokens: 1000,
+          completionTokens: 100,
+          ...counts,
+        }),
+      ).toBeNull()
+    })
+    it.each([
+      ['gpt-5.5', 3.45],
+      ['gpt-5.4', 1.725],
+    ])('charges the entire long %s request at long-context rates', (modelName, total) => {
+      expect(
+        estimateUsageCost({
+          provider: 'openai',
+          modelName: String(modelName),
+          promptTokens: 300000,
+          completionTokens: 10000,
+        })?.totalCost,
+      ).toBeCloseTo(Number(total), 12)
+    })
+    it.each([
+      ['gpt-4.1', 0.032],
+      ['gpt-4o', 0.045],
+      ['gpt-4o-mini', 0.0027],
+    ])('prices registered legacy model %s', (modelName, total) => {
+      expect(
+        estimateUsageCost({
+          provider: 'openai',
+          modelName: String(modelName),
+          promptTokens: 10000,
+          cachedInputTokens: 8000,
+          completionTokens: 3000,
+        })?.totalCost,
+      ).toBeCloseTo(Number(total), 12)
+    })
+    it.each(['gpt-6.1-sol', 'gpt-6-sol', 'gpt-5.6', 'gpt-5.6-sol'])(
+      'applies verified %s Fast rates including long context, writes, and reasoning',
+      (modelName) => {
+        for (const promptTokens of [272000, 272001]) {
+          const params = {
+            provider: 'openai' as const,
+            modelName,
+            promptTokens,
+            completionTokens: 1500,
+            cachedInputTokens: 8000,
+            cacheWriteTokens: 1000,
+            reasoningTokens: 500,
+          }
+          const standard = estimateUsageCost(params)!
+          const fast = estimateUsageCost({ ...params, serviceTier: 'priority' })!
+          expect(fast.totalCost).toBeCloseTo(standard.totalCost * 2, 12)
+          expect(fast.cacheWriteCost).toBeCloseTo(standard.cacheWriteCost! * 2, 12)
+        }
+      },
+    )
+    it('does not invent a price for an unconfigured Priority rate or unexpected legacy cache writes', () => {
+      expect(
+        estimateUsageCost({
+          provider: 'openai',
+          modelName: 'gpt-5.5',
+          promptTokens: 1000,
+          completionTokens: 100,
+          serviceTier: 'priority',
+        }),
+      ).toBeNull()
+      expect(
+        estimateUsageCost({
+          provider: 'openai',
+          modelName: 'gpt-4.1',
+          promptTokens: 1000,
+          completionTokens: 100,
+          cacheWriteTokens: 500,
+        }),
+      ).toBeNull()
+    })
+    it('charges GPT-6 Sol writes at their premium and GPT-5.6 Sol at current promotional rates', () => {
+      expect(
+        estimateUsageCost({
+          provider: 'openai',
+          modelName: 'gpt-6-sol',
+          promptTokens: 10000,
+          completionTokens: 1500,
+          reasoningTokens: 500,
+          cachedInputTokens: 8000,
+          cacheWriteTokens: 1000,
+        })?.totalCost,
+      ).toBeCloseTo(0.0211, 12)
+      expect(
+        estimateUsageCost({
+          provider: 'openai',
+          modelName: 'gpt-5.6',
+          promptTokens: 10000,
+          completionTokens: 1500,
+          reasoningTokens: 500,
+          cachedInputTokens: 8000,
+        })?.totalCost,
+      ).toBeCloseTo(0.0412, 12)
+    })
     it.each(['standard', 'flex'] as const)(
       'charges GPT-6.1 Sol cache reads, writes, and reasoning once with %s processing',
       (serviceTier) => {
@@ -601,15 +707,17 @@ describe('estimateUsageCost', () => {
         provider: 'openai',
         modelName: 'gpt-5.6',
         promptTokens: 272000,
+        completionTokens: 0,
       })
       const aboveBoundary = estimateUsageCost({
         provider: 'openai',
         modelName: 'gpt-5.6-sol',
         promptTokens: 272001,
+        completionTokens: 0,
       })
 
-      expect(atBoundary?.promptCost).toBeCloseTo(1.36, 6)
-      expect(aboveBoundary?.promptCost).toBeCloseTo(2.72001, 6)
+      expect(atBoundary?.promptCost).toBeCloseTo(1.088, 6)
+      expect(aboveBoundary?.promptCost).toBeCloseTo(2.176008, 6)
     })
 
     it('should apply GPT-5.6 long-context pricing above 272K input tokens', () => {
@@ -623,10 +731,10 @@ describe('estimateUsageCost', () => {
       const result = estimateUsageCost(params)
       expect(result).not.toBeNull()
 
-      // GPT-5.6 long context: Input $10/M, Cached $1/M, Output $45/M.
-      expect(result!.promptCost).toBeCloseTo(2, 6)
-      expect(result!.cachedInputCost).toBeCloseTo(0.1, 6)
-      expect(result!.completionCost).toBeCloseTo(0.45, 6)
+      // GPT-5.6 Sol long context: Input $8/M, Cached $0.8/M, Output $30/M.
+      expect(result!.promptCost).toBeCloseTo(1.6, 6)
+      expect(result!.cachedInputCost).toBeCloseTo(0.08, 6)
+      expect(result!.completionCost).toBeCloseTo(0.3, 6)
       expect(result!.reasoningCost).toBe(0)
     })
 

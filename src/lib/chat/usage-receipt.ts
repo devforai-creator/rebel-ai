@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { UsageCostBreakdown } from '@/lib/model-pricing'
 import type { LlmProvider } from '@/types/database.types'
+import type { UsageServiceTier } from '@/lib/llm/usage'
 
 const count = z.number().finite().nonnegative().nullable()
 const receiptSchema = z.object({
@@ -12,10 +13,12 @@ const receiptSchema = z.object({
   input: count,
   uncachedInput: count,
   output: count,
+  visibleOutput: count.optional(),
+  cacheWriteTokens: count.optional(),
   // Optional for receipts written before Google thinking usage was retained.
   reasoningTokens: count.optional(),
   totalTokens: count.optional(),
-  serviceTier: z.enum(['standard', 'flex', 'mixed']).optional(),
+  serviceTier: z.enum(['standard', 'flex', 'priority', 'batch', 'unknown', 'mixed']).optional(),
   cachedInput: count,
   cacheWrite5m: count,
   cacheWrite1h: count,
@@ -28,6 +31,7 @@ const receiptSchema = z.object({
       cacheWrite5m: count,
       cacheWrite1h: count,
       reasoning: count,
+      cacheWrite: count.optional(),
     })
     .nullable(),
 })
@@ -46,7 +50,7 @@ export function buildUsageReceipt({
   provider: LlmProvider
   modelName: string
   callCount: number
-  serviceTier?: 'standard' | 'flex' | 'mixed'
+  serviceTier?: UsageServiceTier | 'mixed'
   usage: {
     promptTokens: number | null
     completionTokens: number | null
@@ -58,6 +62,9 @@ export function buildUsageReceipt({
   cost: UsageCostBreakdown | null
 }): UsageReceipt {
   const anthropic = provider === 'anthropic'
+  const openai = provider === 'openai'
+  const knownUsage = usage.promptTokens !== null && usage.completionTokens !== null
+  if (!knownUsage) cost = null
   const writes = (cost?.cacheWrite5mTokens ?? 0) + (cost?.cacheWrite1hTokens ?? 0)
   return {
     version: 1,
@@ -71,11 +78,27 @@ export function buildUsageReceipt({
         : usage.promptTokens,
     uncachedInput: anthropic
       ? usage.promptTokens
-      : provider === 'google' && usage.promptTokens !== null && usage.cachedInputTokens !== null
-        ? Math.max(usage.promptTokens - usage.cachedInputTokens, 0)
+      : (provider === 'google' || openai) &&
+          usage.promptTokens !== null &&
+          usage.cachedInputTokens !== null
+        ? Math.max(
+            usage.promptTokens -
+              usage.cachedInputTokens -
+              (openai ? (usage.cacheWriteTokens ?? 0) : 0),
+            0,
+          )
         : null,
     output: usage.completionTokens,
-    ...(provider === 'google'
+    ...(openai
+      ? {
+          visibleOutput:
+            usage.completionTokens !== null && usage.reasoningTokens != null
+              ? Math.max(usage.completionTokens - usage.reasoningTokens, 0)
+              : null,
+          cacheWriteTokens: usage.cacheWriteTokens ?? null,
+        }
+      : {}),
+    ...(provider === 'google' || openai
       ? {
           reasoningTokens: usage.reasoningTokens ?? null,
           totalTokens: usage.totalTokens ?? null,
@@ -88,12 +111,13 @@ export function buildUsageReceipt({
     cost: cost
       ? {
           total: cost.totalCost,
-          input: anthropic ? (cost.uncachedPromptCost ?? null) : cost.promptCost,
+          input: anthropic || openai ? (cost.uncachedPromptCost ?? null) : cost.promptCost,
           output: cost.completionCost ?? null,
           cacheRead: cost.cachedInputCost ?? null,
           cacheWrite5m: anthropic ? (cost.cacheWrite5mCost ?? null) : null,
           cacheWrite1h: anthropic ? (cost.cacheWrite1hCost ?? null) : null,
           reasoning: cost.reasoningCost ?? null,
+          ...(openai ? { cacheWrite: cost.cacheWriteCost ?? null } : {}),
         }
       : null,
   }

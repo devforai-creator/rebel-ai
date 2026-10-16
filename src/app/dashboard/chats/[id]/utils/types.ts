@@ -41,7 +41,9 @@ export type ActiveChatJob = {
  */
 export type LatestMessageTokenStats = {
   reasoning?: number | null
-  serviceTier?: 'standard' | 'flex' | 'mixed' | null
+  serviceTier?: 'standard' | 'flex' | 'priority' | 'batch' | 'unknown' | 'mixed' | null
+  cacheWrite?: number | null
+  cacheWriteCostUsd?: number | null
   provider?: string | null
   modelName?: string | null
   callCount?: number | null

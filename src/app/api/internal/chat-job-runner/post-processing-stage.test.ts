@@ -67,7 +67,7 @@ describe('runPostProcessingStage', () => {
           assistantText: 'Hello',
           finishReason: 'stop',
           anthropicCacheCreationInputTokens: null,
-          googleServiceTier,
+          serviceTier: googleServiceTier,
           usage: {
             promptTokens: 10,
             completionTokens: 1,
@@ -166,7 +166,8 @@ describe('runPostProcessingStage', () => {
       promptTokens: 10,
       completionTokens: 20,
       cachedInputTokens: 5,
-      reasoningTokens: undefined,
+      reasoningTokens: null,
+      totalTokens: 30,
       cacheWriteTokens: 123,
       cacheWriteTtl: '5m',
       serviceTier: 'standard',

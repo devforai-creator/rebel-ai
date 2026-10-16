@@ -38,6 +38,36 @@ const baseProps = {
 }
 
 describe('TokenStatsPanel', () => {
+  it('shows OpenAI writes, visible output, reasoning, ATR count, and returned billing mode', () => {
+    const html = renderToStaticMarkup(
+      <TokenStatsPanel
+        {...baseProps}
+        usageStatsEnabled
+        statsExpanded
+        latestUsage={{
+          ...googleUsage,
+          provider: 'openai',
+          serviceTier: 'priority',
+          completion: 1200,
+          cacheWrite: 2000,
+          cacheWriteCostUsd: 0.005,
+          usageBreakdownAvailable: true,
+        }}
+      />,
+    )
+    for (const text of [
+      'OpenAI 사용량과 추정 비용',
+      '캐시 쓰기',
+      '2,000',
+      '1,200',
+      '600',
+      'Fast / Priority',
+      '2회 호출',
+      '한 번만 포함',
+    ])
+      expect(html).toContain(text)
+    expect(html).not.toContain('캐시 쓰기 · 5분')
+  })
   const googleUsage = {
     id: 'answer',
     createdAt: null,
@@ -79,31 +109,35 @@ describe('TokenStatsPanel', () => {
       expect(html).toContain(text)
     expect(html).not.toContain('캐시 쓰기')
   })
-  it('shows missing Google usage as unknown instead of a zero-dollar price', () => {
-    const html = renderToStaticMarkup(
-      <TokenStatsPanel
-        {...baseProps}
-        usageStatsEnabled
-        statsExpanded
-        latestUsage={{
-          ...googleUsage,
-          prompt: null,
-          uncachedPrompt: null,
-          completion: null,
-          reasoning: null,
-          cachedPrompt: null,
-          costUsd: null,
-          promptCostUsd: null,
-          completionCostUsd: null,
-          cachedPromptCostUsd: null,
-          reasoningCostUsd: null,
-        }}
-      />,
-    )
-    expect(html).toContain('정보가 부족해 비용을 계산할 수 없습니다')
-    expect(html).toContain('—')
-    expect(html).not.toContain('$0')
-  })
+  it.each(['google', 'openai'])(
+    'shows missing %s usage as unknown instead of a zero-dollar price',
+    (provider) => {
+      const html = renderToStaticMarkup(
+        <TokenStatsPanel
+          {...baseProps}
+          usageStatsEnabled
+          statsExpanded
+          latestUsage={{
+            ...googleUsage,
+            provider,
+            prompt: null,
+            uncachedPrompt: null,
+            completion: null,
+            reasoning: null,
+            cachedPrompt: null,
+            costUsd: null,
+            promptCostUsd: null,
+            completionCostUsd: null,
+            cachedPromptCostUsd: null,
+            reasoningCostUsd: null,
+          }}
+        />,
+      )
+      expect(html).toContain('정보가 부족해 비용을 계산할 수 없습니다')
+      expect(html).toContain('—')
+      expect(html).not.toContain('$0')
+    },
+  )
   it('shows Anthropic input, cache reads and both write durations separately', () => {
     const html = renderToStaticMarkup(
       <TokenStatsPanel

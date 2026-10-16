@@ -1,6 +1,7 @@
 import type { LanguageModelUsage } from 'ai'
-import { estimateUsageCost, type UsageCostBreakdown } from '@/lib/model-pricing'
+import type { UsageCostBreakdown } from '@/lib/model-pricing'
 import { isGoogleServiceTier, type GoogleServiceTier } from './service-tier'
+import { priceUsageSteps, sumUsageSteps } from './usage'
 
 export type GoogleUsageStep = {
   promptTokens: number | null
@@ -43,19 +44,7 @@ export function readGoogleUsageStep({
 }
 
 export function sumGoogleUsage(steps: GoogleUsageStep[]): GoogleUsageStep {
-  const sum = (key: Exclude<keyof GoogleUsageStep, 'serviceTier'>) => {
-    const values = steps.map((step) => step[key])
-    return steps.length > 0 && values.every((value) => value !== null)
-      ? values.reduce((total, value) => total + value, 0)
-      : null
-  }
-  return {
-    promptTokens: sum('promptTokens'),
-    completionTokens: sum('completionTokens'),
-    totalTokens: sum('totalTokens'),
-    cachedInputTokens: sum('cachedInputTokens'),
-    reasoningTokens: sum('reasoningTokens'),
-  }
+  return sumUsageSteps(steps)
 }
 
 export function priceGoogleSteps({
@@ -67,24 +56,5 @@ export function priceGoogleSteps({
   modelName: string
   serviceTier?: GoogleServiceTier
 }): UsageCostBreakdown | null {
-  if (
-    steps.length === 0 ||
-    steps.some((step) => step.promptTokens === null || step.completionTokens === null)
-  )
-    return null
-  // Choose the long-context band and the returned service tier for each call.
-  const costs = steps.map((step) =>
-    estimateUsageCost({
-      ...step,
-      provider: 'google',
-      modelName,
-      serviceTier: step.serviceTier ?? serviceTier,
-    }),
-  )
-  if (costs.some((cost) => cost === null)) return null
-  const result = { ...costs[0] } as UsageCostBreakdown
-  for (const key of Object.keys(result) as Array<keyof UsageCostBreakdown>) {
-    result[key] = costs.reduce((total, cost) => total + (cost?.[key] ?? 0), 0)
-  }
-  return result
+  return priceUsageSteps({ steps, provider: 'google', modelName, serviceTier })
 }

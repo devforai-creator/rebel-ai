@@ -26,10 +26,15 @@ export function parseLatestMessageTokenStats(value: unknown): LatestMessageToken
     serviceTier:
       value.serviceTier === 'standard' ||
       value.serviceTier === 'flex' ||
+      value.serviceTier === 'priority' ||
+      value.serviceTier === 'batch' ||
+      value.serviceTier === 'unknown' ||
       value.serviceTier === 'mixed'
         ? value.serviceTier
         : null,
     uncachedPrompt: parseNumberOrNull(value.uncachedPrompt),
+    cacheWrite: parseNumberOrNull(value.cacheWrite),
+    cacheWriteCostUsd: parseNumberOrNull(value.cacheWriteCostUsd),
     cacheWrite5m: parseNumberOrNull(value.cacheWrite5m),
     cacheWrite1h: parseNumberOrNull(value.cacheWrite1h),
     cacheWrite5mCostUsd: parseNumberOrNull(value.cacheWrite5mCostUsd),

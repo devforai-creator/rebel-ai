@@ -29,6 +29,8 @@ export type UsageCostBreakdown = {
   reasoningCost: number
   totalCost: number
   uncachedPromptCost?: number
+  cacheWriteTokens?: number
+  cacheWriteCost?: number
   cacheWrite5mTokens?: number
   cacheWrite1hTokens?: number
   cacheWrite5mCost?: number
@@ -63,11 +65,12 @@ function resolveRates({
     }) ?? pricingTiers[pricingTiers.length - 1]
 
   if (provider === 'google' && serviceTier === 'flex') return tier?.flexRates ?? null
+  if (provider === 'openai' && serviceTier === 'priority') return tier?.priorityRates ?? null
   return tier?.rates ?? null
 }
 
 function getServiceTierMultiplier(provider: Provider, serviceTier?: ApiServiceTier | null): number {
-  if (provider === 'openai' && serviceTier === 'flex') {
+  if (provider === 'openai' && (serviceTier === 'flex' || serviceTier === 'batch')) {
     return 0.5
   }
   if (provider === 'anthropic' && serviceTier === 'batch') {
@@ -87,16 +90,18 @@ function calculateCost(tokens: number, ratePerMillion: number, multiplier: numbe
 }
 
 export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown | null {
-  if (
-    params.provider === 'google' &&
-    (!isReportedTokenCount(params.promptTokens) || !isReportedTokenCount(params.completionTokens))
-  )
+  if (!isReportedTokenCount(params.promptTokens) || !isReportedTokenCount(params.completionTokens))
     return null
   const promptTokens = sanitizeTokens(params.promptTokens)
   const completionTokens = sanitizeTokens(params.completionTokens)
   const cachedInputTokens = sanitizeTokens(params.cachedInputTokens)
   const reasoningTokens = sanitizeTokens(params.reasoningTokens)
   const reportedWrites = sanitizeTokens(params.cacheWriteTokens)
+  if (
+    params.provider === 'openai' &&
+    (reasoningTokens > completionTokens || cachedInputTokens + reportedWrites > promptTokens)
+  )
+    return null
   let write5m = sanitizeTokens(params.cacheWrite5mTokens)
   let write1h = sanitizeTokens(params.cacheWrite1hTokens)
   const unclassifiedWrites = Math.max(reportedWrites - write5m - write1h, 0)
@@ -117,6 +122,8 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
   if (!rates) {
     return null
   }
+  if (params.provider === 'openai' && reportedWrites > 0 && rates.cacheWrite === undefined)
+    return null
 
   const cacheWriteTokens =
     params.provider === 'anthropic' ||
@@ -149,11 +156,11 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
     params.provider === 'anthropic' ? calculateCost(write5m, rates.input * 1.25, multiplier) : 0
   const cacheWrite1hCost =
     params.provider === 'anthropic' ? calculateCost(write1h, rates.input * 2, multiplier) : 0
-  const promptCost =
-    uncachedPromptCost +
-    (params.provider === 'anthropic'
+  const cacheWriteCost =
+    params.provider === 'anthropic'
       ? cacheWrite5mCost + cacheWrite1hCost
-      : calculateCost(cacheWriteTokens, rates.cacheWrite ?? rates.input, multiplier))
+      : calculateCost(cacheWriteTokens, rates.cacheWrite ?? rates.input, multiplier)
+  const promptCost = uncachedPromptCost + cacheWriteCost
   const cachedInputRate = rates.cachedInput ?? rates.input
   const cachedInputCost = calculateCost(cachedInputTokens, cachedInputRate, multiplier)
   const completionCost = calculateCost(effectiveCompletionTokens, rates.output, multiplier)
@@ -172,6 +179,8 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
     reasoningCost,
     totalCost,
     uncachedPromptCost,
+    cacheWriteTokens,
+    cacheWriteCost,
     cacheWrite5mTokens: params.provider === 'anthropic' ? write5m : 0,
     cacheWrite1hTokens: params.provider === 'anthropic' ? write1h : 0,
     cacheWrite5mCost,

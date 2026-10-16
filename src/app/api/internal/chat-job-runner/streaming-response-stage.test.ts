@@ -93,9 +93,52 @@ describe('consumeStreamingResponseStage', () => {
       updateIntervalMs: 0,
       debugMetrics,
     })
-    expect(result.googleServiceTier).toBe('flex')
+    expect(result.serviceTier).toBe('flex')
     expect(debugMetrics).toMatchObject({ google_actual_service_tier: 'flex' })
   })
+  it.each(['deepseek', 'openrouter'] as const)(
+    'aggregates all SDK calls through the common %s path',
+    async (provider) => {
+      const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
+      const first = {
+        inputTokens: 1000,
+        outputTokens: 100,
+        totalTokens: 1100,
+        cachedInputTokens: 800,
+        reasoningTokens: 0,
+      }
+      const last = {
+        inputTokens: 1500,
+        outputTokens: 200,
+        totalTokens: 1700,
+        cachedInputTokens: 1000,
+        reasoningTokens: 0,
+      }
+      const result = await consumeStreamingResponseStage({
+        supabase: {} as never,
+        chatId: 'chat',
+        jobId: 'job',
+        provider,
+        ...createProviderTimeoutContext(),
+        regenerateAssistantMessageId: null,
+        stream: {
+          textStream: textDeltaStream(['Answer']),
+          finishReason: Promise.resolve('stop'),
+          providerMetadata: Promise.resolve(undefined),
+          usage: Promise.resolve(last),
+          steps: Promise.resolve([{ usage: first }, { usage: last }]),
+        } as never,
+      })
+      expect(result.usageSteps).toHaveLength(2)
+      expect(result.usage).toMatchObject({
+        promptTokens: 2500,
+        completionTokens: 300,
+        totalTokens: 2800,
+        cachedInputTokens: 1800,
+      })
+    },
+  )
+
   it('streams snapshots and returns usage metadata for a successful response', async () => {
     const { consumeStreamingResponseStage } = await import('./streaming-response-stage')
 
@@ -130,7 +173,7 @@ describe('consumeStreamingResponseStage', () => {
 
     expect(broadcastAssistantStreamSnapshotMock).toHaveBeenCalled()
     expect(broadcastAssistantStreamErrorMock).not.toHaveBeenCalled()
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       fullText: 'hello world',
       assistantText: 'hello world',
       finishReason: 'stop',

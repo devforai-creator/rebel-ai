@@ -1,68 +1,48 @@
-import type { ModelPricingTier } from '../types'
+import type { ModelPricingTier, ModelPricingRateSet } from '../types'
 import { defineProviderCatalog, flatPricing } from './helpers'
 
+// Official model pages: >272K charges the entire request at long-context rates.
+// Fast/Priority is 2x Standard for the Sol models below; older models need their own rates.
+function longContextPricing(rates: ModelPricingRateSet, solPriority = false): ModelPricingTier[] {
+  const longRates = {
+    input: rates.input * 2,
+    output: rates.output * 1.5,
+    cachedInput: rates.cachedInput === undefined ? undefined : rates.cachedInput * 2,
+    cacheWrite: rates.cacheWrite === undefined ? undefined : rates.cacheWrite * 2,
+    reasoning: (rates.reasoning ?? rates.output) * 1.5,
+  }
+  return [rates, longRates].map((rateSet, index) => ({
+    ...(index === 0 ? { maxPromptTokens: 272_000 } : {}),
+    rates: rateSet,
+    ...(solPriority
+      ? {
+          priorityRates: {
+            input: rateSet.input * 2,
+            output: rateSet.output * 2,
+            cachedInput: rateSet.cachedInput === undefined ? undefined : rateSet.cachedInput * 2,
+            cacheWrite: rateSet.cacheWrite === undefined ? undefined : rateSet.cacheWrite * 2,
+            reasoning: (rateSet.reasoning ?? rateSet.output) * 2,
+          },
+        }
+      : {}),
+  }))
+}
+
 // https://developers.openai.com/api/docs/models/gpt-6.1-sol
-const OPENAI_GPT61_SOL_PRICING: ModelPricingTier[] = [
-  {
-    maxPromptTokens: 272_000,
-    rates: {
-      input: 2,
-      output: 10,
-      cachedInput: 0.1,
-      cacheWrite: 2.5,
-      reasoning: 10,
-    },
-  },
-  {
-    rates: {
-      input: 4,
-      output: 15,
-      cachedInput: 0.2,
-      cacheWrite: 5,
-      reasoning: 15,
-    },
-  },
-]
-
-const OPENAI_GPT6_SOL_PRICING: ModelPricingTier[] = [
-  {
-    maxPromptTokens: 272_000,
-    rates: {
-      input: 2,
-      output: 10,
-      cachedInput: 0.2,
-      reasoning: 10,
-    },
-  },
-  {
-    rates: {
-      input: 4,
-      output: 15,
-      cachedInput: 0.4,
-      reasoning: 15,
-    },
-  },
-]
-
-const OPENAI_GPT56_PRICING: ModelPricingTier[] = [
-  {
-    maxPromptTokens: 272_000,
-    rates: {
-      input: 5,
-      output: 30,
-      cachedInput: 0.5,
-      reasoning: 30,
-    },
-  },
-  {
-    rates: {
-      input: 10,
-      output: 45,
-      cachedInput: 1,
-      reasoning: 45,
-    },
-  },
-]
+const OPENAI_GPT61_SOL_PRICING = longContextPricing(
+  { input: 2, output: 10, cachedInput: 0.1, cacheWrite: 2.5, reasoning: 10 },
+  true,
+)
+// https://developers.openai.com/api/docs/models/gpt-6-sol
+const OPENAI_GPT6_SOL_PRICING = longContextPricing(
+  { input: 2, output: 10, cachedInput: 0.2, cacheWrite: 2.5, reasoning: 10 },
+  true,
+)
+// https://developers.openai.com/api/docs/models/gpt-5.6-sol (promotional rates through at least 2026-11-21)
+const OPENAI_GPT56_PRICING = longContextPricing(
+  { input: 4, output: 20, cachedInput: 0.4, cacheWrite: 5, reasoning: 20 },
+  true,
+)
 
 export const openAIModelCatalog = defineProviderCatalog({
   provider: 'openai',
@@ -131,7 +111,7 @@ export const openAIModelCatalog = defineProviderCatalog({
     {
       id: 'gpt-5.5',
       displayName: 'GPT-5.5',
-      pricing: flatPricing({ input: 5, output: 30, cachedInput: 0.5, reasoning: 30 }),
+      pricing: longContextPricing({ input: 5, output: 30, cachedInput: 0.5, reasoning: 30 }),
       features: {
         promptCaching: 'extended',
         reasoning: true,
@@ -144,7 +124,7 @@ export const openAIModelCatalog = defineProviderCatalog({
     {
       id: 'gpt-5.4',
       displayName: 'GPT-5.4',
-      pricing: flatPricing({ input: 2.5, output: 15, cachedInput: 0.25, reasoning: 15 }),
+      pricing: longContextPricing({ input: 2.5, output: 15, cachedInput: 0.25, reasoning: 15 }),
       features: {
         promptCaching: 'extended',
         reasoning: true,
@@ -190,17 +170,20 @@ export const openAIModelCatalog = defineProviderCatalog({
     {
       id: 'gpt-4.1',
       displayName: 'GPT-4.1',
+      pricing: flatPricing({ input: 2, output: 8, cachedInput: 0.5 }),
       features: { promptCaching: 'standard' },
     },
     {
       id: 'gpt-4o',
       displayName: 'GPT-4o',
+      pricing: flatPricing({ input: 2.5, output: 10, cachedInput: 1.25 }),
       features: { promptCaching: 'standard' },
       uiVisible: false,
     },
     {
       id: 'gpt-4o-mini',
       displayName: 'GPT-4o Mini',
+      pricing: flatPricing({ input: 0.15, output: 0.6, cachedInput: 0.075 }),
       features: { promptCaching: 'standard' },
       uiVisible: false,
     },

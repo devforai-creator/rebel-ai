@@ -149,6 +149,7 @@ export function useChatMessageLifecycle({
     debugInfoMap,
     setMessages: queuedChat.setMessages,
     reload: queuedChat.reload,
+    onDeleteComplete: fetchLatestUsage,
   })
 
   const debug = useChatDebugModal({

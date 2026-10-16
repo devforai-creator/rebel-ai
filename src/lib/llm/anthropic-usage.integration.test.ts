@@ -1,9 +1,21 @@
+import { runPostProcessingStage } from '@/app/api/internal/chat-job-runner/post-processing-stage'
 import { afterEach, expect, it, vi } from 'vitest'
 import { jsonSchema, stepCountIs, streamText, tool } from 'ai'
 import { buildLanguageModel } from './model-factory'
-import { priceAnthropicSteps } from './anthropic-usage'
+import { priceUsageSteps } from './usage'
 import { buildUsageReceipt, readUsageReceipt } from '@/lib/chat/usage-receipt'
 import { consumeStreamingResponseStage } from '@/app/api/internal/chat-job-runner/streaming-response-stage'
+
+const { pipeline } = vi.hoisted(() => ({
+  pipeline: vi.fn().mockResolvedValue({
+    messageInsertDuration: null,
+    usageEventInsertDurationMs: 0,
+    summaryTriggerDurationMs: null,
+  }),
+}))
+vi.mock('@/app/api/internal/chat-job-runner/post-generation-pipeline', () => ({
+  runPostGenerationPipeline: pipeline,
+}))
 
 vi.mock('@/app/api/internal/chat-job-runner/assistant-stream-broadcaster', () => ({
   broadcastAssistantStreamSnapshot: vi.fn().mockResolvedValue(undefined),
@@ -115,7 +127,8 @@ it('collects every real SDK ATR step, including mixed TTL writes, into one answe
     cacheWriteTokens: 1250,
   })
   expect(collected.usageSteps).toHaveLength(2)
-  const cost = priceAnthropicSteps({
+  const cost = priceUsageSteps({
+    provider: 'anthropic',
     steps: collected.usageSteps!,
     modelName: 'claude-opus-4-7',
     cacheWriteTtl: '1h',
@@ -157,14 +170,124 @@ it('prices calls separately when the sum crosses a prompt pricing threshold', ()
     reasoningTokens: null,
     cacheWriteTokens: 0,
   }
-  const cost = priceAnthropicSteps({ steps: [step, step], modelName: 'claude-haiku-5-5' })!
+  const cost = priceUsageSteps({
+    provider: 'anthropic',
+    steps: [step, step],
+    modelName: 'claude-haiku-5-5',
+  })!
   expect(cost.totalCost).toBeCloseTo(0.017, 12)
-  const opus = priceAnthropicSteps({
+  const opus = priceUsageSteps({
+    provider: 'anthropic',
     steps: [{ ...step, promptTokens: 300000 }],
     modelName: 'claude-opus-4-6',
   })!
   expect(opus.totalCost).toBeCloseTo(1.525, 12)
   expect(
-    priceAnthropicSteps({ steps: [{ ...step, promptTokens: null }], modelName: 'claude-opus-4-7' }),
+    priceUsageSteps({
+      provider: 'anthropic',
+      steps: [{ ...step, promptTokens: null }],
+      modelName: 'claude-opus-4-7',
+    }),
   ).toBeNull()
+})
+
+it('retains mixed native TTL writes through real SDK ATR and persistence when model pricing is unknown', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValueOnce(
+        sse(
+          1,
+          {
+            input_tokens: 3000,
+            cache_read_input_tokens: 2000,
+            cache_creation_input_tokens: 1000,
+            cache_creation: { ephemeral_5m_input_tokens: 400, ephemeral_1h_input_tokens: 600 },
+          },
+          150,
+          true,
+        ),
+      )
+      .mockResolvedValueOnce(
+        sse(
+          2,
+          { input_tokens: 500, cache_read_input_tokens: 6500, cache_creation_input_tokens: 250 },
+          1000,
+          false,
+        ),
+      ),
+  )
+  const stream = streamText({
+    model: buildLanguageModel({
+      provider: 'anthropic',
+      modelName: 'claude-custom-unpriced',
+      apiKey: 'test-key',
+    }),
+    prompt: 'Read earlier messages.',
+    tools: {
+      fetch_source_range: tool({
+        description: 'Read messages',
+        inputSchema: jsonSchema<Record<string, never>>({ type: 'object', properties: {} }),
+        execute: async () => ({ messages: ['Earlier conversation'] }),
+      }),
+    },
+    stopWhen: stepCountIs(2),
+    maxRetries: 0,
+  })
+  const collected = await consumeStreamingResponseStage({
+    supabase: {} as never,
+    chatId: 'chat',
+    jobId: 'job',
+    stream: stream as never,
+    provider: 'anthropic',
+    regenerateAssistantMessageId: null,
+    providerAbortSignal: new AbortController().signal,
+    providerStreamTimeoutMs: 30000,
+  })
+  await runPostProcessingStage({
+    supabase: {} as never,
+    payload: {
+      chatId: 'chat',
+      userId: 'owner',
+      apiKeyId: 'key',
+      provider: 'anthropic',
+      modelName: 'claude-custom-unpriced',
+      requestId: 'request',
+    } as never,
+    origin: 'http://local',
+    context: {
+      apiKeyData: { service_tier: 'standard' },
+      generationTranscript: [],
+      finalSystemPrompt: 'System',
+      dynamicContext: null,
+      dynamicContextTokens: 0,
+      recentMessages: [],
+      ragInfo: null,
+      bilingualEnabled: false,
+      anthropicConversationMessages: null,
+      anthropicPlaceholderAdded: false,
+      totalInputTokens: 0,
+      staticPromptTokens: 0,
+      debugMetrics: {},
+    } as never,
+    providerArtifacts: {
+      promptCache: null,
+      anthropicCache: { enabled: true, ttl: '1h', minTokens: 1024 },
+      googleExplicitCacheEnabled: false,
+      googleCacheDecision: null,
+      googleCacheResult: null,
+      actualPayload: null,
+    },
+    streamingResponse: collected,
+  })
+  const receipt = readUsageReceipt(pipeline.mock.calls.at(-1)![0].debugInfo)
+  expect(receipt).toMatchObject({
+    input: 13250,
+    cachedInput: 8500,
+    cacheWrite5m: 400,
+    cacheWrite1h: 850,
+    callCount: 2,
+    cost: null,
+  })
 })

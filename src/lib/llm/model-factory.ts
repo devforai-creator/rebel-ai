@@ -1,5 +1,5 @@
 import { buildLocalModel } from './local'
-import { googleServiceTierMiddleware } from './google-service-tier-middleware'
+import { googleUsageMiddleware } from './google-usage-middleware'
 import { deepSeekUsageMiddleware } from './deepseek-usage-middleware'
 import { openRouterUsageMiddleware } from './openrouter-usage-middleware'
 import { createAnthropic } from '@ai-sdk/anthropic'
@@ -49,7 +49,7 @@ function wrapGoogleLanguageModel(model: LanguageModel): LanguageModel {
         middlewareVersion: 'v2',
         transformParams: async ({ params }) => transformGoogleCachedToolCallParams(params),
       },
-      googleServiceTierMiddleware,
+      googleUsageMiddleware,
     ],
   }) as LanguageModel
 }

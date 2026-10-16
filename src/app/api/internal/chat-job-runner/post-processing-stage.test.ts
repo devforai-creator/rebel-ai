@@ -169,6 +169,8 @@ describe('runPostProcessingStage', () => {
       reasoningTokens: null,
       totalTokens: 30,
       cacheWriteTokens: 123,
+      cacheWrite5mTokens: 123,
+      cacheWrite1hTokens: 0,
       cacheWriteTtl: '5m',
       serviceTier: 'standard',
     })
@@ -178,7 +180,11 @@ describe('runPostProcessingStage', () => {
         anthropicConversationMessages: [{ role: 'user', content: 'Hello' }],
         rawResponse: 'raw text',
         processedResponse: 'clean text',
-        usage: expect.objectContaining(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
+        usage: expect.objectContaining({
+          cacheWriteTokens: 123,
+          cacheWrite5mTokens: 123,
+          cacheWrite1hTokens: 0,
+        }),
       }),
     )
     expect(runPostGenerationPipelineMock).toHaveBeenCalledWith(

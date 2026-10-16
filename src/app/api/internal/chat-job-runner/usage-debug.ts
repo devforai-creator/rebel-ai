@@ -1,3 +1,4 @@
+import type { UsageStep } from '@/lib/llm/usage'
 import type { Database, LlmProvider } from '@/types/database.types'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import type { UsageCostBreakdown } from '@/lib/model-pricing'
@@ -21,15 +22,7 @@ export type ChatRunnerActualPayload = {
   }
 }
 
-export type UsageMetrics = {
-  reportedCostUsd?: number | null
-  promptTokens: number | null
-  completionTokens: number | null
-  totalTokens: number | null
-  cachedInputTokens: number | null
-  reasoningTokens: number | null
-  cacheWriteTokens?: number
-}
+export type UsageMetrics = Omit<UsageStep, 'serviceTier' | 'modelName' | 'pricingTimestamp'>
 
 type BuildChatDebugInfoArgs = {
   requestId: string

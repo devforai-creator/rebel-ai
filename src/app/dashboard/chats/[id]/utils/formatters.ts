@@ -43,11 +43,15 @@ export const shouldRefreshTokenStats = (payload: MessageChangePayload): boolean 
   const newMessage = payload.new ?? null
   const oldMessage = payload.old ?? null
 
+  // RLS delete payloads may contain only the primary key, even with FULL replica identity.
+  if (payload.eventType === 'DELETE')
+    return typeof oldMessage?.id === 'string' || isAssistantRole(oldMessage?.role)
+
   if (!isAssistantRole(newMessage?.role) && !isAssistantRole(oldMessage?.role)) {
     return false
   }
 
-  if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
+  if (payload.eventType === 'INSERT') {
     return true
   }
 

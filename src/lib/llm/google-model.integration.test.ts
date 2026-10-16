@@ -139,6 +139,7 @@ describe('Gemini 4 Argon SDK request contract', () => {
     })
     const cost = estimateUsageCost({
       provider: 'google',
+      pricingTimestamp: '2026-10-16T00:00:00Z',
       modelName,
       promptTokens: result.totalUsage.inputTokens,
       completionTokens: result.totalUsage.outputTokens,

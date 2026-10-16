@@ -24,6 +24,7 @@ const cost = estimateUsageCost({
 })!
 const receipt = buildUsageReceipt({
   requestId: 'correct-request',
+  cacheWriteTtl: '1h',
   provider: 'anthropic',
   modelName: 'claude-opus-4-7',
   callCount: 2,

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { priceGoogleSteps, readGoogleUsageStep, sumGoogleUsage } from './google-usage'
+import { readGoogleUsageStep } from './google-usage'
+import { priceUsageSteps, sumUsageSteps } from './usage'
 import { estimateUsageCost } from '@/lib/model-pricing'
 
 const step = {
+  pricingTimestamp: '2026-10-16T00:00:00Z',
   promptTokens: 10000,
   completionTokens: 1500,
   cachedInputTokens: 8000,
@@ -18,6 +20,7 @@ describe('Google per-call pricing', () => {
     expect(
       estimateUsageCost({
         provider: 'google',
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         modelName,
         serviceTier: 'flex',
         promptTokens: 250000,
@@ -30,18 +33,27 @@ describe('Google per-call pricing', () => {
   it('uses actual per-call tiers, falling back only for the call without metadata', () => {
     const steps = [{ ...step, serviceTier: 'standard' as const }, { ...step }]
     expect(
-      priceGoogleSteps({ steps, modelName: 'gemini-4-argon', serviceTier: 'flex' })?.totalCost,
+      priceUsageSteps({
+        provider: 'google',
+        steps,
+        modelName: 'gemini-4-argon',
+        serviceTier: 'flex',
+      })?.totalCost,
     ).toBeCloseTo(0.0248 + 0.0124, 12)
   })
   it('selects the long-context band for each call, including the exact boundary', () => {
     const atBoundary = { ...step, promptTokens: 200000, cachedInputTokens: 0 }
     const above = { ...atBoundary, promptTokens: 200001 }
     expect(
-      priceGoogleSteps({ steps: [atBoundary, atBoundary], modelName: 'gemini-3.1-pro-preview' })
-        ?.totalCost,
+      priceUsageSteps({
+        provider: 'google',
+        steps: [atBoundary, atBoundary],
+        modelName: 'gemini-3.1-pro-preview',
+      })?.totalCost,
     ).toBeCloseTo(0.848, 12)
     expect(
-      priceGoogleSteps({ steps: [above], modelName: 'gemini-3.1-pro-preview' })?.totalCost,
+      priceUsageSteps({ provider: 'google', steps: [above], modelName: 'gemini-3.1-pro-preview' })
+        ?.totalCost,
     ).toBeCloseTo(0.836004, 12)
   })
   it.each([null, undefined, Number.NaN, -1])(
@@ -50,6 +62,7 @@ describe('Google per-call pricing', () => {
       expect(
         estimateUsageCost({
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-4-argon',
           promptTokens: missing,
           completionTokens: 1000,
@@ -58,6 +71,7 @@ describe('Google per-call pricing', () => {
       expect(
         estimateUsageCost({
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-4-argon',
           promptTokens: 1000,
           completionTokens: missing,
@@ -67,18 +81,24 @@ describe('Google per-call pricing', () => {
   )
   it('does not return a partial price or partial aggregate when one ATR call is unknown', () => {
     const steps = [step, { ...step, promptTokens: null }]
-    expect(priceGoogleSteps({ steps, modelName: 'gemini-4-argon' })).toBeNull()
-    expect(sumGoogleUsage(steps).promptTokens).toBeNull()
-    expect(sumGoogleUsage(steps).completionTokens).toBe(3000)
-    expect(priceGoogleSteps({ steps: [], modelName: 'gemini-4-argon' })).toBeNull()
-    expect(sumGoogleUsage([]).promptTokens).toBeNull()
+    expect(priceUsageSteps({ provider: 'google', steps, modelName: 'gemini-4-argon' })).toBeNull()
+    expect(sumUsageSteps(steps).promptTokens).toBeNull()
+    expect(sumUsageSteps(steps).completionTokens).toBe(3000)
+    expect(
+      priceUsageSteps({ provider: 'google', steps: [], modelName: 'gemini-4-argon' }),
+    ).toBeNull()
+    expect(sumUsageSteps([]).promptTokens).toBeNull()
   })
   it('distinguishes valid zero usage from missing usage and defaults optional counters only with usage', () => {
     const known = readGoogleUsageStep({
       usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      providerMetadata: { google: { pricingTimestamp: '2026-10-16T00:00:00Z' } },
     })
     expect(known).toMatchObject({ cachedInputTokens: 0, reasoningTokens: 0 })
-    expect(priceGoogleSteps({ steps: [known], modelName: 'gemini-4-argon' })?.totalCost).toBe(0)
+    expect(
+      priceUsageSteps({ provider: 'google', steps: [known], modelName: 'gemini-4-argon' })
+        ?.totalCost,
+    ).toBe(0)
     const unknown = readGoogleUsageStep({
       usage: { inputTokens: undefined, outputTokens: undefined, totalTokens: undefined },
     })
@@ -88,7 +108,9 @@ describe('Google per-call pricing', () => {
       cachedInputTokens: null,
       reasoningTokens: null,
     })
-    expect(priceGoogleSteps({ steps: [unknown], modelName: 'gemini-4-argon' })).toBeNull()
+    expect(
+      priceUsageSteps({ provider: 'google', steps: [unknown], modelName: 'gemini-4-argon' }),
+    ).toBeNull()
   })
 })
 
@@ -115,6 +137,7 @@ it.each([
     ] as const) {
       const cost = estimateUsageCost({
         provider: 'google',
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         modelName,
         serviceTier,
         promptTokens: 10000,

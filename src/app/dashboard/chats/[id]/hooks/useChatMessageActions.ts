@@ -19,6 +19,7 @@ type UseChatMessageActionsArgs = {
   debugInfoMap: MutableRefObject<Map<string, DebugInfo>>
   setMessages: Dispatch<SetStateAction<DisplayMessage[]>>
   reload: UseQueuedChatReturn['reload']
+  onDeleteComplete?: () => Promise<void>
 }
 
 type UseChatMessageActionsReturn = {
@@ -60,6 +61,7 @@ export function useChatMessageActions({
   debugInfoMap,
   setMessages,
   reload,
+  onDeleteComplete,
 }: UseChatMessageActionsArgs): UseChatMessageActionsReturn {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
@@ -123,7 +125,8 @@ export function useChatMessageActions({
     persistedMessageIds.current.delete(targetId)
     debugInfoMap.current.delete(targetId)
     setMessages((prev) => prev.filter((message) => message.id !== targetId))
-  }, [debugInfoMap, pendingDeleteMessageId, persistedMessageIds, setMessages])
+    await onDeleteComplete?.()
+  }, [debugInfoMap, pendingDeleteMessageId, persistedMessageIds, setMessages, onDeleteComplete])
 
   const pendingDeleteMessage = useMemo(
     () => combinedMessages.find((message) => message.id === pendingDeleteMessageId) ?? null,

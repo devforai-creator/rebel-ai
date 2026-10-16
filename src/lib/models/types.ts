@@ -71,6 +71,7 @@ export type ModelDefinition = {
   uiVisible?: boolean
   uiOrder?: number
   pricing?: ModelPricingTier[]
+  pricingChanges?: ReadonlyArray<{ effectiveFrom: string; pricing: ModelPricingTier[] }>
   features?: ModelFeatures
 }
 

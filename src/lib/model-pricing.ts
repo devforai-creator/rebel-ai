@@ -1,6 +1,8 @@
 import type { ApiServiceTier, Provider } from '@/types/database.types'
 import type { ModelPricingRateSet as RateSet } from './models'
 import { getModelPricingTiers } from './models'
+import { resolveCacheWriteUsage } from './chat/cache-write-usage'
+import { outputIncludesReasoning } from './llm/usage-semantics'
 import { getDeepSeekPricingPeriod } from './deepseek/pricing'
 
 const TOKENS_PER_MILLION = 1_000_000
@@ -55,7 +57,7 @@ function resolveRates({
   const tokens =
     typeof promptTokens === 'number' && Number.isFinite(promptTokens) ? promptTokens : 0
 
-  const pricingTiers = getModelPricingTiers({ provider, modelName })
+  const pricingTiers = getModelPricingTiers({ provider, modelName, pricingTimestamp })
   if (!pricingTiers || pricingTiers.length === 0) {
     return null
   }
@@ -107,9 +109,7 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
   const reasoningTokens = sanitizeTokens(params.reasoningTokens)
   const reportedWrites = sanitizeTokens(params.cacheWriteTokens)
   if (
-    (params.provider === 'openai' ||
-      params.provider === 'deepseek' ||
-      params.provider === 'openrouter') &&
+    outputIncludesReasoning(params.provider) &&
     (reasoningTokens > completionTokens || cachedInputTokens + reportedWrites > promptTokens)
   )
     return null
@@ -118,11 +118,8 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
     !isReportedTokenCount(params.cachedInputTokens)
   )
     return null
-  let write5m = sanitizeTokens(params.cacheWrite5mTokens)
-  let write1h = sanitizeTokens(params.cacheWrite1hTokens)
-  const unclassifiedWrites = Math.max(reportedWrites - write5m - write1h, 0)
-  if (params.cacheWriteTtl === '1h') write1h += unclassifiedWrites
-  else write5m += unclassifiedWrites
+  const { cacheWrite5mTokens: write5m = 0, cacheWrite1hTokens: write1h = 0 } =
+    resolveCacheWriteUsage(params, params.cacheWriteTtl)
   // Anthropic reports uncached input separately; cached reads and writes still
   // count toward the full prompt length that determines the pricing tier.
   const pricingPromptTokens =
@@ -165,12 +162,9 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
       : Math.max(promptTokens - cachedInputTokens - cacheWriteTokens, 0)
 
   // These providers include reasoning in outputTokens; charge each token once.
-  const effectiveCompletionTokens =
-    params.provider === 'openai' ||
-    params.provider === 'deepseek' ||
-    params.provider === 'openrouter'
-      ? Math.max(completionTokens - reasoningTokens, 0)
-      : completionTokens
+  const effectiveCompletionTokens = outputIncludesReasoning(params.provider)
+    ? Math.max(completionTokens - reasoningTokens, 0)
+    : completionTokens
 
   const multiplier = getServiceTierMultiplier(params.provider, params.serviceTier)
 

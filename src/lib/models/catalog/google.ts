@@ -52,6 +52,18 @@ const GEMINI_36_38_FLASH_PRICING = flatPricing(
   { input: 0.375, output: 1.875, cachedInput: 0.0375 },
 )
 
+// Public end dates have no time-zone detail. UTC midnight is the explicit
+// boundary used for estimates; each call's dispatch time is retained.
+const FLASH_PRICING_CHANGES = [
+  {
+    effectiveFrom: '2027-01-01T00:00:00Z',
+    pricing: flatPricing(
+      { input: 1.5, output: 7.5, cachedInput: 0.15 },
+      { input: 0.75, output: 3.75, cachedInput: 0.075 },
+    ),
+  },
+]
+
 export const googleModelCatalog = defineProviderCatalog({
   provider: 'google',
   defaults: {
@@ -69,6 +81,15 @@ export const googleModelCatalog = defineProviderCatalog({
         { input: 2, output: 10, cachedInput: 0.1 },
         { input: 1, output: 5, cachedInput: 0.05 },
       ),
+      pricingChanges: [
+        {
+          effectiveFrom: '2026-12-01T00:00:00Z',
+          pricing: flatPricing(
+            { input: 4, output: 20, cachedInput: 0.2 },
+            { input: 2, output: 10, cachedInput: 0.1 },
+          ),
+        },
+      ],
       features: {
         flex: true,
         promptCaching: 'implicit-only',
@@ -81,18 +102,21 @@ export const googleModelCatalog = defineProviderCatalog({
       id: 'gemini-3.8-flash',
       displayName: 'Gemini 3.8 Flash',
       pricing: GEMINI_36_38_FLASH_PRICING,
+      pricingChanges: FLASH_PRICING_CHANGES,
       features: { flex: true, promptCacheMinTokens: 4096 },
     },
     {
       id: 'gemini-3.7-flash',
       displayName: 'Gemini 3.7 Flash',
       pricing: GEMINI_36_38_FLASH_PRICING,
+      pricingChanges: FLASH_PRICING_CHANGES,
       features: { promptCacheMinTokens: 4096 },
     },
     {
       id: 'gemini-3.6-flash',
       displayName: 'Gemini 3.6 Flash',
       pricing: GEMINI_36_38_FLASH_PRICING,
+      pricingChanges: FLASH_PRICING_CHANGES,
       features: { flex: true, promptCacheMinTokens: 1024 },
     },
     {

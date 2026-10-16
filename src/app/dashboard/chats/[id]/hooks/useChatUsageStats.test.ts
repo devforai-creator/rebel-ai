@@ -129,7 +129,7 @@ describe('useChatUsageStats', () => {
     act(() =>
       result.current.handleUsageRealtime({
         eventType: 'DELETE',
-        old: { role: 'assistant' },
+        old: { id: 'answer-2' },
         new: null,
       }),
     )

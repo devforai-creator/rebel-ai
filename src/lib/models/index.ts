@@ -136,12 +136,31 @@ export function supportsRequiredToolChoice({
 export function getModelPricingTiers({
   provider,
   modelName,
+  pricingTimestamp,
 }: {
   provider: Provider
   modelName?: string | null
+  pricingTimestamp?: string | Date | null
 }): ModelPricingTier[] | null {
   const model = findModelDefinition({ provider, modelName })
-  return model?.pricing ?? null
+  if (!model?.pricingChanges?.length) return model?.pricing ?? null
+  const timestamp =
+    pricingTimestamp instanceof Date
+      ? pricingTimestamp.getTime()
+      : typeof pricingTimestamp === 'string'
+        ? Date.parse(pricingTimestamp)
+        : NaN
+  if (!Number.isFinite(timestamp)) return null
+  let pricing = model.pricing ?? null
+  let latestChange = -Infinity
+  for (const change of model.pricingChanges) {
+    const effectiveFrom = Date.parse(change.effectiveFrom)
+    if (effectiveFrom <= timestamp && effectiveFrom > latestChange) {
+      pricing = change.pricing
+      latestChange = effectiveFrom
+    }
+  }
+  return pricing
 }
 
 export function getDefaultModelForProvider(

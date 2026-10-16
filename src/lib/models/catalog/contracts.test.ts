@@ -39,6 +39,7 @@ describe('model catalog contracts', () => {
   it('wires every declared pricing table into usage estimation', () => {
     for (const model of MODEL_REGISTRY) {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: model.provider,
         modelName: model.id,
       })

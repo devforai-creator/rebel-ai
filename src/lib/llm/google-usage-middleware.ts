@@ -11,21 +11,26 @@ function readServiceTier(body: unknown) {
 
 // @ai-sdk/google 2.x only reads response.serviceTier. Live Gemini responses also
 // report usageMetadata.serviceTier, which its usage schema currently strips.
-export const googleServiceTierMiddleware: LanguageModelV2Middleware = {
+export const googleUsageMiddleware: LanguageModelV2Middleware = {
   middlewareVersion: 'v2',
   wrapGenerate: async ({ doGenerate }) => {
+    const pricingTimestamp = new Date().toISOString()
     const result = await doGenerate()
     const serviceTier = readServiceTier(result.response?.body)
-    if (!serviceTier) return result
     return {
       ...result,
       providerMetadata: {
         ...result.providerMetadata,
-        google: { ...result.providerMetadata?.google, serviceTier },
+        google: {
+          ...result.providerMetadata?.google,
+          pricingTimestamp,
+          ...(serviceTier ? { serviceTier } : {}),
+        },
       },
     }
   },
   wrapStream: async ({ model, params }) => {
+    const pricingTimestamp = new Date().toISOString()
     const result = await model.doStream({ ...params, includeRawChunks: true })
     let serviceTier: 'standard' | 'flex' | undefined
     return {
@@ -35,16 +40,20 @@ export const googleServiceTierMiddleware: LanguageModelV2Middleware = {
           transform(chunk, controller) {
             if (chunk.type === 'raw') {
               serviceTier = readServiceTier(chunk.rawValue) ?? serviceTier
-              // Inspect only the tier; do not expose raw payloads unless requested.
+              // Inspect only billing metadata; do not expose raw payloads unless requested.
               if (params.includeRawChunks) controller.enqueue(chunk)
               return
             }
-            if (chunk.type === 'finish' && serviceTier) {
+            if (chunk.type === 'finish') {
               controller.enqueue({
                 ...chunk,
                 providerMetadata: {
                   ...chunk.providerMetadata,
-                  google: { ...chunk.providerMetadata?.google, serviceTier },
+                  google: {
+                    ...chunk.providerMetadata?.google,
+                    pricingTimestamp,
+                    ...(serviceTier ? { serviceTier } : {}),
+                  },
                 },
               })
               return

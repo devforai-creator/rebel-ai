@@ -1,5 +1,7 @@
+import { readGoogleUsageStep } from './google-usage'
+import { priceUsageSteps } from './usage'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { jsonSchema, stepCountIs, streamText, tool } from 'ai'
+import { generateText, jsonSchema, stepCountIs, streamText, tool } from 'ai'
 import { buildLanguageModel } from './model-factory'
 import { getProviderOptions } from './provider-options'
 import { consumeStreamingResponseStage } from '@/app/api/internal/chat-job-runner/streaming-response-stage'
@@ -26,8 +28,13 @@ vi.mock('@/app/api/internal/chat-job-runner/assistant-stream-broadcaster', () =>
   broadcastAssistantStreamSnapshot: vi.fn().mockResolvedValue(undefined),
   broadcastAssistantStreamError: vi.fn().mockResolvedValue(undefined),
 }))
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
+})
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime('2026-10-16T00:00:00Z')
   vi.clearAllMocks()
   const db = createSupabaseMock({
     tables: {
@@ -285,4 +292,85 @@ it('does not display only the known call price when an earlier ATR call omits us
   })
   const { stats } = await persistAndRead(stream, 'standard')
   expect(stats).toMatchObject({ callCount: 2, prompt: null, completion: null, costUsd: null })
+})
+
+it.each(['standard', 'flex'] as const)(
+  'prices real SDK ATR calls across the Argon discount cutoff and keeps the saved %s bill stable',
+  async (tier) => {
+    vi.setSystemTime('2026-11-30T23:59:59.999Z')
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        vi.setSystemTime('2026-12-01T00:00:00Z')
+        return sse(tier, true)
+      })
+      .mockResolvedValueOnce(sse(tier))
+    vi.stubGlobal('fetch', fetchMock)
+    const stream = streamText({
+      model: buildLanguageModel({
+        provider: 'google',
+        modelName: 'gemini-4-argon',
+        apiKey: 'test-key',
+      }),
+      prompt: 'Read earlier messages.',
+      tools: {
+        fetch_source_range: tool({
+          description: 'Read messages',
+          inputSchema: jsonSchema<Record<string, never>>({ type: 'object', properties: {} }),
+          execute: async () => ({ messages: ['Earlier conversation'] }),
+        }),
+      },
+      stopWhen: stepCountIs(2),
+      maxRetries: 0,
+    })
+    const { collected, stats } = await persistAndRead(stream, tier)
+    expect(collected.usageSteps?.map((step) => step.pricingTimestamp)).toEqual([
+      '2026-11-30T23:59:59.999Z',
+      '2026-12-01T00:00:00.000Z',
+    ])
+    expect(stats.costUsd).toBeCloseTo(tier === 'standard' ? 0.0592 : 0.0296, 12)
+    vi.setSystemTime('2027-02-01T00:00:00Z')
+    const later = await GET(new Request('http://local/stats'), {
+      params: Promise.resolve({ chatId: 'chat' }),
+    })
+    expect(parseLatestUsageStatsResponse(await later.json())?.costUsd).toBe(stats.costUsd)
+  },
+)
+
+it('captures the request time for non-streaming Google responses even without tier metadata', async () => {
+  vi.setSystemTime('2026-12-01T00:00:00Z')
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          candidates: [
+            { content: { role: 'model', parts: [{ text: 'Hello' }] }, finishReason: 'STOP' },
+          ],
+          usageMetadata: {
+            promptTokenCount: 10000,
+            candidatesTokenCount: 1000,
+            thoughtsTokenCount: 500,
+            cachedContentTokenCount: 8000,
+            totalTokenCount: 11500,
+          },
+        }),
+        { headers: { 'content-type': 'application/json' } },
+      ),
+    ),
+  )
+  const result = await generateText({
+    model: buildLanguageModel({
+      provider: 'google',
+      modelName: 'gemini-4-argon',
+      apiKey: 'test-key',
+    }),
+    prompt: 'Hello',
+    maxRetries: 0,
+  })
+  const step = readGoogleUsageStep(result)
+  expect(step.pricingTimestamp).toBe('2026-12-01T00:00:00.000Z')
+  expect(
+    priceUsageSteps({ provider: 'google', modelName: 'gemini-4-argon', steps: [step] })?.totalCost,
+  ).toBeCloseTo(0.0396, 12)
 })

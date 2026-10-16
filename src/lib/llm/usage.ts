@@ -61,6 +61,8 @@ export function sumUsageSteps(
       : null
   }
   const writes = sum('cacheWriteTokens')
+  const writes5m = sum('cacheWrite5mTokens')
+  const writes1h = sum('cacheWrite1hTokens')
   return {
     promptTokens: sum('promptTokens'),
     completionTokens: sum('completionTokens'),
@@ -68,6 +70,8 @@ export function sumUsageSteps(
     cachedInputTokens: sum('cachedInputTokens'),
     reasoningTokens: sum('reasoningTokens'),
     ...(writes !== null ? { cacheWriteTokens: writes } : {}),
+    ...(writes5m !== null ? { cacheWrite5mTokens: writes5m } : {}),
+    ...(writes1h !== null ? { cacheWrite1hTokens: writes1h } : {}),
   }
 }
 

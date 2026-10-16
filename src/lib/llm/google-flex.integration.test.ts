@@ -120,6 +120,7 @@ describe('Google Flex SDK contract', () => {
   it('halves uncached input, cached input, visible output, and reasoning charges', () => {
     const params = {
       provider: 'google' as const,
+      pricingTimestamp: '2026-10-16T00:00:00Z',
       modelName: 'gemini-4-argon',
       promptTokens: 10000,
       cachedInputTokens: 8000,

@@ -164,6 +164,7 @@ describe('Model Registry', () => {
   describe('getModelPricingTiers', () => {
     it('returns pricing tiers for known model', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'openai',
         modelName: 'gpt-5.2',
       })
@@ -176,6 +177,7 @@ describe('Model Registry', () => {
 
     it('returns tiered pricing for Gemini models', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'google',
         modelName: 'gemini-3.1-pro-preview',
       })
@@ -187,6 +189,7 @@ describe('Model Registry', () => {
 
     it('includes the previously missing Gemini 2.5 Flash prices', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'google',
         modelName: 'gemini-2.5-flash',
       })
@@ -246,13 +249,21 @@ describe('Model Registry', () => {
 
     it('uses Sonnet 5.5 cache pricing without matching the older Sonnet 5 family', () => {
       expect(
-        getModelPricingTiers({ provider: 'anthropic', modelName: 'claude-sonnet-5-5-snapshot' }),
+        getModelPricingTiers({
+          pricingTimestamp: '2026-10-16T00:00:00Z',
+          provider: 'anthropic',
+          modelName: 'claude-sonnet-5-5-snapshot',
+        }),
       ).toEqual([{ rates: { input: 2, output: 10, cachedInput: 0.1 } }])
     })
 
     it('uses Haiku 5.5 pricing tiers around 100K input tokens', () => {
       expect(
-        getModelPricingTiers({ provider: 'anthropic', modelName: 'claude-haiku-5-5' }),
+        getModelPricingTiers({
+          pricingTimestamp: '2026-10-16T00:00:00Z',
+          provider: 'anthropic',
+          modelName: 'claude-haiku-5-5',
+        }),
       ).toEqual([
         {
           maxPromptTokens: 100_000,
@@ -284,6 +295,7 @@ describe('Model Registry', () => {
 
     it('has flat Fable 5.1 pricing and auto-only tool-choice capability', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'anthropic',
         modelName: 'claude-fable-5-1',
       })
@@ -303,6 +315,7 @@ describe('Model Registry', () => {
 
     it('has flat Fable 5 pricing', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'anthropic',
         modelName: 'claude-fable-5',
       })
@@ -316,6 +329,7 @@ describe('Model Registry', () => {
 
     it('has flat Opus 4.8 pricing', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'anthropic',
         modelName: 'claude-opus-4-8',
       })
@@ -329,6 +343,7 @@ describe('Model Registry', () => {
 
     it('has current introductory Sonnet 5 pricing', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'anthropic',
         modelName: 'claude-sonnet-5',
       })
@@ -354,7 +369,13 @@ describe('Model Registry', () => {
           reasoning: true,
         },
       })
-      expect(getModelPricingTiers({ provider: 'google', modelName: model?.id })).toEqual([
+      expect(
+        getModelPricingTiers({
+          pricingTimestamp: '2026-10-16T00:00:00Z',
+          provider: 'google',
+          modelName: model?.id,
+        }),
+      ).toEqual([
         {
           rates: { input: 2, output: 10, cachedInput: 0.1 },
           flexRates: { input: 1, output: 5, cachedInput: 0.05 },
@@ -376,6 +397,7 @@ describe('Model Registry', () => {
 
     it('has current promotional pricing and cache threshold', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'google',
         modelName: 'gemini-3.8-flash',
       })
@@ -410,6 +432,7 @@ describe('Model Registry', () => {
 
     it('has current promotional pricing and cache threshold', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'google',
         modelName: 'gemini-3.7-flash',
       })
@@ -445,6 +468,7 @@ describe('Model Registry', () => {
 
     it('has current promotional pricing', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'google',
         modelName: 'gemini-3.6-flash',
       })
@@ -477,6 +501,7 @@ describe('Model Registry', () => {
 
     it('has correct standard pricing', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'google',
         modelName: 'gemini-3.5-flash',
       })
@@ -507,6 +532,7 @@ describe('Model Registry', () => {
 
     it('has correct standard pricing', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'google',
         modelName: 'gemini-3.5-flash-lite',
       })
@@ -543,6 +569,7 @@ describe('Model Registry', () => {
 
     it('has correct standard pricing', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'google',
         modelName: 'gemini-3.1-flash-lite',
       })
@@ -675,8 +702,16 @@ describe('Model Registry', () => {
     })
 
     it('has standard and long-context pricing tiers', () => {
-      const tiers = getModelPricingTiers({ provider: 'openai', modelName: 'gpt-5.6' })
-      const solTiers = getModelPricingTiers({ provider: 'openai', modelName: 'gpt-5.6-sol' })
+      const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
+        provider: 'openai',
+        modelName: 'gpt-5.6',
+      })
+      const solTiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
+        provider: 'openai',
+        modelName: 'gpt-5.6-sol',
+      })
 
       expect(tiers).not.toBeNull()
       expect(tiers).toHaveLength(2)
@@ -716,7 +751,11 @@ describe('Model Registry', () => {
     })
 
     it('has correct pricing', () => {
-      const tiers = getModelPricingTiers({ provider: 'openai', modelName: 'gpt-5.4' })
+      const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
+        provider: 'openai',
+        modelName: 'gpt-5.4',
+      })
 
       expect(tiers).not.toBeNull()
       expect(tiers![0].rates.input).toBe(2.5)
@@ -752,6 +791,7 @@ describe('Model Registry', () => {
 
     it('has correct OpenRouter pricing', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'openrouter',
         modelName: 'moonshotai/kimi-k3',
       })
@@ -789,6 +829,7 @@ describe('Model Registry', () => {
 
     it('has correct OpenRouter pricing', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'openrouter',
         modelName: 'z-ai/glm-5.3',
       })
@@ -819,6 +860,7 @@ describe('Model Registry', () => {
 
     it('has correct OpenRouter pricing', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'openrouter',
         modelName: 'z-ai/glm-5.2',
       })
@@ -853,6 +895,7 @@ describe('Model Registry', () => {
 
     it('has correct OpenRouter pricing', () => {
       const tiers = getModelPricingTiers({
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         provider: 'openrouter',
         modelName: 'z-ai/glm-5.1',
       })

@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { resolveCacheWriteUsage, type CacheWriteUsage } from './cache-write-usage'
+import { outputIncludesReasoning } from '@/lib/llm/usage-semantics'
 import type { UsageCostBreakdown } from '@/lib/model-pricing'
 import type { LlmProvider } from '@/types/database.types'
 import type { UsageServiceTier } from '@/lib/llm/usage'
@@ -51,6 +53,7 @@ export function buildUsageReceipt({
   serviceTier,
   pricingPeriod,
   billingModels,
+  cacheWriteTtl,
 }: {
   requestId: string
   provider: LlmProvider
@@ -59,7 +62,8 @@ export function buildUsageReceipt({
   serviceTier?: UsageServiceTier | 'mixed'
   pricingPeriod?: DeepSeekPricingPeriod | 'mixed'
   billingModels?: string[]
-  usage: {
+  cacheWriteTtl?: '5m' | '1h'
+  usage: CacheWriteUsage & {
     reportedCostUsd?: number | null
     promptTokens: number | null
     completionTokens: number | null
@@ -74,7 +78,7 @@ export function buildUsageReceipt({
   const openai = provider === 'openai'
   const deepseek = provider === 'deepseek'
   const openrouter = provider === 'openrouter'
-  const inclusiveOutput = openai || deepseek || openrouter
+  const inclusiveOutput = outputIncludesReasoning(provider)
   const reportedCostUsd =
     openrouter &&
     typeof usage.reportedCostUsd === 'number' &&
@@ -84,7 +88,7 @@ export function buildUsageReceipt({
       : null
   const knownUsage = usage.promptTokens !== null && usage.completionTokens !== null
   if (!knownUsage || (deepseek && usage.cachedInputTokens === null)) cost = null
-  const writes = (cost?.cacheWrite5mTokens ?? 0) + (cost?.cacheWrite1hTokens ?? 0)
+  const writes = resolveCacheWriteUsage(usage, cacheWriteTtl)
   return {
     version: 1,
     requestId,
@@ -96,7 +100,7 @@ export function buildUsageReceipt({
       : {}),
     input:
       anthropic && usage.promptTokens !== null
-        ? usage.promptTokens + (usage.cachedInputTokens ?? 0) + (usage.cacheWriteTokens ?? writes)
+        ? usage.promptTokens + (usage.cachedInputTokens ?? 0) + (writes.cacheWriteTokens ?? 0)
         : usage.promptTokens,
     uncachedInput: anthropic
       ? usage.promptTokens
@@ -134,8 +138,8 @@ export function buildUsageReceipt({
         }
       : {}),
     cachedInput: usage.cachedInputTokens,
-    cacheWrite5m: anthropic && cost ? (cost.cacheWrite5mTokens ?? null) : null,
-    cacheWrite1h: anthropic && cost ? (cost.cacheWrite1hTokens ?? null) : null,
+    cacheWrite5m: anthropic ? (writes.cacheWrite5mTokens ?? null) : null,
+    cacheWrite1h: anthropic ? (writes.cacheWrite1hTokens ?? null) : null,
     cost:
       reportedCostUsd !== null
         ? {

@@ -1,5 +1,7 @@
 'use client'
 
+import { outputIncludesReasoning } from '@/lib/llm/usage-semantics'
+
 import {
   getReasoningControl,
   REASONING_LABELS,
@@ -85,10 +87,7 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
 }: TokenStatsPanelProps) {
   const [optionsOpen, setOptionsOpen] = useState(false)
   const detailedUsageProvider =
-    latestUsage?.provider === 'google' ||
-    latestUsage?.provider === 'openai' ||
-    latestUsage?.provider === 'deepseek' ||
-    latestUsage?.provider === 'openrouter'
+    latestUsage?.provider === 'google' || outputIncludesReasoning(latestUsage?.provider)
   const optionsId = useId()
   const modelOptions = buildLlmModelOptions(apiKeys)
   const selectedModelValue = serializeLlmModelSelection({

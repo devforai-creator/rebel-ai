@@ -11,8 +11,14 @@ import type { ProviderRequestStageResult } from './provider-request-stage'
 import { ChatJobExecutionError } from './runner-errors'
 import type { StreamingResponseStageResult } from './streaming-response-stage'
 import { buildChatDebugInfo, type UsageMetrics } from './usage-debug'
+import { resolveCacheWriteUsage } from '@/lib/chat/cache-write-usage'
 import { buildUsageReceipt } from '@/lib/chat/usage-receipt'
-import { priceUsageSteps, summarizeUsageServiceTier, sumReportedUsageCost } from '@/lib/llm/usage'
+import {
+  priceUsageSteps,
+  summarizeUsageServiceTier,
+  sumReportedUsageCost,
+  sumUsageSteps,
+} from '@/lib/llm/usage'
 import { getDeepSeekPricingPeriod, summarizeDeepSeekPricingPeriods } from '@/lib/deepseek/pricing'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
@@ -111,7 +117,7 @@ export async function runPostProcessingStage({
   }
   const serviceTier =
     (payload.provider === 'google' ? payload.serviceTier : apiKeyData.service_tier) ?? 'standard'
-  const usageSteps = streamingResponse.usageSteps ?? [
+  let usageSteps = streamingResponse.usageSteps ?? [
     {
       ...usageMetrics,
       ...(payload.provider === 'anthropic' && anthropicCacheCreationInputTokens !== null
@@ -120,6 +126,13 @@ export async function runPostProcessingStage({
       ...(streamingResponse.serviceTier ? { serviceTier: streamingResponse.serviceTier } : {}),
     },
   ]
+  if (payload.provider === 'anthropic') {
+    usageSteps = usageSteps.map((step) => ({
+      ...step,
+      ...resolveCacheWriteUsage(step, anthropicCache?.ttl),
+    }))
+    Object.assign(usageMetrics, sumUsageSteps(usageSteps))
+  }
   const reportedCostUsd =
     payload.provider === 'openrouter' ? sumReportedUsageCost(usageSteps) : null
   if (payload.provider === 'openrouter') usageMetrics.reportedCostUsd = reportedCostUsd
@@ -170,6 +183,7 @@ export async function runPostProcessingStage({
     modelName: payload.modelName,
     usage: usageMetrics,
     cost: usageCost,
+    cacheWriteTtl: anthropicCache?.ttl,
     callCount: usageSteps.length,
     ...(payload.provider === 'deepseek' || payload.provider === 'openrouter'
       ? {

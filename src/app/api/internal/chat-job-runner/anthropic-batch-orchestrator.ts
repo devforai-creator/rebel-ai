@@ -3,6 +3,7 @@ import type { ApiKey, Database } from '@/types/database.types'
 import { parseChatJobPayload, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { resolveAnthropicCacheDecision, resolvePromptCacheDecision } from '@/lib/llm/prompt-cache'
 import { estimateUsageCost } from '@/lib/model-pricing'
+import { resolveCacheWriteUsage } from '@/lib/chat/cache-write-usage'
 import { readAnthropicUsageStep } from '@/lib/llm/anthropic-usage'
 import { buildUsageReceipt } from '@/lib/chat/usage-receipt'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from '@/lib/chat/delivery-mode'
@@ -423,25 +424,25 @@ async function pollAnthropicBatchJob({
     const promptTokens = usage?.input_tokens ?? null
     const completionTokens = usage?.output_tokens ?? null
     const cachedInputTokens = usage?.cache_read_input_tokens ?? null
+    const usageStep = readAnthropicUsageStep({
+      usage: {
+        inputTokens: promptTokens ?? undefined,
+        outputTokens: completionTokens ?? undefined,
+        totalTokens:
+          promptTokens !== null && completionTokens !== null
+            ? promptTokens + completionTokens
+            : undefined,
+      },
+      providerMetadata: { anthropic: { usage } },
+    })
     const usageMetrics = {
-      promptTokens,
-      completionTokens,
-      totalTokens:
-        promptTokens !== null && completionTokens !== null ? promptTokens + completionTokens : null,
-      cachedInputTokens,
-      reasoningTokens: null,
+      ...usageStep,
+      ...resolveCacheWriteUsage(usageStep, metadata.debug.anthropicCache?.ttl),
     }
     const usageCost = estimateUsageCost({
       provider: 'anthropic',
       modelName: payload.modelName,
-      ...readAnthropicUsageStep({
-        usage: {
-          inputTokens: promptTokens ?? undefined,
-          outputTokens: completionTokens ?? undefined,
-          totalTokens: undefined,
-        },
-        providerMetadata: { anthropic: { usage } },
-      }),
+      ...usageMetrics,
       cacheWriteTtl: metadata.debug.anthropicCache?.ttl,
       serviceTier: 'batch',
     })
@@ -465,7 +466,8 @@ async function pollAnthropicBatchJob({
       requestId: payload.requestId,
       provider: 'anthropic',
       modelName: payload.modelName,
-      usage: { ...usageMetrics, cacheWriteTokens: usage?.cache_creation_input_tokens ?? undefined },
+      usage: usageMetrics,
+      cacheWriteTtl: metadata.debug.anthropicCache?.ttl,
       cost: usageCost,
       callCount: 1,
     })

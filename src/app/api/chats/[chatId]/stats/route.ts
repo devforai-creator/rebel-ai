@@ -1,3 +1,4 @@
+import { outputIncludesReasoning } from '@/lib/llm/usage-semantics'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { countProjectedChatMessages, loadLatestProjectedAssistantMessage } from '@/lib/chat/turns'
@@ -93,10 +94,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
         (receipt.provider === 'deepseek' && receipt.cachedInput === null))
         ? null
         : receipt.cost
-    const inclusiveOutput =
-      receipt.provider === 'openai' ||
-      receipt.provider === 'deepseek' ||
-      receipt.provider === 'openrouter'
+    const inclusiveOutput = outputIncludesReasoning(receipt.provider)
     return NextResponse.json({
       messageCount,
       summaryCount,
@@ -257,14 +255,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
           callCount: null,
           createdAt: latestAssistantUsage.created_at,
           prompt: latestPromptTokens,
-          completion:
-            latestUsageEvent?.model_provider === 'openai' ||
-            latestUsageEvent?.model_provider === 'deepseek' ||
-            latestUsageEvent?.model_provider === 'openrouter'
-              ? latestCompletionTokens !== null && latestReasoningTokens !== null
-                ? Math.max(latestCompletionTokens - latestReasoningTokens, 0)
-                : null
-              : latestCompletionTokens,
+          completion: outputIncludesReasoning(latestUsageEvent?.model_provider)
+            ? latestCompletionTokens !== null && latestReasoningTokens !== null
+              ? Math.max(latestCompletionTokens - latestReasoningTokens, 0)
+              : null
+            : latestCompletionTokens,
           reasoning: latestReasoningTokens,
           serviceTier: null,
           pricingPeriod: null,

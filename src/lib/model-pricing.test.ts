@@ -91,6 +91,7 @@ describe('estimateUsageCost', () => {
       it('should calculate cached input at 10% of the promotional input rate', () => {
         const params: UsageCostParams = {
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-3.8-flash',
           promptTokens: 10000,
           completionTokens: 1000,
@@ -114,6 +115,7 @@ describe('estimateUsageCost', () => {
       it('should calculate cached input at 10% of the promotional input rate', () => {
         const params: UsageCostParams = {
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-3.7-flash',
           promptTokens: 10000,
           completionTokens: 1000,
@@ -137,6 +139,7 @@ describe('estimateUsageCost', () => {
       it('should calculate cached input at 10% of the promotional input rate', () => {
         const params: UsageCostParams = {
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-3.6-flash',
           promptTokens: 10000,
           completionTokens: 1000,
@@ -160,6 +163,7 @@ describe('estimateUsageCost', () => {
       it('should calculate cached input at 10% of input rate', () => {
         const params: UsageCostParams = {
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-3.5-flash',
           promptTokens: 10000,
           completionTokens: 1000,
@@ -183,6 +187,7 @@ describe('estimateUsageCost', () => {
       it('should calculate cached input at 10% of input rate', () => {
         const params: UsageCostParams = {
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-3.5-flash-lite',
           promptTokens: 10000,
           completionTokens: 1000,
@@ -206,6 +211,7 @@ describe('estimateUsageCost', () => {
       it('should calculate cached input at 10% of input rate', () => {
         const params: UsageCostParams = {
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-3.1-flash-lite',
           promptTokens: 10000,
           completionTokens: 1000,
@@ -229,6 +235,7 @@ describe('estimateUsageCost', () => {
       it('should calculate cached input at 10% of input rate for tier 1', () => {
         const params: UsageCostParams = {
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-3.1-pro-preview',
           promptTokens: 10000,
           completionTokens: 1000,
@@ -250,6 +257,7 @@ describe('estimateUsageCost', () => {
       it('should use tier 2 pricing for prompts > 200k tokens', () => {
         const params: UsageCostParams = {
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-3.1-pro-preview',
           promptTokens: 250000,
           completionTokens: 1000,
@@ -273,6 +281,7 @@ describe('estimateUsageCost', () => {
         // cachedInput was missing and fallback to input rate was used
         const params: UsageCostParams = {
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-3.1-pro-preview',
           promptTokens: 10000,
           completionTokens: 0,
@@ -294,6 +303,7 @@ describe('estimateUsageCost', () => {
       it('should calculate cached input at 10% of input rate for tier 1', () => {
         const params: UsageCostParams = {
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-2.5-pro',
           promptTokens: 10000,
           completionTokens: 1000,
@@ -313,6 +323,7 @@ describe('estimateUsageCost', () => {
       it('should use tier 2 pricing for prompts > 200k tokens', () => {
         const params: UsageCostParams = {
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-2.5-pro',
           promptTokens: 250000,
           completionTokens: 1000,
@@ -334,6 +345,7 @@ describe('estimateUsageCost', () => {
       it('should calculate cached input at 10% of input rate', () => {
         const params: UsageCostParams = {
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-3-flash-preview',
           promptTokens: 10000,
           completionTokens: 1000,
@@ -355,6 +367,7 @@ describe('estimateUsageCost', () => {
       it('should support gemini-3.0-flash-preview alias', () => {
         const params: UsageCostParams = {
           provider: 'google',
+          pricingTimestamp: '2026-10-16T00:00:00Z',
           modelName: 'gemini-3.0-flash-preview',
           promptTokens: 10000,
           completionTokens: 1000,
@@ -899,6 +912,7 @@ describe('estimateUsageCost', () => {
     it('should return null for unknown provider/model combination', () => {
       const params: UsageCostParams = {
         provider: 'google',
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         modelName: 'unknown-model',
         promptTokens: 1000,
         completionTokens: 100,
@@ -910,6 +924,7 @@ describe('estimateUsageCost', () => {
     it('should handle zero tokens gracefully', () => {
       const params: UsageCostParams = {
         provider: 'google',
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         modelName: 'gemini-3.1-pro-preview',
         promptTokens: 0,
         completionTokens: 0,
@@ -923,6 +938,7 @@ describe('estimateUsageCost', () => {
     it('keeps missing Google usage unpriced instead of free', () => {
       const params: UsageCostParams = {
         provider: 'google',
+        pricingTimestamp: '2026-10-16T00:00:00Z',
         modelName: 'gemini-3.1-pro-preview',
         promptTokens: null,
         completionTokens: null,

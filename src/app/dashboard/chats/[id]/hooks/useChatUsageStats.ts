@@ -22,6 +22,13 @@ export function parseLatestMessageTokenStats(value: unknown): LatestMessageToken
     provider: typeof value.provider === 'string' ? value.provider : null,
     modelName: typeof value.modelName === 'string' ? value.modelName : null,
     callCount: parseNumberOrNull(value.callCount),
+    reasoning: parseNumberOrNull(value.reasoning),
+    serviceTier:
+      value.serviceTier === 'standard' ||
+      value.serviceTier === 'flex' ||
+      value.serviceTier === 'mixed'
+        ? value.serviceTier
+        : null,
     uncachedPrompt: parseNumberOrNull(value.uncachedPrompt),
     cacheWrite5m: parseNumberOrNull(value.cacheWrite5m),
     cacheWrite1h: parseNumberOrNull(value.cacheWrite1h),

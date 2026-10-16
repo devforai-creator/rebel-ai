@@ -14,6 +14,19 @@ const response = (id: string, costUsd = 0.12) => ({
 const options = { chatId: 'chat-1', enabled: true, initialUsageStats: null }
 
 describe('usage stats payloads', () => {
+  it('preserves Google thinking tokens and the actual service tier without inventing missing counts', () => {
+    expect(
+      parseLatestMessageTokenStats({
+        provider: 'google',
+        reasoning: 600,
+        serviceTier: 'mixed',
+        total: 21300,
+      }),
+    ).toMatchObject({ reasoning: 600, serviceTier: 'mixed', total: 21300 })
+    expect(
+      parseLatestMessageTokenStats({ provider: 'google', serviceTier: 'invalid' }),
+    ).toMatchObject({ reasoning: null, serviceTier: null, costUsd: null })
+  })
   it('preserves Anthropic read/write categories and the API call count', () => {
     expect(
       parseLatestMessageTokenStats({

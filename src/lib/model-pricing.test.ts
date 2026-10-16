@@ -805,7 +805,7 @@ describe('estimateUsageCost', () => {
       expect(result!.totalCost).toBe(0)
     })
 
-    it('should handle null tokens gracefully', () => {
+    it('keeps missing Google usage unpriced instead of free', () => {
       const params: UsageCostParams = {
         provider: 'google',
         modelName: 'gemini-3.1-pro-preview',
@@ -814,8 +814,7 @@ describe('estimateUsageCost', () => {
         cachedInputTokens: null,
       }
       const result = estimateUsageCost(params)
-      expect(result).not.toBeNull()
-      expect(result!.totalCost).toBe(0)
+      expect(result).toBeNull()
     })
   })
 })

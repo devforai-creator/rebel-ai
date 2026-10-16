@@ -21,6 +21,7 @@ import {
   sumAnthropicUsage,
   type AnthropicUsageStep,
 } from '@/lib/llm/anthropic-usage'
+import { readGoogleUsageStep, sumGoogleUsage, type GoogleUsageStep } from '@/lib/llm/google-usage'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type ProviderTextStream = Awaited<ReturnType<typeof streamText>>
@@ -156,6 +157,7 @@ async function broadcastProviderStreamFailure({
 
 export type StreamingResponseStageResult = {
   anthropicUsageSteps?: AnthropicUsageStep[]
+  googleUsageSteps?: GoogleUsageStep[]
   googleServiceTier?: GoogleServiceTier
   fullText: string
   assistantText: string
@@ -476,6 +478,15 @@ export async function consumeStreamingResponseStage({
   }
 
   const usage = await stream.usage
+  let googleUsageSteps: GoogleUsageStep[] | undefined
+  let googleUsage: GoogleUsageStep | undefined
+  if (provider === 'google') {
+    const steps = await stream.steps
+    googleUsageSteps = steps?.length
+      ? steps.map((step) => readGoogleUsageStep(step))
+      : [readGoogleUsageStep({ usage, providerMetadata })]
+    googleUsage = sumGoogleUsage(googleUsageSteps)
+  }
   let anthropicUsageSteps: AnthropicUsageStep[] | undefined
   let anthropicUsage: AnthropicUsageStep | undefined
   if (provider === 'anthropic') {
@@ -506,14 +517,16 @@ export async function consumeStreamingResponseStage({
     finishReason,
     anthropicCacheCreationInputTokens,
     ...(anthropicUsageSteps ? { anthropicUsageSteps } : {}),
+    ...(googleUsageSteps ? { googleUsageSteps } : {}),
     ...(googleServiceTier ? { googleServiceTier } : {}),
-    usage: anthropicUsage ?? {
-      promptTokens: usage?.inputTokens ?? null,
-      completionTokens: usage?.outputTokens ?? null,
-      totalTokens: usage?.totalTokens ?? null,
-      cachedInputTokens: usage?.cachedInputTokens ?? null,
-      reasoningTokens: usage?.reasoningTokens ?? null,
-      ...(typeof cacheWriteTokens === 'number' ? { cacheWriteTokens } : {}),
-    },
+    usage: googleUsage ??
+      anthropicUsage ?? {
+        promptTokens: usage?.inputTokens ?? null,
+        completionTokens: usage?.outputTokens ?? null,
+        totalTokens: usage?.totalTokens ?? null,
+        cachedInputTokens: usage?.cachedInputTokens ?? null,
+        reasoningTokens: usage?.reasoningTokens ?? null,
+        ...(typeof cacheWriteTokens === 'number' ? { cacheWriteTokens } : {}),
+      },
   }
 }

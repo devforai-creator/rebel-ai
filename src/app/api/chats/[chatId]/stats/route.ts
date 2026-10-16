@@ -84,7 +84,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
   const latestAssistantUsage = latestAssistantUsageResult as LatestAssistantUsage | null
   const receipt = readUsageReceipt(latestAssistantUsage?.debug_info)
   if (latestAssistantUsage && receipt) {
-    const cost = receipt.cost
+    const cost =
+      receipt.provider === 'google' && (receipt.input === null || receipt.output === null)
+        ? null
+        : receipt.cost
     return NextResponse.json({
       messageCount,
       summaryCount,
@@ -96,8 +99,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
         callCount: receipt.callCount,
         prompt: receipt.input,
         completion: receipt.output,
+        reasoning: receipt.reasoningTokens ?? null,
+        serviceTier: receipt.serviceTier ?? null,
         total:
-          receipt.input !== null && receipt.output !== null ? receipt.input + receipt.output : null,
+          receipt.totalTokens ??
+          (receipt.provider !== 'google' && receipt.input !== null && receipt.output !== null
+            ? receipt.input + receipt.output
+            : null),
         uncachedPrompt: receipt.uncachedInput,
         cachedPrompt: receipt.cachedInput,
         cacheWrite5m: receipt.cacheWrite5m,
@@ -141,9 +149,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
 
   const latestPromptTokens = toNumber(latestAssistantUsage?.prompt_tokens ?? null)
   const latestCompletionTokens = toNumber(latestAssistantUsage?.completion_tokens ?? null)
+  const latestReasoningTokens = toNumber(latestUsageEvent?.reasoning_tokens ?? null)
+  const googleLegacy = latestUsageEvent?.model_provider === 'google'
   const latestTotalTokens =
-    latestPromptTokens !== null && latestCompletionTokens !== null
-      ? latestPromptTokens + latestCompletionTokens
+    latestPromptTokens !== null &&
+    latestCompletionTokens !== null &&
+    (!googleLegacy || latestReasoningTokens !== null)
+      ? latestPromptTokens + latestCompletionTokens + (googleLegacy ? latestReasoningTokens! : 0)
       : null
 
   function extractLatestCacheDetails(debugInfo: Record<string, unknown> | null): {
@@ -228,6 +240,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
           createdAt: latestAssistantUsage.created_at,
           prompt: latestPromptTokens,
           completion: latestCompletionTokens,
+          reasoning: latestReasoningTokens,
+          serviceTier: null,
           total: latestTotalTokens,
           cachedPrompt: latestCachedPromptTokens,
           cacheHit: (latestCachedPromptTokens ?? 0) > 0,

@@ -39,10 +39,12 @@ function resolveRates({
   provider,
   modelName,
   promptTokens,
+  serviceTier,
 }: {
   provider: Provider
   modelName?: string | null
   promptTokens?: number | null
+  serviceTier?: ApiServiceTier | null
 }): RateSet | null {
   const tokens =
     typeof promptTokens === 'number' && Number.isFinite(promptTokens) ? promptTokens : 0
@@ -60,11 +62,12 @@ function resolveRates({
       return true
     }) ?? pricingTiers[pricingTiers.length - 1]
 
+  if (provider === 'google' && serviceTier === 'flex') return tier?.flexRates ?? null
   return tier?.rates ?? null
 }
 
 function getServiceTierMultiplier(provider: Provider, serviceTier?: ApiServiceTier | null): number {
-  if ((provider === 'openai' || provider === 'google') && serviceTier === 'flex') {
+  if (provider === 'openai' && serviceTier === 'flex') {
     return 0.5
   }
   if (provider === 'anthropic' && serviceTier === 'batch') {
@@ -84,6 +87,11 @@ function calculateCost(tokens: number, ratePerMillion: number, multiplier: numbe
 }
 
 export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown | null {
+  if (
+    params.provider === 'google' &&
+    (!isReportedTokenCount(params.promptTokens) || !isReportedTokenCount(params.completionTokens))
+  )
+    return null
   const promptTokens = sanitizeTokens(params.promptTokens)
   const completionTokens = sanitizeTokens(params.completionTokens)
   const cachedInputTokens = sanitizeTokens(params.cachedInputTokens)
@@ -104,6 +112,7 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
     provider: params.provider,
     modelName: params.modelName,
     promptTokens: pricingPromptTokens,
+    serviceTier: params.serviceTier,
   })
   if (!rates) {
     return null
@@ -175,4 +184,8 @@ function sanitizeTokens(value?: number | null): number {
     return 0
   }
   return value
+}
+
+function isReportedTokenCount(value?: number | null): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }

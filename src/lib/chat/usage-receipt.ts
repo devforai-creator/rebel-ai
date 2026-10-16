@@ -12,6 +12,10 @@ const receiptSchema = z.object({
   input: count,
   uncachedInput: count,
   output: count,
+  // Optional for receipts written before Google thinking usage was retained.
+  reasoningTokens: count.optional(),
+  totalTokens: count.optional(),
+  serviceTier: z.enum(['standard', 'flex', 'mixed']).optional(),
   cachedInput: count,
   cacheWrite5m: count,
   cacheWrite1h: count,
@@ -36,16 +40,20 @@ export function buildUsageReceipt({
   usage,
   cost,
   callCount,
+  serviceTier,
 }: {
   requestId: string
   provider: LlmProvider
   modelName: string
   callCount: number
+  serviceTier?: 'standard' | 'flex' | 'mixed'
   usage: {
     promptTokens: number | null
     completionTokens: number | null
     cachedInputTokens: number | null
     cacheWriteTokens?: number
+    reasoningTokens?: number | null
+    totalTokens?: number | null
   }
   cost: UsageCostBreakdown | null
 }): UsageReceipt {
@@ -61,8 +69,19 @@ export function buildUsageReceipt({
       anthropic && usage.promptTokens !== null
         ? usage.promptTokens + (usage.cachedInputTokens ?? 0) + (usage.cacheWriteTokens ?? writes)
         : usage.promptTokens,
-    uncachedInput: anthropic ? usage.promptTokens : null,
+    uncachedInput: anthropic
+      ? usage.promptTokens
+      : provider === 'google' && usage.promptTokens !== null && usage.cachedInputTokens !== null
+        ? Math.max(usage.promptTokens - usage.cachedInputTokens, 0)
+        : null,
     output: usage.completionTokens,
+    ...(provider === 'google'
+      ? {
+          reasoningTokens: usage.reasoningTokens ?? null,
+          totalTokens: usage.totalTokens ?? null,
+          ...(serviceTier ? { serviceTier } : {}),
+        }
+      : {}),
     cachedInput: usage.cachedInputTokens,
     cacheWrite5m: anthropic && cost ? (cost.cacheWrite5mTokens ?? null) : null,
     cacheWrite1h: anthropic && cost ? (cost.cacheWrite1hTokens ?? null) : null,

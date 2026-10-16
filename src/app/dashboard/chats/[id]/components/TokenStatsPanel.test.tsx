@@ -38,6 +38,72 @@ const baseProps = {
 }
 
 describe('TokenStatsPanel', () => {
+  const googleUsage = {
+    id: 'answer',
+    createdAt: null,
+    provider: 'google',
+    callCount: 2,
+    serviceTier: 'flex' as const,
+    prompt: 19000,
+    uncachedPrompt: 5000,
+    completion: 1700,
+    reasoning: 600,
+    total: 21300,
+    cachedPrompt: 14000,
+    cacheHit: true,
+    cacheKey: null,
+    cacheRetention: null,
+    costUsd: 0.0172,
+    promptCostUsd: 0.005,
+    completionCostUsd: 0.0085,
+    cachedPromptCostUsd: 0.0007,
+    reasoningCostUsd: 0.003,
+  }
+  it('shows Google visible output and reasoning separately, along with all ATR calls and actual tier', () => {
+    const html = renderToStaticMarkup(
+      <TokenStatsPanel {...baseProps} usageStatsEnabled statsExpanded latestUsage={googleUsage} />,
+    )
+    for (const text of [
+      'Google 사용량과 추정 비용',
+      '일반 입력',
+      '캐시 읽기',
+      '추론',
+      '5,000',
+      '14,000',
+      '1,700',
+      '600',
+      'Flex',
+      '2회 호출',
+      '$0.017',
+    ])
+      expect(html).toContain(text)
+    expect(html).not.toContain('캐시 쓰기')
+  })
+  it('shows missing Google usage as unknown instead of a zero-dollar price', () => {
+    const html = renderToStaticMarkup(
+      <TokenStatsPanel
+        {...baseProps}
+        usageStatsEnabled
+        statsExpanded
+        latestUsage={{
+          ...googleUsage,
+          prompt: null,
+          uncachedPrompt: null,
+          completion: null,
+          reasoning: null,
+          cachedPrompt: null,
+          costUsd: null,
+          promptCostUsd: null,
+          completionCostUsd: null,
+          cachedPromptCostUsd: null,
+          reasoningCostUsd: null,
+        }}
+      />,
+    )
+    expect(html).toContain('정보가 부족해 비용을 계산할 수 없습니다')
+    expect(html).toContain('—')
+    expect(html).not.toContain('$0')
+  })
   it('shows Anthropic input, cache reads and both write durations separately', () => {
     const html = renderToStaticMarkup(
       <TokenStatsPanel

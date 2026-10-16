@@ -28,6 +28,7 @@ export type ModelPricingRateSet = {
 export type ModelPricingTier = {
   maxPromptTokens?: number
   rates: ModelPricingRateSet
+  flexRates?: ModelPricingRateSet
 }
 
 export type AnthropicThinkingPolicy =

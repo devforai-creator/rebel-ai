@@ -185,13 +185,18 @@ describe('Model Registry', () => {
       expect(tiers![0].maxPromptTokens).toBe(200_000)
     })
 
-    it('returns null for model without pricing', () => {
+    it('includes the previously missing Gemini 2.5 Flash prices', () => {
       const tiers = getModelPricingTiers({
         provider: 'google',
-        modelName: 'gemini-2.5-flash', // No pricing defined
+        modelName: 'gemini-2.5-flash',
       })
 
-      expect(tiers).toBeNull()
+      expect(tiers).toEqual([
+        {
+          rates: { input: 0.3, output: 2.5, cachedInput: 0.03 },
+          flexRates: { input: 0.15, output: 1.25, cachedInput: 0.03 },
+        },
+      ])
     })
   })
 
@@ -350,7 +355,10 @@ describe('Model Registry', () => {
         },
       })
       expect(getModelPricingTiers({ provider: 'google', modelName: model?.id })).toEqual([
-        { rates: { input: 2, output: 10, cachedInput: 0.1 } },
+        {
+          rates: { input: 2, output: 10, cachedInput: 0.1 },
+          flexRates: { input: 1, output: 5, cachedInput: 0.05 },
+        },
       ])
       expect(listUiModelIdsByProvider('google')[0]).toBe('gemini-4-argon')
       expect(getDefaultModelForProvider('google')).toBe('gemini-2.5-flash')

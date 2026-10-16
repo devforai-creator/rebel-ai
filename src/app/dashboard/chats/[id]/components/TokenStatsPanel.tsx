@@ -142,7 +142,9 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                       ? formatUsd(latestUsage.costUsd)
                       : 'Usage'}
                 </span>
-                {latestUsage && <span>{latestUsage.cacheHit ? '✅' : '❌'}</span>}
+                {latestUsage && latestUsage.cachedPrompt !== null && (
+                  <span>{latestUsage.cacheHit ? '✅' : '❌'}</span>
+                )}
               </Button>
             )}
             <Button
@@ -284,6 +286,9 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                     <span className="text-xs text-gray-500">
                       Input: {formatTokenValue(latestUsage.prompt)} | Output:{' '}
                       {formatTokenValue(latestUsage.completion)}
+                      {latestUsage.provider === 'google' && (
+                        <> | 추론: {formatTokenValue(latestUsage.reasoning)}</>
+                      )}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
@@ -293,7 +298,9 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                     </span>
                   </div>
                 </div>
-                {latestUsage.provider === 'anthropic' ? (
+                {latestUsage.provider === 'google' ? (
+                  <GoogleUsageDetails usage={latestUsage} />
+                ) : latestUsage.provider === 'anthropic' ? (
                   <AnthropicUsageDetails usage={latestUsage} />
                 ) : (
                   <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-1">
@@ -329,6 +336,71 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
   )
 })
 
+function GoogleUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
+  const rows = [
+    ['일반 입력', usage.uncachedPrompt, usage.promptCostUsd],
+    ['캐시 읽기', usage.cachedPrompt, usage.cachedPromptCostUsd],
+    ['출력', usage.completion, usage.completionCostUsd],
+    ['추론', usage.reasoning, usage.reasoningCostUsd],
+  ] as const
+  return (
+    <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+      <UsageDetailsTable label="Google 사용량과 추정 비용" rows={rows} />
+      {usage.serviceTier && (
+        <p className="mt-1">
+          요금:{' '}
+          {usage.serviceTier === 'mixed'
+            ? 'Standard / Flex 혼합'
+            : usage.serviceTier === 'flex'
+              ? 'Flex'
+              : 'Standard'}
+        </p>
+      )}
+      {(usage.callCount ?? 1) > 1 && (
+        <p className="mt-1">과거 대화 조회를 포함한 {usage.callCount}회 호출의 합계입니다.</p>
+      )}
+      {usage.costUsd === null && (
+        <p className="mt-1">사용량 또는 단가 정보가 부족해 비용을 계산할 수 없습니다.</p>
+      )}
+      <p className="mt-1 text-gray-400 dark:text-gray-500">
+        출력과 추론은 별도 항목이며, 둘 다 합계 비용에 포함됩니다. 생성 요청의 토큰 비용 추정치로,
+        명시 캐시 보관료는 포함하지 않습니다.
+      </p>
+    </div>
+  )
+}
+
+type UsageDetailRows = ReadonlyArray<
+  readonly [string, number | null | undefined, number | null | undefined]
+>
+
+function UsageDetailsTable({ label, rows }: { label: string; rows: UsageDetailRows }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left" aria-label={label}>
+        <thead>
+          <tr>
+            <th className="py-1 font-medium">항목</th>
+            <th className="py-1 text-right font-medium">토큰</th>
+            <th className="py-1 text-right font-medium">추정 비용</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([title, tokens, cost]) => (
+            <tr key={title}>
+              <th className="py-1 font-normal" scope="row">
+                {title}
+              </th>
+              <td className="py-1 text-right tabular-nums">{formatTokenValue(tokens)}</td>
+              <td className="py-1 text-right tabular-nums">{formatUsd(cost)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function AnthropicUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
   const rows = [
     [
@@ -343,28 +415,7 @@ function AnthropicUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
   ] as const
   return (
     <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left" aria-label="Anthropic 사용량과 추정 비용">
-          <thead>
-            <tr>
-              <th className="py-1 font-medium">항목</th>
-              <th className="py-1 text-right font-medium">토큰</th>
-              <th className="py-1 text-right font-medium">추정 비용</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(([label, tokens, cost]) => (
-              <tr key={label}>
-                <th className="py-1 font-normal" scope="row">
-                  {label}
-                </th>
-                <td className="py-1 text-right tabular-nums">{formatTokenValue(tokens)}</td>
-                <td className="py-1 text-right tabular-nums">{formatUsd(cost)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <UsageDetailsTable label="Anthropic 사용량과 추정 비용" rows={rows} />
       {(usage.callCount ?? 1) > 1 && (
         <p className="mt-1">과거 대화 조회를 포함한 {usage.callCount}회 호출의 합계입니다.</p>
       )}

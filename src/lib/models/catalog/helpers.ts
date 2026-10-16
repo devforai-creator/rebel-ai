@@ -22,8 +22,11 @@ export type ProviderModelCatalog = {
   models: readonly ModelDefinition[]
 }
 
-export function flatPricing(rates: ModelPricingRateSet): ModelPricingTier[] {
-  return [{ rates }]
+export function flatPricing(
+  rates: ModelPricingRateSet,
+  flexRates?: ModelPricingRateSet,
+): ModelPricingTier[] {
+  return [{ rates, ...(flexRates ? { flexRates } : {}) }]
 }
 
 export function defineProviderCatalog({

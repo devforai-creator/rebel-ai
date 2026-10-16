@@ -130,6 +130,78 @@ it('keeps unpriced models unknown even if an old event stores a zero price', asy
   mocks.latest.mockResolvedValue(answer('answer', { usageReceipt: { ...receipt, cost: null } }))
   expect((await get()).latestMessage.costUsd).toBeNull()
 })
+it('reads an older Google receipt without inventing missing reasoning counts or a total', async () => {
+  mocks.latest.mockResolvedValue(
+    answer('google-old', {
+      usageReceipt: {
+        ...receipt,
+        provider: 'google',
+        modelName: 'gemini-4-argon',
+        input: 10000,
+        output: 1500,
+        uncachedInput: null,
+        cachedInput: 8000,
+      },
+    }),
+  )
+  expect((await get()).latestMessage).toMatchObject({
+    provider: 'google',
+    prompt: 10000,
+    completion: 1500,
+    reasoning: null,
+    total: null,
+    serviceTier: null,
+  })
+})
+it('includes reported reasoning in a legacy Google event total', async () => {
+  const db = createSupabaseMock({
+    tables: {
+      chats: { rows: [{ id: 'chat', user_id: 'owner' }] },
+      chat_summaries: { rows: [] },
+      chat_usage_events: {
+        rows: [
+          {
+            chat_id: 'chat',
+            user_id: 'owner',
+            request_id: 'legacy-google',
+            model_provider: 'google',
+            model_name: 'gemini-4-argon',
+            reasoning_tokens: 500,
+            total_cost_usd: 0.0248,
+          },
+        ],
+      },
+    },
+  })
+  mocks.client.mockResolvedValue({
+    ...db,
+    auth: { getUser: async () => ({ data: { user: { id: 'owner' } } }) },
+  })
+  mocks.latest.mockResolvedValue({
+    ...answer('google-old', { requestId: 'legacy-google' }),
+    prompt_tokens: 10000,
+    completion_tokens: 1500,
+  })
+  expect((await get()).latestMessage).toMatchObject({
+    reasoning: 500,
+    total: 12000,
+    costUsd: 0.0248,
+  })
+})
+it('does not preserve an old false zero-dollar estimate for a Google answer without usage', async () => {
+  mocks.latest.mockResolvedValue(
+    answer('google-unknown', {
+      usageReceipt: {
+        ...receipt,
+        provider: 'google',
+        input: null,
+        output: null,
+        cost: { ...receipt.cost!, total: 0 },
+      },
+    }),
+  )
+  expect((await get()).latestMessage.costUsd).toBeNull()
+})
 it('enforces ownership before reading prices', async () => {
   mocks.client.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: null } }) } })
   expect(

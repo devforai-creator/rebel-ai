@@ -12,6 +12,8 @@ import type { ProviderRequestStageResult } from './provider-request-stage'
 import { ChatJobExecutionError } from './runner-errors'
 import type { StreamingResponseStageResult } from './streaming-response-stage'
 import { buildChatDebugInfo, type UsageMetrics } from './usage-debug'
+import { priceAnthropicSteps } from '@/lib/llm/anthropic-usage'
+import { buildUsageReceipt } from '@/lib/chat/usage-receipt'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 
@@ -136,16 +138,25 @@ export async function runPostProcessingStage({
     reasoningTokens: usage.reasoningTokens,
     ...(usage.cacheWriteTokens !== undefined ? { cacheWriteTokens: usage.cacheWriteTokens } : {}),
   }
-  const usageCost = buildUsageCost({
-    payload,
-    serviceTier:
-      payload.provider === 'google'
-        ? (streamingResponse.googleServiceTier ?? payload.serviceTier ?? 'standard')
-        : apiKeyData.service_tier,
-    usage: usageMetrics,
-    anthropicCacheCreationInputTokens,
-    cacheWriteTtl: providerArtifacts.anthropicCache?.ttl,
-  })
+  const serviceTier =
+    payload.provider === 'google'
+      ? (streamingResponse.googleServiceTier ?? payload.serviceTier ?? 'standard')
+      : apiKeyData.service_tier
+  const usageCost =
+    payload.provider === 'anthropic' && streamingResponse.anthropicUsageSteps?.length
+      ? priceAnthropicSteps({
+          steps: streamingResponse.anthropicUsageSteps,
+          modelName: payload.modelName,
+          serviceTier,
+          cacheWriteTtl: anthropicCache?.ttl,
+        })
+      : buildUsageCost({
+          payload,
+          serviceTier,
+          usage: usageMetrics,
+          anthropicCacheCreationInputTokens,
+          cacheWriteTtl: providerArtifacts.anthropicCache?.ttl,
+        })
   const debugConversationMessages =
     payload.provider === 'anthropic' ? anthropicConversationMessages : null
   const debugInfo = buildChatDebugInfo({
@@ -176,6 +187,14 @@ export async function runPostProcessingStage({
     ragInfo,
     actualPayload,
     debugMetrics,
+  })
+  debugInfo.usageReceipt = buildUsageReceipt({
+    requestId: payload.requestId,
+    provider: payload.provider,
+    modelName: payload.modelName,
+    usage: usageMetrics,
+    cost: usageCost,
+    callCount: streamingResponse.anthropicUsageSteps?.length ?? 1,
   })
 
   try {

@@ -1,0 +1,139 @@
+import { beforeEach, expect, it, vi } from 'vitest'
+import { createSupabaseMock } from '@/tests/mocks/supabase'
+import { buildUsageReceipt } from '@/lib/chat/usage-receipt'
+import { estimateUsageCost } from '@/lib/model-pricing'
+import { GET } from './route'
+
+const mocks = vi.hoisted(() => ({ client: vi.fn(), latest: vi.fn(), count: vi.fn() }))
+vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.client }))
+vi.mock('@/lib/chat/turns', () => ({
+  loadLatestProjectedAssistantMessage: mocks.latest,
+  countProjectedChatMessages: mocks.count,
+}))
+const usage = {
+  promptTokens: 32691,
+  completionTokens: 4128,
+  cachedInputTokens: 106687,
+  cacheWriteTokens: 2866,
+}
+const cost = estimateUsageCost({
+  ...usage,
+  provider: 'anthropic',
+  modelName: 'claude-opus-4-7',
+  cacheWriteTtl: '1h',
+})!
+const receipt = buildUsageReceipt({
+  requestId: 'correct-request',
+  provider: 'anthropic',
+  modelName: 'claude-opus-4-7',
+  callCount: 2,
+  usage,
+  cost,
+})
+const answer = (id: string, debug_info: unknown) => ({
+  id,
+  prompt_tokens: usage.promptTokens,
+  completion_tokens: usage.completionTokens,
+  created_at: '2026-10-16T00:00:00Z',
+  debug_info,
+})
+const get = async () =>
+  (
+    await GET(new Request('http://local/stats'), { params: Promise.resolve({ chatId: 'chat' }) })
+  ).json()
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  const db = createSupabaseMock({
+    tables: {
+      chats: { rows: [{ id: 'chat', user_id: 'owner' }] },
+      chat_summaries: { rows: [] },
+      chat_usage_events: {
+        rows: [
+          {
+            chat_id: 'chat',
+            user_id: 'owner',
+            request_id: 'newer-unrelated',
+            total_cost_usd: 99,
+            cached_input_tokens: 99999,
+          },
+          {
+            chat_id: 'chat',
+            user_id: 'owner',
+            request_id: 'correct-request',
+            total_cost_usd: 0.3486585,
+            cached_input_tokens: 106687,
+            model_provider: 'anthropic',
+            model_name: 'claude-opus-4-7',
+          },
+        ],
+      },
+    },
+  })
+  mocks.client.mockResolvedValue({
+    ...db,
+    auth: { getUser: async () => ({ data: { user: { id: 'owner' } } }) },
+  })
+  mocks.count.mockResolvedValue(42)
+})
+
+it('uses the answer receipt, independent of newer events or delayed event insertion', async () => {
+  mocks.latest.mockResolvedValue(answer('answer', { usageReceipt: receipt }))
+  const result = await get()
+  expect(result.latestMessage).toMatchObject({
+    id: 'answer',
+    provider: 'anthropic',
+    callCount: 2,
+    prompt: 142244,
+    uncachedPrompt: 32691,
+    cachedPrompt: 106687,
+    cacheWrite5m: 0,
+    cacheWrite1h: 2866,
+    promptCostUsd: 0.163455,
+    cacheWrite1hCostUsd: 0.02866,
+    costUsd: 0.3486585,
+  })
+})
+it('retains the right price after regeneration and deletion of the last answer', async () => {
+  const oldReceipt = {
+    ...receipt,
+    requestId: 'old-request',
+    cost: { ...receipt.cost!, total: 0.1 },
+  }
+  mocks.latest
+    .mockResolvedValueOnce(answer('regenerated', { usageOnly: true, usageReceipt: receipt }))
+    .mockResolvedValueOnce(answer('previous', { usageOnly: true, usageReceipt: oldReceipt }))
+  expect((await get()).latestMessage.costUsd).toBe(0.3486585)
+  const afterDelete = (await get()).latestMessage
+  expect(afterDelete.id).toBe('previous')
+  expect(afterDelete.costUsd).toBe(0.1)
+})
+it('looks up a legacy record by its exact request ID', async () => {
+  mocks.latest.mockResolvedValue(answer('legacy', { requestId: 'correct-request' }))
+  expect((await get()).latestMessage).toMatchObject({
+    costUsd: 0.3486585,
+    cachedPrompt: 106687,
+    usageBreakdownAvailable: false,
+  })
+})
+it('shows unknown cost for old answers without identity instead of borrowing another request price', async () => {
+  mocks.latest.mockResolvedValue(answer('legacy', null))
+  expect((await get()).latestMessage.costUsd).toBeNull()
+  mocks.latest.mockResolvedValue(answer('legacy', { requestId: 'missing-request' }))
+  expect((await get()).latestMessage.costUsd).toBeNull()
+})
+it('does not show a deleted answer when there is no active assistant left', async () => {
+  mocks.latest.mockResolvedValue(null)
+  expect((await get()).latestMessage).toBeNull()
+})
+it('keeps unpriced models unknown even if an old event stores a zero price', async () => {
+  mocks.latest.mockResolvedValue(answer('answer', { usageReceipt: { ...receipt, cost: null } }))
+  expect((await get()).latestMessage.costUsd).toBeNull()
+})
+it('enforces ownership before reading prices', async () => {
+  mocks.client.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: null } }) } })
+  expect(
+    (await GET(new Request('http://local/stats'), { params: Promise.resolve({ chatId: 'chat' }) }))
+      .status,
+  ).toBe(401)
+})

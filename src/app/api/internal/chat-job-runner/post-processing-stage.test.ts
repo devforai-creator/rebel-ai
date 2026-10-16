@@ -187,7 +187,15 @@ describe('runPostProcessingStage', () => {
         userId: 'user-1',
         provider: 'anthropic',
         modelName: 'claude-haiku-5-5',
-        debugInfo: { requestId: 'req-1', debug: true },
+        debugInfo: expect.objectContaining({
+          requestId: 'req-1',
+          debug: true,
+          usageReceipt: expect.objectContaining({
+            requestId: 'req-1',
+            provider: 'anthropic',
+            callCount: 1,
+          }),
+        }),
         usageCost: { totalCost: 1.23 },
         promptTokens: 10,
         completionTokens: 20,

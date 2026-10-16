@@ -9,7 +9,7 @@ export type SupabaseClientType = SupabaseClient<Database>
 
 type Filter<Row> = {
   field: keyof Row | string
-  op: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'not'
+  op: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'not' | 'is'
   value: unknown
   operator?: string
 }
@@ -41,6 +41,7 @@ type SupabaseConfig = {
 type QueryResult<Row> = { data: Row[]; error: null; count?: number }
 
 type QueryBuilder = {
+  is: (field: string, value: unknown) => QueryBuilder
   eq: (field: string, value: unknown) => QueryBuilder
   neq: (field: string, value: unknown) => QueryBuilder
   not: (field: string, operator: string, value: unknown) => QueryBuilder
@@ -189,13 +190,20 @@ function parseInFilterValue(value: unknown): unknown[] | null {
 }
 
 function matchesFilter<Row extends Record<string, unknown>>(row: Row, filter: Filter<Row>) {
-  const value = row[filter.field as keyof Row] as unknown
+  const jsonPath = String(filter.field).split(/->>?/)
+  const value = jsonPath.reduce<unknown>(
+    (current, key) =>
+      current && typeof current === 'object' ? (current as Record<string, unknown>)[key] : null,
+    row,
+  )
   const numericValue = Number(value)
   const numericFilterValue = Number(filter.value)
   const hasNumericComparison = Number.isFinite(numericValue) && Number.isFinite(numericFilterValue)
   const comparableValue = String(value)
   const comparableFilterValue = String(filter.value)
   switch (filter.op) {
+    case 'is':
+      return (value ?? null) === filter.value
     case 'eq':
       return value === filter.value
     case 'neq':
@@ -219,6 +227,7 @@ function matchesFilter<Row extends Record<string, unknown>>(row: Row, filter: Fi
     case 'in':
       return Array.isArray(filter.value) && filter.value.includes(value)
     case 'not':
+      if (filter.operator === 'is') return (value ?? null) !== filter.value
       if (filter.operator === 'in') {
         const values = parseInFilterValue(filter.value)
         if (!values) {
@@ -289,6 +298,10 @@ function createQueryBuilder<Row extends Record<string, unknown>>(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const builder: any = {
+    is(field: keyof Row | string, value: unknown) {
+      filters.push({ field, op: 'is', value })
+      return builder
+    },
     eq(field: keyof Row | string, value: unknown) {
       filters.push({ field, op: 'eq', value })
       return builder

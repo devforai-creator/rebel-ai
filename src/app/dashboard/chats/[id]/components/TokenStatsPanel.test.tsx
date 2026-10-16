@@ -38,6 +38,79 @@ const baseProps = {
 }
 
 describe('TokenStatsPanel', () => {
+  it('shows Anthropic input, cache reads and both write durations separately', () => {
+    const html = renderToStaticMarkup(
+      <TokenStatsPanel
+        {...baseProps}
+        usageStatsEnabled
+        statsExpanded
+        latestUsage={{
+          id: 'answer',
+          createdAt: null,
+          provider: 'anthropic',
+          callCount: 2,
+          total: 146372,
+          prompt: 142244,
+          uncachedPrompt: 32691,
+          completion: 4128,
+          cachedPrompt: 106687,
+          cacheWrite5m: 0,
+          cacheWrite1h: 2866,
+          cacheHit: true,
+          cacheKey: null,
+          cacheRetention: null,
+          costUsd: 0.3486585,
+          promptCostUsd: 0.163455,
+          completionCostUsd: 0.1032,
+          cachedPromptCostUsd: 0.0533435,
+          cacheWrite5mCostUsd: 0,
+          cacheWrite1hCostUsd: 0.02866,
+          reasoningCostUsd: 0,
+          usageBreakdownAvailable: true,
+        }}
+      />,
+    )
+    for (const value of [
+      '일반 입력',
+      '캐시 읽기',
+      '캐시 쓰기 · 5분',
+      '캐시 쓰기 · 1시간',
+      '142,244',
+      '32,691',
+      '106,687',
+      '2,866',
+      '$0.349',
+      '$0.029',
+      '2회 호출',
+    ])
+      expect(html).toContain(value)
+  })
+  it('keeps the current cost visible when details are collapsed', () => {
+    const html = renderToStaticMarkup(
+      <TokenStatsPanel
+        {...baseProps}
+        usageStatsEnabled
+        latestUsage={{
+          id: 'answer',
+          createdAt: null,
+          total: null,
+          prompt: 10,
+          completion: 2,
+          cachedPrompt: 0,
+          cacheHit: false,
+          cacheKey: null,
+          cacheRetention: null,
+          costUsd: 0.12,
+          promptCostUsd: null,
+          completionCostUsd: null,
+          cachedPromptCostUsd: null,
+          reasoningCostUsd: null,
+        }}
+      />,
+    )
+    expect(html).toContain('$0.120')
+    expect(html).not.toContain('Anthropic 사용량과 추정 비용')
+  })
   it('hides usage controls when usage stats are disabled', () => {
     const html = renderToStaticMarkup(<TokenStatsPanel {...baseProps} usageStatsEnabled={false} />)
 

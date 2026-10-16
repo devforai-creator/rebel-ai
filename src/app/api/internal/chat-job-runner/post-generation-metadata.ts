@@ -56,18 +56,17 @@ export async function clearStaleAssistantDebugInfo({
   requestId: string
   retainedAssistantMessageId: string
 }): Promise<void> {
-  const clearDebugInfoUpdate: MessageUpdate = {
-    debug_info: null,
-  }
-
-  const { error } = await supabase
+  // Keep only the small immutable receipt/identity on old answers. Fetch JSON
+  // paths, never the large recorded prompts. Already-trimmed rows are excluded.
+  const { data, error } = await supabase
     .from('messages')
-    .update(clearDebugInfoUpdate as never)
+    .select('id, request_id:debug_info->>requestId, usage_receipt:debug_info->usageReceipt')
     .eq('chat_id', chatId)
     .eq('role', 'assistant')
     .eq('user_id', userId)
     .neq('id', retainedAssistantMessageId)
     .not('debug_info', 'is', null)
+    .is('debug_info->usageOnly', null)
 
   if (error) {
     logPostGenerationPersistenceWarning({
@@ -78,6 +77,34 @@ export async function clearStaleAssistantDebugInfo({
       requestId,
       error: error.message,
     })
+    return
+  }
+  for (const row of data ?? []) {
+    const retained =
+      row.usage_receipt || row.request_id
+        ? {
+            usageOnly: true,
+            ...(row.request_id ? { requestId: row.request_id } : {}),
+            ...(row.usage_receipt ? { usageReceipt: row.usage_receipt } : {}),
+          }
+        : null
+    const update: MessageUpdate = { debug_info: retained }
+    const { error: trimError } = await supabase
+      .from('messages')
+      .update(update as never)
+      .eq('id', row.id)
+      .eq('chat_id', chatId)
+      .eq('user_id', userId)
+      .eq('role', 'assistant')
+    if (trimError)
+      logPostGenerationPersistenceWarning({
+        action: '[Chat Job Runner] Failed to clear stale assistant debug_info',
+        chatId,
+        userId,
+        apiKeyId,
+        requestId,
+        error: trimError.message,
+      })
   }
 }
 

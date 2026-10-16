@@ -84,7 +84,6 @@ export default function ChatInterface({
     chatId,
     initialUsageStats,
     enabled: usageStatsEnabled,
-    active: statsExpanded,
   })
 
   const { composer, history, messageState, actions, debug } = useChatMessageLifecycle({

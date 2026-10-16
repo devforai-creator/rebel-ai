@@ -16,6 +16,11 @@ import {
 import { evaluateContentFilter } from './content-filter'
 import { ChatJobExecutionError } from './runner-errors'
 import type { UsageMetrics } from './usage-debug'
+import {
+  readAnthropicUsageStep,
+  sumAnthropicUsage,
+  type AnthropicUsageStep,
+} from '@/lib/llm/anthropic-usage'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 type ProviderTextStream = Awaited<ReturnType<typeof streamText>>
@@ -150,6 +155,7 @@ async function broadcastProviderStreamFailure({
 }
 
 export type StreamingResponseStageResult = {
+  anthropicUsageSteps?: AnthropicUsageStep[]
   googleServiceTier?: GoogleServiceTier
   fullText: string
   assistantText: string
@@ -427,7 +433,7 @@ export async function consumeStreamingResponseStage({
       ? (providerMetadata.anthropic as Record<string, unknown>)
       : null
   const anthropicRawUsage = anthropicProviderMetadata?.usage as Record<string, number> | undefined
-  const anthropicCacheCreationInputTokens =
+  let anthropicCacheCreationInputTokens =
     typeof anthropicProviderMetadata?.cacheCreationInputTokens === 'number'
       ? anthropicProviderMetadata.cacheCreationInputTokens
       : (anthropicRawUsage?.cache_creation_input_tokens ?? null)
@@ -470,6 +476,16 @@ export async function consumeStreamingResponseStage({
   }
 
   const usage = await stream.usage
+  let anthropicUsageSteps: AnthropicUsageStep[] | undefined
+  let anthropicUsage: AnthropicUsageStep | undefined
+  if (provider === 'anthropic') {
+    const steps = await stream.steps
+    anthropicUsageSteps = steps?.length
+      ? steps.map((step) => readAnthropicUsageStep(step))
+      : [readAnthropicUsageStep({ usage, providerMetadata })]
+    anthropicUsage = sumAnthropicUsage(anthropicUsageSteps)
+    anthropicCacheCreationInputTokens = anthropicUsage.cacheWriteTokens ?? null
+  }
   if (provider === 'anthropic' && debugMetrics) {
     const thinkingBlockSeen = debugMetrics['anthropic_thinking_block_seen'] === true
     const signatureDeltaSeen = debugMetrics['anthropic_signature_delta_seen'] === true
@@ -489,8 +505,9 @@ export async function consumeStreamingResponseStage({
     assistantText,
     finishReason,
     anthropicCacheCreationInputTokens,
+    ...(anthropicUsageSteps ? { anthropicUsageSteps } : {}),
     ...(googleServiceTier ? { googleServiceTier } : {}),
-    usage: {
+    usage: anthropicUsage ?? {
       promptTokens: usage?.inputTokens ?? null,
       completionTokens: usage?.outputTokens ?? null,
       totalTokens: usage?.totalTokens ?? null,

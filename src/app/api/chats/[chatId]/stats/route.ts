@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { countProjectedChatMessages, loadLatestProjectedAssistantMessage } from '@/lib/chat/turns'
+import { readUsageReceipt, readUsageRequestId } from '@/lib/chat/usage-receipt'
 
 type LatestAssistantUsage = {
   id: string
@@ -12,6 +13,8 @@ type LatestAssistantUsage = {
 }
 
 type LatestUsageCost = {
+  model_provider: string
+  model_name: string | null
   prompt_tokens: number | null
   completion_tokens: number | null
   cached_input_tokens: number | null
@@ -79,20 +82,58 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
   const summaryCount = summaryCountResult.count ?? 0
 
   const latestAssistantUsage = latestAssistantUsageResult as LatestAssistantUsage | null
-
-  const { data: latestUsageEvent, error: latestUsageEventError } = (await supabase
-    .from('chat_usage_events')
-    .select(
-      'prompt_tokens, completion_tokens, cached_input_tokens, reasoning_tokens, prompt_cost_usd, completion_cost_usd, cached_input_cost_usd, reasoning_cost_usd, total_cost_usd, created_at',
-    )
-    .eq('chat_id', chatId)
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()) as {
-    data: LatestUsageCost | null
-    error: unknown
+  const receipt = readUsageReceipt(latestAssistantUsage?.debug_info)
+  if (latestAssistantUsage && receipt) {
+    const cost = receipt.cost
+    return NextResponse.json({
+      messageCount,
+      summaryCount,
+      latestMessage: {
+        id: latestAssistantUsage.id,
+        createdAt: latestAssistantUsage.created_at,
+        provider: receipt.provider,
+        modelName: receipt.modelName,
+        callCount: receipt.callCount,
+        prompt: receipt.input,
+        completion: receipt.output,
+        total:
+          receipt.input !== null && receipt.output !== null ? receipt.input + receipt.output : null,
+        uncachedPrompt: receipt.uncachedInput,
+        cachedPrompt: receipt.cachedInput,
+        cacheWrite5m: receipt.cacheWrite5m,
+        cacheWrite1h: receipt.cacheWrite1h,
+        cacheHit: (receipt.cachedInput ?? 0) > 0,
+        cacheKey: null,
+        cacheRetention: null,
+        costUsd: cost?.total ?? null,
+        promptCostUsd: cost?.input ?? null,
+        completionCostUsd: cost?.output ?? null,
+        cachedPromptCostUsd: cost?.cacheRead ?? null,
+        cacheWrite5mCostUsd: cost?.cacheWrite5m ?? null,
+        cacheWrite1hCostUsd: cost?.cacheWrite1h ?? null,
+        reasoningCostUsd: cost?.reasoning ?? null,
+        usageBreakdownAvailable: true,
+      },
+    })
   }
+
+  // Old answers may only retain a request ID. Never attach a different
+  // request's event just because it is the most recent event in this chat.
+  const requestId = readUsageRequestId(latestAssistantUsage?.debug_info)
+  const { data: latestUsageEvent, error: latestUsageEventError } = requestId
+    ? ((await supabase
+        .from('chat_usage_events')
+        .select(
+          'model_provider, model_name, prompt_tokens, completion_tokens, cached_input_tokens, reasoning_tokens, prompt_cost_usd, completion_cost_usd, cached_input_cost_usd, reasoning_cost_usd, total_cost_usd, created_at',
+        )
+        .eq('chat_id', chatId)
+        .eq('user_id', user.id)
+        .eq('request_id', requestId)
+        .maybeSingle()) as {
+        data: LatestUsageCost | null
+        error: unknown
+      })
+    : { data: null, error: null }
 
   if (latestUsageEventError) {
     console.warn('[Chat stats] Failed to load latest usage event', latestUsageEventError)
@@ -181,12 +222,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
     latestMessage: latestAssistantUsage
       ? {
           id: latestAssistantUsage.id,
+          provider: latestUsageEvent?.model_provider ?? null,
+          modelName: latestUsageEvent?.model_name ?? null,
+          callCount: null,
           createdAt: latestAssistantUsage.created_at,
           prompt: latestPromptTokens,
           completion: latestCompletionTokens,
           total: latestTotalTokens,
           cachedPrompt: latestCachedPromptTokens,
-          cacheHit: cacheDetails.cacheHit,
+          cacheHit: (latestCachedPromptTokens ?? 0) > 0,
           cacheKey: cacheDetails.cacheKey,
           cacheRetention: cacheDetails.cacheRetention,
           costUsd: latestCost.total,
@@ -194,6 +238,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
           completionCostUsd: latestCost.completion,
           cachedPromptCostUsd: latestCost.cachedPrompt,
           reasoningCostUsd: latestCost.reasoning,
+          uncachedPrompt:
+            latestUsageEvent?.model_provider === 'anthropic' ? latestPromptTokens : null,
+          cacheWrite5m: null,
+          cacheWrite1h: null,
+          cacheWrite5mCostUsd: null,
+          cacheWrite1hCostUsd: null,
+          usageBreakdownAvailable: false,
         }
       : null,
   })

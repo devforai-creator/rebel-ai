@@ -3,6 +3,8 @@ import type { ApiKey, Database } from '@/types/database.types'
 import { parseChatJobPayload, type ChatGenerationJobPayload } from '@/lib/chat/job-payload'
 import { resolveAnthropicCacheDecision, resolvePromptCacheDecision } from '@/lib/llm/prompt-cache'
 import { estimateUsageCost } from '@/lib/model-pricing'
+import { readAnthropicUsageStep } from '@/lib/llm/anthropic-usage'
+import { buildUsageReceipt } from '@/lib/chat/usage-receipt'
 import { CHAT_DELIVERY_MODE_ANTHROPIC_BATCH } from '@/lib/chat/delivery-mode'
 import {
   CHAT_JOB_LIFECYCLE_STAGE_COMPLETED,
@@ -432,10 +434,14 @@ async function pollAnthropicBatchJob({
     const usageCost = estimateUsageCost({
       provider: 'anthropic',
       modelName: payload.modelName,
-      promptTokens: promptTokens ?? undefined,
-      completionTokens: completionTokens ?? undefined,
-      cachedInputTokens: cachedInputTokens ?? undefined,
-      cacheWriteTokens: usage?.cache_creation_input_tokens,
+      ...readAnthropicUsageStep({
+        usage: {
+          inputTokens: promptTokens ?? undefined,
+          outputTokens: completionTokens ?? undefined,
+          totalTokens: undefined,
+        },
+        providerMetadata: { anthropic: { usage } },
+      }),
       cacheWriteTtl: metadata.debug.anthropicCache?.ttl,
       serviceTier: 'batch',
     })
@@ -454,6 +460,14 @@ async function pollAnthropicBatchJob({
       modelName: payload.modelName,
       finishReason: batchMessage.stop_reason,
       usage: usageMetrics,
+    })
+    debugInfo.usageReceipt = buildUsageReceipt({
+      requestId: payload.requestId,
+      provider: 'anthropic',
+      modelName: payload.modelName,
+      usage: { ...usageMetrics, cacheWriteTokens: usage?.cache_creation_input_tokens ?? undefined },
+      cost: usageCost,
+      callCount: 1,
     })
 
     currentStage = CHAT_JOB_LIFECYCLE_STAGE_POST_PROCESSING

@@ -18,18 +18,10 @@ export const ANTHROPIC_CACHE_MIN_TOKENS: Record<string, number> = {
 
 const CLAUDE_OPUS_46_PRICING: ModelPricingTier[] = [
   {
-    maxPromptTokens: 200_000,
     rates: {
       input: 5,
       output: 25,
       cachedInput: 0.5,
-    },
-  },
-  {
-    rates: {
-      input: 10,
-      output: 37.5,
-      cachedInput: 1,
     },
   },
 ]
@@ -191,7 +183,7 @@ export const anthropicModelCatalog = defineProviderCatalog({
       displayName: 'Claude Haiku 4.5',
       aliases: ['claude-haiku-4.5'],
       matches: { contains: ['claude-haiku-4-5', 'claude-haiku-4.5'] },
-      pricing: flatPricing({ input: 0.8, output: 4, cachedInput: 0.08 }),
+      pricing: flatPricing({ input: 1, output: 5, cachedInput: 0.1 }),
       features: { promptCacheMinTokens: ANTHROPIC_CACHE_MIN_TOKENS.haiku },
     },
   ],

@@ -293,25 +293,29 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                     </span>
                   </div>
                 </div>
-                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                  <div>
-                    Cache: {latestUsage.cacheHit ? '✅ Hit' : '❌ Miss'}
-                    {latestUsage.cachedPrompt
-                      ? ` (${formatTokenValue(latestUsage.cachedPrompt)} tokens)`
-                      : ''}
+                {latestUsage.provider === 'anthropic' ? (
+                  <AnthropicUsageDetails usage={latestUsage} />
+                ) : (
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                    <div>
+                      Cache: {latestUsage.cacheHit ? '✅ Hit' : '❌ Miss'}
+                      {latestUsage.cachedPrompt
+                        ? ` (${formatTokenValue(latestUsage.cachedPrompt)} tokens)`
+                        : ''}
+                    </div>
+                    <div>
+                      Cost: Input {formatUsd(latestUsage.promptCostUsd)} | Output{' '}
+                      {formatUsd(latestUsage.completionCostUsd)} | Cached{' '}
+                      {formatUsd(latestUsage.cachedPromptCostUsd)}
+                      {latestUsage.reasoningCostUsd
+                        ? ` | Reasoning ${formatUsd(latestUsage.reasoningCostUsd)}`
+                        : ''}
+                    </div>
+                    <div className="text-gray-400 dark:text-gray-500 italic">
+                      * Estimated. Check your AI provider dashboard for actual charges.
+                    </div>
                   </div>
-                  <div>
-                    Cost: Input {formatUsd(latestUsage.promptCostUsd)} | Output{' '}
-                    {formatUsd(latestUsage.completionCostUsd)} | Cached{' '}
-                    {formatUsd(latestUsage.cachedPromptCostUsd)}
-                    {latestUsage.reasoningCostUsd
-                      ? ` | Reasoning ${formatUsd(latestUsage.reasoningCostUsd)}`
-                      : ''}
-                  </div>
-                  <div className="text-gray-400 dark:text-gray-500 italic">
-                    * Estimated. Check your AI provider dashboard for actual charges.
-                  </div>
-                </div>
+                )}
               </>
             ) : (
               <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -324,6 +328,56 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
     </div>
   )
 })
+
+function AnthropicUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
+  const rows = [
+    [
+      '일반 입력',
+      usage.uncachedPrompt ?? usage.prompt,
+      usage.usageBreakdownAvailable ? usage.promptCostUsd : null,
+    ],
+    ['캐시 읽기', usage.cachedPrompt, usage.cachedPromptCostUsd],
+    ['캐시 쓰기 · 5분', usage.cacheWrite5m, usage.cacheWrite5mCostUsd],
+    ['캐시 쓰기 · 1시간', usage.cacheWrite1h, usage.cacheWrite1hCostUsd],
+    ['출력', usage.completion, usage.completionCostUsd],
+  ] as const
+  return (
+    <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left" aria-label="Anthropic 사용량과 추정 비용">
+          <thead>
+            <tr>
+              <th className="py-1 font-medium">항목</th>
+              <th className="py-1 text-right font-medium">토큰</th>
+              <th className="py-1 text-right font-medium">추정 비용</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([label, tokens, cost]) => (
+              <tr key={label}>
+                <th className="py-1 font-normal" scope="row">
+                  {label}
+                </th>
+                <td className="py-1 text-right tabular-nums">{formatTokenValue(tokens)}</td>
+                <td className="py-1 text-right tabular-nums">{formatUsd(cost)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {(usage.callCount ?? 1) > 1 && (
+        <p className="mt-1">과거 대화 조회를 포함한 {usage.callCount}회 호출의 합계입니다.</p>
+      )}
+      {!usage.usageBreakdownAvailable && (
+        <p className="mt-1">이전 기록은 일반 입력과 캐시 쓰기의 상세 비용을 구분할 수 없습니다.</p>
+      )}
+      <p className="mt-1 text-gray-400 dark:text-gray-500">
+        제공자 사용량과 공개 단가에 따른 추정 비용입니다. 실제 청구액은 제공자 대시보드에서
+        확인해주세요.
+      </p>
+    </div>
+  )
+}
 
 function ReasoningSelect({
   label,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { readApiErrorMessage } from '@/lib/http/api-contract'
 import type { LatestMessageTokenStats, MessageChangePayload } from '../utils'
 import { shouldRefreshTokenStats } from '../utils'
@@ -19,6 +19,15 @@ export function parseLatestMessageTokenStats(value: unknown): LatestMessageToken
   }
 
   return {
+    provider: typeof value.provider === 'string' ? value.provider : null,
+    modelName: typeof value.modelName === 'string' ? value.modelName : null,
+    callCount: parseNumberOrNull(value.callCount),
+    uncachedPrompt: parseNumberOrNull(value.uncachedPrompt),
+    cacheWrite5m: parseNumberOrNull(value.cacheWrite5m),
+    cacheWrite1h: parseNumberOrNull(value.cacheWrite1h),
+    cacheWrite5mCostUsd: parseNumberOrNull(value.cacheWrite5mCostUsd),
+    cacheWrite1hCostUsd: parseNumberOrNull(value.cacheWrite1hCostUsd),
+    usageBreakdownAvailable: value.usageBreakdownAvailable === true,
     id: typeof value.id === 'string' ? value.id : null,
     createdAt: typeof value.createdAt === 'string' ? value.createdAt : null,
     total: parseNumberOrNull(value.total),
@@ -48,22 +57,23 @@ export function useChatUsageStats({
   chatId,
   initialUsageStats,
   enabled,
-  active,
 }: {
   chatId: string
   initialUsageStats: LatestMessageTokenStats | null
   enabled: boolean
-  active: boolean
 }) {
   const [latestUsage, setLatestUsage] = useState<LatestMessageTokenStats | null>(initialUsageStats)
   const [isLoading, setIsLoading] = useState(false)
-  const canFetchUsage = enabled && active
+  const canFetchUsage = enabled
+  const requestState = useRef({ version: 0 })
 
   const fetchLatestUsage = useCallback(async () => {
     if (!canFetchUsage) {
       return
     }
 
+    const state = requestState.current
+    const version = ++state.version
     setIsLoading(true)
 
     try {
@@ -76,17 +86,23 @@ export function useChatUsageStats({
         return
       }
 
-      setLatestUsage(parseLatestUsageStatsResponse(await response.json()))
+      const result = parseLatestUsageStatsResponse(await response.json())
+      if (version === state.version) setLatestUsage(result)
     } catch (error) {
       console.error('Failed to load chat usage stats', error)
     } finally {
-      setIsLoading(false)
+      if (version === state.version) setIsLoading(false)
     }
   }, [canFetchUsage, chatId])
 
   useEffect(() => {
+    const state = requestState.current
     setLatestUsage(enabled ? initialUsageStats : null)
-  }, [enabled, initialUsageStats])
+    setIsLoading(false)
+    return () => {
+      state.version++
+    }
+  }, [enabled, chatId, initialUsageStats])
 
   useEffect(() => {
     if (canFetchUsage) {

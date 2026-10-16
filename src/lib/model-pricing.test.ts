@@ -2,6 +2,60 @@ import { describe, it, expect } from 'vitest'
 import { estimateUsageCost, type UsageCostParams } from './model-pricing'
 
 describe('estimateUsageCost', () => {
+  it('keeps the supplied Anthropic read/write breakdown separate and balanced', () => {
+    const cost = estimateUsageCost({
+      provider: 'anthropic',
+      modelName: 'claude-opus-4-7',
+      promptTokens: 32691,
+      cachedInputTokens: 106687,
+      cacheWriteTokens: 2866,
+      cacheWriteTtl: '1h',
+      completionTokens: 4128,
+    })!
+    expect(cost.uncachedPromptCost).toBeCloseTo(0.163455, 12)
+    expect(cost.cacheWrite1hCost).toBeCloseTo(0.02866, 12)
+    expect(cost.cachedInputCost).toBeCloseTo(0.0533435, 12)
+    expect(cost.completionCost).toBeCloseTo(0.1032, 12)
+    expect(cost.totalCost).toBeCloseTo(0.3486585, 12)
+  })
+  it.each(['standard', 'batch'] as const)(
+    'charges actual mixed TTLs at their own rates for %s',
+    (serviceTier) => {
+      const cost = estimateUsageCost({
+        provider: 'anthropic',
+        modelName: 'claude-opus-4-7',
+        promptTokens: 1000,
+        cacheWriteTokens: 1000,
+        cacheWrite5mTokens: 400,
+        cacheWrite1hTokens: 600,
+        cacheWriteTtl: '1h',
+        serviceTier,
+      })!
+      const multiplier = serviceTier === 'batch' ? 0.5 : 1
+      expect(cost.cacheWrite5mCost).toBeCloseTo(0.0025 * multiplier, 12)
+      expect(cost.cacheWrite1hCost).toBeCloseTo(0.006 * multiplier, 12)
+      expect(cost.totalCost).toBeCloseTo(0.0135 * multiplier, 12)
+    },
+  )
+  it('uses current Haiku 4.5 and full-context Opus 4.6 prices', () => {
+    expect(
+      estimateUsageCost({
+        provider: 'anthropic',
+        modelName: 'claude-haiku-4-5',
+        promptTokens: 100000,
+        completionTokens: 1000,
+      })!.totalCost,
+    ).toBeCloseTo(0.105, 12)
+    expect(
+      estimateUsageCost({
+        provider: 'anthropic',
+        modelName: 'claude-opus-4-6',
+        promptTokens: 100000,
+        cachedInputTokens: 200000,
+        completionTokens: 1000,
+      })!.totalCost,
+    ).toBeCloseTo(0.625, 12)
+  })
   it.each(['5m', '1h'] as const)(
     'charges Anthropic cache writes at the %s rate without double-counting reads',
     (cacheWriteTtl) => {

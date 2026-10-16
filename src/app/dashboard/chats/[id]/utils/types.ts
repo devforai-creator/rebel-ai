@@ -40,6 +40,15 @@ export type ActiveChatJob = {
  * Token usage statistics for the latest message
  */
 export type LatestMessageTokenStats = {
+  provider?: string | null
+  modelName?: string | null
+  callCount?: number | null
+  uncachedPrompt?: number | null
+  cacheWrite5m?: number | null
+  cacheWrite1h?: number | null
+  cacheWrite5mCostUsd?: number | null
+  cacheWrite1hCostUsd?: number | null
+  usageBreakdownAvailable?: boolean
   id: string | null
   createdAt: string | null
   total: number | null

@@ -54,8 +54,10 @@ export const shouldRefreshTokenStats = (payload: MessageChangePayload): boolean 
     const promptChanged = newMessage?.prompt_tokens !== oldMessage?.prompt_tokens
     const completionChanged = newMessage?.completion_tokens !== oldMessage?.completion_tokens
     const roleChanged = newMessage?.role !== oldMessage?.role
+    const stateChanged = newMessage?.message_status !== oldMessage?.message_status
+    const debugChanged = newMessage?.debug_info !== oldMessage?.debug_info
 
-    return promptChanged || completionChanged || roleChanged
+    return promptChanged || completionChanged || roleChanged || stateChanged || debugChanged
   }
 
   return false

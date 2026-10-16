@@ -54,6 +54,8 @@ describe('model catalog contracts', () => {
         modelName: model.id,
         promptTokens: 1_000,
         completionTokens: 1_000,
+        cachedInputTokens: 0,
+        pricingTimestamp: '2026-10-16T12:00:00Z',
       })
       expect(estimate).not.toBeNull()
       expect(estimate?.promptCost).toBeCloseTo(model.pricing[0].rates.input / 1_000, 10)

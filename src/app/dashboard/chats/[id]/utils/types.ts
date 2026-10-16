@@ -40,6 +40,8 @@ export type ActiveChatJob = {
  * Token usage statistics for the latest message
  */
 export type LatestMessageTokenStats = {
+  pricingPeriod?: 'peak' | 'off_peak' | 'mixed' | 'unknown' | null
+  billingModels?: string[] | null
   reasoning?: number | null
   serviceTier?: 'standard' | 'flex' | 'priority' | 'batch' | 'unknown' | 'mixed' | null
   cacheWrite?: number | null

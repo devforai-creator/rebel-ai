@@ -170,7 +170,10 @@ describe('buildLanguageModel', () => {
   })
 
   it('builds deepseek model', async () => {
-    const deepseekModel = { provider: 'deepseek-model' } as unknown as LanguageModel
+    const deepseekModel = {
+      provider: 'deepseek-model',
+      modelId: 'deepseek-v4-flash',
+    } as unknown as LanguageModel
     const deepseekFactory = vi.fn(() => deepseekModel)
     createDeepSeekMock.mockReturnValue(deepseekFactory)
     const { buildLanguageModel } = await import('./model-factory')
@@ -184,7 +187,7 @@ describe('buildLanguageModel', () => {
 
     expect(createDeepSeekMock).toHaveBeenCalledWith({ apiKey: 'd-key' })
     expect(deepseekFactory).toHaveBeenCalledWith('deepseek-v4-flash')
-    expect(model).toBe(deepseekModel)
+    expect(model).toMatchObject({ provider: 'deepseek-model', modelId: 'deepseek-v4-flash' })
   })
 
   it('builds openrouter model with chat() to avoid Responses API', async () => {

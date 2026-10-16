@@ -30,6 +30,7 @@ export type ModelPricingTier = {
   rates: ModelPricingRateSet
   flexRates?: ModelPricingRateSet
   priorityRates?: ModelPricingRateSet
+  peakRates?: ModelPricingRateSet
 }
 
 export type AnthropicThinkingPolicy =

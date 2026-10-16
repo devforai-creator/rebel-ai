@@ -38,6 +38,42 @@ const baseProps = {
 }
 
 describe('TokenStatsPanel', () => {
+  it('shows DeepSeek cache misses, reasoning, response model, and mixed pricing periods without a cache-write row', () => {
+    const html = renderToStaticMarkup(
+      <TokenStatsPanel
+        {...baseProps}
+        usageStatsEnabled
+        statsExpanded
+        latestUsage={{
+          ...googleUsage,
+          provider: 'deepseek',
+          modelName: 'deepseek-v4-pro',
+          billingModels: ['deepseek-flash'],
+          serviceTier: null,
+          pricingPeriod: 'mixed',
+          uncachedPrompt: 5000,
+          completion: 1200,
+          reasoning: 600,
+          cachedPromptCostUsd: 0.000024,
+          costUsd: 0.00252,
+          usageBreakdownAvailable: true,
+        }}
+      />,
+    )
+    for (const text of [
+      'DeepSeek 사용량과 추정 비용',
+      '일반 입력',
+      '5,000',
+      '1,200',
+      '600',
+      '호출별 시간대 혼합',
+      '응답 모델: deepseek-flash',
+      '$0.000024',
+      '2회 호출',
+    ])
+      expect(html).toContain(text)
+    expect(html).not.toContain('캐시 쓰기')
+  })
   it('shows OpenAI writes, visible output, reasoning, ATR count, and returned billing mode', () => {
     const html = renderToStaticMarkup(
       <TokenStatsPanel
@@ -109,7 +145,7 @@ describe('TokenStatsPanel', () => {
       expect(html).toContain(text)
     expect(html).not.toContain('캐시 쓰기')
   })
-  it.each(['google', 'openai'])(
+  it.each(['google', 'openai', 'deepseek'])(
     'shows missing %s usage as unknown instead of a zero-dollar price',
     (provider) => {
       const html = renderToStaticMarkup(

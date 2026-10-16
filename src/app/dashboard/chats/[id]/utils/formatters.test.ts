@@ -21,6 +21,12 @@ describe('chat formatter utils', () => {
     expect(formatUsd(0.0043)).toBe('$0.0043')
     expect(formatUsd(0.245)).toBe('$0.245')
     expect(formatUsd(12.345)).toBe('$12.35')
+    expect(formatUsd(0.000024)).toBe('$0.000024')
+    expect(formatUsd(0.00252)).toBe('$0.00252')
+    expect(formatUsd(0.00084)).toBe('$0.00084')
+    expect(formatUsd(0.00000001)).toBe('<$0.000001')
+    expect(formatUsd(0.0000005)).toBe('<$0.000001')
+    expect(formatUsd(-0.00000001)).toBe('>-$0.000001')
   })
 
   it('refreshes token stats only for assistant inserts, deletes, and meaningful updates', () => {

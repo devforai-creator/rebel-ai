@@ -226,6 +226,71 @@ it('reads older OpenAI receipts without labeling inclusive output as visible out
     total: 11500,
   })
 })
+it('reads older DeepSeek receipts without inventing a reasoning split or a pricing period', async () => {
+  mocks.latest.mockResolvedValue(
+    answer('deepseek-old', {
+      usageReceipt: {
+        ...receipt,
+        provider: 'deepseek',
+        modelName: 'deepseek-v4-flash',
+        input: 10000,
+        output: 1500,
+        cachedInput: 8000,
+      },
+    }),
+  )
+  expect((await get()).latestMessage).toMatchObject({
+    completion: null,
+    reasoning: null,
+    pricingPeriod: null,
+    billingModels: null,
+    usageBreakdownAvailable: false,
+  })
+})
+it('suppresses an older DeepSeek estimate when its cache breakdown is missing', async () => {
+  mocks.latest.mockResolvedValue(
+    answer('deepseek-old', {
+      usageReceipt: {
+        ...receipt,
+        provider: 'deepseek',
+        cachedInput: null,
+        cost: { ...receipt.cost!, total: 0.00182 },
+      },
+    }),
+  )
+  expect((await get()).latestMessage.costUsd).toBeNull()
+})
+it('also suppresses legacy event costs when DeepSeek cache usage was never reported', async () => {
+  const db = createSupabaseMock({
+    tables: {
+      chats: { rows: [{ id: 'chat', user_id: 'owner' }] },
+      chat_summaries: { rows: [] },
+      chat_usage_events: {
+        rows: [
+          {
+            chat_id: 'chat',
+            user_id: 'owner',
+            request_id: 'legacy-deepseek',
+            model_provider: 'deepseek',
+            model_name: 'deepseek-v4-flash',
+            cached_input_tokens: null,
+            total_cost_usd: 0.00182,
+          },
+        ],
+      },
+    },
+  })
+  mocks.client.mockResolvedValue({
+    ...db,
+    auth: { getUser: async () => ({ data: { user: { id: 'owner' } } }) },
+  })
+  mocks.latest.mockResolvedValue({
+    ...answer('legacy-deepseek', { requestId: 'legacy-deepseek' }),
+    prompt_tokens: 10000,
+    completion_tokens: 1500,
+  })
+  expect((await get()).latestMessage).toMatchObject({ costUsd: null, cachedPrompt: null })
+})
 it('enforces ownership before reading prices', async () => {
   mocks.client.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: null } }) } })
   expect(

@@ -1,5 +1,6 @@
 import { buildLocalModel } from './local'
 import { googleServiceTierMiddleware } from './google-service-tier-middleware'
+import { deepSeekUsageMiddleware } from './deepseek-usage-middleware'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
@@ -78,7 +79,10 @@ export function buildLanguageModel({
     }
     case 'deepseek': {
       const deepseekProvider = createDeepSeek({ apiKey })
-      return deepseekProvider(modelName)
+      return wrapLanguageModel({
+        model: deepseekProvider(modelName),
+        middleware: deepSeekUsageMiddleware,
+      })
     }
     case 'openrouter': {
       const requestFetch = createOpenRouterRequestFetch({ modelName })

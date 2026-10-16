@@ -14,6 +14,22 @@ const response = (id: string, costUsd = 0.12) => ({
 const options = { chatId: 'chat-1', enabled: true, initialUsageStats: null }
 
 describe('usage stats payloads', () => {
+  it('retains DeepSeek pricing metadata without borrowing missing values', () => {
+    expect(
+      parseLatestMessageTokenStats({
+        provider: 'deepseek',
+        pricingPeriod: 'mixed',
+        billingModels: ['deepseek-flash'],
+      }),
+    ).toMatchObject({ pricingPeriod: 'mixed', billingModels: ['deepseek-flash'] })
+    expect(
+      parseLatestMessageTokenStats({
+        provider: 'deepseek',
+        pricingPeriod: 'bad',
+        billingModels: [1],
+      }),
+    ).toMatchObject({ pricingPeriod: null, billingModels: null })
+  })
   it('preserves Google thinking tokens and the actual service tier without inventing missing counts', () => {
     expect(
       parseLatestMessageTokenStats({

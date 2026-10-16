@@ -84,6 +84,10 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
   onOpenAssetDiagnostics,
 }: TokenStatsPanelProps) {
   const [optionsOpen, setOptionsOpen] = useState(false)
+  const detailedUsageProvider =
+    latestUsage?.provider === 'google' ||
+    latestUsage?.provider === 'openai' ||
+    latestUsage?.provider === 'deepseek'
   const optionsId = useId()
   const modelOptions = buildLlmModelOptions(apiKeys)
   const selectedModelValue = serializeLlmModelSelection({
@@ -286,7 +290,7 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                     <span className="text-xs text-gray-500">
                       Input: {formatTokenValue(latestUsage.prompt)} | Output:{' '}
                       {formatTokenValue(latestUsage.completion)}
-                      {(latestUsage.provider === 'google' || latestUsage.provider === 'openai') && (
+                      {detailedUsageProvider && (
                         <> | 추론: {formatTokenValue(latestUsage.reasoning)}</>
                       )}
                     </span>
@@ -298,7 +302,7 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                     </span>
                   </div>
                 </div>
-                {latestUsage.provider === 'google' || latestUsage.provider === 'openai' ? (
+                {detailedUsageProvider ? (
                   <TokenUsageDetails usage={latestUsage} />
                 ) : latestUsage.provider === 'anthropic' ? (
                   <AnthropicUsageDetails usage={latestUsage} />
@@ -349,6 +353,8 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
 
 function TokenUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
   const openai = usage.provider === 'openai'
+  const deepseek = usage.provider === 'deepseek'
+  const providerLabel = openai ? 'OpenAI' : deepseek ? 'DeepSeek' : 'Google'
   const rows = [
     [
       '일반 입력',
@@ -357,12 +363,35 @@ function TokenUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
     ],
     ['캐시 읽기', usage.cachedPrompt, usage.cachedPromptCostUsd],
     ...(openai ? [['캐시 쓰기', usage.cacheWrite, usage.cacheWriteCostUsd] as const] : []),
-    ['출력', usage.completion, usage.completionCostUsd],
-    ['추론', usage.reasoning, usage.reasoningCostUsd],
+    [
+      '출력',
+      usage.completion,
+      deepseek && !usage.usageBreakdownAvailable ? null : usage.completionCostUsd,
+    ],
+    [
+      '추론',
+      usage.reasoning,
+      deepseek && !usage.usageBreakdownAvailable ? null : usage.reasoningCostUsd,
+    ],
   ] as const
   return (
     <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
-      <UsageDetailsTable label={`${openai ? 'OpenAI' : 'Google'} 사용량과 추정 비용`} rows={rows} />
+      <UsageDetailsTable label={`${providerLabel} 사용량과 추정 비용`} rows={rows} />
+      {deepseek && usage.pricingPeriod && (
+        <p className="mt-1">
+          요금 시간대:{' '}
+          {
+            { peak: '혼잡', off_peak: '비혼잡', mixed: '호출별 시간대 혼합', unknown: '미확인' }[
+              usage.pricingPeriod
+            ]
+          }
+        </p>
+      )}
+      {deepseek &&
+      usage.billingModels?.length &&
+      (usage.billingModels.length > 1 || usage.billingModels[0] !== usage.modelName) ? (
+        <p className="mt-1 break-all">응답 모델: {usage.billingModels.join(', ')}</p>
+      ) : null}
       {usage.serviceTier && (
         <p className="mt-1">
           요금:{' '}
@@ -388,10 +417,18 @@ function TokenUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
       {openai && !usage.usageBreakdownAvailable && (
         <p className="mt-1">이전 기록은 캐시 쓰기와 출력의 상세 사용량을 확인할 수 없습니다.</p>
       )}
+      {deepseek && !usage.usageBreakdownAvailable && (
+        <p className="mt-1">이전 기록은 추론 사용량과 요금 시간대를 확인할 수 없습니다.</p>
+      )}
+      {deepseek && usage.usageBreakdownAvailable && usage.reasoning == null && (
+        <p className="mt-1">추론 사용량을 받지 못해 출력·추론의 상세 구분은 미확인입니다.</p>
+      )}
       <p className="mt-1 text-gray-400 dark:text-gray-500">
-        {openai
-          ? '출력은 추론을 제외한 토큰입니다. 추론도 출력 단가로 계산하며, 합계에 한 번만 포함됩니다. 제공자 사용량과 공개 단가에 따른 추정 비용입니다.'
-          : '출력과 추론은 별도 항목이며, 둘 다 합계 비용에 포함됩니다. 생성 요청의 토큰 비용 추정치로, 명시 캐시 보관료는 포함하지 않습니다.'}
+        {deepseek
+          ? '출력은 추론을 제외한 토큰입니다. 추론도 출력 단가로 한 번만 계산합니다. 요금 시간대는 제공자 응답 시각 기준 추정치입니다.'
+          : openai
+            ? '출력은 추론을 제외한 토큰입니다. 추론도 출력 단가로 계산하며, 합계에 한 번만 포함됩니다. 제공자 사용량과 공개 단가에 따른 추정 비용입니다.'
+            : '출력과 추론은 별도 항목이며, 둘 다 합계 비용에 포함됩니다. 생성 요청의 토큰 비용 추정치로, 명시 캐시 보관료는 포함하지 않습니다.'}
       </p>
     </div>
   )

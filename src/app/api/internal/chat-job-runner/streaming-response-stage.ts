@@ -19,6 +19,7 @@ import type { UsageMetrics } from './usage-debug'
 import { readAnthropicUsageStep } from '@/lib/llm/anthropic-usage'
 import { readGoogleUsageStep } from '@/lib/llm/google-usage'
 import { readOpenAIUsageStep } from '@/lib/llm/openai-usage'
+import { readDeepSeekUsageStep } from '@/lib/llm/deepseek-usage'
 import {
   readSdkUsageStep,
   sumUsageSteps,
@@ -480,7 +481,9 @@ export async function consumeStreamingResponseStage({
         ? readGoogleUsageStep
         : provider === 'openai'
           ? readOpenAIUsageStep
-          : readSdkUsageStep
+          : provider === 'deepseek'
+            ? readDeepSeekUsageStep
+            : readSdkUsageStep
   const usageSteps: UsageStep[] = (steps?.length ? steps : [{ usage, providerMetadata }]).map(
     (step) => readUsage(step),
   )

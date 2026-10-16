@@ -8,6 +8,8 @@ import type { ApiServiceTier, Provider } from '@/types/database.types'
 
 export type UsageServiceTier = ApiServiceTier | 'unknown'
 export type UsageStep = {
+  modelName?: string | null
+  pricingTimestamp?: string | null
   promptTokens: number | null
   completionTokens: number | null
   totalTokens: number | null
@@ -43,8 +45,10 @@ export function readSdkUsageStep({ usage }: SdkUsageStep): UsageStep {
   }
 }
 
-export function sumUsageSteps(steps: UsageStep[]): Omit<UsageStep, 'serviceTier'> {
-  const sum = (key: Exclude<keyof UsageStep, 'serviceTier'>) => {
+export function sumUsageSteps(
+  steps: UsageStep[],
+): Omit<UsageStep, 'serviceTier' | 'modelName' | 'pricingTimestamp'> {
+  const sum = (key: Exclude<keyof UsageStep, 'serviceTier' | 'modelName' | 'pricingTimestamp'>) => {
     const values = steps.map((step) => reportedTokenCount(step[key]))
     return steps.length && values.every((value) => value !== null)
       ? values.reduce((total, value) => total + value, 0)
@@ -83,7 +87,7 @@ export function priceUsageSteps({
     estimateUsageCost({
       ...step,
       provider,
-      modelName,
+      modelName: provider === 'deepseek' ? step.modelName : modelName,
       serviceTier: step.serviceTier === 'unknown' ? undefined : (step.serviceTier ?? serviceTier),
       cacheWriteTtl,
     }),

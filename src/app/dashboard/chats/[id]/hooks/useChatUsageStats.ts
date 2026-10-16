@@ -23,6 +23,18 @@ export function parseLatestMessageTokenStats(value: unknown): LatestMessageToken
     modelName: typeof value.modelName === 'string' ? value.modelName : null,
     callCount: parseNumberOrNull(value.callCount),
     reasoning: parseNumberOrNull(value.reasoning),
+    pricingPeriod:
+      value.pricingPeriod === 'peak' ||
+      value.pricingPeriod === 'off_peak' ||
+      value.pricingPeriod === 'mixed' ||
+      value.pricingPeriod === 'unknown'
+        ? value.pricingPeriod
+        : null,
+    billingModels:
+      Array.isArray(value.billingModels) &&
+      value.billingModels.every((model) => typeof model === 'string')
+        ? value.billingModels
+        : null,
     serviceTier:
       value.serviceTier === 'standard' ||
       value.serviceTier === 'flex' ||

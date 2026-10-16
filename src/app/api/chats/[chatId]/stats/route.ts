@@ -84,7 +84,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
   const latestAssistantUsage = latestAssistantUsageResult as LatestAssistantUsage | null
   const receipt = readUsageReceipt(latestAssistantUsage?.debug_info)
   if (latestAssistantUsage && receipt) {
-    const cost = receipt.input === null || receipt.output === null ? null : receipt.cost
+    const cost =
+      receipt.input === null ||
+      receipt.output === null ||
+      (receipt.provider === 'deepseek' && receipt.cachedInput === null)
+        ? null
+        : receipt.cost
+    const inclusiveOutput = receipt.provider === 'openai' || receipt.provider === 'deepseek'
     return NextResponse.json({
       messageCount,
       summaryCount,
@@ -95,10 +101,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
         modelName: receipt.modelName,
         callCount: receipt.callCount,
         prompt: receipt.input,
-        completion:
-          receipt.provider === 'openai' ? (receipt.visibleOutput ?? null) : receipt.output,
+        completion: inclusiveOutput ? (receipt.visibleOutput ?? null) : receipt.output,
         reasoning: receipt.reasoningTokens ?? null,
         serviceTier: receipt.serviceTier ?? null,
+        pricingPeriod: receipt.pricingPeriod ?? null,
+        billingModels: receipt.billingModels ?? null,
         total:
           receipt.totalTokens ??
           (receipt.provider !== 'google' && receipt.input !== null && receipt.output !== null
@@ -120,8 +127,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
         cacheWrite1hCostUsd: cost?.cacheWrite1h ?? null,
         cacheWriteCostUsd: cost?.cacheWrite ?? null,
         reasoningCostUsd: cost?.reasoning ?? null,
-        usageBreakdownAvailable:
-          receipt.provider !== 'openai' || receipt.visibleOutput !== undefined,
+        usageBreakdownAvailable: !inclusiveOutput || receipt.visibleOutput !== undefined,
       },
     })
   }
@@ -221,7 +227,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
       ? cacheDetails.cachedPromptTokens
       : toNumber(latestUsageEvent?.cached_input_tokens ?? null)
 
-  const knownUsage = latestPromptTokens !== null && latestCompletionTokens !== null
+  const knownUsage =
+    latestPromptTokens !== null &&
+    latestCompletionTokens !== null &&
+    (latestUsageEvent?.model_provider !== 'deepseek' || latestCachedPromptTokens !== null)
   const latestCost = {
     total: toNumber(latestUsageEvent?.total_cost_usd ?? null),
     prompt: toNumber(latestUsageEvent?.prompt_cost_usd ?? null),
@@ -242,13 +251,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
           createdAt: latestAssistantUsage.created_at,
           prompt: latestPromptTokens,
           completion:
-            latestUsageEvent?.model_provider === 'openai'
+            latestUsageEvent?.model_provider === 'openai' ||
+            latestUsageEvent?.model_provider === 'deepseek'
               ? latestCompletionTokens !== null && latestReasoningTokens !== null
                 ? Math.max(latestCompletionTokens - latestReasoningTokens, 0)
                 : null
               : latestCompletionTokens,
           reasoning: latestReasoningTokens,
           serviceTier: null,
+          pricingPeriod: null,
+          billingModels: null,
           total: latestTotalTokens,
           cachedPrompt: latestCachedPromptTokens,
           cacheHit: (latestCachedPromptTokens ?? 0) > 0,
@@ -260,7 +272,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
           cachedPromptCostUsd: knownUsage ? latestCost.cachedPrompt : null,
           reasoningCostUsd: knownUsage ? latestCost.reasoning : null,
           uncachedPrompt:
-            latestUsageEvent?.model_provider === 'anthropic' ? latestPromptTokens : null,
+            latestUsageEvent?.model_provider === 'anthropic'
+              ? latestPromptTokens
+              : latestUsageEvent?.model_provider === 'deepseek' &&
+                  latestPromptTokens !== null &&
+                  latestCachedPromptTokens !== null
+                ? Math.max(latestPromptTokens - latestCachedPromptTokens, 0)
+                : null,
           cacheWrite5m: null,
           cacheWrite1h: null,
           cacheWrite: null,

@@ -1,10 +1,12 @@
 import type { ApiServiceTier, Provider } from '@/types/database.types'
 import type { ModelPricingRateSet as RateSet } from './models'
 import { getModelPricingTiers } from './models'
+import { getDeepSeekPricingPeriod } from './deepseek/pricing'
 
 const TOKENS_PER_MILLION = 1_000_000
 
 export type UsageCostParams = {
+  pricingTimestamp?: string | Date | null
   provider: Provider
   modelName?: string | null
   promptTokens?: number | null
@@ -42,11 +44,13 @@ function resolveRates({
   modelName,
   promptTokens,
   serviceTier,
+  pricingTimestamp,
 }: {
   provider: Provider
   modelName?: string | null
   promptTokens?: number | null
   serviceTier?: ApiServiceTier | null
+  pricingTimestamp?: string | Date | null
 }): RateSet | null {
   const tokens =
     typeof promptTokens === 'number' && Number.isFinite(promptTokens) ? promptTokens : 0
@@ -66,6 +70,11 @@ function resolveRates({
 
   if (provider === 'google' && serviceTier === 'flex') return tier?.flexRates ?? null
   if (provider === 'openai' && serviceTier === 'priority') return tier?.priorityRates ?? null
+  if (provider === 'deepseek') {
+    const period = getDeepSeekPricingPeriod(pricingTimestamp)
+    if (period === 'unknown') return null
+    return period === 'peak' ? (tier?.peakRates ?? null) : (tier?.rates ?? null)
+  }
   return tier?.rates ?? null
 }
 
@@ -98,10 +107,11 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
   const reasoningTokens = sanitizeTokens(params.reasoningTokens)
   const reportedWrites = sanitizeTokens(params.cacheWriteTokens)
   if (
-    params.provider === 'openai' &&
+    (params.provider === 'openai' || params.provider === 'deepseek') &&
     (reasoningTokens > completionTokens || cachedInputTokens + reportedWrites > promptTokens)
   )
     return null
+  if (params.provider === 'deepseek' && !isReportedTokenCount(params.cachedInputTokens)) return null
   let write5m = sanitizeTokens(params.cacheWrite5mTokens)
   let write1h = sanitizeTokens(params.cacheWrite1hTokens)
   const unclassifiedWrites = Math.max(reportedWrites - write5m - write1h, 0)
@@ -118,6 +128,7 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
     modelName: params.modelName,
     promptTokens: pricingPromptTokens,
     serviceTier: params.serviceTier,
+    pricingTimestamp: params.pricingTimestamp,
   })
   if (!rates) {
     return null
@@ -142,9 +153,9 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
       ? promptTokens // Anthropic: inputTokens is already uncached
       : Math.max(promptTokens - cachedInputTokens - cacheWriteTokens, 0)
 
-  // OpenAI outputTokens includes reasoning; charge those tokens only in reasoningCost.
+  // These providers include reasoning in outputTokens; charge each token once.
   const effectiveCompletionTokens =
-    params.provider === 'openai'
+    params.provider === 'openai' || params.provider === 'deepseek'
       ? Math.max(completionTokens - reasoningTokens, 0)
       : completionTokens
 

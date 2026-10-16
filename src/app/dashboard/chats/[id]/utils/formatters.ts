@@ -19,8 +19,9 @@ export const formatUsd = (value: number | null | undefined): string => {
   }
 
   const absolute = Math.abs(value)
+  if (absolute < 0.000001) return value < 0 ? '>-$0.000001' : '<$0.000001'
   if (absolute < 0.01) {
-    return `$${value.toFixed(4)}`
+    return `$${value.toFixed(6).replace(/(\.\d{4,}?)0+$/, '$1')}`
   }
 
   if (absolute < 1) {

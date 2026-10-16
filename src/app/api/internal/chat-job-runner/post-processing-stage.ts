@@ -13,6 +13,7 @@ import type { StreamingResponseStageResult } from './streaming-response-stage'
 import { buildChatDebugInfo, type UsageMetrics } from './usage-debug'
 import { buildUsageReceipt } from '@/lib/chat/usage-receipt'
 import { priceUsageSteps, summarizeUsageServiceTier } from '@/lib/llm/usage'
+import { getDeepSeekPricingPeriod, summarizeDeepSeekPricingPeriods } from '@/lib/deepseek/pricing'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
 
@@ -164,6 +165,16 @@ export async function runPostProcessingStage({
     usage: usageMetrics,
     cost: usageCost,
     callCount: usageSteps.length,
+    ...(payload.provider === 'deepseek'
+      ? {
+          pricingPeriod: summarizeDeepSeekPricingPeriods(
+            usageSteps.map((step) => getDeepSeekPricingPeriod(step.pricingTimestamp)),
+          ),
+          billingModels: [
+            ...new Set(usageSteps.flatMap((step) => (step.modelName ? [step.modelName] : []))),
+          ],
+        }
+      : {}),
     ...(payload.provider === 'google' || payload.provider === 'openai'
       ? { serviceTier: summarizeUsageServiceTier(usageSteps, serviceTier) }
       : {}),

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { UsageCostBreakdown } from '@/lib/model-pricing'
 import type { LlmProvider } from '@/types/database.types'
 import type { UsageServiceTier } from '@/lib/llm/usage'
+import type { DeepSeekPricingPeriod } from '@/lib/deepseek/pricing'
 
 const count = z.number().finite().nonnegative().nullable()
 const receiptSchema = z.object({
@@ -19,6 +20,8 @@ const receiptSchema = z.object({
   reasoningTokens: count.optional(),
   totalTokens: count.optional(),
   serviceTier: z.enum(['standard', 'flex', 'priority', 'batch', 'unknown', 'mixed']).optional(),
+  pricingPeriod: z.enum(['peak', 'off_peak', 'mixed', 'unknown']).optional(),
+  billingModels: z.array(z.string().min(1)).optional(),
   cachedInput: count,
   cacheWrite5m: count,
   cacheWrite1h: count,
@@ -45,12 +48,16 @@ export function buildUsageReceipt({
   cost,
   callCount,
   serviceTier,
+  pricingPeriod,
+  billingModels,
 }: {
   requestId: string
   provider: LlmProvider
   modelName: string
   callCount: number
   serviceTier?: UsageServiceTier | 'mixed'
+  pricingPeriod?: DeepSeekPricingPeriod | 'mixed'
+  billingModels?: string[]
   usage: {
     promptTokens: number | null
     completionTokens: number | null
@@ -63,8 +70,10 @@ export function buildUsageReceipt({
 }): UsageReceipt {
   const anthropic = provider === 'anthropic'
   const openai = provider === 'openai'
+  const deepseek = provider === 'deepseek'
+  const inclusiveOutput = openai || deepseek
   const knownUsage = usage.promptTokens !== null && usage.completionTokens !== null
-  if (!knownUsage) cost = null
+  if (!knownUsage || (deepseek && usage.cachedInputTokens === null)) cost = null
   const writes = (cost?.cacheWrite5mTokens ?? 0) + (cost?.cacheWrite1hTokens ?? 0)
   return {
     version: 1,
@@ -78,7 +87,7 @@ export function buildUsageReceipt({
         : usage.promptTokens,
     uncachedInput: anthropic
       ? usage.promptTokens
-      : (provider === 'google' || openai) &&
+      : (provider === 'google' || inclusiveOutput) &&
           usage.promptTokens !== null &&
           usage.cachedInputTokens !== null
         ? Math.max(
@@ -89,20 +98,26 @@ export function buildUsageReceipt({
           )
         : null,
     output: usage.completionTokens,
-    ...(openai
+    ...(inclusiveOutput
       ? {
           visibleOutput:
             usage.completionTokens !== null && usage.reasoningTokens != null
               ? Math.max(usage.completionTokens - usage.reasoningTokens, 0)
               : null,
-          cacheWriteTokens: usage.cacheWriteTokens ?? null,
+          ...(openai ? { cacheWriteTokens: usage.cacheWriteTokens ?? null } : {}),
         }
       : {}),
-    ...(provider === 'google' || openai
+    ...(provider === 'google' || inclusiveOutput
       ? {
           reasoningTokens: usage.reasoningTokens ?? null,
           totalTokens: usage.totalTokens ?? null,
           ...(serviceTier ? { serviceTier } : {}),
+        }
+      : {}),
+    ...(deepseek
+      ? {
+          ...(pricingPeriod ? { pricingPeriod } : {}),
+          ...(billingModels ? { billingModels } : {}),
         }
       : {}),
     cachedInput: usage.cachedInputTokens,
@@ -112,11 +127,12 @@ export function buildUsageReceipt({
       ? {
           total: cost.totalCost,
           input: anthropic || openai ? (cost.uncachedPromptCost ?? null) : cost.promptCost,
-          output: cost.completionCost ?? null,
+          output: deepseek && usage.reasoningTokens == null ? null : (cost.completionCost ?? null),
           cacheRead: cost.cachedInputCost ?? null,
           cacheWrite5m: anthropic ? (cost.cacheWrite5mCost ?? null) : null,
           cacheWrite1h: anthropic ? (cost.cacheWrite1hCost ?? null) : null,
-          reasoning: cost.reasoningCost ?? null,
+          reasoning:
+            deepseek && usage.reasoningTokens == null ? null : (cost.reasoningCost ?? null),
           ...(openai ? { cacheWrite: cost.cacheWriteCost ?? null } : {}),
         }
       : null,

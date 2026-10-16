@@ -38,6 +38,62 @@ const baseProps = {
 }
 
 describe('TokenStatsPanel', () => {
+  it('shows native OpenRouter total with unknown detail costs, visible output, reasoning and ATR calls', () => {
+    const html = renderToStaticMarkup(
+      <TokenStatsPanel
+        {...baseProps}
+        usageStatsEnabled
+        statsExpanded
+        latestUsage={{
+          ...googleUsage,
+          provider: 'openrouter',
+          serviceTier: null,
+          costSource: 'provider',
+          costUsd: 0.032,
+          completion: 1200,
+          cacheWrite: 2000,
+          cacheWriteCostUsd: null,
+          promptCostUsd: null,
+          completionCostUsd: null,
+          cachedPromptCostUsd: null,
+          reasoningCostUsd: null,
+          usageBreakdownAvailable: true,
+        }}
+      />,
+    )
+    for (const text of [
+      'OpenRouter 사용량과 비용',
+      '캐시 쓰기',
+      '2,000',
+      '1,200',
+      '600',
+      '2회 호출',
+      '$0.032',
+      '응답에 보고된 실제 비용',
+      '항목별 실제 금액은 미확인',
+    ])
+      expect(html).toContain(text)
+    expect(html).not.toContain('공개 단가로 추정')
+    expect(html).not.toContain('$0.0000')
+  })
+  it('labels the fallback OpenRouter cost as estimated', () => {
+    const html = renderToStaticMarkup(
+      <TokenStatsPanel
+        {...baseProps}
+        usageStatsEnabled
+        statsExpanded
+        latestUsage={{
+          ...googleUsage,
+          provider: 'openrouter',
+          serviceTier: null,
+          costSource: 'estimated',
+          usageBreakdownAvailable: true,
+        }}
+      />,
+    )
+    expect(html).toContain('공개 단가로 추정한 금액')
+    expect(html).not.toContain('응답에 보고된 실제 비용')
+  })
   it('shows DeepSeek cache misses, reasoning, response model, and mixed pricing periods without a cache-write row', () => {
     const html = renderToStaticMarkup(
       <TokenStatsPanel
@@ -145,7 +201,7 @@ describe('TokenStatsPanel', () => {
       expect(html).toContain(text)
     expect(html).not.toContain('캐시 쓰기')
   })
-  it.each(['google', 'openai', 'deepseek'])(
+  it.each(['google', 'openai', 'deepseek', 'openrouter'])(
     'shows missing %s usage as unknown instead of a zero-dollar price',
     (provider) => {
       const html = renderToStaticMarkup(

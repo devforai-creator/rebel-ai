@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { priceUsageSteps, sumUsageSteps, type UsageStep } from './usage'
+import { priceUsageSteps, sumUsageSteps, sumReportedUsageCost, type UsageStep } from './usage'
 
 const step: UsageStep = {
   promptTokens: 200000,
@@ -36,3 +36,24 @@ it('distinguishes empty or missing usage from a reported zero-token call', () =>
     })?.totalCost,
   ).toBe(0)
 })
+
+it('sums complete provider costs independently of token usage, including zero', () => {
+  expect(
+    sumReportedUsageCost([
+      { ...step, promptTokens: null, reportedCostUsd: 0 },
+      { ...step, reportedCostUsd: 0.032 },
+    ]),
+  ).toBe(0.032)
+  expect(sumReportedUsageCost([])).toBeNull()
+})
+it.each([undefined, null, -1, NaN, Infinity])(
+  'does not publish a partial or invalid provider total: %s',
+  (reportedCostUsd) => {
+    expect(
+      sumReportedUsageCost([
+        { ...step, reportedCostUsd: 0.01 },
+        { ...step, reportedCostUsd },
+      ]),
+    ).toBeNull()
+  },
+)

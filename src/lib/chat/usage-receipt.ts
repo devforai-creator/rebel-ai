@@ -11,6 +11,7 @@ const receiptSchema = z.object({
   provider: z.string(),
   modelName: z.string(),
   callCount: z.number().int().positive(),
+  costSource: z.enum(['provider', 'estimated']).optional(),
   input: count,
   uncachedInput: count,
   output: count,
@@ -59,6 +60,7 @@ export function buildUsageReceipt({
   pricingPeriod?: DeepSeekPricingPeriod | 'mixed'
   billingModels?: string[]
   usage: {
+    reportedCostUsd?: number | null
     promptTokens: number | null
     completionTokens: number | null
     cachedInputTokens: number | null
@@ -71,7 +73,15 @@ export function buildUsageReceipt({
   const anthropic = provider === 'anthropic'
   const openai = provider === 'openai'
   const deepseek = provider === 'deepseek'
-  const inclusiveOutput = openai || deepseek
+  const openrouter = provider === 'openrouter'
+  const inclusiveOutput = openai || deepseek || openrouter
+  const reportedCostUsd =
+    openrouter &&
+    typeof usage.reportedCostUsd === 'number' &&
+    Number.isFinite(usage.reportedCostUsd) &&
+    usage.reportedCostUsd >= 0
+      ? usage.reportedCostUsd
+      : null
   const knownUsage = usage.promptTokens !== null && usage.completionTokens !== null
   if (!knownUsage || (deepseek && usage.cachedInputTokens === null)) cost = null
   const writes = (cost?.cacheWrite5mTokens ?? 0) + (cost?.cacheWrite1hTokens ?? 0)
@@ -81,6 +91,9 @@ export function buildUsageReceipt({
     provider,
     modelName,
     callCount,
+    ...(openrouter && (reportedCostUsd !== null || cost)
+      ? { costSource: reportedCostUsd !== null ? ('provider' as const) : ('estimated' as const) }
+      : {}),
     input:
       anthropic && usage.promptTokens !== null
         ? usage.promptTokens + (usage.cachedInputTokens ?? 0) + (usage.cacheWriteTokens ?? writes)
@@ -93,7 +106,7 @@ export function buildUsageReceipt({
         ? Math.max(
             usage.promptTokens -
               usage.cachedInputTokens -
-              (openai ? (usage.cacheWriteTokens ?? 0) : 0),
+              (openai || openrouter ? (usage.cacheWriteTokens ?? 0) : 0),
             0,
           )
         : null,
@@ -104,7 +117,7 @@ export function buildUsageReceipt({
             usage.completionTokens !== null && usage.reasoningTokens != null
               ? Math.max(usage.completionTokens - usage.reasoningTokens, 0)
               : null,
-          ...(openai ? { cacheWriteTokens: usage.cacheWriteTokens ?? null } : {}),
+          ...(openai || openrouter ? { cacheWriteTokens: usage.cacheWriteTokens ?? null } : {}),
         }
       : {}),
     ...(provider === 'google' || inclusiveOutput
@@ -114,7 +127,7 @@ export function buildUsageReceipt({
           ...(serviceTier ? { serviceTier } : {}),
         }
       : {}),
-    ...(deepseek
+    ...(deepseek || openrouter
       ? {
           ...(pricingPeriod ? { pricingPeriod } : {}),
           ...(billingModels ? { billingModels } : {}),
@@ -123,19 +136,39 @@ export function buildUsageReceipt({
     cachedInput: usage.cachedInputTokens,
     cacheWrite5m: anthropic && cost ? (cost.cacheWrite5mTokens ?? null) : null,
     cacheWrite1h: anthropic && cost ? (cost.cacheWrite1hTokens ?? null) : null,
-    cost: cost
-      ? {
-          total: cost.totalCost,
-          input: anthropic || openai ? (cost.uncachedPromptCost ?? null) : cost.promptCost,
-          output: deepseek && usage.reasoningTokens == null ? null : (cost.completionCost ?? null),
-          cacheRead: cost.cachedInputCost ?? null,
-          cacheWrite5m: anthropic ? (cost.cacheWrite5mCost ?? null) : null,
-          cacheWrite1h: anthropic ? (cost.cacheWrite1hCost ?? null) : null,
-          reasoning:
-            deepseek && usage.reasoningTokens == null ? null : (cost.reasoningCost ?? null),
-          ...(openai ? { cacheWrite: cost.cacheWriteCost ?? null } : {}),
-        }
-      : null,
+    cost:
+      reportedCostUsd !== null
+        ? {
+            total: reportedCostUsd,
+            input: null,
+            output: null,
+            cacheRead: null,
+            cacheWrite5m: null,
+            cacheWrite1h: null,
+            reasoning: null,
+            cacheWrite: null,
+          }
+        : cost
+          ? {
+              total: cost.totalCost,
+              input:
+                anthropic || openai || openrouter
+                  ? (cost.uncachedPromptCost ?? null)
+                  : cost.promptCost,
+              output:
+                (deepseek || openrouter) && usage.reasoningTokens == null
+                  ? null
+                  : (cost.completionCost ?? null),
+              cacheRead: cost.cachedInputCost ?? null,
+              cacheWrite5m: anthropic ? (cost.cacheWrite5mCost ?? null) : null,
+              cacheWrite1h: anthropic ? (cost.cacheWrite1hCost ?? null) : null,
+              reasoning:
+                (deepseek || openrouter) && usage.reasoningTokens == null
+                  ? null
+                  : (cost.reasoningCost ?? null),
+              ...(openai || openrouter ? { cacheWrite: cost.cacheWriteCost ?? null } : {}),
+            }
+          : null,
   }
 }
 

@@ -208,7 +208,7 @@ describe('buildLanguageModel', () => {
       baseURL: 'https://openrouter.ai/api/v1',
     })
     expect(openrouterChatMock).toHaveBeenCalledWith('z-ai/glm-5')
-    expect(model).toBe(openrouterModel)
+    expect(model).toMatchObject({ provider: 'openrouter-model' })
   })
 
   it('forces max OpenRouter reasoning for Kimi K3 at the request boundary', async () => {

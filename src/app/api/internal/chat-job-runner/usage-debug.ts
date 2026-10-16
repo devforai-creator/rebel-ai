@@ -22,6 +22,7 @@ export type ChatRunnerActualPayload = {
 }
 
 export type UsageMetrics = {
+  reportedCostUsd?: number | null
   promptTokens: number | null
   completionTokens: number | null
   totalTokens: number | null
@@ -620,7 +621,8 @@ export function buildChatUsageEvent({
     cached_input_cost_usd: usageCost?.cachedInputCost ?? 0,
     completion_cost_usd: usageCost?.completionCost ?? 0,
     reasoning_cost_usd: usageCost?.reasoningCost ?? 0,
-    total_cost_usd: usageCost?.totalCost ?? 0,
+    total_cost_usd:
+      (provider === 'openrouter' ? usage.reportedCostUsd : null) ?? usageCost?.totalCost ?? 0,
     request_id: requestId,
   }
 }

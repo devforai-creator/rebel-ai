@@ -107,11 +107,17 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
   const reasoningTokens = sanitizeTokens(params.reasoningTokens)
   const reportedWrites = sanitizeTokens(params.cacheWriteTokens)
   if (
-    (params.provider === 'openai' || params.provider === 'deepseek') &&
+    (params.provider === 'openai' ||
+      params.provider === 'deepseek' ||
+      params.provider === 'openrouter') &&
     (reasoningTokens > completionTokens || cachedInputTokens + reportedWrites > promptTokens)
   )
     return null
-  if (params.provider === 'deepseek' && !isReportedTokenCount(params.cachedInputTokens)) return null
+  if (
+    (params.provider === 'deepseek' || params.provider === 'openrouter') &&
+    !isReportedTokenCount(params.cachedInputTokens)
+  )
+    return null
   let write5m = sanitizeTokens(params.cacheWrite5mTokens)
   let write1h = sanitizeTokens(params.cacheWrite1hTokens)
   const unclassifiedWrites = Math.max(reportedWrites - write5m - write1h, 0)
@@ -133,12 +139,17 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
   if (!rates) {
     return null
   }
-  if (params.provider === 'openai' && reportedWrites > 0 && rates.cacheWrite === undefined)
+  if (
+    (params.provider === 'openai' || params.provider === 'openrouter') &&
+    reportedWrites > 0 &&
+    rates.cacheWrite === undefined
+  )
     return null
 
   const cacheWriteTokens =
     params.provider === 'anthropic' ||
-    (params.provider === 'openai' && rates.cacheWrite !== undefined)
+    ((params.provider === 'openai' || params.provider === 'openrouter') &&
+      rates.cacheWrite !== undefined)
       ? params.provider === 'anthropic'
         ? write5m + write1h
         : reportedWrites
@@ -155,7 +166,9 @@ export function estimateUsageCost(params: UsageCostParams): UsageCostBreakdown |
 
   // These providers include reasoning in outputTokens; charge each token once.
   const effectiveCompletionTokens =
-    params.provider === 'openai' || params.provider === 'deepseek'
+    params.provider === 'openai' ||
+    params.provider === 'deepseek' ||
+    params.provider === 'openrouter'
       ? Math.max(completionTokens - reasoningTokens, 0)
       : completionTokens
 

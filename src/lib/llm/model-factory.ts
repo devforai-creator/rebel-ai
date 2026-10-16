@@ -1,6 +1,7 @@
 import { buildLocalModel } from './local'
 import { googleServiceTierMiddleware } from './google-service-tier-middleware'
 import { deepSeekUsageMiddleware } from './deepseek-usage-middleware'
+import { openRouterUsageMiddleware } from './openrouter-usage-middleware'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
@@ -91,7 +92,10 @@ export function buildLanguageModel({
         baseURL: OPENROUTER_BASE_URL,
         ...(requestFetch ? { fetch: requestFetch } : {}),
       })
-      return openrouterProvider.chat(modelName)
+      return wrapLanguageModel({
+        model: openrouterProvider.chat(modelName),
+        middleware: openRouterUsageMiddleware,
+      })
     }
     default:
       throw new Error(`Unsupported provider: ${provider}`)

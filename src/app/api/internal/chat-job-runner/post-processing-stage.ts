@@ -12,7 +12,7 @@ import { ChatJobExecutionError } from './runner-errors'
 import type { StreamingResponseStageResult } from './streaming-response-stage'
 import { buildChatDebugInfo, type UsageMetrics } from './usage-debug'
 import { buildUsageReceipt } from '@/lib/chat/usage-receipt'
-import { priceUsageSteps, summarizeUsageServiceTier } from '@/lib/llm/usage'
+import { priceUsageSteps, summarizeUsageServiceTier, sumReportedUsageCost } from '@/lib/llm/usage'
 import { getDeepSeekPricingPeriod, summarizeDeepSeekPricingPeriods } from '@/lib/deepseek/pricing'
 
 type AdminSupabaseClient = ReturnType<typeof createAdminClient>
@@ -120,13 +120,19 @@ export async function runPostProcessingStage({
       ...(streamingResponse.serviceTier ? { serviceTier: streamingResponse.serviceTier } : {}),
     },
   ]
-  const usageCost = priceUsageSteps({
-    steps: usageSteps,
-    provider: payload.provider,
-    modelName: payload.modelName,
-    serviceTier,
-    cacheWriteTtl: anthropicCache?.ttl,
-  })
+  const reportedCostUsd =
+    payload.provider === 'openrouter' ? sumReportedUsageCost(usageSteps) : null
+  if (payload.provider === 'openrouter') usageMetrics.reportedCostUsd = reportedCostUsd
+  const usageCost =
+    reportedCostUsd !== null
+      ? null
+      : priceUsageSteps({
+          steps: usageSteps,
+          provider: payload.provider,
+          modelName: payload.modelName,
+          serviceTier,
+          cacheWriteTtl: anthropicCache?.ttl,
+        })
   const debugConversationMessages =
     payload.provider === 'anthropic' ? anthropicConversationMessages : null
   const debugInfo = buildChatDebugInfo({
@@ -165,11 +171,15 @@ export async function runPostProcessingStage({
     usage: usageMetrics,
     cost: usageCost,
     callCount: usageSteps.length,
-    ...(payload.provider === 'deepseek'
+    ...(payload.provider === 'deepseek' || payload.provider === 'openrouter'
       ? {
-          pricingPeriod: summarizeDeepSeekPricingPeriods(
-            usageSteps.map((step) => getDeepSeekPricingPeriod(step.pricingTimestamp)),
-          ),
+          ...(payload.provider === 'deepseek'
+            ? {
+                pricingPeriod: summarizeDeepSeekPricingPeriods(
+                  usageSteps.map((step) => getDeepSeekPricingPeriod(step.pricingTimestamp)),
+                ),
+              }
+            : {}),
           billingModels: [
             ...new Set(usageSteps.flatMap((step) => (step.modelName ? [step.modelName] : []))),
           ],

@@ -10,6 +10,7 @@ export type UsageServiceTier = ApiServiceTier | 'unknown'
 export type UsageStep = {
   modelName?: string | null
   pricingTimestamp?: string | null
+  reportedCostUsd?: number | null
   promptTokens: number | null
   completionTokens: number | null
   totalTokens: number | null
@@ -47,8 +48,13 @@ export function readSdkUsageStep({ usage }: SdkUsageStep): UsageStep {
 
 export function sumUsageSteps(
   steps: UsageStep[],
-): Omit<UsageStep, 'serviceTier' | 'modelName' | 'pricingTimestamp'> {
-  const sum = (key: Exclude<keyof UsageStep, 'serviceTier' | 'modelName' | 'pricingTimestamp'>) => {
+): Omit<UsageStep, 'serviceTier' | 'modelName' | 'pricingTimestamp' | 'reportedCostUsd'> {
+  const sum = (
+    key: Exclude<
+      keyof UsageStep,
+      'serviceTier' | 'modelName' | 'pricingTimestamp' | 'reportedCostUsd'
+    >,
+  ) => {
     const values = steps.map((step) => reportedTokenCount(step[key]))
     return steps.length && values.every((value) => value !== null)
       ? values.reduce((total, value) => total + value, 0)
@@ -63,6 +69,22 @@ export function sumUsageSteps(
     reasoningTokens: sum('reasoningTokens'),
     ...(writes !== null ? { cacheWriteTokens: writes } : {}),
   }
+}
+
+// A partial provider total must never look like the complete cost of an ATR turn.
+export function sumReportedUsageCost(steps: UsageStep[]): number | null {
+  if (
+    !steps.length ||
+    steps.some(
+      (step) =>
+        typeof step.reportedCostUsd !== 'number' ||
+        !Number.isFinite(step.reportedCostUsd) ||
+        step.reportedCostUsd < 0,
+    )
+  )
+    return null
+  const total = steps.reduce((sum, step) => sum + step.reportedCostUsd!, 0)
+  return Number.isFinite(total) ? total : null
 }
 
 export function priceUsageSteps({
@@ -87,7 +109,12 @@ export function priceUsageSteps({
     estimateUsageCost({
       ...step,
       provider,
-      modelName: provider === 'deepseek' ? step.modelName : modelName,
+      modelName:
+        provider === 'deepseek'
+          ? step.modelName
+          : provider === 'openrouter'
+            ? (step.modelName ?? modelName)
+            : modelName,
       serviceTier: step.serviceTier === 'unknown' ? undefined : (step.serviceTier ?? serviceTier),
       cacheWriteTtl,
     }),

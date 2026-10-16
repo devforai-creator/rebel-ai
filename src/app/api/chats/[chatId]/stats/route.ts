@@ -84,13 +84,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
   const latestAssistantUsage = latestAssistantUsageResult as LatestAssistantUsage | null
   const receipt = readUsageReceipt(latestAssistantUsage?.debug_info)
   if (latestAssistantUsage && receipt) {
+    const providerReportedCost =
+      receipt.provider === 'openrouter' && receipt.costSource === 'provider'
     const cost =
-      receipt.input === null ||
-      receipt.output === null ||
-      (receipt.provider === 'deepseek' && receipt.cachedInput === null)
+      !providerReportedCost &&
+      (receipt.input === null ||
+        receipt.output === null ||
+        (receipt.provider === 'deepseek' && receipt.cachedInput === null))
         ? null
         : receipt.cost
-    const inclusiveOutput = receipt.provider === 'openai' || receipt.provider === 'deepseek'
+    const inclusiveOutput =
+      receipt.provider === 'openai' ||
+      receipt.provider === 'deepseek' ||
+      receipt.provider === 'openrouter'
     return NextResponse.json({
       messageCount,
       summaryCount,
@@ -120,6 +126,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
         cacheKey: null,
         cacheRetention: null,
         costUsd: cost?.total ?? null,
+        costSource: receipt.costSource ?? null,
         promptCostUsd: cost?.input ?? null,
         completionCostUsd: cost?.output ?? null,
         cachedPromptCostUsd: cost?.cacheRead ?? null,
@@ -252,7 +259,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
           prompt: latestPromptTokens,
           completion:
             latestUsageEvent?.model_provider === 'openai' ||
-            latestUsageEvent?.model_provider === 'deepseek'
+            latestUsageEvent?.model_provider === 'deepseek' ||
+            latestUsageEvent?.model_provider === 'openrouter'
               ? latestCompletionTokens !== null && latestReasoningTokens !== null
                 ? Math.max(latestCompletionTokens - latestReasoningTokens, 0)
                 : null

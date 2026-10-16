@@ -19,6 +19,8 @@ export function parseLatestMessageTokenStats(value: unknown): LatestMessageToken
   }
 
   return {
+    costSource:
+      value.costSource === 'provider' || value.costSource === 'estimated' ? value.costSource : null,
     provider: typeof value.provider === 'string' ? value.provider : null,
     modelName: typeof value.modelName === 'string' ? value.modelName : null,
     callCount: parseNumberOrNull(value.callCount),

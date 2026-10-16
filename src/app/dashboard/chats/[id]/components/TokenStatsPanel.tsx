@@ -87,7 +87,8 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
   const detailedUsageProvider =
     latestUsage?.provider === 'google' ||
     latestUsage?.provider === 'openai' ||
-    latestUsage?.provider === 'deepseek'
+    latestUsage?.provider === 'deepseek' ||
+    latestUsage?.provider === 'openrouter'
   const optionsId = useId()
   const modelOptions = buildLlmModelOptions(apiKeys)
   const selectedModelValue = serializeLlmModelSelection({
@@ -354,7 +355,14 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
 function TokenUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
   const openai = usage.provider === 'openai'
   const deepseek = usage.provider === 'deepseek'
-  const providerLabel = openai ? 'OpenAI' : deepseek ? 'DeepSeek' : 'Google'
+  const openrouter = usage.provider === 'openrouter'
+  const providerLabel = openai
+    ? 'OpenAI'
+    : deepseek
+      ? 'DeepSeek'
+      : openrouter
+        ? 'OpenRouter'
+        : 'Google'
   const rows = [
     [
       '일반 입력',
@@ -362,21 +370,35 @@ function TokenUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
       openai && !usage.usageBreakdownAvailable ? null : usage.promptCostUsd,
     ],
     ['캐시 읽기', usage.cachedPrompt, usage.cachedPromptCostUsd],
-    ...(openai ? [['캐시 쓰기', usage.cacheWrite, usage.cacheWriteCostUsd] as const] : []),
+    ...(openai || openrouter
+      ? [['캐시 쓰기', usage.cacheWrite, usage.cacheWriteCostUsd] as const]
+      : []),
     [
       '출력',
       usage.completion,
-      deepseek && !usage.usageBreakdownAvailable ? null : usage.completionCostUsd,
+      (deepseek || openrouter) && !usage.usageBreakdownAvailable ? null : usage.completionCostUsd,
     ],
     [
       '추론',
       usage.reasoning,
-      deepseek && !usage.usageBreakdownAvailable ? null : usage.reasoningCostUsd,
+      (deepseek || openrouter) && !usage.usageBreakdownAvailable ? null : usage.reasoningCostUsd,
     ],
   ] as const
   return (
     <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
-      <UsageDetailsTable label={`${providerLabel} 사용량과 추정 비용`} rows={rows} />
+      <UsageDetailsTable
+        label={`${providerLabel} 사용량과 ${openrouter && usage.costSource === 'provider' ? '비용' : '추정 비용'}`}
+        rows={rows}
+        costLabel={openrouter && usage.costSource === 'provider' ? '세부 비용' : undefined}
+      />
+      {openrouter && usage.costSource === 'provider' && (
+        <p className="mt-1">
+          총액은 OpenRouter 응답에 보고된 실제 비용입니다. 항목별 실제 금액은 미확인입니다.
+        </p>
+      )}
+      {openrouter && usage.costSource === 'estimated' && (
+        <p className="mt-1">모든 호출의 실제 비용을 받지 못해 공개 단가로 추정한 금액입니다.</p>
+      )}
       {deepseek && usage.pricingPeriod && (
         <p className="mt-1">
           요금 시간대:{' '}
@@ -387,7 +409,7 @@ function TokenUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
           }
         </p>
       )}
-      {deepseek &&
+      {(deepseek || openrouter) &&
       usage.billingModels?.length &&
       (usage.billingModels.length > 1 || usage.billingModels[0] !== usage.modelName) ? (
         <p className="mt-1 break-all">응답 모델: {usage.billingModels.join(', ')}</p>
@@ -417,18 +439,25 @@ function TokenUsageDetails({ usage }: { usage: LatestMessageTokenStats }) {
       {openai && !usage.usageBreakdownAvailable && (
         <p className="mt-1">이전 기록은 캐시 쓰기와 출력의 상세 사용량을 확인할 수 없습니다.</p>
       )}
+      {openrouter && !usage.usageBreakdownAvailable && (
+        <p className="mt-1">
+          이전 기록은 캐시 쓰기와 출력·추론의 상세 사용량을 확인할 수 없습니다.
+        </p>
+      )}
       {deepseek && !usage.usageBreakdownAvailable && (
         <p className="mt-1">이전 기록은 추론 사용량과 요금 시간대를 확인할 수 없습니다.</p>
       )}
-      {deepseek && usage.usageBreakdownAvailable && usage.reasoning == null && (
+      {(deepseek || openrouter) && usage.usageBreakdownAvailable && usage.reasoning == null && (
         <p className="mt-1">추론 사용량을 받지 못해 출력·추론의 상세 구분은 미확인입니다.</p>
       )}
       <p className="mt-1 text-gray-400 dark:text-gray-500">
-        {deepseek
-          ? '출력은 추론을 제외한 토큰입니다. 추론도 출력 단가로 한 번만 계산합니다. 요금 시간대는 제공자 응답 시각 기준 추정치입니다.'
-          : openai
-            ? '출력은 추론을 제외한 토큰입니다. 추론도 출력 단가로 계산하며, 합계에 한 번만 포함됩니다. 제공자 사용량과 공개 단가에 따른 추정 비용입니다.'
-            : '출력과 추론은 별도 항목이며, 둘 다 합계 비용에 포함됩니다. 생성 요청의 토큰 비용 추정치로, 명시 캐시 보관료는 포함하지 않습니다.'}
+        {openrouter
+          ? '출력은 추론을 제외한 토큰입니다. 추론은 출력에 한 번만 포함됩니다.'
+          : deepseek
+            ? '출력은 추론을 제외한 토큰입니다. 추론도 출력 단가로 한 번만 계산합니다. 요금 시간대는 제공자 응답 시각 기준 추정치입니다.'
+            : openai
+              ? '출력은 추론을 제외한 토큰입니다. 추론도 출력 단가로 계산하며, 합계에 한 번만 포함됩니다. 제공자 사용량과 공개 단가에 따른 추정 비용입니다.'
+              : '출력과 추론은 별도 항목이며, 둘 다 합계 비용에 포함됩니다. 생성 요청의 토큰 비용 추정치로, 명시 캐시 보관료는 포함하지 않습니다.'}
       </p>
     </div>
   )
@@ -438,7 +467,15 @@ type UsageDetailRows = ReadonlyArray<
   readonly [string, number | null | undefined, number | null | undefined]
 >
 
-function UsageDetailsTable({ label, rows }: { label: string; rows: UsageDetailRows }) {
+function UsageDetailsTable({
+  label,
+  rows,
+  costLabel = '추정 비용',
+}: {
+  label: string
+  rows: UsageDetailRows
+  costLabel?: string
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left" aria-label={label}>
@@ -446,7 +483,7 @@ function UsageDetailsTable({ label, rows }: { label: string; rows: UsageDetailRo
           <tr>
             <th className="py-1 font-medium">항목</th>
             <th className="py-1 text-right font-medium">토큰</th>
-            <th className="py-1 text-right font-medium">추정 비용</th>
+            <th className="py-1 text-right font-medium">{costLabel}</th>
           </tr>
         </thead>
         <tbody>

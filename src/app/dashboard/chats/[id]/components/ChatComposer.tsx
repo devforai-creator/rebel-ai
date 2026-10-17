@@ -1,7 +1,7 @@
 'use client'
 
 import React, { memo, useId, type ChangeEvent, type FormEvent, type RefObject } from 'react'
-import { ArrowUp, Loader2, WandSparkles } from 'lucide-react'
+import { ArrowUp, Loader2, Undo2, WandSparkles, X } from 'lucide-react'
 
 const QUICK_INSERT_SYMBOLS = [
   { symbol: '"', label: 'Insert double quote' },
@@ -97,9 +97,9 @@ export const ChatComposer = memo(function ChatComposer({
         className="max-w-4xl mx-auto"
       >
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-2 sm:gap-x-3">
-          <div className="contents sm:flex sm:min-w-0 sm:flex-col sm:overflow-hidden sm:rounded-2xl sm:border sm:border-gray-300 sm:bg-white sm:shadow-sm sm:focus-within:ring-2 sm:focus-within:ring-blue-500 dark:sm:border-gray-600 dark:sm:bg-gray-700">
+          <div className="contents sm:relative sm:block sm:min-w-0">
             {onGenerateDraft && (
-              <div className="col-span-2 mb-2 flex flex-wrap items-center gap-3 text-sm sm:order-2 sm:mb-0 sm:justify-end sm:gap-2 sm:px-3 sm:pb-2 sm:pt-1">
+              <div className="col-span-2 mb-2 flex flex-wrap items-center gap-3 text-sm sm:absolute sm:bottom-2 sm:right-3 sm:z-10 sm:mb-0 sm:flex-nowrap sm:gap-2">
                 <button
                   type="button"
                   disabled={isLoading || isDrafting || Boolean(draftDisabledReason)}
@@ -109,22 +109,24 @@ export const ChatComposer = memo(function ChatComposer({
                     '비워두면 다음 반응을 제안하고, 의도를 적으면 풀어 씁니다.'
                   }
                   onClick={onGenerateDraft}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-300 px-3 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 sm:border-transparent sm:text-xs dark:sm:border-transparent dark:sm:hover:bg-gray-600"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-300 px-3 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 sm:min-h-8 sm:w-8 sm:justify-center sm:gap-0 sm:border-transparent sm:p-0 dark:sm:border-transparent dark:sm:hover:bg-gray-600"
                 >
                   {isDrafting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <WandSparkles className="h-4 w-4" />
                   )}
-                  {isDrafting ? '작성 중...' : '대신 작성'}
+                  <span className="sm:sr-only">{isDrafting ? '작성 중...' : '대신 작성'}</span>
                 </button>
                 {isDrafting && (
                   <button
                     type="button"
                     onClick={onCancelDraft}
-                    className="min-h-9 text-gray-600 dark:text-gray-300"
+                    title="작성 취소"
+                    className="min-h-9 text-gray-600 dark:text-gray-300 sm:inline-flex sm:min-h-8 sm:w-8 sm:items-center sm:justify-center sm:rounded-lg sm:hover:bg-gray-100 dark:sm:hover:bg-gray-600"
                   >
-                    취소
+                    <X className="hidden h-4 w-4 sm:block" aria-hidden="true" />
+                    <span className="sm:sr-only">취소</span>
                   </button>
                 )}
                 {onRestoreDraftInput && !isDrafting && (
@@ -132,9 +134,11 @@ export const ChatComposer = memo(function ChatComposer({
                     type="button"
                     disabled={isLoading}
                     onClick={onRestoreDraftInput}
-                    className="min-h-9 text-gray-600 hover:underline disabled:opacity-50 dark:text-gray-300"
+                    title="원문 복원"
+                    className="min-h-9 text-gray-600 hover:underline disabled:opacity-50 dark:text-gray-300 sm:inline-flex sm:min-h-8 sm:w-8 sm:items-center sm:justify-center sm:rounded-lg sm:hover:bg-gray-100 dark:sm:hover:bg-gray-600"
                   >
-                    원문 복원
+                    <Undo2 className="hidden h-4 w-4 sm:block" aria-hidden="true" />
+                    <span className="sm:sr-only">원문 복원</span>
                   </button>
                 )}
                 <span
@@ -150,14 +154,11 @@ export const ChatComposer = memo(function ChatComposer({
               </div>
             )}
             {draftError && (
-              <p
-                role="alert"
-                className="col-span-2 mb-2 text-sm text-red-600 dark:text-red-400 sm:order-3 sm:px-4 sm:pb-2"
-              >
+              <p role="alert" className="col-span-2 mb-2 text-sm text-red-600 dark:text-red-400">
                 {draftError}
               </p>
             )}
-            <div className="relative min-w-0 flex-1 sm:order-1">
+            <div className="relative min-w-0 flex-1">
               <textarea
                 ref={composerRef}
                 value={input}
@@ -182,7 +183,7 @@ export const ChatComposer = memo(function ChatComposer({
                 }}
                 placeholder="Type a message..."
                 rows={1}
-                className="max-h-[60vh] w-full resize-none overflow-y-auto rounded-2xl border border-gray-300 px-4 pt-3.5 pb-12 text-base leading-6 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:block sm:rounded-none sm:border-0 sm:py-3.5 sm:shadow-none sm:focus:ring-0"
+                className={`max-h-[60vh] w-full resize-none overflow-y-auto rounded-2xl border border-gray-300 px-4 pt-3.5 pb-12 text-base leading-6 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:block sm:pb-3.5${onGenerateDraft ? ' sm:pr-24' : ''}`}
                 disabled={isLoading}
               />
               <div

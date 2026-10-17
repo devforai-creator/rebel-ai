@@ -85,6 +85,7 @@ describe('user draft composer', () => {
       const [url, init] = fetchMock.mock.calls[0]
       expect(url).toBe('/api/chats/chat-1/user-draft')
       expect(JSON.parse(init.body).instruction).toBe(input)
+      expect(JSON.parse(init.body)).toMatchObject({ apiKeyId: 'key-1', modelName: 'gpt-5.4' })
       expect(onSubmit).not.toHaveBeenCalled()
       expect(fetchMock).toHaveBeenCalledTimes(1)
       fireEvent.click(screen.getByRole('button', { name: 'Send message' }))

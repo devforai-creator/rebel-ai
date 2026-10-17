@@ -1,7 +1,7 @@
 'use client'
 
 import React, { memo, type ChangeEvent, type FormEvent, type RefObject } from 'react'
-import { ArrowUp, Loader2 } from 'lucide-react'
+import { ArrowUp, Loader2, WandSparkles } from 'lucide-react'
 
 const QUICK_INSERT_SYMBOLS = [
   { symbol: '"', label: 'Insert double quote' },
@@ -20,6 +20,12 @@ export interface ChatComposerProps {
     selectionEnd?: number | null,
   ) => void
   onSubmit: (event?: FormEvent<HTMLFormElement>) => void
+  isDrafting?: boolean
+  draftDisabledReason?: string | null
+  draftError?: string | null
+  onGenerateDraft?: () => void
+  onCancelDraft?: () => void
+  onRestoreDraftInput?: () => void
 }
 
 export function shouldSubmitChatComposerOnEnter({
@@ -51,6 +57,12 @@ export const ChatComposer = memo(function ChatComposer({
   onInputChange,
   onQuickInsert,
   onSubmit,
+  isDrafting = false,
+  draftDisabledReason,
+  draftError,
+  onGenerateDraft,
+  onCancelDraft,
+  onRestoreDraftInput,
 }: ChatComposerProps) {
   const submitLabel = isLoading ? 'Sending message' : 'Send message'
   const handleQuickInsert = (text: string) => {
@@ -73,7 +85,66 @@ export const ChatComposer = memo(function ChatComposer({
 
   return (
     <div className="border-t border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:p-4">
-      <form onSubmit={onSubmit} className="max-w-4xl mx-auto">
+      <form
+        onSubmit={(event) => {
+          if (isDrafting) {
+            event.preventDefault()
+            return
+          }
+          onSubmit(event)
+        }}
+        className="max-w-4xl mx-auto"
+      >
+        {onGenerateDraft && (
+          <div className="mb-2 flex flex-wrap items-center gap-3 text-sm">
+            <button
+              type="button"
+              disabled={isLoading || isDrafting || Boolean(draftDisabledReason)}
+              title={
+                draftDisabledReason ?? '비워두면 다음 반응을 제안하고, 의도를 적으면 풀어 씁니다.'
+              }
+              onClick={onGenerateDraft}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-300 px-3 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              {isDrafting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <WandSparkles className="h-4 w-4" />
+              )}
+              {isDrafting ? '작성 중...' : '대신 작성'}
+            </button>
+            {isDrafting && (
+              <button
+                type="button"
+                onClick={onCancelDraft}
+                className="min-h-9 text-gray-600 dark:text-gray-300"
+              >
+                취소
+              </button>
+            )}
+            {onRestoreDraftInput && !isDrafting && (
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={onRestoreDraftInput}
+                className="min-h-9 text-gray-600 hover:underline disabled:opacity-50 dark:text-gray-300"
+              >
+                원문 복원
+              </button>
+            )}
+            <span className="text-xs text-gray-500 dark:text-gray-400" role="status">
+              {draftDisabledReason ??
+                (isDrafting
+                  ? '초안을 작성하고 있습니다.'
+                  : '비우면 다음 반응을, 의도를 적으면 풀어 씁니다.')}
+            </span>
+          </div>
+        )}
+        {draftError && (
+          <p role="alert" className="mb-2 text-sm text-red-600 dark:text-red-400">
+            {draftError}
+          </p>
+        )}
         <div className="flex items-end gap-2 sm:gap-3">
           <div className="relative flex-1">
             <textarea
@@ -95,7 +166,7 @@ export const ChatComposer = memo(function ChatComposer({
                   })
                 ) {
                   event.preventDefault()
-                  void onSubmit()
+                  if (!isDrafting) void onSubmit()
                 }
               }}
               placeholder="Type a message..."
@@ -127,7 +198,7 @@ export const ChatComposer = memo(function ChatComposer({
             type="submit"
             aria-label={submitLabel}
             title={submitLabel}
-            disabled={isLoading || !input.trim()}
+            disabled={isLoading || isDrafting || !input.trim()}
             className="inline-flex h-11 w-11 shrink-0 items-center justify-center self-end rounded-full bg-blue-600 text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-[96px] sm:w-auto sm:px-5 sm:rounded-lg"
           >
             <span className="sm:hidden" aria-hidden="true">

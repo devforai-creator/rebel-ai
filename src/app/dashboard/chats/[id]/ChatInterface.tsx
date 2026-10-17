@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import { useAutosizeTextArea } from '@/hooks/useAutosizeTextArea'
 
@@ -14,6 +14,7 @@ import {
   useChatMetadataViews,
 } from './hooks'
 import { ChatComposer, MessageList, TokenStatsPanel, DebugModal } from './components'
+import { useUserDraft } from './hooks/useUserDraft'
 
 export default function ChatInterface({
   chatId,
@@ -106,6 +107,35 @@ export default function ChatInterface({
     },
     fetchLatestUsage,
     onMessageChangeSideEffect: handleUsageRealtime,
+  })
+
+  const selectedProvider = apiKeys.find((key) => key.id === selectedApiKeyId)?.provider
+  const draftContextKey = useMemo(
+    () =>
+      JSON.stringify(messageState.combinedMessages.map((message) => [message.id, message.content])),
+    [messageState.combinedMessages],
+  )
+  const draft = useUserDraft({
+    chatId,
+    apiKeyId: selectedApiKeyId,
+    modelName: selectedModelName,
+    provider: selectedProvider,
+    reasoningEffort: resolveModelReasoning({
+      apiKeyId: selectedApiKeyId,
+      modelName: selectedModelName,
+    }),
+    serviceTier: resolveModelServiceTier({
+      apiKeyId: selectedApiKeyId,
+      modelName: selectedModelName,
+    }),
+    contextKey: draftContextKey,
+    input: composer.input,
+    isChatLoading:
+      messageState.isLoading ||
+      actions.editingMessageId !== null ||
+      actions.reprocessingMessageId !== null ||
+      actions.retranslatingMessageId !== null,
+    replaceInput: composer.replaceInput,
   })
 
   useAutosizeTextArea(composerRef, composer.input, { minHeight: 96, maxHeight: 600 })
@@ -202,6 +232,12 @@ export default function ChatInterface({
         onInputChange={composer.handleInputChange}
         onQuickInsert={composer.insertInputText}
         onSubmit={composer.handleSubmit}
+        isDrafting={draft.isDrafting}
+        draftDisabledReason={draft.disabledReason}
+        draftError={draft.error}
+        onGenerateDraft={draft.generateDraft}
+        onCancelDraft={draft.cancelDraft}
+        onRestoreDraftInput={draft.canRestore ? draft.restoreInput : undefined}
       />
 
       {/* Debug modal */}

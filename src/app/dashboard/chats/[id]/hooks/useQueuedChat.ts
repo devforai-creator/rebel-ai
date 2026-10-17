@@ -59,6 +59,7 @@ export interface UseQueuedChatReturn {
   setMessages: React.Dispatch<React.SetStateAction<DisplayMessage[]>>
   streamingDraft: StreamingAssistantDraft | null
   input: string
+  replaceInput: (value: string) => void
   insertInputText: (
     text: string,
     selectionStart?: number | null,
@@ -540,6 +541,7 @@ export function useQueuedChat({
     setMessages,
     streamingDraft: lifecycle.streamingDraft,
     input,
+    replaceInput: setInput,
     insertInputText,
     handleInputChange,
     handleSubmit,

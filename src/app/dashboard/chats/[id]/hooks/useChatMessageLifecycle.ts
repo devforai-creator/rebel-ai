@@ -54,7 +54,7 @@ export type UseChatMessageLifecycleArgs = {
 export type UseChatMessageLifecycleReturn = {
   composer: Pick<
     UseQueuedChatReturn,
-    'input' | 'insertInputText' | 'handleInputChange' | 'handleSubmit'
+    'input' | 'replaceInput' | 'insertInputText' | 'handleInputChange' | 'handleSubmit'
   >
   history: {
     hasMore: boolean
@@ -161,6 +161,7 @@ export function useChatMessageLifecycle({
   return {
     composer: {
       input: queuedChat.input,
+      replaceInput: queuedChat.replaceInput,
       insertInputText: queuedChat.insertInputText,
       handleInputChange: queuedChat.handleInputChange,
       handleSubmit: queuedChat.handleSubmit,

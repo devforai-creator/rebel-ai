@@ -43,6 +43,7 @@ function setup(
     modelConfig?: unknown
     personaId?: string | null
     missingCharacter?: boolean
+    characterMetadata?: unknown
   } = {},
 ) {
   const client = createSupabaseMock({
@@ -66,7 +67,10 @@ function setup(
                 id: 'char-1',
                 name: 'Commander',
                 system_prompt: 'Portray the commander.',
-                post_history_instructions: 'Never write the user character.',
+                metadata: options.characterMetadata ?? {
+                  post_history_instructions: 'Never write the user character.',
+                  unrelated_import_payload: 'Do not include the entire imported metadata.',
+                },
               },
             ],
       },
@@ -147,6 +151,11 @@ describe('generateUserDraft', () => {
     const prompt = JSON.parse(call.prompt)
     expect(prompt.userPersona.name).toBe('Scout')
     expect(prompt.characterAndSetting.name).toBe('Commander')
+    expect(prompt.characterAndSetting.post_history_instructions).toBe(
+      'Never write the user character.',
+    )
+    expect(prompt.characterAndSetting).not.toHaveProperty('metadata')
+    expect(call.prompt).not.toContain('unrelated_import_payload')
     expect(prompt.activeLore).toBe('Mountain terrain')
     expect(prompt.memory).toContain('avoid the river')
     expect(prompt.transcript).toEqual(transcript.map(({ role, content }) => ({ role, content })))
@@ -197,6 +206,17 @@ describe('generateUserDraft', () => {
     await generateUserDraft(args)
     expect(JSON.parse(mocks.generate.mock.calls[0][0].prompt).userPersona).toBeNull()
   })
+
+  it.each([{}, 'legacy metadata', [], { post_history_instructions: 123 }])(
+    'handles character metadata without text instructions: %j',
+    async (characterMetadata) => {
+      await generateUserDraft(setup({ characterMetadata }).args)
+      expect(
+        JSON.parse(mocks.generate.mock.calls[0][0].prompt).characterAndSetting
+          .post_history_instructions,
+      ).toBeNull()
+    },
+  )
 
   it.each(['google', 'anthropic', 'deepseek', 'openrouter'] as const)(
     'uses the existing cloud model factory for %s',

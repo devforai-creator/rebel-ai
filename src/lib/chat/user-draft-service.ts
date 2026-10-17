@@ -112,7 +112,7 @@ export async function generateUserDraft({
     await Promise.all([
       supabase
         .from('characters')
-        .select('name, system_prompt, post_history_instructions')
+        .select('name, system_prompt, metadata')
         .eq('id', chat.character_id)
         .single(),
       chat.persona_id
@@ -127,6 +127,15 @@ export async function generateUserDraft({
   if (characterResult.error || !characterResult.data || personaResult.error) {
     throw new UserDraftError('Failed to load roleplay context', 500)
   }
+  const character = characterResult.data
+  const metadata = character.metadata
+  const postHistoryInstructions =
+    metadata &&
+    typeof metadata === 'object' &&
+    !Array.isArray(metadata) &&
+    typeof metadata.post_history_instructions === 'string'
+      ? metadata.post_history_instructions
+      : null
   const limitMessages =
     memoryConfig.mode === 'prefix_live_blocks'
       ? Math.max(CHAT_CONTEXT_WINDOW, totalMessages - (visibleSummaryEnd ?? 0))
@@ -156,7 +165,11 @@ export async function generateUserDraft({
   // Preserve original speaker labels as reference data, not as the active model conversation.
   const prompt = JSON.stringify({
     userPersona: personaResult.data,
-    characterAndSetting: characterResult.data,
+    characterAndSetting: {
+      name: character.name,
+      system_prompt: character.system_prompt,
+      post_history_instructions: postHistoryInstructions,
+    },
     activeLore: lorebook.combined,
     memory: memory.dynamicContext,
     transcript: memory.fallbackMessages.map(({ role, content }) => ({ role, content })),

@@ -8382,3 +8382,17 @@ revoke all on function public.claim_pending_local_chat_job(uuid) from public,ano
 grant execute on function public.claim_pending_chat_job() to service_role;
 grant execute on function public.claim_pending_local_chat_job(uuid) to service_role;
 
+
+
+-- >>> 99_account_user_draft_model.sql
+
+-- Account-wide, optional user-message drafting configuration.
+-- SQL NULL preserves the current chat model, reasoning, and service tier.
+ALTER TABLE public.profiles
+  ADD COLUMN user_draft_model_config jsonb
+  CONSTRAINT profiles_user_draft_model_config_object
+    CHECK (user_draft_model_config IS NULL OR jsonb_typeof(user_draft_model_config) = 'object');
+
+COMMENT ON COLUMN public.profiles.user_draft_model_config IS
+  'Optional account-wide cloud model, API key ID, reasoning preference and Google service tier for user-message drafting. Null follows the chat settings. Ownership and model capabilities are validated on save and invocation.';
+

@@ -11,11 +11,13 @@ import ChatUsageSettingsForm from './ChatUsageSettingsForm'
 import ChangePasswordForm from './ChangePasswordForm'
 import ReprocessSettingsForm from './ReprocessSettingsForm'
 import TranslationModelSettingsForm from './TranslationModelSettingsForm'
+import UserDraftModelSettingsForm from './UserDraftModelSettingsForm'
+import { parseUserDraftModelConfig } from '@/lib/chat/user-draft-model-config'
 import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import type { SelectableLlmApiKey, VoyageEmbeddingsKeyOption } from './options'
 
 const ACCOUNT_PROFILE_SELECT_COLUMNS =
-  'display_name, chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt, enable_episodic_rag, enable_agentic_transcript_recall_default, enable_chat_usage_stats, voyage_embedding_api_key_id, summary_api_key_id, summary_model_name, reprocess_prompt, reprocess_api_key_id, reprocess_model_name, translation_api_key_id, translation_model_name'
+  'display_name, chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt, enable_episodic_rag, enable_agentic_transcript_recall_default, enable_chat_usage_stats, voyage_embedding_api_key_id, summary_api_key_id, summary_model_name, reprocess_prompt, reprocess_api_key_id, reprocess_model_name, translation_api_key_id, translation_model_name, user_draft_model_config'
 
 export default async function AccountPage() {
   const supabase = await createClient()
@@ -91,7 +93,26 @@ export default async function AccountPage() {
           </div>
 
           <div className="px-6 py-8 space-y-8">
-            <section>
+            <section id="user-draft-settings" aria-labelledby="user-draft-heading">
+              <h2
+                id="user-draft-heading"
+                className="text-lg font-semibold text-gray-900 dark:text-white"
+              >
+                대필 모델
+              </h2>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                모든 채팅의 ‘대신 작성’에 적용됩니다. 대필용으로 가벼운 클라우드 모델을 따로 선택할
+                수 있습니다.
+              </p>
+              <div className="mt-6">
+                <UserDraftModelSettingsForm
+                  initialConfig={parseUserDraftModelConfig(profile?.user_draft_model_config)}
+                  apiKeys={selectableLlmApiKeys}
+                />
+              </div>
+            </section>
+
+            <section className="border-t border-gray-200 dark:border-gray-700 pt-8">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Episodic Memory RAG
               </h2>

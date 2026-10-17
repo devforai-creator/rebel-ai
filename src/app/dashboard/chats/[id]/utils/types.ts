@@ -3,6 +3,7 @@ import type { Message } from '@/types/database.types'
 import type { ChatModelConfig } from '@/lib/chat/model-config'
 import type { ChatDeliveryMode } from '@/lib/chat/delivery-mode'
 import type { ChatRuntimeApiKeyOption } from '../../api-key-options'
+import type { UserDraftModelConfig } from '@/lib/chat/user-draft-model-config'
 
 /**
  * Display-optimized message type for UI rendering
@@ -232,6 +233,7 @@ export interface ChatInterfaceProps {
   preselectedApiKeyId?: string
   preselectedModelName?: string
   initialModelConfig?: ChatModelConfig | null
+  userDraftModelConfig?: UserDraftModelConfig | null
   initialUsageStats: LatestMessageTokenStats | null
   usageStatsEnabled: boolean
   character: ChatCharacter

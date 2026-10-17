@@ -9,6 +9,7 @@ type UserDraftOptions = {
   apiKeyId: string
   modelName: string
   provider?: string
+  configurationError?: string | null
   reasoningEffort?: UserDraftRequest['reasoningEffort']
   serviceTier?: UserDraftRequest['serviceTier']
   contextKey: string
@@ -23,6 +24,7 @@ export function useUserDraft(options: UserDraftOptions) {
     apiKeyId,
     modelName,
     provider,
+    configurationError,
     reasoningEffort,
     serviceTier,
     contextKey,
@@ -39,13 +41,14 @@ export function useUserDraft(options: UserDraftOptions) {
   } | null>(null)
   const activeRequest = useRef<AbortController | null>(null)
   const disabledReason =
-    provider === 'local'
+    configurationError ??
+    (provider === 'local'
       ? '대신 작성은 클라우드 모델에서만 사용할 수 있습니다.'
       : !provider || !apiKeyId || !modelName
         ? '먼저 클라우드 모델을 선택해주세요.'
         : isChatLoading
           ? '현재 응답이나 메시지 편집이 끝난 뒤 작성할 수 있습니다.'
-          : null
+          : null)
   const scopeKey = JSON.stringify([
     chatId,
     apiKeyId,

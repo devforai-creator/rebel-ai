@@ -23,6 +23,7 @@ import { loadChatLorebookState, renderLorebookContext } from '@/lib/lorebook/run
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { createClient } from '@/lib/supabase/server'
 import type { UserDraftRequest } from './user-draft-contract'
+import { parseUserDraftModelConfig } from './user-draft-model-config'
 
 export const USER_DRAFT_SYSTEM_PROMPT = [
   "You write the user's next roleplay message on their behalf.",
@@ -75,11 +76,23 @@ export async function generateUserDraft({
     .single()
   if (chatError || !chat) throw new UserDraftError('Chat not found', 404)
 
+  const { data: profile, error: preferenceError } = await supabase
+    .from('profiles')
+    .select('user_draft_model_config')
+    .eq('id', userId)
+    .maybeSingle()
+  if (preferenceError) throw new UserDraftError('대필 모델 설정을 불러오지 못했습니다.', 500)
+  const preference = parseUserDraftModelConfig(profile?.user_draft_model_config)
+  if (profile?.user_draft_model_config != null && !preference)
+    throw new UserDraftError('대시보드에서 대필 모델 설정을 다시 저장해주세요.', 400)
+  // Read the account preference on every invocation, including already-open chat tabs.
+  const selection = preference ?? request
+
   const resolved = await resolveActiveLlmConfigForUser({
     supabase,
     userId,
-    apiKeyId: request.apiKeyId,
-    preferredModelName: request.modelName,
+    apiKeyId: selection.apiKeyId,
+    preferredModelName: selection.modelName,
   })
   if (resolved.status === 'missing_api_key') {
     throw new UserDraftError('API key not found or inactive', 404)
@@ -93,15 +106,15 @@ export async function generateUserDraft({
     throw new UserDraftError('대신 작성은 클라우드 모델에서만 사용할 수 있습니다.', 400)
   }
   if (
-    request.reasoningEffort !== undefined &&
-    !supportsReasoningPreference(provider, modelName, request.reasoningEffort)
+    selection.reasoningEffort !== undefined &&
+    !supportsReasoningPreference(provider, modelName, selection.reasoningEffort)
   ) {
     throw new UserDraftError('Unsupported reasoningEffort for model', 400)
   }
   if (
-    request.serviceTier !== undefined &&
+    selection.serviceTier !== undefined &&
     (provider !== 'google' ||
-      (request.serviceTier === 'flex' && !supportsGoogleFlex(provider, modelName)))
+      (selection.serviceTier === 'flex' && !supportsGoogleFlex(provider, modelName)))
   ) {
     throw new UserDraftError('Unsupported serviceTier for model', 400)
   }
@@ -189,14 +202,18 @@ export async function generateUserDraft({
     provider,
     modelName,
     preference:
-      request.reasoningEffort ?? modelConfig.reasoning?.[getReasoningModelKey(provider, modelName)],
+      preference?.reasoningEffort ??
+      request.reasoningEffort ??
+      modelConfig.reasoning?.[getReasoningModelKey(provider, modelName)],
     legacyEffort: config.legacyReasoningEffort,
   })
   const serviceTier =
     provider === 'google'
-      ? (request.serviceTier ??
-        modelConfig.serviceTiers?.[getServiceTierModelKey(provider, modelName)] ??
-        'standard')
+      ? preference
+        ? (preference.serviceTier ?? 'standard')
+        : (request.serviceTier ??
+          modelConfig.serviceTiers?.[getServiceTierModelKey(provider, modelName)] ??
+          'standard')
       : undefined
   signal.throwIfAborted()
   const model = await createLanguageModelFromSecretConfig({

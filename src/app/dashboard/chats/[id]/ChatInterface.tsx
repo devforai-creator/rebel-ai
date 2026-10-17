@@ -24,6 +24,7 @@ export default function ChatInterface({
   preselectedApiKeyId,
   preselectedModelName,
   initialModelConfig,
+  userDraftModelConfig,
   initialUsageStats,
   usageStatsEnabled,
   character,
@@ -109,7 +110,11 @@ export default function ChatInterface({
     onMessageChangeSideEffect: handleUsageRealtime,
   })
 
-  const selectedProvider = apiKeys.find((key) => key.id === selectedApiKeyId)?.provider
+  const draftSelection = userDraftModelConfig ?? {
+    apiKeyId: selectedApiKeyId,
+    modelName: selectedModelName,
+  }
+  const draftCredential = apiKeys.find((key) => key.id === draftSelection.apiKeyId)
   const draftContextKey = useMemo(
     () =>
       JSON.stringify(messageState.combinedMessages.map((message) => [message.id, message.content])),
@@ -117,9 +122,14 @@ export default function ChatInterface({
   )
   const draft = useUserDraft({
     chatId,
+    // Send the chat selection as fallback; the server applies the current account preference.
     apiKeyId: selectedApiKeyId,
     modelName: selectedModelName,
-    provider: selectedProvider,
+    provider: draftCredential?.provider,
+    configurationError:
+      userDraftModelConfig && !draftCredential
+        ? '대필 API 키를 사용할 수 없습니다. 대시보드 설정에서 다시 선택해주세요.'
+        : null,
     reasoningEffort: resolveModelReasoning({
       apiKeyId: selectedApiKeyId,
       modelName: selectedModelName,
@@ -128,7 +138,7 @@ export default function ChatInterface({
       apiKeyId: selectedApiKeyId,
       modelName: selectedModelName,
     }),
-    contextKey: draftContextKey,
+    contextKey: JSON.stringify([draftContextKey, userDraftModelConfig ?? null]),
     input: composer.input,
     isChatLoading:
       messageState.isLoading ||

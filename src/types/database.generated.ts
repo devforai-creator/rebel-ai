@@ -1214,6 +1214,7 @@ export type Database = {
           translation_api_key_id: string | null
           translation_model_name: string | null
           updated_at: string
+          user_draft_model_config: Json | null
           username: string | null
           voyage_embedding_api_key_id: string | null
         }
@@ -1237,6 +1238,7 @@ export type Database = {
           translation_api_key_id?: string | null
           translation_model_name?: string | null
           updated_at?: string
+          user_draft_model_config?: Json | null
           username?: string | null
           voyage_embedding_api_key_id?: string | null
         }
@@ -1260,6 +1262,7 @@ export type Database = {
           translation_api_key_id?: string | null
           translation_model_name?: string | null
           updated_at?: string
+          user_draft_model_config?: Json | null
           username?: string | null
           voyage_embedding_api_key_id?: string | null
         }

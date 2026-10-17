@@ -16,6 +16,8 @@ import SystemPromptEditorButton from './SystemPromptEditorButton'
 import ChatPersonaWidget from './ChatPersonaWidget'
 import { BASE_GLOBAL_SYSTEM_PROMPT } from '@/lib/chat/global-system-prompt'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
+import { parseUserDraftModelConfig } from '@/lib/chat/user-draft-model-config'
+import type { Json } from '@/types/database.types'
 import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import { loadProjectedChatWindow } from '@/lib/chat/turns'
 import type { Persona } from '@/types/database.types'
@@ -125,11 +127,14 @@ export default async function ChatPage({ params, searchParams }: Props) {
 
   const profileSettingsPromise = supabase
     .from('profiles')
-    .select('enable_chat_usage_stats, enable_agentic_transcript_recall_default')
+    .select(
+      'enable_chat_usage_stats, enable_agentic_transcript_recall_default, user_draft_model_config',
+    )
     .eq('id', user.id)
     .maybeSingle<{
       enable_chat_usage_stats: boolean
       enable_agentic_transcript_recall_default: boolean
+      user_draft_model_config: Json | null
     }>()
 
   const availablePersonasPromise = supabase
@@ -226,6 +231,9 @@ export default async function ChatPage({ params, searchParams }: Props) {
           </Suspense>
           <div className="flex flex-1 min-w-0 min-h-0">
             <ChatInterface
+              userDraftModelConfig={parseUserDraftModelConfig(
+                profileSettings?.user_draft_model_config,
+              )}
               chatId={chat.id}
               initialMessages={initialMessages}
               initialActiveJob={initialActiveJob}

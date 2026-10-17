@@ -44,10 +44,14 @@ function setup(
     personaId?: string | null
     missingCharacter?: boolean
     characterMetadata?: unknown
+    draftModelConfig?: unknown
   } = {},
 ) {
   const client = createSupabaseMock({
     tables: {
+      profiles: {
+        rows: [{ id: 'user-1', user_draft_model_config: options.draftModelConfig ?? null }],
+      },
       chats: {
         rows: [
           {
@@ -139,6 +143,113 @@ beforeEach(() => {
 })
 
 describe('generateUserDraft', () => {
+  it('uses the account draft model, reasoning and tier instead of the chat selection', async () => {
+    const { args, client } = setup({
+      draftModelConfig: {
+        apiKeyId: 'draft-key',
+        modelName: 'gemini-4-argon',
+        reasoningEffort: 'low',
+        serviceTier: 'flex',
+      },
+    })
+    ;(client.state.apiKeys as Record<string, unknown>[]).push({
+      id: 'draft-key',
+      user_id: 'user-1',
+      is_active: true,
+      provider: 'google',
+      model_preference: 'gemini-4-argon',
+      service_tier: 'standard',
+      vault_secret_name: 'draft-vault',
+    })
+    await generateUserDraft({ ...args, request: { ...args.request, reasoningEffort: 'high' } })
+    expect(mocks.model).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          apiKeyId: 'draft-key',
+          modelName: 'gemini-4-argon',
+          provider: 'google',
+        }),
+      }),
+    )
+    expect(mocks.generate.mock.calls[0][0].providerOptions.google).toMatchObject({
+      serviceTier: 'flex',
+      thinkingConfig: { thinkingLevel: 'low' },
+    })
+  })
+
+  it('keeps dedicated default reasoning and Standard independent of chat preferences', async () => {
+    const { args } = setup({
+      provider: 'google',
+      modelName: 'gemini-4-argon',
+      draftModelConfig: {
+        apiKeyId: 'key-1',
+        modelName: 'gemini-4-argon',
+        reasoningEffort: 'default',
+      },
+      modelConfig: {
+        reasoning: { 'google:gemini-4-argon': 'high' },
+        serviceTiers: { 'google:gemini-4-argon': 'flex' },
+      },
+    })
+    await generateUserDraft({
+      ...args,
+      request: { ...args.request, reasoningEffort: 'high', serviceTier: 'flex' },
+    })
+    const options = mocks.generate.mock.calls[0][0].providerOptions.google
+    expect(options.serviceTier).toBe('standard')
+    expect(options.thinkingConfig).toBeUndefined()
+  })
+
+  it('inherits chat reasoning and tier when no dedicated model is configured', async () => {
+    const { args } = setup({ provider: 'google', modelName: 'gemini-4-argon' })
+    await generateUserDraft({
+      ...args,
+      request: { ...args.request, reasoningEffort: 'high', serviceTier: 'flex' },
+    })
+    expect(mocks.generate.mock.calls[0][0].providerOptions.google).toMatchObject({
+      serviceTier: 'flex',
+      thinkingConfig: { thinkingLevel: 'high' },
+    })
+  })
+
+  it.each([
+    { apiKeyId: 'missing-key', modelName: 'gpt-5.4' },
+    { apiKeyId: 'key-1', modelName: 'not-a-model' },
+    { apiKeyId: 'key-1' },
+  ])(
+    'does not fall back to the chat model for an unavailable saved selection: %j',
+    async (draftModelConfig) => {
+      const { args } = setup({ draftModelConfig })
+      await expect(generateUserDraft(args)).rejects.toBeInstanceOf(Error)
+      expect(mocks.model).not.toHaveBeenCalled()
+      expect(mocks.generate).not.toHaveBeenCalled()
+    },
+  )
+
+  it('rechecks ownership of the dedicated credential', async () => {
+    const { args } = setup({
+      keyOwner: 'other',
+      draftModelConfig: { apiKeyId: 'key-1', modelName: 'gpt-5.4' },
+    })
+    await expect(generateUserDraft(args)).rejects.toMatchObject({ status: 404 })
+    expect(mocks.model).not.toHaveBeenCalled()
+  })
+
+  it('reads changed account settings for an already-open chat request', async () => {
+    const { args, client } = setup()
+    await generateUserDraft(args)
+    ;(client.state.profiles as Record<string, unknown>[])[0].user_draft_model_config = {
+      apiKeyId: 'key-1',
+      modelName: 'gpt-5.5',
+      reasoningEffort: 'low',
+    }
+    await generateUserDraft(args)
+    expect(mocks.model.mock.calls[1][0].config.modelName).toBe('gpt-5.5')
+    ;(client.state.profiles as Record<string, unknown>[])[0].user_draft_model_config = null
+    await generateUserDraft(args)
+    expect(mocks.model.mock.calls[2][0].config.modelName).toBe('gpt-5.4')
+  })
+
   it('suggests a user reaction using persona, active history, memory and lore without persisting it', async () => {
     const { args, client, getAdminClient } = setup()
     const before = JSON.stringify(client.state)

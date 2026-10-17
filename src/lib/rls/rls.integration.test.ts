@@ -238,6 +238,55 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
   })
 
   describe('profiles table RLS', () => {
+    it('saves and clears the account draft model for its owner', async () => {
+      const config = {
+        apiKeyId: testData.apiKeyA.id,
+        modelName: 'gemini-4-argon',
+        reasoningEffort: 'low',
+        serviceTier: 'flex',
+      }
+      const saved = await testData.userA.client
+        .from('profiles')
+        .update({ user_draft_model_config: config })
+        .eq('id', testData.userA.id)
+        .select('user_draft_model_config')
+        .single()
+      expect(saved.error).toBeNull()
+      expect(saved.data?.user_draft_model_config).toEqual(config)
+      const otherRead = await testData.userB.client
+        .from('profiles')
+        .select('user_draft_model_config')
+        .eq('id', testData.userA.id)
+      expect(otherRead.error).toBeNull()
+      expect(otherRead.data).toEqual([])
+      const otherUpdate = await testData.userB.client
+        .from('profiles')
+        .update({ user_draft_model_config: null })
+        .eq('id', testData.userA.id)
+        .select('id')
+      expect(otherUpdate.error).toBeNull()
+      expect(otherUpdate.data).toEqual([])
+      const after = await testData.userA.client
+        .from('profiles')
+        .select('user_draft_model_config')
+        .eq('id', testData.userA.id)
+        .single()
+      expect(after.data?.user_draft_model_config).toEqual(config)
+      const cleared = await testData.userA.client
+        .from('profiles')
+        .update({ user_draft_model_config: null })
+        .eq('id', testData.userA.id)
+      expect(cleared.error).toBeNull()
+    })
+
+    it('rejects a non-object draft configuration at the database boundary', async () => {
+      const result = await testData.userA.client
+        .from('profiles')
+        .update({ user_draft_model_config: 'invalid' })
+        .eq('id', testData.userA.id)
+      expect(result.error?.code).toBe('23514')
+    })
+
     it('does not allow users to grant themselves admin privileges', async () => {
       const attempt = await testData.userA.client
         .from('profiles')

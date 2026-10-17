@@ -47,6 +47,7 @@ vi.mock('./actions', () => ({
   updateSummaryPrompts: vi.fn(),
   updateTranslationModelPreference: vi.fn(),
 }))
+vi.mock('./user-draft-settings-actions', () => ({ updateUserDraftModelSettings: vi.fn() }))
 
 type ProfileRow = {
   id: string
@@ -252,6 +253,11 @@ describe('account page', () => {
     render(await AccountPage())
 
     expect(screen.getByRole('heading', { name: 'Account Settings' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '대필 모델' })).toBeTruthy()
+    expect((screen.getByRole('combobox', { name: '대필 모델' }) as HTMLSelectElement).value).toBe(
+      '',
+    )
+    expect(screen.queryByLabelText('대필 추론 강도')).toBeNull()
     expect(screen.getByText('Owner (owner@example.com)')).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Message Reprocess' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Bilingual Memory' })).toBeTruthy()

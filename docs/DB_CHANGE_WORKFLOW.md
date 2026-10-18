@@ -26,8 +26,13 @@ For incremental schema changes, do not edit production directly in Supabase SQL
 Editor.
 
 1. Create the next migration file in `supabase/migrations/`.
-   This repository currently uses numeric ordering, so continue the sequence:
-   `64_<name>.sql`, `65_<name>.sql`, and so on.
+   Versions `00` through `99` retain their original names and database history.
+   After `99`, use the fixed-width sequence `999000_<name>.sql`,
+   `999001_<name>.sql`, and so on. Supabase compares version strings, so `100`
+   would be inserted between `10` and `11` instead of following `99`.
+   Use Supabase CLI **2.121.0 or later** (CI pins 2.121.0): older CLI versions
+   sort whole filenames and cannot reconcile the `99` / `999000` boundary.
+   Do not renumber or repair the existing applied history to change ordering.
 2. Apply and test the change locally.
 
 ```bash

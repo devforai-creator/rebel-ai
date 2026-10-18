@@ -7,14 +7,20 @@ import { useCharacterChats } from './useCharacterChats'
 const {
   refreshMock,
   toastErrorMock,
+  toastSuccessMock,
   deleteChatMock,
+  renameChatMock,
+  setChatBookmarkedMock,
   fetchCharacterChatsPageMock,
   fetchCharacterChatExportMock,
   downloadBlobMock,
 } = vi.hoisted(() => ({
   refreshMock: vi.fn(),
   toastErrorMock: vi.fn(),
+  toastSuccessMock: vi.fn(),
   deleteChatMock: vi.fn(),
+  renameChatMock: vi.fn(),
+  setChatBookmarkedMock: vi.fn(),
   fetchCharacterChatsPageMock: vi.fn(),
   fetchCharacterChatExportMock: vi.fn(),
   downloadBlobMock: vi.fn(),
@@ -29,6 +35,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('sonner', () => ({
   toast: {
     error: toastErrorMock,
+    success: toastSuccessMock,
   },
 }))
 
@@ -41,6 +48,11 @@ vi.mock('../character-chats-client', () => ({
   fetchCharacterChatExport: (...args: unknown[]) => fetchCharacterChatExportMock(...args),
 }))
 
+vi.mock('@/app/dashboard/chats/chat-list-actions', () => ({
+  renameChat: (...args: unknown[]) => renameChatMock(...args),
+  setChatBookmarked: (...args: unknown[]) => setChatBookmarkedMock(...args),
+}))
+
 vi.mock('../download-blob', () => ({
   downloadBlob: (...args: unknown[]) => downloadBlobMock(...args),
 }))
@@ -50,6 +62,8 @@ describe('useCharacterChats', () => {
     refreshMock.mockReset()
     toastErrorMock.mockReset()
     deleteChatMock.mockReset()
+    renameChatMock.mockReset()
+    setChatBookmarkedMock.mockReset()
     fetchCharacterChatsPageMock.mockReset()
     fetchCharacterChatExportMock.mockReset()
     downloadBlobMock.mockReset()
@@ -111,6 +125,7 @@ describe('useCharacterChats', () => {
           created_at: '2026-01-02',
           last_message_at: null,
           recency_at: '2026-01-02',
+          is_bookmarked: false,
           lastMessage: null,
         },
       ],
@@ -128,6 +143,7 @@ describe('useCharacterChats', () => {
             created_at: '2026-01-01',
             last_message_at: null,
             recency_at: '2026-01-01',
+            is_bookmarked: false,
             lastMessage: null,
           },
         ],
@@ -183,6 +199,7 @@ describe('useCharacterChats', () => {
             created_at: '2026-01-01',
             last_message_at: null,
             recency_at: '2026-01-01',
+            is_bookmarked: false,
             lastMessage: null,
           },
         ],
@@ -203,5 +220,124 @@ describe('useCharacterChats', () => {
       expect(toastErrorMock).toHaveBeenCalledWith('Delete failed')
     })
     expect(result.current.chatList.map((chat) => chat.id)).toEqual(['chat-1'])
+  })
+})
+
+const oldRoom = {
+  id: 'old-room',
+  title: 'Old',
+  created_at: '2026-01-01',
+  last_message_at: null,
+  recency_at: '2026-01-01',
+  is_bookmarked: false,
+  lastMessage: null,
+}
+function renderRooms() {
+  return renderHook(() =>
+    useCharacterChats({
+      characterId: 'char-1',
+      initialChats: [oldRoom],
+      initialChatCursor: 'old-cursor',
+      initialHasMoreChats: true,
+    }),
+  )
+}
+describe('chat list mutations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setChatBookmarkedMock.mockReset()
+    renameChatMock.mockReset()
+    fetchCharacterChatsPageMock.mockReset()
+  })
+  it('reloads the first page and replaces the cursor after changing bookmark order', async () => {
+    setChatBookmarkedMock.mockResolvedValue({ chat: { ...oldRoom, is_bookmarked: true } })
+    fetchCharacterChatsPageMock.mockResolvedValue({
+      chats: [{ ...oldRoom, is_bookmarked: true }],
+      hasMore: true,
+      nextCursor: 'new-cursor',
+    })
+    const { result } = renderRooms()
+    await act(async () => {
+      await result.current.bookmarkChat(oldRoom)
+    })
+    expect(setChatBookmarkedMock).toHaveBeenCalledWith('old-room', true)
+    expect(fetchCharacterChatsPageMock).toHaveBeenCalledWith('char-1', null)
+    expect(result.current.chatList[0].is_bookmarked).toBe(true)
+    fetchCharacterChatsPageMock.mockResolvedValue({ chats: [], hasMore: false, nextCursor: null })
+    await act(async () => {
+      await result.current.loadMoreChats()
+    })
+    expect(fetchCharacterChatsPageMock).toHaveBeenLastCalledWith('char-1', 'new-cursor')
+  })
+  it('does not change local bookmarks or pagination when saving fails', async () => {
+    setChatBookmarkedMock.mockResolvedValue({ error: 'Denied' })
+    const { result } = renderRooms()
+    await act(async () => {
+      await result.current.bookmarkChat(oldRoom)
+    })
+    expect(result.current.chatList[0].is_bookmarked).toBe(false)
+    expect(result.current.hasMoreChatPages).toBe(true)
+    expect(result.current.updatingChatId).toBeNull()
+    expect(toastErrorMock).toHaveBeenCalledWith('Denied')
+  })
+  it('keeps a saved bookmark and offers a fresh list retry when reloading fails', async () => {
+    setChatBookmarkedMock.mockResolvedValue({ chat: { ...oldRoom, is_bookmarked: true } })
+    fetchCharacterChatsPageMock.mockRejectedValueOnce(new Error('Offline'))
+    const { result } = renderRooms()
+    await act(async () => {
+      await result.current.bookmarkChat(oldRoom)
+    })
+    expect(result.current.chatList[0].is_bookmarked).toBe(true)
+    expect(result.current.chatListError).toContain('저장됐지만')
+    expect(result.current.hasMoreChatPages).toBe(false)
+    fetchCharacterChatsPageMock.mockResolvedValue({
+      chats: [{ ...oldRoom, is_bookmarked: true }],
+      hasMore: false,
+      nextCursor: null,
+    })
+    await act(async () => {
+      await result.current.retryChatList()
+    })
+    expect(result.current.chatListError).toBeNull()
+  })
+  it('renames the local room without discarding loaded pages', async () => {
+    renameChatMock.mockResolvedValue({ chat: { ...oldRoom, title: '본편' } })
+    const { result } = renderRooms()
+    await act(async () => {
+      expect(await result.current.renameCharacterChat('old-room', '본편')).toEqual({})
+    })
+    expect(result.current.chatList[0].title).toBe('본편')
+    expect(result.current.hasMoreChatPages).toBe(true)
+    renameChatMock.mockResolvedValue({ error: 'Denied' })
+    await act(async () => {
+      expect(await result.current.renameCharacterChat('old-room', 'Lost')).toEqual({
+        error: 'Denied',
+      })
+    })
+    expect(result.current.chatList[0].title).toBe('본편')
+  })
+  it('does not allow two pagination or bookmark requests to race', async () => {
+    let finish!: (value: unknown) => void
+    fetchCharacterChatsPageMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+    )
+    const { result } = renderRooms()
+    let loading!: Promise<void>
+    act(() => {
+      loading = result.current.loadMoreChats()
+    })
+    await act(async () => {
+      await result.current.bookmarkChat(oldRoom)
+      await result.current.loadMoreChats()
+    })
+    expect(setChatBookmarkedMock).not.toHaveBeenCalled()
+    expect(fetchCharacterChatsPageMock).toHaveBeenCalledOnce()
+    await act(async () => {
+      finish({ chats: [oldRoom], hasMore: false, nextCursor: null })
+      await loading
+    })
+    expect(result.current.chatList).toHaveLength(1)
   })
 })

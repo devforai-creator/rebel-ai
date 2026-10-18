@@ -425,6 +425,102 @@ describe.skipIf(shouldSkip)('recent and character chat list RPC integration', ()
     expect(new Set(collectedIds).size).toBe(expectedOrder.length)
   })
 
+  it('paginates bookmarks before all other rooms and returns unpinned rooms to recency order', async () => {
+    const characterId = await createCharacter(userA.id, 'Bookmarks')
+    const ids: string[] = []
+    for (let index = 0; index < 18; index++) {
+      ids.push(
+        await createChat(
+          userA.id,
+          characterId,
+          `Room ${index}`,
+          randomUUID(),
+          `2026-01-${String(index + 1).padStart(2, '0')}T00:00:00.000Z`,
+        ),
+      )
+    }
+    for (const id of [ids[0], ids[1]]) {
+      const result = await userA.client.from('chats').update({ is_bookmarked: true }).eq('id', id)
+      expect(result.error).toBeNull()
+    }
+    const collected: string[] = []
+    let cursor:
+      | { p_cursor_chat_id: string; p_cursor_recency_at: string; p_cursor_is_bookmarked: boolean }
+      | undefined
+    while (true) {
+      const result = await userA.client.rpc('list_character_chats_with_bookmarks', {
+        p_character_id: characterId,
+        p_page_size: 3,
+        ...cursor,
+      })
+      expect(result.error).toBeNull()
+      const page = result.data!.slice(0, 3)
+      collected.push(...page.map((row) => row.id))
+      if (result.data!.length <= 3) break
+      const last = page.at(-1)!
+      cursor = {
+        p_cursor_chat_id: last.id,
+        p_cursor_recency_at: last.recency_at,
+        p_cursor_is_bookmarked: last.is_bookmarked,
+      }
+    }
+    expect(collected).toEqual([ids[1], ids[0], ...ids.slice(2).reverse()])
+    expect(new Set(collected).size).toBe(18)
+
+    const update = await userA.client
+      .from('chats')
+      .update({ is_bookmarked: false, title: 'Renamed old room' })
+      .eq('id', ids[0])
+    expect(update.error).toBeNull()
+    const after = await userA.client.rpc('list_character_chats_with_bookmarks', {
+      p_character_id: characterId,
+      p_page_size: 50,
+    })
+    expect(after.error).toBeNull()
+    expect(after.data?.map((row) => row.id)).toEqual([
+      ids[1],
+      ...ids.filter((id) => id !== ids[1]).reverse(),
+    ])
+    expect(after.data?.at(-1)).toMatchObject({
+      id: ids[0],
+      title: 'Renamed old room',
+      last_message_at: null,
+    })
+  })
+
+  it('protects bookmarks and titles with room ownership and requires a complete bookmark cursor', async () => {
+    const characterId = await createCharacter(userA.id, 'Private Bookmark')
+    const ownId = await createChat(userA.id, characterId, 'Own')
+    const otherId = await createChat(userB.id, characterId, 'Other')
+    const forbidden = await userA.client
+      .from('chats')
+      .update({ is_bookmarked: true, title: 'Forged' })
+      .eq('id', otherId)
+      .select('id')
+    expect(forbidden.error).toBeNull()
+    expect(forbidden.data).toEqual([])
+    const other = await userB.client
+      .from('chats')
+      .select('title, is_bookmarked')
+      .eq('id', otherId)
+      .single()
+    expect(other.data).toMatchObject({ title: 'Recent Chat Other', is_bookmarked: false })
+    const own = await userA.client.rpc('list_character_chats_with_bookmarks', {
+      p_character_id: characterId,
+    })
+    expect(own.error).toBeNull()
+    expect(own.data?.map((row) => row.id)).toEqual([ownId])
+    const anon = await anonymousClient.rpc('list_character_chats_with_bookmarks', {
+      p_character_id: characterId,
+    })
+    expect(anon.error?.code).toBe('42501')
+    const incomplete = await userA.client.rpc('list_character_chats_with_bookmarks', {
+      p_character_id: characterId,
+      p_cursor_is_bookmarked: true,
+    })
+    expect(incomplete.error?.code).toBe('22023')
+  })
+
   it('scopes character chat pages to the caller and rejects invalid direct calls', async () => {
     const characterId = await createCharacter(userA.id, 'Owned Chat List')
     const userAChatId = await createChat(userA.id, characterId, 'User A')

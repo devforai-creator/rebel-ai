@@ -6,7 +6,7 @@ import type { CharacterChat, CharacterChatsPage } from '@/lib/chat/character-cha
 import { CHARACTER_CHAT_PAGE_SIZE } from '@/lib/chat/constants'
 import type { Database } from '@/types/database.types'
 
-const CURSOR_VERSION = 1
+const CURSOR_VERSION = 2
 const MAX_PAGE_SIZE = 50
 const MAX_CURSOR_LENGTH = 512
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/
@@ -16,7 +16,7 @@ const MESSAGE_PREVIEW_LIMIT = 240
 
 type CharacterChatsSupabase = Pick<SupabaseClient<Database>, 'rpc'>
 type GeneratedCharacterChatRow =
-  Database['public']['Functions']['list_character_chats']['Returns'][number]
+  Database['public']['Functions']['list_character_chats_with_bookmarks']['Returns'][number]
 
 type CharacterChatRow = Omit<
   GeneratedCharacterChatRow,
@@ -32,6 +32,7 @@ type CharacterChatsCursor = {
   v: typeof CURSOR_VERSION
   recencyAt: string
   chatId: string
+  isBookmarked: boolean
 }
 
 export class InvalidCharacterChatsCursorError extends Error {
@@ -66,11 +67,12 @@ function decodeCursor(cursor: string | null | undefined): CharacterChatsCursor |
       throw new InvalidCharacterChatsCursorError()
     }
 
-    const payload = JSON.parse(decoded) as Partial<CharacterChatsCursor>
+    const payload = JSON.parse(decoded) as Partial<Omit<CharacterChatsCursor, 'v'>> & { v?: number }
     if (
       typeof payload !== 'object' ||
       payload === null ||
-      payload.v !== CURSOR_VERSION ||
+      (payload.v !== CURSOR_VERSION && payload.v !== 1) ||
+      (payload.v === CURSOR_VERSION && typeof payload.isBookmarked !== 'boolean') ||
       typeof payload.recencyAt !== 'string' ||
       !TIMESTAMP_PATTERN.test(payload.recencyAt) ||
       !Number.isFinite(Date.parse(payload.recencyAt)) ||
@@ -84,6 +86,7 @@ function decodeCursor(cursor: string | null | undefined): CharacterChatsCursor |
       v: CURSOR_VERSION,
       recencyAt: payload.recencyAt,
       chatId: payload.chatId,
+      isBookmarked: payload.v === 1 ? false : payload.isBookmarked!,
     }
   } catch (error) {
     if (error instanceof InvalidCharacterChatsCursorError) {
@@ -98,6 +101,7 @@ function encodeCursor(row: CharacterChatRow): string {
     v: CURSOR_VERSION,
     recencyAt: row.recency_at,
     chatId: row.id,
+    isBookmarked: row.is_bookmarked,
   }
   return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
 }
@@ -123,6 +127,7 @@ function mapChat(row: CharacterChatRow): CharacterChat {
     created_at: row.created_at,
     last_message_at: row.last_message_at,
     recency_at: row.recency_at,
+    is_bookmarked: row.is_bookmarked,
     lastMessage: preview,
   }
 }
@@ -138,13 +143,14 @@ export async function loadCharacterChats(options: {
     1,
     Math.min(options.pageSize ?? CHARACTER_CHAT_PAGE_SIZE, MAX_PAGE_SIZE),
   )
-  const { data, error } = await options.supabase.rpc('list_character_chats', {
+  const { data, error } = await options.supabase.rpc('list_character_chats_with_bookmarks', {
     p_character_id: options.characterId,
     p_page_size: pageSize,
     ...(cursor
       ? {
           p_cursor_recency_at: cursor.recencyAt,
           p_cursor_chat_id: cursor.chatId,
+          p_cursor_is_bookmarked: cursor.isBookmarked,
         }
       : {}),
   })

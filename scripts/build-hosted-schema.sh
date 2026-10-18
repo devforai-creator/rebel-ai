@@ -20,11 +20,13 @@ trap cleanup EXIT
 -- project does not already have them available.
 EOF
 
-  for migration in "$ROOT_DIR"/supabase/migrations/*.sql; do
+  # Match Supabase CLI's version ordering, including the transition after 99.
+  while IFS= read -r -d '' migration_name; do
+    migration="$ROOT_DIR/supabase/migrations/$migration_name"
     printf '\n\n-- >>> %s\n\n' "$(basename "$migration")"
     cat "$migration"
     printf '\n'
-  done
+  done < <(find "$ROOT_DIR/supabase/migrations" -maxdepth 1 -name '*.sql' -printf '%f\0' | LC_ALL=C sort -z -t_ -k1,1)
 } > "$TEMP_FILE"
 
 if [[ "${1:-}" == "--check" ]]; then

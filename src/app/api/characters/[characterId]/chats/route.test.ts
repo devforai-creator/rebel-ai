@@ -117,6 +117,7 @@ describe('GET /api/characters/[characterId]/chats', () => {
     )
 
     expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
     await expect(response.json()).resolves.toEqual({
       chats: [],
       hasMore: false,

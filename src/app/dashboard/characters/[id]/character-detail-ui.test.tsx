@@ -166,6 +166,7 @@ describe('CharacterDetailView', () => {
             created_at: '2026-04-12T00:00:00.000Z',
             last_message_at: '2026-04-12T01:00:00.000Z',
             recency_at: '2026-04-12T01:00:00.000Z',
+            is_bookmarked: false,
             lastMessage: null,
           },
         ]}

@@ -4,6 +4,7 @@ export type CharacterChat = {
   created_at: string
   last_message_at: string | null
   recency_at: string
+  is_bookmarked: boolean
   lastMessage: { content: string; role: 'user' | 'assistant' } | null
 }
 

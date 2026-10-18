@@ -36,7 +36,7 @@ export async function GET(
   try {
     const cursor = new URL(request.url).searchParams.get('cursor')
     const page = await loadCharacterChats({ supabase, characterId, cursor })
-    return NextResponse.json(page)
+    return NextResponse.json(page, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     if (error instanceof InvalidCharacterChatsCursorError) {
       return NextResponse.json({ error: 'Invalid pagination cursor' }, { status: 400 })

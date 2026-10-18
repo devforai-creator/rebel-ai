@@ -13,6 +13,7 @@ function createRow(overrides: Record<string, unknown> = {}) {
     created_at: '2026-08-15T09:00:00+00:00',
     last_message_at: '2026-08-15T10:00:00+00:00',
     recency_at: '2026-08-15T10:00:00+00:00',
+    is_bookmarked: false,
     preview_role: 'assistant',
     preview_content: ' Hello\nthere ',
     ...overrides,
@@ -40,6 +41,7 @@ describe('loadCharacterChats', () => {
           created_at: '2026-08-15T09:00:00+00:00',
           last_message_at: '2026-08-15T10:00:00+00:00',
           recency_at: '2026-08-15T10:00:00+00:00',
+          is_bookmarked: false,
           lastMessage: { role: 'assistant', content: 'Hello there' },
         },
       ],
@@ -55,11 +57,12 @@ describe('loadCharacterChats', () => {
       pageSize: 1,
     })
 
-    expect(nextRpc).toHaveBeenCalledWith('list_character_chats', {
+    expect(nextRpc).toHaveBeenCalledWith('list_character_chats_with_bookmarks', {
       p_character_id: '20000000-0000-0000-0000-000000000001',
       p_page_size: 1,
       p_cursor_recency_at: '2026-08-15T10:00:00+00:00',
       p_cursor_chat_id: '10000000-0000-0000-0000-000000000001',
+      p_cursor_is_bookmarked: false,
     })
   })
 
@@ -69,6 +72,7 @@ describe('loadCharacterChats', () => {
         createRow({
           last_message_at: null,
           recency_at: '2026-08-15T09:00:00+00:00',
+          is_bookmarked: false,
           preview_role: null,
           preview_content: null,
         }),
@@ -84,8 +88,56 @@ describe('loadCharacterChats', () => {
     expect(page.chats[0]).toMatchObject({
       last_message_at: null,
       recency_at: '2026-08-15T09:00:00+00:00',
+      is_bookmarked: false,
       lastMessage: null,
     })
+  })
+
+  it('includes bookmark state in the cursor when crossing into ordinary rooms', async () => {
+    const rpc = vi
+      .fn()
+      .mockResolvedValue({ data: [createRow({ is_bookmarked: true }), createRow()], error: null })
+    const page = await loadCharacterChats({
+      supabase: { rpc } as never,
+      characterId: 'char-1',
+      pageSize: 1,
+    })
+    expect(page.chats[0].is_bookmarked).toBe(true)
+    rpc.mockResolvedValue({ data: [], error: null })
+    await loadCharacterChats({
+      supabase: { rpc } as never,
+      characterId: 'char-1',
+      cursor: page.nextCursor,
+    })
+    expect(rpc).toHaveBeenLastCalledWith(
+      'list_character_chats_with_bookmarks',
+      expect.objectContaining({ p_cursor_is_bookmarked: true }),
+    )
+  })
+
+  it('accepts a preceding deployment cursor and rejects incomplete bookmark cursors', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [], error: null })
+    const payload = {
+      v: 1,
+      recencyAt: '2026-08-15T10:00:00+00:00',
+      chatId: '10000000-0000-0000-0000-000000000001',
+    }
+    await loadCharacterChats({
+      supabase: { rpc } as never,
+      characterId: 'char-1',
+      cursor: Buffer.from(JSON.stringify(payload)).toString('base64url'),
+    })
+    expect(rpc).toHaveBeenLastCalledWith(
+      'list_character_chats_with_bookmarks',
+      expect.objectContaining({ p_cursor_is_bookmarked: false }),
+    )
+    await expect(
+      loadCharacterChats({
+        supabase: { rpc } as never,
+        characterId: 'char-1',
+        cursor: Buffer.from(JSON.stringify({ ...payload, v: 2 })).toString('base64url'),
+      }),
+    ).rejects.toBeInstanceOf(InvalidCharacterChatsCursorError)
   })
 
   it('rejects malformed cursors before calling the RPC', async () => {

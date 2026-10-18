@@ -4,11 +4,11 @@ import type { ChatImportResult } from '@/types/risu-chat'
 
 export async function fetchCharacterChatsPage(
   characterId: string,
-  cursor: string,
+  cursor: string | null,
   fetchImpl: typeof fetch = fetch,
 ): Promise<CharacterChatsPage> {
   const response = await fetchImpl(
-    `/api/characters/${characterId}/chats?cursor=${encodeURIComponent(cursor)}`,
+    `/api/characters/${characterId}/chats${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
   )
 
   if (!response.ok) {

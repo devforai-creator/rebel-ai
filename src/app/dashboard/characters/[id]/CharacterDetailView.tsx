@@ -10,6 +10,7 @@ import EmptyState from '@/app/dashboard/components/EmptyState'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import CharacterForm from '../CharacterForm'
 import ChatImportModal from './ChatImportModal'
+import ChatHistoryItem from './ChatHistoryItem'
 import type { CharacterDetailViewProps } from './character-detail-types'
 import { useCharacterChats } from './hooks/useCharacterChats'
 
@@ -35,6 +36,11 @@ export default function CharacterDetailView({
     hasMoreChatPages,
     isChatLoading,
     pendingDeleteChat,
+    updatingChatId,
+    chatListError,
+    bookmarkChat,
+    renameCharacterChat,
+    retryChatList,
     exportChat,
     requestDeleteCharacterChat,
     cancelDeleteCharacterChat,
@@ -166,64 +172,17 @@ export default function CharacterDetailView({
           {chatList.length > 0 ? (
             <div className="space-y-3">
               {chatList.map((chat) => (
-                <SurfaceCard key={chat.id} tone="subtle" padding="none" className="overflow-hidden">
-                  <Link
-                    href={`/dashboard/chats/${chat.id}`}
-                    prefetch={false}
-                    className="block p-4 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {chat.title || 'Untitled'}
-                        </h3>
-                        {chat.lastMessage && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">
-                            {chat.lastMessage.role === 'user' ? 'You: ' : ''}
-                            {chat.lastMessage.content}
-                          </p>
-                        )}
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                          {chat.last_message_at === null ? 'Created: ' : 'Last message: '}
-                          {new Date(chat.recency_at).toLocaleString('en-US')}
-                        </p>
-                      </div>
-                      <svg
-                        className="w-5 h-5 text-gray-400 flex-shrink-0 ml-2"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 5l7 7-7 7"
-                        />
-                      </svg>
-                    </div>
-                  </Link>
-                  <div className="px-4 pb-3 border-t border-gray-200 dark:border-gray-600 pt-2 flex items-center gap-3">
-                    <Button
-                      onClick={() => exportChat(chat.id)}
-                      disabled={exportingChatId === chat.id}
-                      variant="ghost"
-                      size="sm"
-                      className="-ml-2"
-                    >
-                      {exportingChatId === chat.id ? 'Exporting...' : 'Export'}
-                    </Button>
-                    <Button
-                      onClick={() => requestDeleteCharacterChat(chat.id, chat.title)}
-                      disabled={deletingChatId === chat.id}
-                      variant="ghostDestructive"
-                      size="sm"
-                      className="-ml-2"
-                    >
-                      {deletingChatId === chat.id ? 'Deleting...' : 'Delete'}
-                    </Button>
-                  </div>
-                </SurfaceCard>
+                <ChatHistoryItem
+                  key={chat.id}
+                  chat={chat}
+                  busy={Boolean(updatingChatId) || Boolean(deletingChatId) || isChatLoading}
+                  exporting={exportingChatId === chat.id}
+                  deleting={deletingChatId === chat.id}
+                  onBookmark={() => void bookmarkChat(chat)}
+                  onRename={(title) => renameCharacterChat(chat.id, title)}
+                  onExport={() => void exportChat(chat.id)}
+                  onDelete={() => requestDeleteCharacterChat(chat.id, chat.title)}
+                />
               ))}
             </div>
           ) : (
@@ -244,9 +203,26 @@ export default function CharacterDetailView({
             />
           )}
 
+          {chatListError && (
+            <div role="alert" className="mt-4 text-sm text-red-600 dark:text-red-400">
+              <p>{chatListError}</p>
+              <Button
+                onClick={() => void retryChatList()}
+                disabled={isChatLoading || Boolean(updatingChatId)}
+                variant="ghost"
+                size="sm"
+              >
+                목록 다시 불러오기
+              </Button>
+            </div>
+          )}
           {hasMoreChatPages && (
             <div className="mt-6 flex justify-center">
-              <Button onClick={loadMoreChats} disabled={isChatLoading} variant="secondary">
+              <Button
+                onClick={loadMoreChats}
+                disabled={isChatLoading || Boolean(updatingChatId)}
+                variant="secondary"
+              >
                 {isChatLoading ? 'Loading more chats...' : 'Load more chat history'}
               </Button>
             </div>

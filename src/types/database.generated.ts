@@ -735,6 +735,7 @@ export type Database = {
           created_at: string
           custom_system_prompt: string | null
           id: string
+          is_bookmarked: boolean
           last_message_at: string | null
           max_context_messages: number
           model_config: Json | null
@@ -748,6 +749,7 @@ export type Database = {
           created_at?: string
           custom_system_prompt?: string | null
           id?: string
+          is_bookmarked?: boolean
           last_message_at?: string | null
           max_context_messages?: number
           model_config?: Json | null
@@ -761,6 +763,7 @@ export type Database = {
           created_at?: string
           custom_system_prompt?: string | null
           id?: string
+          is_bookmarked?: boolean
           last_message_at?: string | null
           max_context_messages?: number
           model_config?: Json | null
@@ -1584,6 +1587,25 @@ export type Database = {
         Returns: {
           created_at: string
           id: string
+          last_message_at: string
+          preview_content: string
+          preview_role: string
+          recency_at: string
+          title: string
+        }[]
+      }
+      list_character_chats_with_bookmarks: {
+        Args: {
+          p_character_id: string
+          p_cursor_chat_id?: string
+          p_cursor_is_bookmarked?: boolean
+          p_cursor_recency_at?: string
+          p_page_size?: number
+        }
+        Returns: {
+          created_at: string
+          id: string
+          is_bookmarked: boolean
           last_message_at: string
           preview_content: string
           preview_role: string

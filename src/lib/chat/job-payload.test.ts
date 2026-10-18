@@ -36,10 +36,21 @@ describe('chat job payload parsing', () => {
     }
     expect(parseChatJobPayload(serializeChatJobPayload(payload))).toEqual(payload)
     expect(parseChatJobPayload({ ...payload, serviceTier: 'priority' })).toBeNull()
-    expect(parseChatJobPayload({ ...payload, provider: 'openai' })).toBeNull()
+    expect(parseChatJobPayload({ ...payload, provider: 'anthropic' })).toBeNull()
     expect(parseChatJobPayload({ ...payload, modelName: 'gemini-3.7-flash' })).toBeNull()
     expect(parseChatJobPayload(basePayload)?.serviceTier).toBeUndefined()
   })
+
+  it.each(['standard', 'flex', 'priority', 'batch'] as const)(
+    'round trips an effective OpenAI %s snapshot and accepts legacy jobs without one',
+    (serviceTier) => {
+      const payload = { ...basePayload, modelName: 'gpt-6-luna', serviceTier }
+      expect(parseChatJobPayload(serializeChatJobPayload(payload))).toEqual(payload)
+      expect(parseChatJobPayload({ ...payload, serviceTier: 'bogus' })).toBeNull()
+      expect(parseChatJobPayload({ ...payload, serviceTier: { toString: 'flex' } })).toBeNull()
+      expect(parseChatJobPayload(basePayload)?.serviceTier).toBeUndefined()
+    },
+  )
 
   it('round trips explicit default and explicit effort without falling back to a live key', () => {
     for (const effort of [null, 'low', 'none'] as const) {

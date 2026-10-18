@@ -1,6 +1,6 @@
 import { userDraftRequestSchema } from './user-draft-contract'
 import { supportsReasoningPreference } from '@/lib/llm/reasoning'
-import { supportsGoogleFlex } from '@/lib/llm/service-tier'
+import { supportsModelServiceTier } from '@/lib/llm/service-tier'
 import { listModelsByProvider } from '@/lib/models'
 import type { LlmProvider } from '@/types/database.types'
 import type { z } from 'zod'
@@ -29,8 +29,7 @@ export function getUserDraftModelConfigError(
     return '선택한 모델에서 지원하지 않는 추론 강도입니다.'
   if (
     config.serviceTier !== undefined &&
-    (provider !== 'google' ||
-      (config.serviceTier === 'flex' && !supportsGoogleFlex(provider, config.modelName)))
+    !supportsModelServiceTier(provider, config.modelName, config.serviceTier)
   )
     return '선택한 모델에서 지원하지 않는 서비스 티어입니다.'
   return null

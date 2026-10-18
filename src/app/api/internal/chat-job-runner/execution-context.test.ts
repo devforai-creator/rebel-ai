@@ -302,6 +302,19 @@ describe('loadChatJobExecutionContext', () => {
     })
   })
 
+  it.each(['standard', 'flex', undefined] as const)(
+    'carries OpenAI queued tier %s into provider and cost stages',
+    async (serviceTier) => {
+      const { loadChatJobExecutionContext } = await import('./execution-context')
+      const result = await loadChatJobExecutionContext({
+        supabase: createChatJobRunnerSupabaseMock() as never,
+        payload: buildValidPayload({ serviceTier, modelName: 'gpt-6-luna' }),
+        timings: {},
+      })
+      expect(result.apiKeyData.service_tier).toBe(serviceTier ?? 'standard')
+    },
+  )
+
   it('loads the current execution context before requesting the provider', async () => {
     const { loadChatJobExecutionContext } = await import('./execution-context')
     const supabase = createChatJobRunnerSupabaseMock()

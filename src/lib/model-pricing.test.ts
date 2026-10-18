@@ -2,6 +2,33 @@ import { describe, it, expect } from 'vitest'
 import { estimateUsageCost, type UsageCostParams } from './model-pricing'
 
 describe('estimateUsageCost', () => {
+  it.each(['standard', 'flex'] as const)(
+    'prices Luna short and long contexts including cache writes (%s)',
+    (serviceTier) => {
+      for (const promptTokens of [100_000, 300_000]) {
+        const long = promptTokens > 272_000
+        const rate = serviceTier === 'flex' ? 0.5 : 1
+        const cost = estimateUsageCost({
+          provider: 'openai',
+          modelName: 'gpt-6-luna',
+          serviceTier,
+          promptTokens,
+          cachedInputTokens: 20_000,
+          cacheWriteTokens: 10_000,
+          completionTokens: 1_000,
+        })!
+        expect(cost.totalCost).toBeCloseTo(
+          (((promptTokens - 30_000) * 0.1 * (long ? 2 : 1) +
+            20_000 * 0.01 * (long ? 2 : 1) +
+            10_000 * 0.125 * (long ? 2 : 1) +
+            1_000 * 0.5 * (long ? 1.5 : 1)) /
+            1_000_000) *
+            rate,
+          12,
+        )
+      }
+    },
+  )
   it('keeps the supplied Anthropic read/write breakdown separate and balanced', () => {
     const cost = estimateUsageCost({
       provider: 'anthropic',

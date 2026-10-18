@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { supportsGoogleFlex, normalizeServiceTierPreferences } from './service-tier'
+import {
+  supportsGoogleFlex,
+  supportsModelFlex,
+  resolveModelServiceTier,
+  normalizeServiceTierPreferences,
+} from './service-tier'
 import { mergeChatModelConfigPatch, hasPersistableChatModelConfig } from '@/lib/chat/model-config'
 
 describe('chat service tier preferences', () => {
@@ -18,9 +23,28 @@ describe('chat service tier preferences', () => {
         'google:gemini-4-argon': 'standard',
         'google:gemini-3.7-flash': 'flex',
         'google:gemini-2.5-pro': 'priority',
-        'openai:gpt-5.6': 'flex',
+        'openai:gpt-5.6-sol': 'flex',
+        'openai:gpt-6-luna': 'standard',
+        'openai:gpt-4.1': 'flex',
+        'openai:unknown-model': 'standard',
       }),
-    ).toEqual({ 'google:gemini-3-flash-preview': 'flex', 'google:gemini-4-argon': 'standard' })
+    ).toEqual({
+      'google:gemini-3-flash-preview': 'flex',
+      'google:gemini-4-argon': 'standard',
+      'openai:gpt-5.6': 'flex',
+      'openai:gpt-6-luna': 'standard',
+    })
+  })
+
+  it('inherits legacy OpenAI tiers until a model explicitly overrides them', () => {
+    expect(supportsModelFlex('openai', 'gpt-6-luna')).toBe(true)
+    expect(supportsModelFlex('openai', 'gpt-4.1')).toBe(false)
+    for (const legacyTier of ['standard', 'flex', 'priority', 'batch'] as const) {
+      expect(resolveModelServiceTier({ provider: 'openai', legacyTier })).toBe(legacyTier)
+      expect(
+        resolveModelServiceTier({ provider: 'openai', legacyTier, preference: 'standard' }),
+      ).toBe('standard')
+    }
   })
 
   it('preserves tier selection when unrelated settings change and supports clearing it', () => {

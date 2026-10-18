@@ -18,7 +18,11 @@ import {
   resolveReasoningSnapshot,
   supportsReasoningPreference,
 } from '@/lib/llm/reasoning'
-import { getServiceTierModelKey, supportsGoogleFlex } from '@/lib/llm/service-tier'
+import {
+  getServiceTierModelKey,
+  supportsModelServiceTier,
+  resolveModelServiceTier,
+} from '@/lib/llm/service-tier'
 import { loadChatLorebookState, renderLorebookContext } from '@/lib/lorebook/runtime'
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { createClient } from '@/lib/supabase/server'
@@ -113,8 +117,7 @@ export async function generateUserDraft({
   }
   if (
     selection.serviceTier !== undefined &&
-    (provider !== 'google' ||
-      (selection.serviceTier === 'flex' && !supportsGoogleFlex(provider, modelName)))
+    !supportsModelServiceTier(provider, modelName, selection.serviceTier)
   ) {
     throw new UserDraftError('Unsupported serviceTier for model', 400)
   }
@@ -207,19 +210,19 @@ export async function generateUserDraft({
       modelConfig.reasoning?.[getReasoningModelKey(provider, modelName)],
     legacyEffort: config.legacyReasoningEffort,
   })
-  const serviceTier =
-    provider === 'google'
-      ? preference
-        ? (preference.serviceTier ?? 'standard')
-        : (request.serviceTier ??
-          modelConfig.serviceTiers?.[getServiceTierModelKey(provider, modelName)] ??
-          'standard')
-      : undefined
+  const serviceTier = resolveModelServiceTier({
+    provider,
+    preference: preference
+      ? preference.serviceTier
+      : (request.serviceTier ??
+        modelConfig.serviceTiers?.[getServiceTierModelKey(provider, modelName)]),
+    legacyTier: config.serviceTier,
+  })
   signal.throwIfAborted()
   const model = await createLanguageModelFromSecretConfig({
     supabase: getAdminClient(),
     requester: userId,
-    config,
+    config: provider === 'openai' ? { ...config, serviceTier } : config,
     logPrefix: '[User draft]',
   })
   const { text, finishReason } = await generateText({

@@ -6,7 +6,49 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('GPT-6.1 Sol SDK request contract', () => {
+describe('OpenAI SDK request contract', () => {
+  it.each(['standard', 'flex'] as const)(
+    'sends Luna reasoning and the explicit %s tier in Responses',
+    async (serviceTier) => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        Response.json({
+          id: 'resp_luna',
+          created_at: 0,
+          model: 'gpt-6-luna',
+          status: 'completed',
+          output: [],
+          usage: { input_tokens: 10, output_tokens: 0, total_tokens: 10 },
+        }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      vi.resetModules()
+      const { buildLanguageModel } = await import('./model-factory')
+      const model = buildLanguageModel({
+        provider: 'openai',
+        modelName: 'gpt-6-luna',
+        apiKey: 'test-key',
+        serviceTier,
+      }) as LanguageModelV2
+      await model.doGenerate({
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+        providerOptions: getProviderOptions('openai', {
+          modelName: 'gpt-6-luna',
+          serviceTier,
+          reasoning: { effort: 'low', source: 'chat' },
+          promptCacheKey: 'luna-cache',
+        }),
+      })
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(url).toBe('https://api.openai.com/v1/responses')
+      expect(JSON.parse(init.body)).toMatchObject({
+        model: 'gpt-6-luna',
+        service_tier: serviceTier === 'standard' ? 'default' : 'flex',
+        reasoning: { effort: 'low' },
+        prompt_cache_key: 'luna-cache',
+      })
+      expect(JSON.parse(init.body)).not.toHaveProperty('prompt_cache_retention')
+    },
+  )
   it.each([null, 'none', 'low', 'xhigh', 'max'] as const)(
     'preserves a chat effort snapshot (%s) in Responses',
     async (effort) => {

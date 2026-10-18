@@ -88,10 +88,29 @@ describe('UserDraftModelSettingsForm', () => {
       target: { value: JSON.stringify(['openai-key', 'gpt-5.4']) },
     })
     expect((screen.getByLabelText('대필 추론 강도') as HTMLSelectElement).value).toBe('default')
-    expect(screen.queryByLabelText('대필 서비스 티어')).toBeNull()
+    expect((screen.getByLabelText('대필 서비스 티어') as HTMLSelectElement).value).toBe('')
     fireEvent.change(screen.getByLabelText('대필 모델'), { target: { value: '' } })
     expect(screen.getAllByRole('combobox')).toHaveLength(1)
     expect(new FormData(form).get('user_draft_api_key_id')).toBe('')
+  })
+
+  it('offers Luna and keeps legacy OpenAI defaults until an explicit tier is saved', () => {
+    const { container } = render(
+      <UserDraftModelSettingsForm
+        initialConfig={{ apiKeyId: 'openai-key', modelName: 'gpt-6-luna', reasoningEffort: 'low' }}
+        apiKeys={[{ ...keys[1], service_tier: 'flex' }]}
+      />,
+    )
+    expect(screen.getByRole('option', { name: /GPT-6 Luna/ })).toBeTruthy()
+    const tier = screen.getByLabelText('대필 서비스 티어') as HTMLSelectElement
+    expect(tier.value).toBe('')
+    expect(screen.getByRole('option', { name: /기존 키 설정.*flex/ })).toBeTruthy()
+    fireEvent.change(tier, { target: { value: 'standard' } })
+    expect(new FormData(container.querySelector('form')!).get('user_draft_service_tier')).toBe(
+      'standard',
+    )
+    fireEvent.change(tier, { target: { value: '' } })
+    expect(new FormData(container.querySelector('form')!).get('user_draft_service_tier')).toBe('')
   })
 
   it('loads saved preferences and keeps unavailable saved selections visible', () => {

@@ -8,9 +8,9 @@ import {
 } from '@/lib/llm/reasoning'
 import {
   getServiceTierModelKey,
-  supportsGoogleFlex,
+  supportsModelFlex,
   type ChatServiceTierPreferences,
-  type GoogleServiceTier,
+  type ModelServiceTier,
 } from '@/lib/llm/service-tier'
 import { toast } from 'sonner'
 import type { ChatModelConfig, ChatMemoryMode } from '@/lib/chat/model-config'
@@ -137,8 +137,11 @@ type UseChatInterfaceSettingsArgs = {
 type UseChatInterfaceSettingsReturn = {
   serviceTierPreferences: ChatServiceTierPreferences
   reasoningPreferences: ChatReasoningPreferences
-  resolveModelServiceTier: (selection: LlmModelSelection) => GoogleServiceTier | undefined
-  handleSelectServiceTier: (selection: LlmModelSelection, tier: GoogleServiceTier) => void
+  resolveModelServiceTier: (selection: LlmModelSelection) => ModelServiceTier | undefined
+  handleSelectServiceTier: (
+    selection: LlmModelSelection,
+    tier: ModelServiceTier | 'default',
+  ) => void
   resolveModelReasoning: (selection: LlmModelSelection) => ReasoningPreference | undefined
   handleSelectReasoning: (selection: LlmModelSelection, preference: ReasoningPreference) => void
   selectedApiKeyId: string
@@ -493,24 +496,33 @@ export function useChatInterfaceSettings({
   const resolveModelServiceTier = useCallback(
     (selection: LlmModelSelection) => {
       const credential = apiKeys.find((key) => key.id === selection.apiKeyId)
-      if (!credential || !supportsGoogleFlex(credential.provider, selection.modelName))
+      if (
+        !credential ||
+        (credential.provider !== 'openai' &&
+          !supportsModelFlex(credential.provider, selection.modelName))
+      )
         return undefined
       return (
         serviceTierPreferences[getServiceTierModelKey(credential.provider, selection.modelName)] ??
-        'standard'
+        (credential.provider === 'google' ? 'standard' : undefined)
       )
     },
     [apiKeys, serviceTierPreferences],
   )
 
   const handleSelectServiceTier = useCallback(
-    (selection: LlmModelSelection, tier: GoogleServiceTier) => {
+    (selection: LlmModelSelection, tier: ModelServiceTier | 'default') => {
       const credential = apiKeys.find((key) => key.id === selection.apiKeyId)
-      if (!credential || !supportsGoogleFlex(credential.provider, selection.modelName)) return
-      const nextPreferences = {
-        ...serviceTierPreferences,
-        [getServiceTierModelKey(credential.provider, selection.modelName)]: tier,
-      }
+      if (
+        !credential ||
+        (credential.provider !== 'openai' &&
+          !supportsModelFlex(credential.provider, selection.modelName))
+      )
+        return
+      const nextPreferences = { ...serviceTierPreferences }
+      const key = getServiceTierModelKey(credential.provider, selection.modelName)
+      if (tier === 'default') delete nextPreferences[key]
+      else nextPreferences[key] = tier
       setServiceTierPreferences(nextPreferences)
       persistModelConfig({
         selectedModel,

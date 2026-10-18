@@ -70,6 +70,7 @@ import { POST } from './route'
 const triggerMessageTranslationMock = vi.mocked(triggerMessageTranslation)
 
 interface ApiKeyRow {
+  service_tier?: 'standard' | 'flex' | 'priority' | 'batch'
   reasoning_effort?: string | null
   id: string
   user_id: string
@@ -1015,6 +1016,80 @@ function buildDefaultAuthenticatedFixture(
 }
 
 describe('POST /api/chat', () => {
+  it.each([
+    ['standard', 'flex', 'standard'],
+    ['flex', 'standard', 'flex'],
+    [undefined, 'flex', 'flex'],
+    [undefined, 'priority', 'priority'],
+  ] as const)(
+    'freezes OpenAI model tier %s with legacy default %s',
+    async (serviceTier, legacyTier, expected) => {
+      const fixture = buildDefaultAuthenticatedFixture()
+      Object.assign(fixture.apiKeys[0], {
+        provider: 'openai',
+        model_preference: 'gpt-6-luna',
+        service_tier: legacyTier,
+      })
+      const supabase = createSupabaseMock(fixture)
+      const response = await POST(
+        new Request('http://localhost/api/chat', {
+          method: 'POST',
+          body: JSON.stringify({
+            chatId: 'chat-1',
+            apiKeyId: 'api-key-1',
+            userMessage: 'Hello',
+            serviceTier,
+          }),
+        }),
+      )
+      expect(response.status).toBe(202)
+      fixture.apiKeys[0].service_tier = 'standard'
+      expect(supabase.chatJobs[0].payload).toMatchObject({
+        serviceTier: expected,
+        modelName: 'gpt-6-luna',
+      })
+    },
+  )
+
+  it('uses stored OpenAI model tiers independently on the same key', async () => {
+    const fixture = buildDefaultAuthenticatedFixture()
+    Object.assign(fixture.apiKeys[0], {
+      provider: 'openai',
+      model_preference: 'gpt-6-luna',
+      service_tier: 'flex',
+    })
+    fixture.chats[0].model_config = {
+      serviceTiers: { 'openai:gpt-6-luna': 'standard', 'openai:gpt-6-sol': 'flex' },
+    }
+    const supabase = createSupabaseMock(fixture)
+    const response = await POST(
+      new Request('http://localhost/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({ chatId: 'chat-1', apiKeyId: 'api-key-1', userMessage: 'Hello' }),
+      }),
+    )
+    expect(response.status).toBe(202)
+    expect(supabase.chatJobs[0].payload).toMatchObject({ serviceTier: 'standard' })
+  })
+
+  it('rejects unsupported OpenAI Flex before creating a job', async () => {
+    const fixture = buildDefaultAuthenticatedFixture()
+    Object.assign(fixture.apiKeys[0], { provider: 'openai', model_preference: 'gpt-4.1' })
+    const supabase = createSupabaseMock(fixture)
+    const response = await POST(
+      new Request('http://localhost/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          chatId: 'chat-1',
+          apiKeyId: 'api-key-1',
+          userMessage: 'Hello',
+          serviceTier: 'flex',
+        }),
+      }),
+    )
+    expect(response.status).toBe(400)
+    expect(supabase.chatJobs).toHaveLength(0)
+  })
   it.each(['standard', 'flex', undefined] as const)(
     'snapshots Google tier %s independently of subsequent config changes',
     async (serviceTier) => {

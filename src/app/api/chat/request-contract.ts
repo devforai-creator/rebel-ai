@@ -1,6 +1,6 @@
 import { isReasoningPreference, type ReasoningPreference } from '@/lib/llm/reasoning'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
-import { isGoogleServiceTier, type GoogleServiceTier } from '@/lib/llm/service-tier'
+import { isModelServiceTier, type ModelServiceTier } from '@/lib/llm/service-tier'
 import { CHAT_REQUEST_LIMITS } from '@/lib/chat/runtime-limits'
 import { z } from 'zod'
 import { createErrorResponse } from './responses'
@@ -28,7 +28,7 @@ export interface ParsedChatRequest {
   apiKeyId: string
   modelName: string | null
   reasoningEffort?: ReasoningPreference
-  serviceTier?: GoogleServiceTier
+  serviceTier?: ModelServiceTier
   rawDeliveryMode: unknown
   isRegeneration: boolean
   regenerateAssistantMessageId: string | null
@@ -103,7 +103,7 @@ export async function parseChatRequest({ req }: { req: Request }): Promise<Parse
     return { status: 'error', response: createErrorResponse('Invalid reasoningEffort', 400) }
   }
   const reasoningEffort = rawReasoningEffort
-  if (rawServiceTier !== undefined && !isGoogleServiceTier(rawServiceTier)) {
+  if (rawServiceTier !== undefined && !isModelServiceTier(rawServiceTier)) {
     return { status: 'error', response: createErrorResponse('Invalid serviceTier', 400) }
   }
   const serviceTier = rawServiceTier

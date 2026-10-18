@@ -427,6 +427,7 @@ export async function requestProviderStage({
     reasoning.effort ?? getReasoningControl(provider, modelName)?.defaultLevel ?? null
   const providerOptions = getProviderOptions(provider, {
     ...(provider === 'google' ? { serviceTier: payload.serviceTier ?? 'standard' } : {}),
+    ...(provider === 'openai' ? { serviceTier: apiKeyData.service_tier ?? 'standard' } : {}),
     modelName,
     promptCacheKey: promptCache?.key,
     promptCacheRetention: promptCache?.retention,
@@ -435,6 +436,9 @@ export async function requestProviderStage({
   })
   if (provider === 'google') {
     debugMetrics['google_requested_service_tier'] = payload.serviceTier ?? 'standard'
+  }
+  if (provider === 'openai') {
+    debugMetrics['openai_requested_service_tier'] = apiKeyData.service_tier ?? 'standard'
   }
   const googleExplicitCache =
     provider === 'google'

@@ -784,7 +784,10 @@ export async function loadChatJobExecutionContext({
   debugMetrics['estimated_static_prompt_tokens'] = estimateTokens(staticSystemPrompt)
 
   return {
-    apiKeyData,
+    apiKeyData:
+      provider === 'openai' && payload.serviceTier
+        ? { ...apiKeyData, service_tier: payload.serviceTier }
+        : apiKeyData,
     decryptedApiKey,
     requestContext,
     generationTranscript,

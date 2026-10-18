@@ -1,8 +1,9 @@
 import { findModelDefinition, getModelFeatures } from '@/lib/models'
-import type { LlmProvider } from '@/types/database.types'
+import type { ApiServiceTier, LlmProvider } from '@/types/database.types'
 
-export type GoogleServiceTier = 'standard' | 'flex'
-export type ChatServiceTierPreferences = Record<string, GoogleServiceTier>
+export type ModelServiceTier = 'standard' | 'flex'
+export type GoogleServiceTier = ModelServiceTier
+export type ChatServiceTierPreferences = Record<string, ModelServiceTier>
 
 export function isGoogleServiceTier(value: unknown): value is GoogleServiceTier {
   return value === 'standard' || value === 'flex'
@@ -10,6 +11,38 @@ export function isGoogleServiceTier(value: unknown): value is GoogleServiceTier 
 
 export function supportsGoogleFlex(provider: LlmProvider, modelName: string): boolean {
   return provider === 'google' && getModelFeatures({ provider, modelName })?.flex === true
+}
+
+export const isModelServiceTier = isGoogleServiceTier
+
+export function supportsModelFlex(provider: LlmProvider, modelName: string): boolean {
+  return (
+    (provider === 'openai' || provider === 'google') &&
+    getModelFeatures({ provider, modelName })?.flex === true
+  )
+}
+
+export function supportsModelServiceTier(
+  provider: LlmProvider,
+  modelName: string,
+  tier: ModelServiceTier,
+): boolean {
+  if (tier === 'flex') return supportsModelFlex(provider, modelName)
+  return provider === 'openai' || provider === 'google'
+}
+
+export function resolveModelServiceTier({
+  provider,
+  preference,
+  legacyTier,
+}: {
+  provider: LlmProvider
+  preference?: ModelServiceTier
+  legacyTier?: ApiServiceTier | null
+}): ApiServiceTier | undefined {
+  if (provider === 'google') return preference ?? 'standard'
+  if (provider === 'openai') return preference ?? legacyTier ?? 'standard'
+  return undefined
 }
 
 export function getServiceTierModelKey(provider: LlmProvider, modelName: string): string {
@@ -20,10 +53,13 @@ export function normalizeServiceTierPreferences(input: unknown): ChatServiceTier
   if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
   const preferences: ChatServiceTierPreferences = {}
   for (const [key, value] of Object.entries(input)) {
-    if (!key.startsWith('google:') || !isGoogleServiceTier(value)) continue
-    const modelName = key.slice('google:'.length)
-    if (!supportsGoogleFlex('google', modelName)) continue
-    preferences[getServiceTierModelKey('google', modelName)] = value
+    const [provider, ...modelParts] = key.split(':')
+    if ((provider !== 'google' && provider !== 'openai') || !isModelServiceTier(value)) continue
+    const modelName = modelParts.join(':')
+    if (!findModelDefinition({ provider, modelName })) continue
+    if (provider === 'google' && !supportsGoogleFlex(provider, modelName)) continue
+    if (!supportsModelServiceTier(provider, modelName, value)) continue
+    preferences[getServiceTierModelKey(provider, modelName)] = value
   }
   return preferences
 }

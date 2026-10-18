@@ -733,10 +733,11 @@ describe('Model Registry', () => {
       })
     })
 
-    it('appears after GPT-6 Sol while keeping GPT-5.5 as the provider default', () => {
+    it('appears after GPT-6 Luna while keeping GPT-5.5 as the provider default', () => {
       const ids = listUiModelIdsByProvider('openai')
 
-      expect(ids.indexOf('gpt-5.6')).toBe(ids.indexOf('gpt-6-sol') + 1)
+      expect(ids.indexOf('gpt-6-luna')).toBe(ids.indexOf('gpt-6-sol') + 1)
+      expect(ids.indexOf('gpt-5.6')).toBe(ids.indexOf('gpt-6-luna') + 1)
       expect(getDefaultModelForProvider('openai')).toBe('gpt-5.5')
     })
   })

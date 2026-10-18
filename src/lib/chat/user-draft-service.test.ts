@@ -40,6 +40,7 @@ function setup(
     keyOwner?: string
     provider?: string
     modelName?: string
+    legacyTier?: 'standard' | 'flex' | 'priority'
     modelConfig?: unknown
     personaId?: string | null
     missingCharacter?: boolean
@@ -95,7 +96,7 @@ function setup(
             is_active: true,
             provider: options.provider ?? 'openai',
             model_preference: options.modelName ?? 'gpt-5.4',
-            service_tier: 'standard',
+            service_tier: options.legacyTier ?? 'standard',
             vault_secret_name: 'vault-1',
           },
         ],
@@ -143,6 +144,49 @@ beforeEach(() => {
 })
 
 describe('generateUserDraft', () => {
+  it.each([
+    ['flex', 'standard', 'standard'],
+    ['standard', 'flex', 'flex'],
+    ['flex', undefined, 'flex'],
+    ['priority', undefined, 'priority'],
+  ] as const)(
+    'applies dedicated OpenAI tier %s / %s independently of reply options',
+    async (legacyTier, serviceTier, expected) => {
+      const { args } = setup({
+        modelName: 'gpt-6-luna',
+        legacyTier,
+        draftModelConfig: {
+          apiKeyId: 'key-1',
+          modelName: 'gpt-6-luna',
+          reasoningEffort: 'low',
+          serviceTier,
+        },
+        modelConfig: {
+          serviceTiers: { 'openai:gpt-6-luna': expected === 'flex' ? 'standard' : 'flex' },
+        },
+      })
+      await generateUserDraft({
+        ...args,
+        request: { ...args.request, serviceTier: expected === 'flex' ? 'standard' : 'flex' },
+      })
+      expect(mocks.model.mock.calls[0][0].config.serviceTier).toBe(expected)
+      expect(mocks.generate.mock.calls[0][0].providerOptions.openai).toMatchObject({
+        serviceTier: expected === 'standard' ? 'default' : expected,
+        reasoningEffort: 'low',
+      })
+    },
+  )
+
+  it('inherits the reply model tier when the draft setting stays at its default', async () => {
+    const { args } = setup({
+      modelName: 'gpt-6-luna',
+      legacyTier: 'flex',
+      modelConfig: { serviceTiers: { 'openai:gpt-6-luna': 'standard' } },
+    })
+    await generateUserDraft(args)
+    expect(mocks.model.mock.calls[0][0].config.serviceTier).toBe('standard')
+  })
+
   it('uses the account draft model, reasoning and tier instead of the chat selection', async () => {
     const { args, client } = setup({
       draftModelConfig: {
@@ -386,7 +430,7 @@ describe('generateUserDraft', () => {
   })
 
   it('rejects incompatible service tier settings', async () => {
-    const { args } = setup()
+    const { args } = setup({ modelName: 'gpt-4.1' })
     await expect(
       generateUserDraft({
         ...args,

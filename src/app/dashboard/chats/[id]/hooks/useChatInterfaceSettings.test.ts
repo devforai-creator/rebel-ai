@@ -62,6 +62,29 @@ beforeEach(() => {
 })
 
 describe('resolveInitialChatSettings', () => {
+  it('keeps OpenAI model tiers independent and can return to legacy key defaults', async () => {
+    mocks.updateChatModelConfig.mockResolvedValue({ success: true })
+    const selection = { apiKeyId: 'key-1', modelName: 'gpt-6-luna' }
+    const other = { apiKeyId: 'key-1', modelName: 'gpt-6-sol' }
+    const { result } = renderHook(() =>
+      useChatInterfaceSettings({ chatId: 'chat-1', apiKeys: [...apiKeys], isDeveloper: false }),
+    )
+    expect(result.current.resolveModelServiceTier(selection)).toBeUndefined()
+    act(() => result.current.handleSelectServiceTier(selection, 'standard'))
+    await waitFor(() => expect(mocks.updateChatModelConfig).toHaveBeenCalledTimes(1))
+    expect(result.current.resolveModelServiceTier(selection)).toBe('standard')
+    expect(result.current.resolveModelServiceTier(other)).toBeUndefined()
+    act(() => result.current.handleSelectServiceTier(other, 'flex'))
+    await waitFor(() => expect(mocks.updateChatModelConfig).toHaveBeenCalledTimes(2))
+    act(() => result.current.handleSelectServiceTier(selection, 'default'))
+    await waitFor(() => expect(mocks.updateChatModelConfig).toHaveBeenCalledTimes(3))
+    expect(result.current.resolveModelServiceTier(selection)).toBeUndefined()
+    expect(mocks.updateChatModelConfig).toHaveBeenLastCalledWith(
+      'chat-1',
+      expect.objectContaining({ serviceTiers: { 'openai:gpt-6-sol': 'flex' } }),
+    )
+  })
+
   it('remembers tiers per model on the same key and rolls back failed saves', async () => {
     const selection = { apiKeyId: 'key-3', modelName: 'gemini-4-argon' }
     const other = { apiKeyId: 'key-3', modelName: 'gemini-3.8-flash' }

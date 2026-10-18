@@ -11,21 +11,6 @@ import { MAX_API_KEY_LENGTH, PROVIDER_OPTIONS, PROVIDER_RULES } from './provider
 
 type ProviderValue = (typeof PROVIDER_OPTIONS)[number]['value']
 
-const OPENAI_SERVICE_TIER_OPTIONS = [
-  {
-    value: 'standard',
-    label: 'Standard (Default)',
-    description: 'Normal processing speed and SLA',
-  },
-  {
-    value: 'flex',
-    label: 'Flex (50% discount)',
-    description: 'Slower responses and occasional 429 errors',
-  },
-] as const
-
-type ServiceTierValue = (typeof OPENAI_SERVICE_TIER_OPTIONS)[number]['value']
-
 const INITIAL_FORM_STATE: ApiKeyFormState = {
   error: null,
   success: false,
@@ -36,7 +21,6 @@ const INITIAL_FORM_STATE: ApiKeyFormState = {
 
 export default function AddApiKeyForm() {
   const [provider, setProvider] = useState<ProviderValue>('google')
-  const [serviceTier, setServiceTier] = useState<ServiceTierValue>('standard')
   const [isGuideOpen, setIsGuideOpen] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [formState, formAction] = useActionState<ApiKeyFormState, FormData>(
@@ -59,16 +43,9 @@ export default function AddApiKeyForm() {
     setShowSuccess(true)
     formRef.current?.reset()
     setProvider('google')
-    setServiceTier('standard')
     const timeout = setTimeout(() => setShowSuccess(false), 3000)
     return () => clearTimeout(timeout)
   }, [formState.error, formState.success])
-
-  useEffect(() => {
-    if (provider !== 'openai') {
-      setServiceTier('standard')
-    }
-  }, [provider])
 
   return (
     <>
@@ -194,33 +171,10 @@ export default function AddApiKeyForm() {
             </p>
           </div>
 
-          {provider !== 'openai' && <input type="hidden" name="service_tier" value="standard" />}
-
-          {provider === 'openai' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                OpenAI Service Tier
-              </label>
-              <select
-                name="service_tier"
-                value={serviceTier}
-                onChange={(event) => setServiceTier(event.target.value as ServiceTierValue)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                {OPENAI_SERVICE_TIER_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Flex is 50% cheaper but may be slower and occasionally return 429 errors.
-              </p>
-            </div>
-          )}
-
+          <input type="hidden" name="service_tier" value="standard" />
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            추론 수준은 채팅방의 모델 옵션에서 설정할 수 있습니다.
+            추론 강도와 서비스 티어는 채팅방의 모델 옵션에서, 대필은 대시보드 설정에서 변경할 수
+            있습니다.
           </p>
 
           {/* 제출 버튼 */}

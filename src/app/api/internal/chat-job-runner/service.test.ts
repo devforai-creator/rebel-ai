@@ -2362,6 +2362,7 @@ describe('processChatJobs', () => {
       openai: {
         textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
         promptCacheKey: 'chat:chat-1',
+        serviceTier: 'default',
       },
     })
   })

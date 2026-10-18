@@ -86,6 +86,7 @@ export default function ApiKeyList({ apiKeys }: Props) {
                 )}
                 {key.provider === 'openai' && key.service_tier && (
                   <span className="px-2 py-1 text-xs font-medium rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300">
+                    기존 기본값:{' '}
                     {key.service_tier === 'standard'
                       ? 'Standard'
                       : key.service_tier.charAt(0).toUpperCase() + key.service_tier.slice(1)}

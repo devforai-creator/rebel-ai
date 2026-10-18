@@ -2,7 +2,7 @@ import type { ModelPricingTier, ModelPricingRateSet } from '../types'
 import { defineProviderCatalog, flatPricing } from './helpers'
 
 // Official model pages: >272K charges the entire request at long-context rates.
-// Fast/Priority is 2x Standard for the Sol models below; older models need their own rates.
+// Fast/Priority is 2x Standard for the GPT-6 and 5.6 models below; older models need their own rates.
 function longContextPricing(rates: ModelPricingRateSet, solPriority = false): ModelPricingTier[] {
   const longRates = {
     input: rates.input * 2,
@@ -38,6 +38,11 @@ const OPENAI_GPT6_SOL_PRICING = longContextPricing(
   { input: 2, output: 10, cachedInput: 0.2, cacheWrite: 2.5, reasoning: 10 },
   true,
 )
+// https://developers.openai.com/api/docs/models/gpt-6-luna
+const OPENAI_GPT6_LUNA_PRICING = longContextPricing(
+  { input: 0.1, output: 0.5, cachedInput: 0.01, cacheWrite: 0.125, reasoning: 0.5 },
+  true,
+)
 // https://developers.openai.com/api/docs/models/gpt-5.6-sol (promotional rates through at least 2026-11-21)
 const OPENAI_GPT56_PRICING = longContextPricing(
   { input: 4, output: 20, cachedInput: 0.4, cacheWrite: 5, reasoning: 20 },
@@ -57,6 +62,7 @@ export const openAIModelCatalog = defineProviderCatalog({
       matches: { prefixes: ['gpt-6.1-sol-'] },
       pricing: OPENAI_GPT61_SOL_PRICING,
       features: {
+        flex: true,
         promptCaching: 'standard',
         reasoning: true,
         reasoningControl: {
@@ -76,6 +82,26 @@ export const openAIModelCatalog = defineProviderCatalog({
       matches: { prefixes: ['gpt-6-sol-'] },
       pricing: OPENAI_GPT6_SOL_PRICING,
       features: {
+        flex: true,
+        promptCaching: 'standard',
+        reasoning: true,
+        reasoningControl: {
+          levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+          defaultLevel: 'medium',
+        },
+        openai: {
+          promptCacheMode: 'explicit',
+          promptCacheRetention: 'omit',
+        },
+      },
+    },
+    {
+      id: 'gpt-6-luna',
+      displayName: 'GPT-6 Luna',
+      matches: { prefixes: ['gpt-6-luna-'] },
+      pricing: OPENAI_GPT6_LUNA_PRICING,
+      features: {
+        flex: true,
         promptCaching: 'standard',
         reasoning: true,
         reasoningControl: {
@@ -95,6 +121,7 @@ export const openAIModelCatalog = defineProviderCatalog({
       matches: { prefixes: ['gpt-5.6-'] },
       pricing: OPENAI_GPT56_PRICING,
       features: {
+        flex: true,
         promptCaching: 'standard',
         reasoning: true,
         reasoningControl: {
@@ -113,6 +140,7 @@ export const openAIModelCatalog = defineProviderCatalog({
       displayName: 'GPT-5.5',
       pricing: longContextPricing({ input: 5, output: 30, cachedInput: 0.5, reasoning: 30 }),
       features: {
+        flex: true,
         promptCaching: 'extended',
         reasoning: true,
         reasoningControl: {
@@ -126,6 +154,7 @@ export const openAIModelCatalog = defineProviderCatalog({
       displayName: 'GPT-5.4',
       pricing: longContextPricing({ input: 2.5, output: 15, cachedInput: 0.25, reasoning: 15 }),
       features: {
+        flex: true,
         promptCaching: 'extended',
         reasoning: true,
         reasoningControl: {
@@ -139,6 +168,7 @@ export const openAIModelCatalog = defineProviderCatalog({
       displayName: 'GPT-5.2',
       pricing: flatPricing({ input: 1.75, output: 14, cachedInput: 0.175, reasoning: 14 }),
       features: {
+        flex: true,
         promptCaching: 'extended',
         reasoning: true,
         reasoningControl: {
@@ -152,6 +182,7 @@ export const openAIModelCatalog = defineProviderCatalog({
       displayName: 'GPT-5.1',
       pricing: flatPricing({ input: 1.25, output: 10, cachedInput: 0.125, reasoning: 10 }),
       features: {
+        flex: true,
         promptCaching: 'extended',
         reasoning: true,
         reasoningControl: { levels: ['none', 'low', 'medium', 'high'], defaultLevel: 'none' },
@@ -162,6 +193,7 @@ export const openAIModelCatalog = defineProviderCatalog({
       displayName: 'GPT-5',
       pricing: flatPricing({ input: 1.25, output: 10, cachedInput: 0.125, reasoning: 10 }),
       features: {
+        flex: true,
         promptCaching: 'extended',
         reasoning: true,
         reasoningControl: { levels: ['minimal', 'low', 'medium', 'high'], defaultLevel: 'medium' },

@@ -1,5 +1,5 @@
 import type { ReasoningSnapshot } from './reasoning'
-import type { GoogleServiceTier } from './service-tier'
+import type { ApiServiceTier } from '@/types/database.types'
 import type { JSONValue, SharedV2ProviderOptions } from '@ai-sdk/provider'
 import { ANTHROPIC_CACHE_MIN_TOKENS, getModelFeatures } from '@/lib/models'
 
@@ -11,7 +11,7 @@ export const ANTHROPIC_INTERLEAVED_THINKING_BETA = 'interleaved-thinking-2025-05
 export const DEFAULT_OPENAI_TEXT_VERBOSITY = 'high'
 
 type ProviderOptionsInput = {
-  serviceTier?: GoogleServiceTier
+  serviceTier?: ApiServiceTier
   modelName?: string | null
   promptCacheKey?: string | null
   promptCacheRetention?: '24h' | 'in_memory'
@@ -54,6 +54,9 @@ export function getProviderOptions(
     })?.openai
     const openaiOptions: Record<string, JSONValue> = {
       textVerbosity: DEFAULT_OPENAI_TEXT_VERBOSITY,
+      ...(overrides?.serviceTier && overrides.serviceTier !== 'batch'
+        ? { serviceTier: overrides.serviceTier === 'standard' ? 'default' : overrides.serviceTier }
+        : {}),
     }
 
     if (overrides?.promptCacheKey) {

@@ -7,7 +7,7 @@ import {
   REASONING_LABELS,
   type ReasoningPreference,
 } from '@/lib/llm/reasoning'
-import { supportsGoogleFlex, type GoogleServiceTier } from '@/lib/llm/service-tier'
+import { supportsModelFlex, type ModelServiceTier } from '@/lib/llm/service-tier'
 import React, { memo, useId, useState } from 'react'
 import Button from '@/app/dashboard/components/Button'
 import { formatChatModelOptionLabel } from '../../api-key-options'
@@ -27,8 +27,8 @@ import {
 } from '../utils'
 
 interface TokenStatsPanelProps {
-  resolveModelServiceTier?: (selection: LlmModelSelection) => GoogleServiceTier | undefined
-  onSelectServiceTier?: (selection: LlmModelSelection, tier: GoogleServiceTier) => void
+  resolveModelServiceTier?: (selection: LlmModelSelection) => ModelServiceTier | undefined
+  onSelectServiceTier?: (selection: LlmModelSelection, tier: ModelServiceTier | 'default') => void
   apiKeys: ApiKeyOption[]
   selectedApiKeyId: string
   selectedModelName: string
@@ -122,7 +122,12 @@ export const TokenStatsPanel = memo(function TokenStatsPanel({
                   {formatChatModelOptionLabel(option, {
                     extraProviderDetail:
                       option.credential.provider === 'openai'
-                        ? formatServiceTierLabel(option.credential.service_tier)
+                        ? formatServiceTierLabel(
+                            resolveModelServiceTier?.({
+                              apiKeyId: option.credential.id,
+                              modelName: option.modelName,
+                            }) ?? option.credential.service_tier,
+                          )
                         : null,
                   })}
                 </option>
@@ -595,7 +600,8 @@ function ServiceTierSelect({
   const credential = apiKeys.find((key) => key.id === selection.apiKeyId)
   if (
     !credential ||
-    !supportsGoogleFlex(credential.provider, selection.modelName) ||
+    (credential.provider !== 'openai' &&
+      !supportsModelFlex(credential.provider, selection.modelName)) ||
     !onSelectServiceTier
   )
     return null
@@ -603,17 +609,27 @@ function ServiceTierSelect({
     <label className="flex min-w-0 flex-col gap-1 text-xs text-gray-600 dark:text-gray-300">
       {label}
       <select
-        value={resolveModelServiceTier?.(selection) ?? 'standard'}
+        value={
+          resolveModelServiceTier?.(selection) ??
+          (credential.provider === 'openai' ? 'default' : 'standard')
+        }
         onChange={(event) =>
-          onSelectServiceTier(selection, event.target.value as GoogleServiceTier)
+          onSelectServiceTier(selection, event.target.value as ModelServiceTier | 'default')
         }
         className="w-full min-w-0 rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
       >
+        {credential.provider === 'openai' && (
+          <option value="default">
+            기존 키 설정 ({formatServiceTierLabel(credential.service_tier)})
+          </option>
+        )}
         <option value="standard">Standard (기본 요금)</option>
-        <option value="flex">Flex (요금 50% · 느릴 수 있음)</option>
+        {supportsModelFlex(credential.provider, selection.modelName) && (
+          <option value="flex">Flex (요금 50% · 느릴 수 있음)</option>
+        )}
       </select>
       <span className="text-xs text-gray-500 dark:text-gray-400">
-        Flex는 최대 12분 대기하며 혼잡하면 실패할 수 있습니다. 실패해도 Standard로 자동 전환하지
+        모델별로 저장됩니다. Flex는 느리거나 혼잡 시 실패할 수 있으며, Standard로 자동 전환하지
         않습니다.
       </span>
     </label>

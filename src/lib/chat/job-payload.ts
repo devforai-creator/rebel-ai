@@ -4,13 +4,9 @@ import {
   type ReasoningSnapshot,
 } from '@/lib/llm/reasoning'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
-import {
-  isGoogleServiceTier,
-  supportsGoogleFlex,
-  type GoogleServiceTier,
-} from '@/lib/llm/service-tier'
+import { isGoogleServiceTier, supportsGoogleFlex } from '@/lib/llm/service-tier'
 import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
-import type { Json, LlmProvider } from '@/types/database.types'
+import type { ApiServiceTier, Json, LlmProvider } from '@/types/database.types'
 import {
   CHAT_DELIVERY_MODE_STREAMING,
   isChatDeliveryMode,
@@ -31,7 +27,7 @@ export interface ChatGenerationJobPayload {
   provider: LlmProvider
   modelName: string
   reasoning?: ReasoningSnapshot
-  serviceTier?: GoogleServiceTier
+  serviceTier?: ApiServiceTier
   deliveryMode: ChatDeliveryMode
   sanitizedMessages: SanitizedMessage[]
   isRegeneration: boolean
@@ -104,11 +100,18 @@ export function parseChatJobPayload(payload: unknown): ChatGenerationJobPayload 
   }
 
   let reasoning: ReasoningSnapshot | undefined
+  // Internal snapshots also retain inherited legacy OpenAI priority/batch settings.
+  // Public requests accept only Standard/Flex and validate model support before enqueueing.
   if (
     payload.serviceTier !== undefined &&
-    (!isGoogleServiceTier(payload.serviceTier) ||
-      payload.provider !== 'google' ||
-      (payload.serviceTier === 'flex' && !supportsGoogleFlex(payload.provider, payload.modelName)))
+    !(
+      (payload.provider === 'openai' &&
+        typeof payload.serviceTier === 'string' &&
+        ['standard', 'flex', 'priority', 'batch'].includes(payload.serviceTier)) ||
+      (payload.provider === 'google' &&
+        isGoogleServiceTier(payload.serviceTier) &&
+        (payload.serviceTier !== 'flex' || supportsGoogleFlex(payload.provider, payload.modelName)))
+    )
   ) {
     return null
   }
@@ -142,7 +145,7 @@ export function parseChatJobPayload(payload: unknown): ChatGenerationJobPayload 
     provider: payload.provider,
     modelName: payload.modelName,
     ...(reasoning ? { reasoning } : {}),
-    ...(payload.serviceTier ? { serviceTier: payload.serviceTier as GoogleServiceTier } : {}),
+    ...(payload.serviceTier ? { serviceTier: payload.serviceTier as ApiServiceTier } : {}),
     deliveryMode: isChatDeliveryMode(payload.deliveryMode)
       ? payload.deliveryMode
       : CHAT_DELIVERY_MODE_STREAMING,

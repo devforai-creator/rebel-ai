@@ -15,7 +15,7 @@ import {
   REASONING_LABELS,
   type ReasoningPreference,
 } from '@/lib/llm/reasoning'
-import { supportsGoogleFlex, type GoogleServiceTier } from '@/lib/llm/service-tier'
+import { supportsModelFlex, type ModelServiceTier } from '@/lib/llm/service-tier'
 import type { UserDraftModelConfig } from '@/lib/chat/user-draft-model-config'
 import type { SelectableLlmApiKey } from './options'
 import { resolveActionStateFeedback } from './useActionStateFeedback'
@@ -44,7 +44,7 @@ export default function UserDraftModelSettingsForm({
   const [reasoning, setReasoning] = useState<ReasoningPreference>(
     initialConfig?.reasoningEffort ?? 'default',
   )
-  const [tier, setTier] = useState<GoogleServiceTier>(initialConfig?.serviceTier ?? 'standard')
+  const [tier, setTier] = useState<ModelServiceTier | ''>(initialConfig?.serviceTier ?? '')
   const [state, formAction, pending] = useActionState(updateUserDraftModelSettings, INITIAL_STATE)
   const [editedSinceSave, setEditedSinceSave] = useState(false)
   const feedback = resolveActionStateFeedback(state, {
@@ -58,8 +58,11 @@ export default function UserDraftModelSettingsForm({
     ? getReasoningControl(selected.credential.provider, selected.modelName)
     : null
   const supportsFlex = selected
-    ? supportsGoogleFlex(selected.credential.provider, selected.modelName)
+    ? supportsModelFlex(selected.credential.provider, selected.modelName)
     : false
+
+  const supportsTier = selected?.credential.provider === 'openai' || supportsFlex
+  const displayedTier = tier || (selected?.credential.provider === 'google' ? 'standard' : '')
 
   return (
     <form
@@ -85,7 +88,7 @@ export default function UserDraftModelSettingsForm({
             onChange={(event) => {
               setSelection(event.target.value ? parseLlmModelSelection(event.target.value) : null)
               setReasoning('default')
-              setTier('standard')
+              setTier('')
               clearFeedback()
             }}
           >
@@ -109,7 +112,7 @@ export default function UserDraftModelSettingsForm({
               : '각 채팅에서 선택한 주 모델과 추론 강도·서비스 티어를 그대로 사용합니다.'}
           </p>
         </div>
-        {selected && (reasoningControl || supportsFlex) && (
+        {selected && (reasoningControl || supportsTier) && (
           <div className="grid gap-4 sm:grid-cols-2">
             {reasoningControl && (
               <div className="space-y-2">
@@ -135,7 +138,7 @@ export default function UserDraftModelSettingsForm({
                 </select>
               </div>
             )}
-            {supportsFlex && (
+            {supportsTier && (
               <div className="space-y-2">
                 <label htmlFor="user-draft-tier" className={LABEL_CLASS}>
                   대필 서비스 티어
@@ -144,14 +147,19 @@ export default function UserDraftModelSettingsForm({
                   id="user-draft-tier"
                   name="user_draft_service_tier"
                   className={SELECT_CLASS}
-                  value={tier}
+                  value={displayedTier}
                   onChange={(event) => {
-                    setTier(event.target.value as GoogleServiceTier)
+                    setTier(event.target.value as ModelServiceTier | '')
                     clearFeedback()
                   }}
                 >
+                  {selected.credential.provider === 'openai' && (
+                    <option value="">
+                      기존 키 설정 ({selected.credential.service_tier ?? 'standard'})
+                    </option>
+                  )}
                   <option value="standard">Standard</option>
-                  <option value="flex">Flex</option>
+                  {supportsFlex && <option value="flex">Flex</option>}
                 </select>
                 {tier === 'flex' && (
                   <p className="text-xs text-gray-500 dark:text-gray-400">

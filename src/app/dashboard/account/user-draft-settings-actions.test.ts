@@ -50,6 +50,25 @@ function setup({ owner = 'user-1', active = true, provider = 'google', signedIn 
 }
 beforeEach(() => vi.clearAllMocks())
 describe('updateUserDraftModelSettings', () => {
+  it.each(['standard', 'flex', ''] as const)(
+    'saves or clears a dedicated OpenAI tier (%s) without changing the key',
+    async (tier) => {
+      const db = setup({ provider: 'openai' })
+      const before = JSON.stringify(db.state.apiKeys)
+      const result = await updateUserDraftModelSettings(
+        initialState,
+        form({ ...googleForm, user_draft_model_name: 'gpt-6-luna', user_draft_service_tier: tier }),
+      )
+      expect(result.success).toBe(true)
+      expect((db.state.profiles as Record<string, unknown>[])[0].user_draft_model_config).toEqual({
+        apiKeyId: 'key-1',
+        modelName: 'gpt-6-luna',
+        reasoningEffort: 'low',
+        ...(tier ? { serviceTier: tier } : {}),
+      })
+      expect(JSON.stringify(db.state.apiKeys)).toBe(before)
+    },
+  )
   it('saves independent cloud settings on only the authenticated profile', async () => {
     const db = setup()
     expect(await updateUserDraftModelSettings(initialState, form(googleForm))).toEqual({

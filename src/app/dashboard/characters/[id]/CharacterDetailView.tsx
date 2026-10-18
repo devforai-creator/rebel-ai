@@ -8,6 +8,7 @@ import Button, { buttonClassName } from '@/app/dashboard/components/Button'
 import ConfirmDialog from '@/app/dashboard/components/ConfirmDialog'
 import EmptyState from '@/app/dashboard/components/EmptyState'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
+import LocalTimestamp from '@/app/dashboard/components/LocalTimestamp'
 import CharacterForm from '../CharacterForm'
 import ChatImportModal from './ChatImportModal'
 import ChatHistoryItem from './ChatHistoryItem'
@@ -115,7 +116,7 @@ export default function CharacterDetailView({
           <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1 mb-4">
             <div className="flex justify-between">
               <span>Created:</span>
-              <span>{new Date(character.created_at).toLocaleDateString('en-US')}</span>
+              <LocalTimestamp timestamp={character.created_at} dateOnly />
             </div>
             <div className="flex justify-between">
               <span>Visibility:</span>

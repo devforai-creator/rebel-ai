@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Check, Pencil, Star, X } from 'lucide-react'
 import Button from '@/app/dashboard/components/Button'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
+import LocalTimestamp from '@/app/dashboard/components/LocalTimestamp'
 import { CHAT_TITLE_MAX_LENGTH, chatTitleSchema } from '@/lib/chat/chat-list-contract'
 import type { CharacterChat } from './character-detail-types'
 
@@ -92,7 +93,7 @@ export default function ChatHistoryItem({
           )}
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
             {chat.last_message_at === null ? 'Created: ' : 'Last message: '}
-            {new Date(chat.recency_at).toLocaleString('en-US')}
+            <LocalTimestamp timestamp={chat.recency_at} />
           </p>
         </Link>
         <button

@@ -30,6 +30,18 @@ Do not run `supabase db push --linked` before:
 2. `npm run db:schema`
 3. relevant tests and typechecks
 
+Every new `public` table must declare its Data API grants in the same migration
+as `CREATE TABLE`, RLS enablement, and policies. Grant only the operations needed
+by `anon`, `authenticated`, and `service_role`; server-side supabase-js also needs
+table grants. Grant sequence privileges explicitly when required. For a table
+that must never be exposed through the Data API, explicitly revoke all table
+privileges from `public`, `anon`, `authenticated`, and `service_role` instead.
+Do not restore automatic default grants or grant access to all public tables.
+Keep applied migration history unchanged; backfill grants in a new migration.
+Update `supabase/tests/data_api_grants.test.sql.in` for new tables and run
+`npm run test:db:grants` in addition to the DB integration tests. The unit suite checks
+that new table migrations contain an explicit access decision.
+
 ## Commit & Pull Request Guidelines
 
 Recent history favors short imperative commit subjects such as `Fix ...`, `Switch ...`, and `Revert ...`; an occasional conventional prefix like `fix:` is also acceptable. Keep commits focused and mention migration or environment-variable impact when needed. PRs should include a summary, linked issue if applicable, test evidence, and screenshots or GIFs for dashboard/UI changes. Call out any required updates to `.env.local`, Vercel settings, or Supabase configuration.

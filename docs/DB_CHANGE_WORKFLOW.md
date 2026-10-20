@@ -20,6 +20,58 @@ Use this document when you:
 npm run db:schema
 ```
 
+## Explicit Data API Grants
+
+Supabase no longer automatically grants Data API access to new `public` tables
+(all existing projects switch on October 30, 2026). Existing object grants stay
+intact, but fresh projects, preview branches, and local resets recreate tables.
+RLS policies do not replace table privileges, and `service_role` bypasses RLS
+but still needs table privileges when using supabase-js/PostgREST.
+
+For every new table, include these access decisions in its creation migration:
+
+1. Enable RLS and define the required ownership/visibility policies.
+2. Explicitly grant each API role only its required operations. Anonymous access
+   is optional; internal tables should normally grant only to `service_role`.
+3. Grant privileges on any required serial/identity sequences separately.
+
+For example, for an owner-scoped table used by signed-in users and the server:
+
+```sql
+alter table public.your_table enable row level security;
+
+create policy "Users can read their own rows" on public.your_table
+  for select to authenticated
+  using (user_id = (select auth.uid()));
+
+grant select on table public.your_table to authenticated;
+grant select, insert, update, delete on table public.your_table to service_role;
+-- If the API role needs a sequence:
+-- grant usage, select on sequence public.your_table_id_seq to service_role;
+```
+
+For an internal table, revoke client access explicitly, then grant the required
+server operations. For a database-only table with no Data API access at all,
+explicitly `revoke all on table public.your_table from public, anon,
+authenticated, service_role` instead of granting an API role access.
+Do not use blanket grants on all public tables or restore the old automatic
+default privileges. Do not rewrite already applied table-creation migrations;
+use a new migration to backfill existing tables instead.
+
+`999001_explicit_data_api_grants.sql` backfills the current table inventory.
+The regular unit suite checks future table-creation migrations for an explicit
+grant (or an explicit database-only revoke) in the same file. Also update the
+role/operation inventory in `supabase/tests/data_api_grants.test.sql.in` when adding
+tables. This transactional test removes existing automatic grants, reapplies
+the backfill, and checks table/sequence permissions and internal-table isolation;
+its changes are rolled back. Future table grants must also be replayed in that
+test after the backfill, so they are tested without inherited automatic grants.
+
+```bash
+npm run test:db:grants
+npm run test:db
+```
+
 ## Normal Workflow
 
 For incremental schema changes, do not edit production directly in Supabase SQL
@@ -56,6 +108,7 @@ npm run db:schema
 ```bash
 npm run typecheck
 npm run test
+npm run test:db:grants
 npm run test:db
 ```
 

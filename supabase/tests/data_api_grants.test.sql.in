@@ -1,0 +1,117 @@
+-- Render psql includes with npm run test:db:grants before running pg_prove.
+begin;
+
+create extension if not exists pgtap with schema extensions;
+set local search_path = public, extensions;
+select plan(6);
+
+create temporary table expected_data_api_grants (
+  table_name text primary key,
+  authenticated_privileges text[] not null,
+  anon_privileges text[] not null default '{}',
+  service_privileges text[] not null default array['select', 'insert', 'update', 'delete']
+);
+
+insert into expected_data_api_grants (table_name, authenticated_privileges) values
+  ('announcements', array['select']),
+  ('anon_rate_limits', '{}'),
+  ('api_keys', array['select', 'insert', 'update', 'delete']),
+  ('character_assets', array['select', 'insert', 'update', 'delete']),
+  ('character_modules', array['select', 'insert', 'update', 'delete']),
+  ('character_presets', array['select', 'insert', 'update', 'delete']),
+  ('characters', array['select', 'insert', 'update', 'delete']),
+  ('charx_import_jobs', array['select', 'insert', 'delete']),
+  ('chat_facts', array['select', 'insert', 'update', 'delete']),
+  ('chat_generation_jobs', array['select', 'insert']),
+  ('chat_rate_limits', '{}'),
+  ('chat_summaries', array['select', 'insert', 'update', 'delete']),
+  ('chat_turns', array['select', 'insert', 'update', 'delete']),
+  ('chat_usage_events', array['select', 'insert']),
+  ('chats', array['select', 'insert', 'update', 'delete']),
+  ('global_variables', array['select', 'insert', 'update', 'delete']),
+  ('local_chat_worker_status', '{}'),
+  ('lorebook_overrides', array['select', 'insert', 'update', 'delete']),
+  ('lorebook_overrides_v2', array['select', 'insert', 'update', 'delete']),
+  ('messages', array['select', 'insert', 'update', 'delete']),
+  ('module_assets', array['select', 'insert', 'update', 'delete']),
+  ('modules', array['select', 'insert', 'update', 'delete']),
+  ('personas', array['select', 'insert', 'update', 'delete']),
+  ('presets', array['select', 'insert', 'update', 'delete']),
+  ('profiles', array['select', 'insert', 'update']),
+  ('risum_import_jobs', array['select', 'insert', 'delete']),
+  ('service_health_status', '{}'),
+  ('user_feedback', array['select', 'insert']),
+  ('vault_secret_audit', '{}');
+
+update expected_data_api_grants set anon_privileges = array['select']
+where table_name = 'characters';
+update expected_data_api_grants set service_privileges = array['select', 'insert', 'update']
+where table_name = 'service_health_status';
+
+create temporary table original_function_acl as
+select oid, proacl from pg_proc where pronamespace = 'public'::regnamespace;
+
+-- Simulate tables/sequences created without Supabase's old automatic grants.
+-- The surrounding transaction restores the local database after the test.
+revoke all on all tables in schema public from public, anon, authenticated, service_role;
+revoke all on all sequences in schema public from public, anon, authenticated, service_role;
+
+select ok(
+  not has_table_privilege('authenticated', 'public.profiles', 'select')
+  and not has_table_privilege('service_role', 'public.messages', 'insert'),
+  'fixture removes automatic grants, including service_role access'
+);
+
+\ir ../migrations/999001_explicit_data_api_grants.sql
+-- Reapplying grants must be harmless on an existing project too.
+\ir ../migrations/999001_explicit_data_api_grants.sql
+
+select set_eq(
+  $$select table_name from expected_data_api_grants$$,
+  $$select tablename::text from pg_tables where schemaname = 'public'$$,
+  'every public table has a reviewed access contract'
+);
+
+select is_empty($check$
+  select expected.table_name, roles.role_name, operations.privilege
+  from expected_data_api_grants expected
+  cross join (values ('anon'), ('authenticated'), ('service_role')) roles(role_name)
+  cross join (values ('select'), ('insert'), ('update'), ('delete'),
+    ('truncate'), ('references'), ('trigger')) operations(privilege)
+  where has_table_privilege(
+    roles.role_name, 'public.' || expected.table_name, operations.privilege
+  ) is distinct from (operations.privilege = any (
+    case roles.role_name
+      when 'anon' then expected.anon_privileges
+      when 'authenticated' then expected.authenticated_privileges
+      else expected.service_privileges
+    end
+  ))
+$check$, 'explicit grants restore required operations and keep internal tables isolated');
+
+select is_empty($check$
+  select relname from pg_class
+  where relnamespace = 'public'::regnamespace and relkind in ('r', 'p')
+    and not relrowsecurity
+$check$, 'all public tables retain RLS');
+
+select is_empty($check$
+  select roles.role_name, operations.privilege
+  from (values ('anon'), ('authenticated'), ('service_role')) roles(role_name)
+  cross join (values ('usage'), ('select'), ('update')) operations(privilege)
+  where has_sequence_privilege(
+    roles.role_name, 'public.messages_sequence_seq', operations.privilege
+  ) is distinct from (
+    roles.role_name in ('authenticated', 'service_role')
+    and operations.privilege in ('usage', 'select')
+  )
+$check$, 'message sequence access is explicit and limited to authenticated/server roles');
+
+select is_empty($check$
+  select functions.oid::regprocedure
+  from pg_proc functions join original_function_acl original using (oid)
+  where functions.proacl is distinct from original.proacl
+$check$, 'table grant backfill preserves all existing RPC permissions');
+
+select * from finish();
+rollback;

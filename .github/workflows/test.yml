@@ -30,8 +30,10 @@ jobs:
             db:
               - 'supabase/migrations/**'
               - 'supabase/schema.sql'
+              - 'supabase/tests/**'
               - 'src/lib/rls/**'
               - 'scripts/build-hosted-schema.sh'
+              - 'scripts/test-data-api-grants.js'
               - 'package.json'
               - 'package-lock.json'
               - 'docs/DB_CHANGE_WORKFLOW.md'
@@ -161,6 +163,9 @@ jobs:
 
       - name: Run DB integration tests
         run: npm run test:db
+
+      - name: Verify explicit Data API grants without automatic privileges
+        run: npm run test:db:grants
 
       - name: Stop Supabase
         if: always()

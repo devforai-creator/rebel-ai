@@ -17,7 +17,7 @@ vi.mock('@/lib/llm/google-cache', async () => {
   }
 })
 
-describe('prepareGoogleExplicitCache', () => {
+describe('shared prepareGoogleExplicitCache', () => {
   beforeEach(() => {
     createGoogleCacheMock.mockReset()
     resolveGoogleCacheDecisionMock.mockReset()

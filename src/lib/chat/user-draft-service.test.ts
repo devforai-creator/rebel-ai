@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSupabaseMock, type SupabaseClientType } from '@/tests/mocks/supabase'
 import { LLM_OUTPUT_LIMITS } from '@/lib/llm/output-limits'
 import { getDefaultModelForProvider } from '@/lib/models'
@@ -7,6 +7,9 @@ import { generateUserDraft, USER_DRAFT_SYSTEM_PROMPT } from './user-draft-servic
 const mocks = vi.hoisted(() => ({
   generate: vi.fn(),
   model: vi.fn(),
+  apiKey: vi.fn(),
+  buildModel: vi.fn(),
+  cacheCreate: vi.fn(),
   memory: vi.fn(),
   count: vi.fn(),
   tail: vi.fn(),
@@ -17,6 +20,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('ai', () => ({ generateText: mocks.generate }))
 vi.mock('@/lib/llm/language-model-access', () => ({
   createLanguageModelFromSecretConfig: mocks.model,
+  resolveLanguageModelApiKey: mocks.apiKey,
+}))
+vi.mock('@/lib/llm/model-factory', () => ({ buildLanguageModel: mocks.buildModel }))
+vi.mock('@/lib/llm/google-cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/llm/google-cache')>()),
+  createGoogleCache: mocks.cacheCreate,
 }))
 vi.mock('@/lib/chat-memory', () => ({ buildMemoryPlan: mocks.memory }))
 vi.mock('@/lib/chat/turns', () => ({
@@ -123,12 +132,20 @@ function setup(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.stubEnv('GOOGLE_EXPLICIT_CACHE_MODE', 'off')
   mocks.generate.mockResolvedValue({
     text: '  *안전한 능선길을 가리킨다.*  ',
     finishReason: 'stop',
     usage: { inputTokens: undefined, outputTokens: undefined, totalTokens: undefined },
   })
   mocks.model.mockResolvedValue({ id: 'model' })
+  mocks.apiKey.mockResolvedValue('test-google-key')
+  mocks.buildModel.mockReturnValue({ id: 'google-model' })
+  mocks.cacheCreate.mockResolvedValue({
+    success: true,
+    cacheName: 'cachedContents/draft',
+    cachedTokenCount: 8000,
+  })
   mocks.count.mockResolvedValue(2)
   mocks.tail.mockResolvedValue(transcript)
   mocks.summaryEnd.mockResolvedValue(0)
@@ -162,6 +179,8 @@ beforeEach(() => {
     ],
   }))
 })
+
+afterEach(() => vi.unstubAllEnvs())
 
 describe('generateUserDraft', () => {
   it.each([
@@ -431,6 +450,171 @@ describe('generateUserDraft', () => {
       cacheHitTokens: null,
       cacheMissTokens: null,
     })
+  })
+
+  it.each(['openai', 'anthropic', 'deepseek', 'openrouter', 'google'] as const)(
+    'uses the same prefix reference layout for %s',
+    async (provider) => {
+      await generateUserDraft(
+        setup({
+          provider,
+          modelName: getDefaultModelForProvider(provider),
+          modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+        }).args,
+      )
+      const call = mocks.generate.mock.calls[0][0]
+      expect(call.prompt).toBeUndefined()
+      expect(call.system).toContain(USER_DRAFT_SYSTEM_PROMPT)
+      expect(call.messages.map((message: { role: string }) => message.role)).toEqual([
+        'user',
+        'user',
+        'user',
+        'user',
+        'user',
+      ])
+      expect(JSON.parse(call.messages[3].content)).toEqual({
+        transcript: { role: 'assistant', content: transcript[1].content },
+      })
+      expect(mocks.cacheCreate).not.toHaveBeenCalled()
+    },
+  )
+
+  it('reuses Google explicit caching for the stable draft prefix with one Vault read', async () => {
+    vi.stubEnv('GOOGLE_EXPLICIT_CACHE_MODE', 'auto')
+    const { args, client } = setup({
+      provider: 'google',
+      modelName: 'gemini-2.5-flash',
+      modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+    })
+    ;(client.state.characters as Record<string, unknown>[])[0].system_prompt =
+      'Stable setting '.repeat(1000)
+    mocks.renderLore.mockReturnValue({
+      combined: 'All lore',
+      alwaysActive: 'Always relevant',
+      conditional: 'Current scene',
+    })
+    mocks.generate.mockResolvedValue({
+      text: 'A complete draft',
+      finishReason: 'stop',
+      usage: {
+        inputTokens: 10000,
+        outputTokens: 200,
+        reasoningTokens: 50,
+        cachedInputTokens: 8000,
+      },
+    })
+    const before = JSON.stringify(client.state)
+    const result = await generateUserDraft(args)
+    expect(mocks.apiKey).toHaveBeenCalledTimes(1)
+    expect(mocks.model).not.toHaveBeenCalled()
+    expect(mocks.buildModel).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: 'test-google-key', provider: 'google' }),
+    )
+    const cached = mocks.cacheCreate.mock.calls[0][0]
+    expect(cached).toMatchObject({ ttlSeconds: 60, requestTimeoutMs: 10000 })
+    expect(cached.systemPrompt).toContain(USER_DRAFT_SYSTEM_PROMPT)
+    expect(JSON.stringify(cached.messagesToCache)).not.toContain('Current scene')
+    expect(JSON.stringify(cached.messagesToCache)).toContain('Always relevant')
+    const call = mocks.generate.mock.calls[0][0]
+    expect(call.system).toBeUndefined()
+    expect(call.prompt).toBeUndefined()
+    expect(call.messages).toHaveLength(1)
+    expect(call.messages[0].content).toContain('Current scene')
+    expect(call.providerOptions.google.cachedContent).toBe('cachedContents/draft')
+    expect(result.usage).toMatchObject({
+      provider: 'google',
+      cacheMode: 'explicit',
+      inputTokens: 10000,
+      outputTokens: 200,
+      reasoningTokens: 50,
+      cacheHitTokens: 8000,
+      cacheMissTokens: 2000,
+    })
+    expect(JSON.stringify(result)).not.toContain('test-google-key')
+    expect(JSON.stringify(client.state)).toBe(before)
+  })
+
+  it.each(['off', 'too-short', 'unsupported', 'create-failure'])(
+    'keeps a full Google prefix request when explicit cache is %s',
+    async (reason) => {
+      vi.stubEnv('GOOGLE_EXPLICIT_CACHE_MODE', reason === 'off' ? 'off' : 'auto')
+      const { args, client } = setup({
+        provider: 'google',
+        modelName: reason === 'unsupported' ? 'gemini-4-argon' : 'gemini-2.5-flash',
+        modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+      })
+      if (reason !== 'too-short') {
+        ;(client.state.characters as Record<string, unknown>[])[0].system_prompt =
+          'Stable setting '.repeat(1000)
+      }
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mocks.cacheCreate.mockResolvedValue({
+        success: false,
+        error: 'Cache temporarily unavailable',
+      })
+      try {
+        const result = await generateUserDraft(args)
+        expect(mocks.cacheCreate).toHaveBeenCalledTimes(reason === 'create-failure' ? 1 : 0)
+        const call = mocks.generate.mock.calls[0][0]
+        expect(call.system).toContain(USER_DRAFT_SYSTEM_PROMPT)
+        expect(call.messages).toHaveLength(5)
+        expect(call.providerOptions.google).not.toHaveProperty('cachedContent')
+        expect(result.usage).toMatchObject({
+          provider: 'google',
+          cacheMode: 'implicit',
+          cacheHitTokens: null,
+          cacheMissTokens: null,
+        })
+        expect(mocks.generate).toHaveBeenCalledTimes(1)
+      } finally {
+        warn.mockRestore()
+      }
+    },
+  )
+
+  it('keeps Google summary mode uncached explicitly and reports automatic cache usage', async () => {
+    vi.stubEnv('GOOGLE_EXPLICIT_CACHE_MODE', 'auto')
+    mocks.generate.mockResolvedValue({
+      text: 'A draft',
+      finishReason: 'stop',
+      usage: {
+        inputTokens: 1000,
+        outputTokens: 100,
+        reasoningTokens: 20,
+      },
+    })
+    const result = await generateUserDraft(
+      setup({ provider: 'google', modelName: 'gemini-2.5-flash' }).args,
+    )
+    expect(JSON.parse(mocks.generate.mock.calls[0][0].prompt).transcript).toHaveLength(2)
+    expect(mocks.apiKey).not.toHaveBeenCalled()
+    expect(mocks.cacheCreate).not.toHaveBeenCalled()
+    expect(result.usage).toMatchObject({
+      memoryMode: 'summary_window',
+      cacheMode: 'implicit',
+      cacheHitTokens: 0,
+      cacheMissTokens: 1000,
+    })
+  })
+
+  it('does not generate after cancellation during Google cache setup', async () => {
+    vi.stubEnv('GOOGLE_EXPLICIT_CACHE_MODE', 'auto')
+    const { args, client } = setup({
+      provider: 'google',
+      modelName: 'gemini-2.5-flash',
+      modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+    })
+    ;(client.state.characters as Record<string, unknown>[])[0].system_prompt =
+      'Stable setting '.repeat(1000)
+    const controller = new AbortController()
+    mocks.cacheCreate.mockImplementationOnce(async () => {
+      controller.abort()
+      return { success: true, cacheName: 'cachedContents/canceled', cachedTokenCount: 8000 }
+    })
+    await expect(generateUserDraft({ ...args, signal: controller.signal })).rejects.toMatchObject({
+      name: 'AbortError',
+    })
+    expect(mocks.generate).not.toHaveBeenCalled()
   })
 
   it('checks the complete DeepSeek prefix request against the input budget', async () => {

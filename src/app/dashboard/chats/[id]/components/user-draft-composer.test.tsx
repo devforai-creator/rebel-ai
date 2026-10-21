@@ -88,6 +88,36 @@ afterEach(() => {
 })
 
 describe('user draft composer', () => {
+  it.each(['explicit', 'implicit'] as const)(
+    'shows Google %s cache usage with thinking separate from output',
+    async (cacheMode) => {
+      fetchMock.mockResolvedValue(
+        Response.json({
+          content: 'A Google draft',
+          usage: {
+            ...usage,
+            provider: 'google',
+            modelName: cacheMode === 'implicit' ? 'gemini-4-argon' : 'gemini-2.5-flash',
+            cacheMode,
+            reasoningTokens: 50,
+          },
+        }),
+      )
+      render(<Harness provider="google" modelName="gemini-2.5-flash" />)
+      fireEvent.click(screen.getByRole('button', { name: '대신 작성' }))
+      await waitFor(() => expect(composer().value).toBe('A Google draft'))
+      expect(screen.getByText('대필 사용량 · 캐시 적중률 80.0%')).toBeTruthy()
+      expect(
+        screen.getByText(cacheMode === 'explicit' ? '명시적 캐시 사용' : '자동 캐싱'),
+      ).toBeTruthy()
+      expect(screen.getByText(/Google · gemini-/)).toBeTruthy()
+      expect(screen.getByText('출력 토큰')).toBeTruthy()
+      expect(screen.getByText('추론 토큰')).toBeTruthy()
+      expect(screen.getByText('50')).toBeTruthy()
+      expect(screen.queryByText('출력 토큰 (추론 포함)')).toBeNull()
+    },
+  )
+
   it('shows the last draft cache usage and hides it when switching chats', async () => {
     fetchMock.mockResolvedValue(Response.json({ content: 'generated user message', usage }))
     const view = render(<Harness provider="deepseek" modelName="deepseek-v4-flash" />)

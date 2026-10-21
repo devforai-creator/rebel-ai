@@ -10,7 +10,8 @@ export function UserDraftUsageDetails({ usage }: { usage: UserDraftUsage }) {
     ['입력 토큰', usage.inputTokens],
     ['캐시 hit 토큰', usage.cacheHitTokens],
     ['캐시 miss 토큰', usage.cacheMissTokens],
-    ['출력 토큰 (추론 포함)', usage.outputTokens],
+    [usage.provider === 'google' ? '출력 토큰' : '출력 토큰 (추론 포함)', usage.outputTokens],
+    ...(usage.provider === 'google' ? [['추론 토큰', usage.reasoningTokens ?? null] as const] : []),
   ] as const
 
   return (
@@ -20,9 +21,14 @@ export function UserDraftUsageDetails({ usage }: { usage: UserDraftUsage }) {
       </summary>
       <div className="mt-2 max-w-sm rounded-lg border border-gray-200 p-3 dark:border-gray-600">
         <p className="break-all">
-          DeepSeek · {usage.modelName} ·{' '}
+          {usage.provider === 'google' ? 'Google' : 'DeepSeek'} · {usage.modelName} ·{' '}
           {usage.memoryMode === 'prefix_live_blocks' ? 'Prefix' : 'Summary'}
         </p>
+        {usage.provider === 'google' && usage.cacheMode && (
+          <p className="mt-1">
+            {usage.cacheMode === 'explicit' ? '명시적 캐시 사용' : '자동 캐싱'}
+          </p>
+        )}
         <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
           {rows.map(([label, count]) => (
             <div key={label} className="contents">

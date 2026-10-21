@@ -33,7 +33,7 @@ import type { LoadedChatJobExecutionContext } from './execution-context'
 import {
   prepareGoogleExplicitCache,
   type GoogleExplicitCachePreparation,
-} from './google-explicit-cache-adapter'
+} from '@/lib/llm/google-explicit-cache-adapter'
 import { buildLanguageModel } from './model-factory'
 import { buildStreamPayloadPlan } from './stream-payload-builder'
 import type { ChatRunnerActualPayload } from './usage-debug'

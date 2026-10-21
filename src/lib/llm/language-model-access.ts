@@ -1,3 +1,5 @@
+import 'server-only'
+
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { LanguageModel } from 'ai'
 import { buildLanguageModel } from '@/lib/llm/model-factory'
@@ -13,6 +15,44 @@ export type SecretBackedLanguageModelConfig = {
   vaultSecretName: string
 }
 
+export async function resolveLanguageModelApiKey({
+  supabase,
+  requester,
+  vaultSecretName,
+  logPrefix,
+}: {
+  supabase: RpcClient
+  requester: string
+  vaultSecretName: string
+  logPrefix: string
+}): Promise<string> {
+  const { data, error } = await getDecryptedSecret(supabase, {
+    secret_name: vaultSecretName,
+    requester,
+  })
+
+  if (error) {
+    console.error(`${logPrefix} Vault decryption failed`, {
+      secretName: vaultSecretName,
+      requester,
+      errorCode: error.code,
+      errorMessage: error.message,
+      errorDetails: error.details,
+    })
+    throw new Error('Vault decryption failed')
+  }
+
+  if (!data) {
+    console.error(`${logPrefix} Vault decryption returned empty`, {
+      secretName: vaultSecretName,
+      requester,
+    })
+    throw new Error('Vault returned empty secret')
+  }
+
+  return data
+}
+
 export async function createLanguageModelFromSecretConfig({
   supabase,
   requester,
@@ -24,34 +64,16 @@ export async function createLanguageModelFromSecretConfig({
   config: SecretBackedLanguageModelConfig
   logPrefix: string
 }): Promise<LanguageModel> {
-  const { data, error } = await getDecryptedSecret(supabase, {
-    secret_name: config.vaultSecretName,
+  const apiKey = await resolveLanguageModelApiKey({
+    supabase,
     requester,
+    vaultSecretName: config.vaultSecretName,
+    logPrefix,
   })
-
-  if (error) {
-    console.error(`${logPrefix} Vault decryption failed`, {
-      secretName: config.vaultSecretName,
-      requester,
-      errorCode: error.code,
-      errorMessage: error.message,
-      errorDetails: error.details,
-    })
-    throw new Error('Vault decryption failed')
-  }
-
-  if (!data) {
-    console.error(`${logPrefix} Vault decryption returned empty`, {
-      secretName: config.vaultSecretName,
-      requester,
-    })
-    throw new Error('Vault returned empty secret')
-  }
-
   return buildLanguageModel({
     provider: config.provider,
     modelName: config.modelName,
-    apiKey: data,
+    apiKey,
     serviceTier: config.serviceTier,
   })
 }

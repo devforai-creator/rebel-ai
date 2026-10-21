@@ -8,7 +8,7 @@ import { buildAnthropicCacheControl } from '@/lib/llm/provider-options'
 import type { AnthropicCacheDecision } from '@/lib/llm/prompt-cache'
 import type { LlmProvider } from '@/types/database.types'
 import type { ChatRunnerActualPayload } from './usage-debug'
-import type { GoogleExplicitCachePreparation } from './google-explicit-cache-adapter'
+import type { GoogleExplicitCachePreparation } from '@/lib/llm/google-explicit-cache-adapter'
 
 type ConversationMessage = { role: 'user' | 'assistant'; content: string }
 

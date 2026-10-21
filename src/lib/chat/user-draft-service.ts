@@ -10,10 +10,16 @@ import { resolveActiveLlmConfigForUser } from './llm-config-resolver'
 import { normalizeChatModelConfig, resolveChatMemoryConfig } from './model-config'
 import { countProjectedConversationMessages, loadProjectedConversationTail } from './turns'
 import { resolveChatInputTokenLimit } from './runtime-limits'
-import { createLanguageModelFromSecretConfig } from '@/lib/llm/language-model-access'
+import {
+  createLanguageModelFromSecretConfig,
+  resolveLanguageModelApiKey,
+} from '@/lib/llm/language-model-access'
+import { buildLanguageModel } from '@/lib/llm/model-factory'
+import { prepareGoogleExplicitCache } from '@/lib/llm/google-explicit-cache-adapter'
 import { LLM_OUTPUT_LIMITS } from '@/lib/llm/output-limits'
 import { getProviderOptions } from '@/lib/llm/provider-options'
 import { readDeepSeekUsageStep } from '@/lib/llm/deepseek-usage'
+import { readGoogleUsageStep } from '@/lib/llm/google-usage'
 import {
   getReasoningModelKey,
   resolveReasoningSnapshot,
@@ -187,7 +193,7 @@ export async function generateUserDraft({
   }
   // Reuse the memory plan's prefix blocks; only the reference-data envelope is draft-specific.
   const prefixRequest =
-    provider === 'deepseek' && memoryConfig.mode === 'prefix_live_blocks'
+    memoryConfig.mode === 'prefix_live_blocks'
       ? buildUserDraftPrefixRequest({
           system: USER_DRAFT_SYSTEM_PROMPT,
           userPersona: personaResult.data,
@@ -241,18 +247,47 @@ export async function generateUserDraft({
     legacyTier: config.serviceTier,
   })
   signal.throwIfAborted()
-  const model = await createLanguageModelFromSecretConfig({
+  const providerOptions = getProviderOptions(provider, { modelName, reasoning, serviceTier })
+  const access = {
     supabase: getAdminClient(),
     requester: userId,
-    config: provider === 'openai' ? { ...config, serviceTier } : config,
     logPrefix: '[User draft]',
-  })
-  const result = await generateText({
-    model,
+  }
+  // Google cache preparation and model construction share one server-only Vault read.
+  const googleApiKey =
+    provider === 'google' && prefixRequest
+      ? await resolveLanguageModelApiKey({ ...access, vaultSecretName: config.vaultSecretName })
+      : null
+  const model = googleApiKey
+    ? buildLanguageModel({ provider, modelName, apiKey: googleApiKey, serviceTier })
+    : await createLanguageModelFromSecretConfig({
+        ...access,
+        config: provider === 'openai' ? { ...config, serviceTier } : config,
+      })
+  signal.throwIfAborted()
+  const googleCache =
+    googleApiKey && prefixRequest
+      ? await prepareGoogleExplicitCache({
+          apiKey: googleApiKey,
+          modelName,
+          systemPrompt: prefixRequest.system,
+          recentMessages: prefixRequest.messages,
+          providerOptions,
+          toolCapableInvocation: false,
+          cacheCreateTimeoutMs: 10_000,
+          logPrefix: '[User draft]',
+        })
+      : null
+  signal.throwIfAborted()
+  const generationRequest = googleCache?.streamRequestOverride ?? {
     ...(prefixRequest
       ? { system: prefixRequest.system, messages: prefixRequest.messages }
       : { system: USER_DRAFT_SYSTEM_PROMPT, prompt: prompt! }),
-    providerOptions: getProviderOptions(provider, { modelName, reasoning, serviceTier }),
+    providerOptions,
+  }
+  const result = await generateText({
+    model,
+    ...generationRequest,
     maxOutputTokens: LLM_OUTPUT_LIMITS.utility,
     maxRetries: 0,
     abortSignal: signal,
@@ -262,8 +297,15 @@ export async function generateUserDraft({
     throw new UserDraftError('완성된 초안을 생성하지 못했습니다. 다시 시도해주세요.', 502)
   }
   // Drafting deliberately performs no message, turn, job, or memory writes.
-  if (provider === 'deepseek') {
-    const usage = readDeepSeekUsageStep(result)
+  if (provider === 'deepseek' || provider === 'google') {
+    const usage =
+      provider === 'deepseek' ? readDeepSeekUsageStep(result) : readGoogleUsageStep(result)
+    const cacheHitTokens =
+      usage.promptTokens !== null &&
+      usage.cachedInputTokens !== null &&
+      usage.cachedInputTokens > usage.promptTokens
+        ? null
+        : usage.cachedInputTokens
     return {
       content,
       usage: {
@@ -272,10 +314,18 @@ export async function generateUserDraft({
         memoryMode: memoryConfig.mode,
         inputTokens: usage.promptTokens,
         outputTokens: usage.completionTokens,
-        cacheHitTokens: usage.cachedInputTokens,
+        ...(provider === 'google'
+          ? {
+              reasoningTokens: usage.reasoningTokens,
+              cacheMode: googleCache?.streamRequestOverride
+                ? ('explicit' as const)
+                : ('implicit' as const),
+            }
+          : {}),
+        cacheHitTokens,
         cacheMissTokens:
-          usage.promptTokens !== null && usage.cachedInputTokens !== null
-            ? usage.promptTokens - usage.cachedInputTokens
+          usage.promptTokens !== null && cacheHitTokens !== null
+            ? usage.promptTokens - cacheHitTokens
             : null,
       },
     }

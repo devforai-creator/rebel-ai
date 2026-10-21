@@ -1,3 +1,5 @@
+import 'server-only'
+
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import {
@@ -53,6 +55,8 @@ export async function prepareGoogleExplicitCache({
   disableGoogleExplicitCache = false,
   jobId,
   timings,
+  cacheCreateTimeoutMs,
+  logPrefix = '[Chat Job Runner]',
   logDebug = () => undefined,
 }: {
   apiKey: string
@@ -63,8 +67,10 @@ export async function prepareGoogleExplicitCache({
   toolContract?: SerializableFunctionToolContract | null
   toolCapableInvocation: boolean
   disableGoogleExplicitCache?: boolean
-  jobId: string
-  timings: Record<string, number>
+  jobId?: string
+  timings?: Record<string, number>
+  cacheCreateTimeoutMs?: number
+  logPrefix?: string
   logDebug?: (...args: unknown[]) => void
 }): Promise<GoogleExplicitCachePreparation> {
   const googleConversationMessages = buildGoogleConversationMessages(recentMessages)
@@ -96,7 +102,7 @@ export async function prepareGoogleExplicitCache({
     googleExplicitCacheConfigured && !disableGoogleExplicitCache && !disabledForToolUsePreflight
 
   if (disabledForToolUsePreflight) {
-    logDebug('[Chat Job Runner] Google explicit cache disabled before request build', {
+    logDebug(`${logPrefix} Google explicit cache disabled before request build`, {
       jobId,
       modelName,
       reason: 'tool-compatible invocation without cacheable tool contract',
@@ -104,7 +110,7 @@ export async function prepareGoogleExplicitCache({
   }
 
   if (disableGoogleExplicitCache) {
-    logDebug('[Chat Job Runner] Google explicit cache disabled for compatibility retry', {
+    logDebug(`${logPrefix} Google explicit cache disabled for compatibility retry`, {
       jobId,
       modelName,
     })
@@ -123,8 +129,9 @@ export async function prepareGoogleExplicitCache({
       messagesToCache: requestContract.cacheCreateInput.messagesToCache,
       toolContract: requestContract.cacheCreateInput.toolContract,
       ttlSeconds: 60,
+      ...(cacheCreateTimeoutMs !== undefined ? { requestTimeoutMs: cacheCreateTimeoutMs } : {}),
     })
-    timings['7c_google_cache_create'] = performance.now() - googleCacheCreateStart
+    if (timings) timings['7c_google_cache_create'] = performance.now() - googleCacheCreateStart
 
     if (googleCacheResult.success) {
       streamRequestOverride = {
@@ -142,20 +149,17 @@ export async function prepareGoogleExplicitCache({
         messagesToCache: requestContract.cacheCreateInput.messagesToCache,
       }
 
-      logDebug('[Chat Job Runner] Google explicit caching enabled', {
+      logDebug(`${logPrefix} Google explicit caching enabled`, {
         cacheName: googleCacheResult.cacheName,
         cachedTokenCount: googleCacheResult.cachedTokenCount,
         lastMessageRole: lastMessage.role,
       })
     } else {
-      console.warn(
-        '[Chat Job Runner] Google cache creation failed, falling back to normal request',
-        {
-          error: googleCacheResult.error,
-          code: googleCacheResult.code,
-          modelName,
-        },
-      )
+      console.warn(`${logPrefix} Google cache creation failed, falling back to normal request`, {
+        error: googleCacheResult.error,
+        code: googleCacheResult.code,
+        modelName,
+      })
     }
   }
 

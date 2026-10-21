@@ -414,8 +414,10 @@ export interface GoogleCacheConfig {
   messagesToCache: Array<{ role: 'user' | 'assistant'; content: string }>
   /** Serializable function-tool contract owned at cache-create time. */
   toolContract?: SerializableFunctionToolContract | null
-  /** Cache TTL in seconds (default: 20) */
+  /** Cache TTL in seconds (default: 60) */
   ttlSeconds?: number
+  /** Bound optional cache setup independently of the generation request. */
+  requestTimeoutMs?: number
 }
 
 export type GoogleConversationMessage = {
@@ -537,10 +539,14 @@ export async function createGoogleCache(
     messagesToCache,
     toolContract,
     ttlSeconds = DEFAULT_CACHE_TTL_SECONDS,
+    requestTimeoutMs,
   } = config
 
   try {
-    const cacheManager = new GoogleAICacheManager(apiKey)
+    const cacheManager = new GoogleAICacheManager(
+      apiKey,
+      requestTimeoutMs !== undefined ? { timeout: requestTimeoutMs } : undefined,
+    )
     const cacheToolPayload = buildGoogleCacheCreateToolPayload({ toolContract })
 
     // Build contents array for caching

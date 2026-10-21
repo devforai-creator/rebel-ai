@@ -8,7 +8,10 @@ vi.mock('@/lib/llm/model-factory', () => ({
   buildLanguageModel: hoistedMocks.buildLanguageModelMock,
 }))
 
-import { createLanguageModelFromSecretConfig } from './language-model-access'
+import {
+  createLanguageModelFromSecretConfig,
+  resolveLanguageModelApiKey,
+} from './language-model-access'
 
 type LanguageModelAccessClient = Parameters<
   typeof createLanguageModelFromSecretConfig
@@ -67,6 +70,24 @@ describe('createLanguageModelFromSecretConfig', () => {
       serviceTier: 'standard',
     })
     expect(model).toEqual({ id: 'mock-model' })
+  })
+
+  it('shares one authenticated Vault read with provider cache preparation', async () => {
+    const { client, rpc } = createRpcClient('test-provider-key')
+    expect(
+      await resolveLanguageModelApiKey({
+        supabase: client,
+        requester: 'user-1',
+        vaultSecretName: 'vault-key',
+        logPrefix: '[Test Access]',
+      }),
+    ).toBe('test-provider-key')
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(rpc).toHaveBeenCalledWith('get_decrypted_secret', {
+      secret_name: 'vault-key',
+      requester: 'user-1',
+    })
+    expect(hoistedMocks.buildLanguageModelMock).not.toHaveBeenCalled()
   })
 
   it('throws when vault decryption RPC fails', async () => {

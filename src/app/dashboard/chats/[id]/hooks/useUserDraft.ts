@@ -48,6 +48,7 @@ export function useUserDraft(options: UserDraftOptions) {
     generated: string
   } | null>(null)
   const activeRequest = useRef<AbortController | null>(null)
+  const activeRequestContext = useRef<{ scopeKey: string; input: string } | null>(null)
   const disabledReason =
     configurationError ??
     (provider === 'local'
@@ -77,7 +78,14 @@ export function useUserDraft(options: UserDraftOptions) {
 
   // Editing, sending, switching models/chats, or receiving a new turn invalidates a pending draft.
   useEffect(() => {
-    cancelDraft()
+    if (
+      activeRequest.current &&
+      (activeRequestContext.current?.scopeKey !== scopeKey ||
+        activeRequestContext.current?.input !== input ||
+        isChatLoading)
+    ) {
+      cancelDraft()
+    }
     setError(null)
   }, [input, scopeKey, isChatLoading, cancelDraft])
 
@@ -89,6 +97,7 @@ export function useUserDraft(options: UserDraftOptions) {
 
     const controller = new AbortController()
     activeRequest.current = controller
+    activeRequestContext.current = snapshot
     setIsDrafting(true)
     setError(null)
     setUsageResult(null)

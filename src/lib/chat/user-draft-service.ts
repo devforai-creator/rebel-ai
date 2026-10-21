@@ -192,18 +192,17 @@ export async function generateUserDraft({
     post_history_instructions: postHistoryInstructions,
   }
   // Reuse the memory plan's prefix blocks; only the reference-data envelope is draft-specific.
+  const prefixOptions = {
+    system: USER_DRAFT_SYSTEM_PROMPT,
+    userPersona: personaResult.data,
+    characterAndSetting,
+    alwaysActiveLore: lorebook.alwaysActive,
+    conditionalLore: lorebook.conditional,
+    promptBlocks: memory.promptBlocks,
+    instruction,
+  }
   const prefixRequest =
-    memoryConfig.mode === 'prefix_live_blocks'
-      ? buildUserDraftPrefixRequest({
-          system: USER_DRAFT_SYSTEM_PROMPT,
-          userPersona: personaResult.data,
-          characterAndSetting,
-          alwaysActiveLore: lorebook.alwaysActive,
-          conditionalLore: lorebook.conditional,
-          promptBlocks: memory.promptBlocks,
-          instruction,
-        })
-      : null
+    memoryConfig.mode === 'prefix_live_blocks' ? buildUserDraftPrefixRequest(prefixOptions) : null
   // Preserve original speaker labels as reference data, not as the active model conversation.
   const prompt = prefixRequest
     ? null
@@ -271,7 +270,10 @@ export async function generateUserDraft({
           apiKey: googleApiKey,
           modelName,
           systemPrompt: prefixRequest.system,
-          recentMessages: prefixRequest.messages,
+          recentMessages: buildUserDraftPrefixRequest({
+            ...prefixOptions,
+            cacheConditionalLore: true,
+          }).messages,
           providerOptions,
           toolCapableInvocation: false,
           cacheCreateTimeoutMs: 10_000,

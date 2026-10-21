@@ -504,7 +504,10 @@ describe('generateUserDraft', () => {
       },
     })
     const before = JSON.stringify(client.state)
-    const result = await generateUserDraft(args)
+    const result = await generateUserDraft({
+      ...args,
+      request: { ...args.request, instruction: 'Decline the offer' },
+    })
     expect(mocks.apiKey).toHaveBeenCalledTimes(1)
     expect(mocks.model).not.toHaveBeenCalled()
     expect(mocks.buildModel).toHaveBeenCalledWith(
@@ -513,13 +516,20 @@ describe('generateUserDraft', () => {
     const cached = mocks.cacheCreate.mock.calls[0][0]
     expect(cached).toMatchObject({ ttlSeconds: 60, requestTimeoutMs: 10000 })
     expect(cached.systemPrompt).toContain(USER_DRAFT_SYSTEM_PROMPT)
-    expect(JSON.stringify(cached.messagesToCache)).not.toContain('Current scene')
+    expect(JSON.stringify(cached.messagesToCache)).toContain('Current scene')
     expect(JSON.stringify(cached.messagesToCache)).toContain('Always relevant')
+    expect(JSON.stringify(cached.messagesToCache)).not.toContain('Decline the offer')
+    expect(cached.messagesToCache.at(-1).content).toContain('"activeLore":"Current scene"')
+    expect(JSON.parse(cached.messagesToCache.at(-2).content)).toEqual({
+      transcript: { role: 'assistant', content: transcript[1].content },
+    })
     const call = mocks.generate.mock.calls[0][0]
     expect(call.system).toBeUndefined()
     expect(call.prompt).toBeUndefined()
     expect(call.messages).toHaveLength(1)
-    expect(call.messages[0].content).toContain('Current scene')
+    expect(call.messages[0].content).not.toContain('Current scene')
+    expect(call.messages[0].content).not.toContain('activeLore')
+    expect(call.messages[0].content).toContain('Decline the offer')
     expect(call.providerOptions.google.cachedContent).toBe('cachedContents/draft')
     expect(result.usage).toMatchObject({
       provider: 'google',
@@ -532,6 +542,27 @@ describe('generateUserDraft', () => {
     })
     expect(JSON.stringify(result)).not.toContain('test-google-key')
     expect(JSON.stringify(client.state)).toBe(before)
+  })
+
+  it('includes large conditional lore in cache eligibility even with a short stable prefix', async () => {
+    vi.stubEnv('GOOGLE_EXPLICIT_CACHE_MODE', 'auto')
+    const conditional = 'Large current scene '.repeat(1000)
+    mocks.renderLore.mockReturnValue({ combined: conditional, alwaysActive: null, conditional })
+    const result = await generateUserDraft(
+      setup({
+        provider: 'google',
+        modelName: 'gemini-2.5-flash',
+        modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+      }).args,
+    )
+    expect(mocks.cacheCreate).toHaveBeenCalledTimes(1)
+    expect(mocks.cacheCreate.mock.calls[0][0].messagesToCache.at(-1).content).toContain(conditional)
+    const call = mocks.generate.mock.calls[0][0]
+    expect(call.messages).toHaveLength(1)
+    expect(call.messages[0].content).toContain('Suggest the next USER reaction')
+    expect(call.messages[0].content).toContain('"writingInstruction":null')
+    expect(call.messages[0].content).not.toContain('Large current scene')
+    expect(result.usage?.cacheMode).toBe('explicit')
   })
 
   it.each(['off', 'too-short', 'unsupported', 'create-failure'])(
@@ -547,17 +578,32 @@ describe('generateUserDraft', () => {
         ;(client.state.characters as Record<string, unknown>[])[0].system_prompt =
           'Stable setting '.repeat(1000)
       }
+      mocks.renderLore.mockReturnValue({
+        combined: 'Current scene',
+        alwaysActive: null,
+        conditional: 'Current scene',
+      })
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       mocks.cacheCreate.mockResolvedValue({
         success: false,
         error: 'Cache temporarily unavailable',
       })
       try {
-        const result = await generateUserDraft(args)
+        const result = await generateUserDraft({
+          ...args,
+          request: { ...args.request, instruction: 'Decline the offer' },
+        })
         expect(mocks.cacheCreate).toHaveBeenCalledTimes(reason === 'create-failure' ? 1 : 0)
         const call = mocks.generate.mock.calls[0][0]
         expect(call.system).toContain(USER_DRAFT_SYSTEM_PROMPT)
         expect(call.messages).toHaveLength(5)
+        expect(call.messages.at(-1).content).toContain('"activeLore":"Current scene"')
+        expect(call.messages.at(-1).content).toContain('Decline the offer')
+        expect(
+          call.messages
+            .slice(0, -1)
+            .some(({ content }: { content: string }) => content.includes('Current scene')),
+        ).toBe(false)
         expect(call.providerOptions.google).not.toHaveProperty('cachedContent')
         expect(result.usage).toMatchObject({
           provider: 'google',

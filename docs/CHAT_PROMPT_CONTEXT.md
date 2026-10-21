@@ -17,6 +17,14 @@ history, leaving the latest user request and its current context live. Cache cre
 falls back to the identical canonical request. Argon remains implicit-cache-only. ATR attaches
 tools without adding its instruction to the system a second time.
 
+Prefix-mode user drafts reuse the common context builder and Google cache adapter.
+For explicit cache preparation only, the draft builder puts the selected conditional lore
+in its own application context block after the reference history, followed by a live block
+containing only the writing instruction and draft task. This includes conditional lore in
+the per-request cache without changing its precedence relative to history. Cache-off,
+unsupported models (including Argon), and cache-create failures keep the original common
+prefix request with conditional lore and the writing instruction together in the live tail.
+
 Anthropic retains its existing system blocks and static cache breakpoint. Other providers
 retain their current layout. Translation and summarization requests do not use chat lore or
 this context layout. Future changes to their adapters should be tested independently.

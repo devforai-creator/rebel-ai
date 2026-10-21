@@ -10,6 +10,7 @@ export function buildUserDraftPrefixRequest({
   conditionalLore,
   promptBlocks,
   instruction,
+  cacheConditionalLore = false,
 }: {
   system: string
   userPersona: { name: string; description: string | null } | null
@@ -22,18 +23,24 @@ export function buildUserDraftPrefixRequest({
   conditionalLore: string | null
   promptBlocks: MemoryPromptBlock[]
   instruction: string
+  /** Only for per-request explicit cache preparation; automatic caching keeps lore live. */
+  cacheConditionalLore?: boolean
 }) {
-  return buildChatContextRequest({
+  const draftTask = {
+    writingInstruction: instruction || null,
+    task: instruction
+      ? 'Expand the writingInstruction into the next USER message.'
+      : 'Suggest the next USER reaction to the current scene.',
+  }
+  const referenceRequest = buildChatContextRequest({
     context: {
       instructions: system,
       memory: null,
-      turnContext: JSON.stringify({
-        activeLore: conditionalLore,
-        writingInstruction: instruction || null,
-        task: instruction
-          ? 'Expand the writingInstruction into the next USER message.'
-          : 'Suggest the next USER reaction to the current scene.',
-      }),
+      turnContext: cacheConditionalLore
+        ? conditionalLore
+          ? JSON.stringify({ activeLore: conditionalLore })
+          : null
+        : JSON.stringify({ activeLore: conditionalLore, ...draftTask }),
     },
     messages: [
       {
@@ -51,5 +58,17 @@ export function buildUserDraftPrefixRequest({
           ),
         })),
     ],
+  })
+  if (!cacheConditionalLore) return referenceRequest
+
+  // The Google adapter caches all but the final message. Keep current lore after
+  // history for precedence, and leave only the draft instruction/task in that tail.
+  return buildChatContextRequest({
+    context: {
+      instructions: system,
+      memory: null,
+      turnContext: JSON.stringify(draftTask),
+    },
+    messages: referenceRequest.messages,
   })
 }

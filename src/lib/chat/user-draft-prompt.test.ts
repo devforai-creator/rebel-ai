@@ -3,6 +3,7 @@ import { generateText } from 'ai'
 import { createDeepSeek } from '@ai-sdk/deepseek'
 import { buildUserDraftPrefixRequest } from './user-draft-prompt'
 import { readDeepSeekUsageStep } from '@/lib/llm/deepseek-usage'
+import { buildGoogleExplicitCacheRequestContract } from '@/lib/llm/google-cache'
 import type { MemoryPromptBlock } from '@/lib/chat-memory/types'
 
 const blocks: MemoryPromptBlock[] = [
@@ -100,6 +101,59 @@ describe('prefix memory adapted for user drafts', () => {
     expect(result.messages.at(-1)?.content).toContain('Suggest the next USER reaction')
     expect(result.messages.at(-1)?.content).toContain('"writingInstruction":null')
   })
+
+  it.each(['Refuse politely', ''])(
+    'caches selected lore after the shared reference history and leaves only the draft task live: %j',
+    (instruction) => {
+      const canonical = buildUserDraftPrefixRequest({ ...options, instruction })
+      const request = buildUserDraftPrefixRequest({
+        ...options,
+        instruction,
+        cacheConditionalLore: true,
+      })
+      const contract = buildGoogleExplicitCacheRequestContract({
+        systemPrompt: request.system,
+        messages: request.messages,
+      })
+      expect(request.system).toBe(canonical.system)
+      expect(contract.cacheCreateInput.messagesToCache.slice(0, -1)).toEqual(
+        canonical.messages.slice(0, canonical.cacheableMessageCount),
+      )
+      expect(contract.cacheCreateInput.messagesToCache.at(-1)).toEqual({
+        role: 'user',
+        content: '<application_context>\n{"activeLore":"Current scene"}\n</application_context>',
+      })
+      expect(JSON.stringify(contract.cacheCreateInput.messagesToCache)).not.toContain(
+        'writingInstruction',
+      )
+      const liveTail = contract.liveRequestTail.messages
+      expect(liveTail).toHaveLength(1)
+      expect(liveTail[0].content).not.toContain('activeLore')
+      expect(liveTail[0].content).toContain(
+        JSON.stringify({ writingInstruction: instruction || null }).slice(1, -1),
+      )
+      expect(liveTail[0].content).toContain(
+        instruction ? 'Expand the writingInstruction' : 'Suggest the next USER reaction',
+      )
+      expect(request.messages.every((message) => message.role === 'user')).toBe(true)
+    },
+  )
+
+  it.each([null, ''])(
+    'does not add an empty lore block to explicit cache preparation: %j',
+    (conditionalLore) => {
+      const request = buildUserDraftPrefixRequest({
+        ...options,
+        promptBlocks: [],
+        conditionalLore,
+        cacheConditionalLore: true,
+      })
+      expect(request.messages).toHaveLength(2)
+      expect(request.cacheableMessageCount).toBe(1)
+      expect(request.messages.at(-1)?.content).toContain('Refuse politely')
+      expect(JSON.stringify(request.messages)).not.toContain('activeLore')
+    },
+  )
 
   it('preserves the shared prefix on the DeepSeek wire and reads native hit/miss usage', async () => {
     const bodies: Array<{ messages: unknown[] }> = []

@@ -245,6 +245,7 @@ export default function ChatInterface({
         isDrafting={draft.isDrafting}
         draftDisabledReason={draft.disabledReason}
         draftError={draft.error}
+        draftUsage={draft.usage}
         onGenerateDraft={draft.generateDraft}
         onCancelDraft={draft.cancelDraft}
         onRestoreDraftInput={draft.canRestore ? draft.restoreInput : undefined}

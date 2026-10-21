@@ -31,7 +31,7 @@ beforeEach(() => {
   mocks.createClient.mockResolvedValue({ auth: { getUser: mocks.getUser } })
   mocks.getUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
   mocks.rateLimit.mockResolvedValue({ allowed: true, retryAfter: null })
-  mocks.generate.mockResolvedValue('A user draft')
+  mocks.generate.mockResolvedValue({ content: 'A user draft' })
 })
 afterEach(() => vi.restoreAllMocks())
 
@@ -57,6 +57,25 @@ describe('POST user-draft', () => {
       context,
     )
     expect(mocks.generate.mock.calls[0][0].request.instruction).toBe('정중하게 거절한다')
+  })
+
+  it('returns provider cache usage alongside the draft', async () => {
+    const result = {
+      content: 'A user draft',
+      usage: {
+        provider: 'deepseek',
+        modelName: 'deepseek-v4-flash',
+        memoryMode: 'prefix_live_blocks',
+        inputTokens: 10000,
+        outputTokens: 100,
+        cacheHitTokens: 8000,
+        cacheMissTokens: 2000,
+      },
+    }
+    mocks.generate.mockResolvedValue(result)
+    const response = await POST(request(), context)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(await response.json()).toEqual(result)
   })
 
   it('requires authentication before using the rate limiter or model', async () => {

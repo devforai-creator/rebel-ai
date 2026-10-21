@@ -70,7 +70,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cha
 
     const { chatId } = await params
     signal.throwIfAborted()
-    const content = await generateUserDraft({
+    const result = await generateUserDraft({
       supabase,
       getAdminClient: createAdminClient,
       userId: auth.user.id,
@@ -78,7 +78,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cha
       request: parsed.data,
       signal,
     })
-    return Response.json({ content }, { headers: { 'Cache-Control': 'no-store' } })
+    return Response.json(result, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     if (error instanceof UserDraftError) {
       return createApiErrorResponse(error.message, error.status)

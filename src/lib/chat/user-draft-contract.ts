@@ -15,3 +15,18 @@ export const userDraftRequestSchema = z
   .strict()
 
 export type UserDraftRequest = z.infer<typeof userDraftRequestSchema>
+
+const tokenCount = z.number().int().nonnegative().nullable()
+
+export const userDraftUsageSchema = z.object({
+  provider: z.literal('deepseek'),
+  modelName: z.string().min(1),
+  memoryMode: z.enum(['summary_window', 'prefix_live_blocks']),
+  inputTokens: tokenCount,
+  outputTokens: tokenCount,
+  cacheHitTokens: tokenCount,
+  cacheMissTokens: tokenCount,
+})
+
+export type UserDraftUsage = z.infer<typeof userDraftUsageSchema>
+export type UserDraftResponse = { content: string; usage?: UserDraftUsage }

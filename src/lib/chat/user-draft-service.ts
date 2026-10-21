@@ -13,6 +13,7 @@ import { resolveChatInputTokenLimit } from './runtime-limits'
 import { createLanguageModelFromSecretConfig } from '@/lib/llm/language-model-access'
 import { LLM_OUTPUT_LIMITS } from '@/lib/llm/output-limits'
 import { getProviderOptions } from '@/lib/llm/provider-options'
+import { readDeepSeekUsageStep } from '@/lib/llm/deepseek-usage'
 import {
   getReasoningModelKey,
   resolveReasoningSnapshot,
@@ -26,8 +27,9 @@ import {
 import { loadChatLorebookState, renderLorebookContext } from '@/lib/lorebook/runtime'
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { createClient } from '@/lib/supabase/server'
-import type { UserDraftRequest } from './user-draft-contract'
+import type { UserDraftRequest, UserDraftResponse } from './user-draft-contract'
 import { parseUserDraftModelConfig } from './user-draft-model-config'
+import { buildUserDraftPrefixRequest } from './user-draft-prompt'
 
 export const USER_DRAFT_SYSTEM_PROMPT = [
   "You write the user's next roleplay message on their behalf.",
@@ -70,7 +72,7 @@ export async function generateUserDraft({
   chatId: string
   request: UserDraftRequest
   signal: AbortSignal
-}): Promise<string> {
+}): Promise<UserDraftResponse> {
   signal.throwIfAborted()
   const { data: chat, error: chatError } = await supabase
     .from('chats')
@@ -178,26 +180,46 @@ export async function generateUserDraft({
     transcriptStartOrdinal: Math.max(1, totalMessages - messages.length + 1),
   })
 
+  const characterAndSetting = {
+    name: character.name,
+    system_prompt: character.system_prompt,
+    post_history_instructions: postHistoryInstructions,
+  }
+  // Reuse the memory plan's prefix blocks; only the reference-data envelope is draft-specific.
+  const prefixRequest =
+    provider === 'deepseek' && memoryConfig.mode === 'prefix_live_blocks'
+      ? buildUserDraftPrefixRequest({
+          system: USER_DRAFT_SYSTEM_PROMPT,
+          userPersona: personaResult.data,
+          characterAndSetting,
+          alwaysActiveLore: lorebook.alwaysActive,
+          conditionalLore: lorebook.conditional,
+          promptBlocks: memory.promptBlocks,
+          instruction,
+        })
+      : null
   // Preserve original speaker labels as reference data, not as the active model conversation.
-  const prompt = JSON.stringify({
-    userPersona: personaResult.data,
-    characterAndSetting: {
-      name: character.name,
-      system_prompt: character.system_prompt,
-      post_history_instructions: postHistoryInstructions,
-    },
-    activeLore: lorebook.combined,
-    memory: memory.dynamicContext,
-    transcript: memory.fallbackMessages.map(({ role, content }) => ({ role, content })),
-    writingInstruction: instruction || null,
-    task: instruction
-      ? 'Expand the writingInstruction into the next USER message.'
-      : 'Suggest the next USER reaction to the current scene.',
-  })
-  if (
-    estimateTokenCount(USER_DRAFT_SYSTEM_PROMPT) + estimateTokenCount(prompt) >
-    resolveChatInputTokenLimit(provider)
-  ) {
+  const prompt = prefixRequest
+    ? null
+    : JSON.stringify({
+        userPersona: personaResult.data,
+        characterAndSetting,
+        activeLore: lorebook.combined,
+        memory: memory.dynamicContext,
+        transcript: memory.fallbackMessages.map(({ role, content }) => ({ role, content })),
+        writingInstruction: instruction || null,
+        task: instruction
+          ? 'Expand the writingInstruction into the next USER message.'
+          : 'Suggest the next USER reaction to the current scene.',
+      })
+  const inputTokens = prefixRequest
+    ? estimateTokenCount(prefixRequest.system) +
+      prefixRequest.messages.reduce(
+        (total, message) => total + estimateTokenCount(message.content),
+        0,
+      )
+    : estimateTokenCount(USER_DRAFT_SYSTEM_PROMPT) + estimateTokenCount(prompt!)
+  if (inputTokens > resolveChatInputTokenLimit(provider)) {
     throw new UserDraftError('Roleplay context is too large to draft a message', 413)
   }
 
@@ -225,19 +247,38 @@ export async function generateUserDraft({
     config: provider === 'openai' ? { ...config, serviceTier } : config,
     logPrefix: '[User draft]',
   })
-  const { text, finishReason } = await generateText({
+  const result = await generateText({
     model,
-    system: USER_DRAFT_SYSTEM_PROMPT,
-    prompt,
+    ...(prefixRequest
+      ? { system: prefixRequest.system, messages: prefixRequest.messages }
+      : { system: USER_DRAFT_SYSTEM_PROMPT, prompt: prompt! }),
     providerOptions: getProviderOptions(provider, { modelName, reasoning, serviceTier }),
     maxOutputTokens: LLM_OUTPUT_LIMITS.utility,
     maxRetries: 0,
     abortSignal: signal,
   })
-  const content = text.trim()
-  if (!content || finishReason === 'length') {
+  const content = result.text.trim()
+  if (!content || result.finishReason === 'length') {
     throw new UserDraftError('완성된 초안을 생성하지 못했습니다. 다시 시도해주세요.', 502)
   }
   // Drafting deliberately performs no message, turn, job, or memory writes.
-  return content
+  if (provider === 'deepseek') {
+    const usage = readDeepSeekUsageStep(result)
+    return {
+      content,
+      usage: {
+        provider,
+        modelName: usage.modelName ?? modelName,
+        memoryMode: memoryConfig.mode,
+        inputTokens: usage.promptTokens,
+        outputTokens: usage.completionTokens,
+        cacheHitTokens: usage.cachedInputTokens,
+        cacheMissTokens:
+          usage.promptTokens !== null && usage.cachedInputTokens !== null
+            ? usage.promptTokens - usage.cachedInputTokens
+            : null,
+      },
+    }
+  }
+  return { content }
 }

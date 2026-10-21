@@ -126,6 +126,7 @@ beforeEach(() => {
   mocks.generate.mockResolvedValue({
     text: '  *안전한 능선길을 가리킨다.*  ',
     finishReason: 'stop',
+    usage: { inputTokens: undefined, outputTokens: undefined, totalTokens: undefined },
   })
   mocks.model.mockResolvedValue({ id: 'model' })
   mocks.count.mockResolvedValue(2)
@@ -137,9 +138,28 @@ beforeEach(() => {
     alwaysActive: null,
     conditional: null,
   })
-  mocks.memory.mockImplementation(async ({ sanitizedMessages }) => ({
+  mocks.memory.mockImplementation(async ({ sanitizedMessages, baseSystemPrompt }) => ({
     dynamicContext: 'Previously agreed to avoid the river.',
     fallbackMessages: sanitizedMessages,
+    promptBlocks: [
+      {
+        role: 'system',
+        content: baseSystemPrompt,
+        stability: 'static',
+        cachePreference: 'prefer-cache',
+      },
+      {
+        role: 'system',
+        content: 'Previously agreed to avoid the river.',
+        stability: 'sealed',
+        cachePreference: 'prefer-cache',
+      },
+      ...sanitizedMessages.map((message: { role: string; content: string }) => ({
+        ...message,
+        stability: 'live',
+        cachePreference: 'prefer-cache',
+      })),
+    ],
   }))
 })
 
@@ -297,7 +317,7 @@ describe('generateUserDraft', () => {
   it('suggests a user reaction using persona, active history, memory and lore without persisting it', async () => {
     const { args, client, getAdminClient } = setup()
     const before = JSON.stringify(client.state)
-    expect(await generateUserDraft(args)).toBe('*안전한 능선길을 가리킨다.*')
+    expect(await generateUserDraft(args)).toEqual({ content: '*안전한 능선길을 가리킨다.*' })
     const call = mocks.generate.mock.calls[0][0]
     expect(call.system).toBe(USER_DRAFT_SYSTEM_PROMPT)
     expect(call.system).not.toContain('You control EVERYTHING')
@@ -354,6 +374,76 @@ describe('generateUserDraft', () => {
         totalConversationMessages: 80,
       }),
     )
+  })
+
+  it('uses shared prefix blocks for DeepSeek drafts and keeps conditional lore after history', async () => {
+    const { args, client } = setup({
+      provider: 'deepseek',
+      modelName: 'deepseek-v4-flash',
+      modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+    })
+    mocks.renderLore.mockReturnValue({
+      combined: 'Permanent setting\nCurrent scene',
+      alwaysActive: 'Permanent setting',
+      conditional: 'Current scene',
+    })
+    mocks.generate.mockResolvedValue({
+      text: 'A complete draft',
+      finishReason: 'stop',
+      usage: { inputTokens: 10000, outputTokens: 200, cachedInputTokens: 8000 },
+    })
+    const before = JSON.stringify(client.state)
+    const result = await generateUserDraft(args)
+    const call = mocks.generate.mock.calls[0][0]
+    expect(call.prompt).toBeUndefined()
+    expect(call.system).toContain(USER_DRAFT_SYSTEM_PROMPT)
+    expect(call.messages.every((message: { role: string }) => message.role === 'user')).toBe(true)
+    expect(JSON.parse(call.messages[0].content).alwaysActiveLore).toBe('Permanent setting')
+    expect(JSON.parse(call.messages[1].content)).toEqual({
+      memory: 'Previously agreed to avoid the river.',
+    })
+    expect(JSON.parse(call.messages[3].content)).toEqual({
+      transcript: { role: 'assistant', content: transcript[1].content },
+    })
+    expect(call.messages.at(-1).content).toContain('Current scene')
+    expect(result).toEqual({
+      content: 'A complete draft',
+      usage: {
+        provider: 'deepseek',
+        modelName: 'deepseek-v4-flash',
+        memoryMode: 'prefix_live_blocks',
+        inputTokens: 10000,
+        outputTokens: 200,
+        cacheHitTokens: 8000,
+        cacheMissTokens: 2000,
+      },
+    })
+    expect(JSON.stringify(client.state)).toBe(before)
+  })
+
+  it('keeps the summary-mode payload and unknown cache usage for DeepSeek', async () => {
+    const { args } = setup({ provider: 'deepseek', modelName: 'deepseek-v4-flash' })
+    const result = await generateUserDraft(args)
+    expect(JSON.parse(mocks.generate.mock.calls[0][0].prompt).transcript).toHaveLength(2)
+    expect(result.usage).toMatchObject({
+      memoryMode: 'summary_window',
+      inputTokens: null,
+      cacheHitTokens: null,
+      cacheMissTokens: null,
+    })
+  })
+
+  it('checks the complete DeepSeek prefix request against the input budget', async () => {
+    const { args } = setup({
+      provider: 'deepseek',
+      modelName: 'deepseek-v4-flash',
+      modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+    })
+    mocks.memory.mockResolvedValue({
+      promptBlocks: [{ role: 'user', content: 'x'.repeat(650_000), stability: 'live' }],
+    })
+    await expect(generateUserDraft(args)).rejects.toMatchObject({ status: 413 })
+    expect(mocks.model).not.toHaveBeenCalled()
   })
 
   it('works without a selected persona', async () => {

@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { readApiErrorMessage } from '@/lib/http/api-contract'
-import type { UserDraftRequest } from '@/lib/chat/user-draft-contract'
+import {
+  userDraftUsageSchema,
+  type UserDraftRequest,
+  type UserDraftUsage,
+} from '@/lib/chat/user-draft-contract'
 
 type UserDraftOptions = {
   chatId: string
@@ -34,6 +38,10 @@ export function useUserDraft(options: UserDraftOptions) {
   } = options
   const [isDrafting, setIsDrafting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [usageResult, setUsageResult] = useState<{
+    scopeKey: string
+    usage: UserDraftUsage
+  } | null>(null)
   const [previousInput, setPreviousInput] = useState<{
     chatId: string
     original: string
@@ -83,6 +91,7 @@ export function useUserDraft(options: UserDraftOptions) {
     activeRequest.current = controller
     setIsDrafting(true)
     setError(null)
+    setUsageResult(null)
     try {
       const body: UserDraftRequest = {
         apiKeyId,
@@ -120,6 +129,8 @@ export function useUserDraft(options: UserDraftOptions) {
         return
 
       const content = result.content.trim()
+      const usage = userDraftUsageSchema.safeParse('usage' in result ? result.usage : undefined)
+      setUsageResult(usage.success ? { scopeKey: snapshot.scopeKey, usage: usage.data } : null)
       setPreviousInput({ chatId, original: snapshot.input, generated: content })
       replaceInput(content)
     } catch (cause) {
@@ -147,6 +158,7 @@ export function useUserDraft(options: UserDraftOptions) {
   return {
     isDrafting,
     error,
+    usage: usageResult?.scopeKey === scopeKey ? usageResult.usage : null,
     disabledReason,
     generateDraft,
     cancelDraft,

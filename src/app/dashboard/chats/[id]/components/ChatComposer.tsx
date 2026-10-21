@@ -2,6 +2,8 @@
 
 import React, { memo, useId, type ChangeEvent, type FormEvent, type RefObject } from 'react'
 import { ArrowUp, Loader2, Undo2, WandSparkles, X } from 'lucide-react'
+import type { UserDraftUsage } from '@/lib/chat/user-draft-contract'
+import { UserDraftUsageDetails } from './UserDraftUsageDetails'
 
 const QUICK_INSERT_SYMBOLS = [
   { symbol: '"', label: 'Insert double quote' },
@@ -23,6 +25,7 @@ export interface ChatComposerProps {
   isDrafting?: boolean
   draftDisabledReason?: string | null
   draftError?: string | null
+  draftUsage?: UserDraftUsage | null
   onGenerateDraft?: () => void
   onCancelDraft?: () => void
   onRestoreDraftInput?: () => void
@@ -60,6 +63,7 @@ export const ChatComposer = memo(function ChatComposer({
   isDrafting = false,
   draftDisabledReason,
   draftError,
+  draftUsage,
   onGenerateDraft,
   onCancelDraft,
   onRestoreDraftInput,
@@ -224,6 +228,7 @@ export const ChatComposer = memo(function ChatComposer({
             <span className="hidden sm:inline">{isLoading ? 'Sending...' : 'Send'}</span>
           </button>
         </div>
+        {draftUsage && <UserDraftUsageDetails usage={draftUsage} />}
       </form>
     </div>
   )

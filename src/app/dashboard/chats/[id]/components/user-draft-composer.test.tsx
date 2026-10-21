@@ -5,6 +5,17 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatComposer } from './ChatComposer'
 import { useUserDraft } from '../hooks/useUserDraft'
+import type { UserDraftUsage } from '@/lib/chat/user-draft-contract'
+
+const usage: UserDraftUsage = {
+  provider: 'deepseek',
+  modelName: 'deepseek-v4-flash',
+  memoryMode: 'prefix_live_blocks',
+  inputTokens: 10000,
+  outputTokens: 200,
+  cacheHitTokens: 8000,
+  cacheMissTokens: 2000,
+}
 
 const fetchMock = vi.fn()
 const onSubmit = vi.fn((event?: React.FormEvent<HTMLFormElement>) => event?.preventDefault())
@@ -46,6 +57,7 @@ function Harness({
       onGenerateDraft={draft.generateDraft}
       draftDisabledReason={draft.disabledReason}
       draftError={draft.error}
+      draftUsage={draft.usage}
       onCancelDraft={draft.cancelDraft}
       onRestoreDraftInput={draft.canRestore ? draft.restoreInput : undefined}
     />
@@ -61,8 +73,8 @@ function pendingRequest() {
       resolve = done
     }),
   )
-  return (content = 'generated user message') =>
-    act(async () => resolve(Response.json({ content })))
+  return (content = 'generated user message', usage?: UserDraftUsage) =>
+    act(async () => resolve(Response.json({ content, usage })))
 }
 
 beforeEach(() => {
@@ -76,6 +88,64 @@ afterEach(() => {
 })
 
 describe('user draft composer', () => {
+  it('shows the last draft cache usage and hides it when switching chats', async () => {
+    fetchMock.mockResolvedValue(Response.json({ content: 'generated user message', usage }))
+    const view = render(<Harness provider="deepseek" modelName="deepseek-v4-flash" />)
+    fireEvent.click(screen.getByRole('button', { name: '대신 작성' }))
+    await waitFor(() => expect(composer().value).toBe('generated user message'))
+    expect(screen.getByText('대필 사용량 · 캐시 적중률 80.0%')).toBeTruthy()
+    expect(screen.getByText('8,000')).toBeTruthy()
+    expect(screen.getByText('2,000')).toBeTruthy()
+    expect(screen.getByText(/DeepSeek · deepseek-v4-flash · Prefix/)).toBeTruthy()
+    view.rerender(<Harness provider="deepseek" modelName="deepseek-v4-flash" chatId="chat-2" />)
+    expect(screen.queryByText(/대필 사용량/)).toBeNull()
+  })
+
+  it('shows unknown usage as unreported and preserves an explicit zero cache hit', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({
+        content: 'first draft',
+        usage: { ...usage, inputTokens: null, cacheHitTokens: null, cacheMissTokens: null },
+      }),
+    )
+    render(<Harness />)
+    fireEvent.click(screen.getByRole('button', { name: '대신 작성' }))
+    await waitFor(() => expect(screen.getByText('대필 사용량 · 캐시 적중률 미확인')).toBeTruthy())
+    expect(screen.getAllByText('미확인')).toHaveLength(3)
+    fetchMock.mockResolvedValue(
+      Response.json({
+        content: 'second draft',
+        usage: { ...usage, cacheHitTokens: 0, cacheMissTokens: 10000 },
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: '대신 작성' }))
+    await waitFor(() => expect(screen.getByText('대필 사용량 · 캐시 적중률 0.0%')).toBeTruthy())
+    expect(screen.getByText('0')).toBeTruthy()
+  })
+
+  it('ignores usage from a canceled response', async () => {
+    const finish = pendingRequest()
+    render(<Harness />)
+    fireEvent.click(screen.getByRole('button', { name: '대신 작성' }))
+    fireEvent.click(screen.getByRole('button', { name: '취소' }))
+    await finish('late draft', usage)
+    expect(screen.queryByText(/대필 사용량/)).toBeNull()
+  })
+
+  it('keeps a valid draft when optional usage is malformed', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({
+        content: 'generated user message',
+        usage: { ...usage, cacheHitTokens: -1 },
+      }),
+    )
+    render(<Harness />)
+    fireEvent.click(screen.getByRole('button', { name: '대신 작성' }))
+    await waitFor(() => expect(composer().value).toBe('generated user message'))
+    expect(screen.queryByText(/대필 사용량/)).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it.each(['', '상대의 주장에 반박한다'])(
     'fills the composer for input %j without auto-sending',
     async (input) => {

@@ -31,6 +31,7 @@ import { supportsRequiredToolChoice } from '@/lib/models'
 import { submitAnthropicBatchJob } from './anthropic-batch-orchestrator'
 import type { LoadedChatJobExecutionContext } from './execution-context'
 import {
+  buildGooglePrefixCacheContextRequest,
   prepareGoogleExplicitCache,
   type GoogleExplicitCachePreparation,
 } from '@/lib/llm/google-explicit-cache-adapter'
@@ -397,19 +398,28 @@ export async function requestProviderStage({
         })
       : finalSystemPrompt
   const contextMessages = provider === 'anthropic' ? anthropicConversationMessages : recentMessages
+  const toolInstruction = buildSystemPromptForAgenticTranscriptRecall({
+    systemPrompt: '',
+    toolContract: recallToolContract,
+    maxToolCalls: agenticTranscriptRecall.maxToolCalls,
+    sourceMap: agenticTranscriptRecallSourceMap,
+    requireToolByInstruction: atrToolChoiceEnforcement === 'instruction_required',
+  })
   const contextRequest = context.requestContext
     ? buildChatContextRequest({
         context: context.requestContext,
         messages: contextMessages,
-        toolInstruction: buildSystemPromptForAgenticTranscriptRecall({
-          systemPrompt: '',
-          toolContract: recallToolContract,
-          maxToolCalls: agenticTranscriptRecall.maxToolCalls,
-          sourceMap: agenticTranscriptRecallSourceMap,
-          requireToolByInstruction: atrToolChoiceEnforcement === 'instruction_required',
-        }),
+        toolInstruction,
       })
     : undefined
+  const googleCacheContextRequest =
+    provider === 'google' && context.memoryMode === 'prefix_live_blocks' && context.requestContext
+      ? buildGooglePrefixCacheContextRequest({
+          context: context.requestContext,
+          messages: contextMessages,
+          toolInstruction,
+        })
+      : contextRequest
 
   const model = buildLanguageModel({
     provider,
@@ -445,8 +455,8 @@ export async function requestProviderStage({
       ? await prepareGoogleExplicitCache({
           apiKey: decryptedApiKey,
           modelName,
-          systemPrompt: contextRequest?.system ?? googleCacheSystemPrompt,
-          recentMessages: contextRequest?.messages ?? recentMessages,
+          systemPrompt: googleCacheContextRequest?.system ?? googleCacheSystemPrompt,
+          recentMessages: googleCacheContextRequest?.messages ?? recentMessages,
           providerOptions,
           toolContract: googleToolContract,
           toolCapableInvocation: agenticTranscriptRecall.enabled && hasToolCapableSourceMap,
@@ -517,7 +527,9 @@ export async function requestProviderStage({
       recentMessages,
       googleExplicitCache,
       providerOptions,
-      contextRequest,
+      contextRequest: googleExplicitCache?.streamRequestOverride
+        ? googleCacheContextRequest
+        : contextRequest,
     })
 
     if (streamPayloadPlan.strategy === 'anthropic-split-system') {

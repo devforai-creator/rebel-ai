@@ -1384,113 +1384,136 @@ describe('processChatJobs', () => {
     })
   })
 
-  it('forwards classified context through the runner into the Google request when explicit cache is disabled', async () => {
-    const supabase = createChatJobRunnerSupabaseMock({
-      rpc: { get_decrypted_secret: () => decryptSecretMock() },
-    })
-    createAdminClientMock.mockReturnValue(supabase)
+  it.each([false, true])(
+    'forwards Google Prefix context through the runner with explicit cache=%s',
+    async (cacheEnabled) => {
+      const supabase = createChatJobRunnerSupabaseMock({
+        rpc: { get_decrypted_secret: () => decryptSecretMock() },
+      })
+      createAdminClientMock.mockReturnValue(supabase)
 
-    decryptSecretMock.mockResolvedValue('sk-test')
-    setRunnerApiKeyProvider(supabase, 'google')
-    parseChatJobPayloadMock.mockReturnValue(
-      buildValidPayload({
-        requestId: 'req-google-cache-off',
-        provider: 'google',
-        modelName: 'gemini-1.5-flash',
-      }),
-    )
-    buildMemoryPlanMock.mockResolvedValueOnce({
-      requestContext: {
-        instructions: 'STABLE CARD',
-        memory: 'SUMMARY',
-        turnContext: 'CURRENT LORE',
-      },
-      mode: 'summary_window',
-      promptBlocks: [
-        {
-          role: 'system',
-          content: 'CTX',
-          cachePreference: 'prefer-cache',
-          stability: 'static',
+      decryptSecretMock.mockResolvedValue('sk-test')
+      setRunnerApiKeyProvider(supabase, 'google')
+      parseChatJobPayloadMock.mockReturnValue(
+        buildValidPayload({
+          requestId: 'req-google-cache-off',
+          provider: 'google',
+          modelName: 'gemini-3.8-flash',
+        }),
+      )
+      buildMemoryPlanMock.mockResolvedValueOnce({
+        requestContext: {
+          instructions: 'STABLE CARD',
+          memory: 'SUMMARY',
+          turnContext: 'CURRENT LORE',
         },
-        {
-          role: 'assistant',
-          content: 'previous turn',
-          cachePreference: 'avoid-cache',
-          stability: 'live',
-        },
-        {
-          role: 'user',
-          content: 'latest user message',
-          cachePreference: 'avoid-cache',
-          stability: 'live',
-        },
-      ],
-      fallbackSystemPrompt: 'CTX',
-      fallbackMessages: [
+        mode: 'prefix_live_blocks',
+        promptBlocks: [
+          {
+            role: 'system',
+            content: 'CTX',
+            cachePreference: 'prefer-cache',
+            stability: 'static',
+          },
+          {
+            role: 'assistant',
+            content: 'previous turn',
+            cachePreference: 'avoid-cache',
+            stability: 'live',
+          },
+          {
+            role: 'user',
+            content: 'latest user message',
+            cachePreference: 'avoid-cache',
+            stability: 'live',
+          },
+        ],
+        fallbackSystemPrompt: 'CTX',
+        fallbackMessages: [
+          { role: 'assistant', content: 'previous turn' },
+          { role: 'user', content: 'latest user message' },
+        ],
+        staticSystemPrompt: 'CTX',
+        dynamicContext: null,
+        ragInfo: null,
+      })
+      isGoogleExplicitCacheEnabledMock.mockReturnValueOnce(cacheEnabled)
+      resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
+      createGoogleCacheMock.mockResolvedValueOnce({
+        success: true,
+        cacheName: 'cachedContents/runner-prefix',
+        cachedTokenCount: 5000,
+      })
+      streamTextMock.mockResolvedValue({
+        textStream: ['uncached answer'],
+        finishReason: Promise.resolve('stop'),
+        providerMetadata: Promise.resolve({}),
+        usage: Promise.resolve({ inputTokens: 20, outputTokens: 10, totalTokens: 30 }),
+      })
+      claimPendingJobMock.mockResolvedValueOnce({
+        id: 'job-google-cache-off',
+        payload: { ok: true },
+      })
+      claimPendingJobMock.mockResolvedValueOnce(null)
+
+      const { processChatJobs } = await import('./service')
+      const result = await processChatJobs(1)
+
+      expect(result.results[0]).toMatchObject({
+        jobId: 'job-google-cache-off',
+        status: 'success',
+      })
+      expect(createGoogleCacheMock).toHaveBeenCalledTimes(cacheEnabled ? 1 : 0)
+      const call = streamTextMock.mock.calls[0]?.[0] as {
+        system?: string
+        messages?: Array<{ role: string; content: string }>
+        providerOptions?: Record<string, unknown>
+      }
+      const referenceMessages = [
         { role: 'assistant', content: 'previous turn' },
         { role: 'user', content: 'latest user message' },
-      ],
-      staticSystemPrompt: 'CTX',
-      dynamicContext: null,
-      ragInfo: null,
-    })
-    isGoogleExplicitCacheEnabledMock.mockReturnValueOnce(false)
-    resolveGoogleCacheDecisionMock.mockReturnValueOnce({ enabled: true, minTokens: 1024 })
-    streamTextMock.mockResolvedValue({
-      textStream: ['uncached answer'],
-      finishReason: Promise.resolve('stop'),
-      providerMetadata: Promise.resolve({}),
-      usage: Promise.resolve({ inputTokens: 20, outputTokens: 10, totalTokens: 30 }),
-    })
-    claimPendingJobMock.mockResolvedValueOnce({
-      id: 'job-google-cache-off',
-      payload: { ok: true },
-    })
-    claimPendingJobMock.mockResolvedValueOnce(null)
+        {
+          role: 'user',
+          content: '<application_context>\nSUMMARY\n\nCURRENT LORE\n</application_context>',
+        },
+      ]
+      if (cacheEnabled) {
+        expect(call.system).toBeUndefined()
+        expect(createGoogleCacheMock.mock.calls[0][0].messagesToCache).toEqual(referenceMessages)
+        expect(call.messages).toEqual([
+          {
+            role: 'user',
+            content: '<application_context>\nContinue the conversation.\n</application_context>',
+          },
+        ])
+        expect(call.providerOptions?.google).toMatchObject({
+          cachedContent: 'cachedContents/runner-prefix',
+        })
+      } else {
+        expect(call.system).toContain('STABLE CARD')
+        expect(call.system).not.toContain('CURRENT LORE')
+        expect(call.messages).toEqual(referenceMessages)
+        expect(
+          (call.providerOptions?.google as { cachedContent?: string } | undefined)?.cachedContent,
+        ).toBeUndefined()
+      }
 
-    const { processChatJobs } = await import('./service')
-    const result = await processChatJobs(1)
-
-    expect(result.results[0]).toMatchObject({
-      jobId: 'job-google-cache-off',
-      status: 'success',
-    })
-    expect(createGoogleCacheMock).not.toHaveBeenCalled()
-    const call = streamTextMock.mock.calls[0]?.[0] as {
-      system?: string
-      messages?: Array<{ role: string; content: string }>
-      providerOptions?: Record<string, unknown>
-    }
-    expect(call.system).toContain('STABLE CARD')
-    expect(call.system).not.toContain('CURRENT LORE')
-    expect(call.messages).toEqual([
-      { role: 'assistant', content: 'previous turn' },
-      { role: 'user', content: 'latest user message' },
-      {
-        role: 'user',
-        content: '<application_context>\nSUMMARY\n\nCURRENT LORE\n</application_context>',
-      },
-    ])
-    expect(
-      (call.providerOptions?.google as { cachedContent?: string } | undefined)?.cachedContent,
-    ).toBeUndefined()
-
-    const latest = supabase.messages[supabase.messages.length - 1]
-    expect(latest).toMatchObject({
-      role: 'assistant',
-      content: 'uncached answer',
-    })
-    expect(latest.debug_info).toMatchObject({
-      googleCache: {
-        featureEnabled: false,
-        cacheCreated: false,
-        meetsMinTokens: true,
-        disabledForToolUsePreflight: false,
-        disabledForCompatibilityRetry: false,
-      },
-    })
-  })
+      const latest = supabase.messages[supabase.messages.length - 1]
+      expect(latest).toMatchObject({
+        role: 'assistant',
+        content: 'uncached answer',
+      })
+      expect(latest.debug_info).toMatchObject({
+        googleCache: {
+          featureEnabled: cacheEnabled,
+          cacheCreated: cacheEnabled,
+          meetsMinTokens: true,
+          disabledForToolUsePreflight: false,
+          disabledForCompatibilityRetry: false,
+        },
+      })
+    },
+  )
 
   it('retries cached Google tool-capable turns without cache after a provider compatibility conflict', async () => {
     const supabase = createChatJobRunnerSupabaseMock({

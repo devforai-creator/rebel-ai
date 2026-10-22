@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
+import { buildChatContextRequest } from '@/lib/chat-memory/prompt-context'
 
 const createGoogleCacheMock = vi.fn()
 const resolveGoogleCacheDecisionMock = vi.fn()
@@ -118,6 +119,79 @@ describe('shared prepareGoogleExplicitCache', () => {
       },
     })
   })
+
+  it.each(['user', 'assistant'] as const)(
+    'caches memory and lore after a final %s message while keeping ATR guidance live',
+    async (role) => {
+      const { buildGooglePrefixCacheContextRequest, prepareGoogleExplicitCache } =
+        await import('./google-explicit-cache-adapter')
+      const messages = [{ role, content: 'Current dialogue' }]
+      const context = { instructions: 'FIXED', memory: 'SUMMARY AND FACTS', turnContext: 'LORE' }
+      const original = structuredClone({ messages, context })
+      const request = buildGooglePrefixCacheContextRequest({
+        context,
+        messages,
+        toolInstruction: 'ATR EXECUTION GUIDANCE',
+      })
+      resolveGoogleCacheDecisionMock.mockReturnValue({ enabled: true, minTokens: 1024 })
+      createGoogleCacheMock.mockResolvedValue({
+        success: true,
+        cacheName: 'cachedContents/context',
+        cachedTokenCount: 5000,
+      })
+      const result = await prepareGoogleExplicitCache({
+        apiKey: 'test-key',
+        modelName: 'gemini-3.8-flash',
+        systemPrompt: request.system,
+        recentMessages: request.messages,
+        toolCapableInvocation: false,
+      })
+      const cached = createGoogleCacheMock.mock.calls[0][0]
+      expect(cached.systemPrompt).toBe(buildChatContextRequest({ context, messages }).system)
+      expect(cached.messagesToCache[0]).toEqual(messages[0])
+      expect(cached.messagesToCache.at(-1).content).toContain('SUMMARY AND FACTS\n\nLORE')
+      expect(JSON.stringify(cached.messagesToCache)).not.toContain('ATR EXECUTION GUIDANCE')
+      expect(result.streamRequestOverride?.messages).toEqual([
+        {
+          role: 'user',
+          content: '<application_context>\nATR EXECUTION GUIDANCE\n</application_context>',
+        },
+      ])
+      expect({ messages, context }).toEqual(original)
+    },
+  )
+
+  it.each([
+    { memory: 'SUMMARY', turnContext: null },
+    { memory: null, turnContext: 'LORE' },
+  ])('leaves a valid short continuation when ATR is absent: %j', async (parts) => {
+    const { buildGooglePrefixCacheContextRequest } = await import('./google-explicit-cache-adapter')
+    const request = buildGooglePrefixCacheContextRequest({
+      context: { instructions: 'FIXED', ...parts },
+      messages: [],
+    })
+    expect(request.messages).toHaveLength(2)
+    expect(request.messages[0].content).toContain(parts.memory ?? parts.turnContext!)
+    expect(request.messages.at(-1)?.content).toBe(
+      '<application_context>\nContinue the conversation.\n</application_context>',
+    )
+  })
+
+  it.each([null, 'ATR GUIDANCE'])(
+    'keeps the common request when no memory or lore is present: %j',
+    async (toolInstruction) => {
+      const { buildGooglePrefixCacheContextRequest } =
+        await import('./google-explicit-cache-adapter')
+      const options = {
+        context: { instructions: 'FIXED', memory: null, turnContext: null },
+        messages: [{ role: 'user' as const, content: 'Current dialogue' }],
+        toolInstruction,
+      }
+      expect(buildGooglePrefixCacheContextRequest(options)).toEqual(
+        buildChatContextRequest(options),
+      )
+    },
+  )
 
   it('disables explicit cache before request build when a tool-capable invocation lacks a cacheable tool contract', async () => {
     const { prepareGoogleExplicitCache } = await import('./google-explicit-cache-adapter')

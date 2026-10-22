@@ -12,10 +12,19 @@ application context block. Earlier conversation messages are unchanged. These te
 blocks never enter canonical messages, summaries, lore keyword scanning, or bilingual history.
 Assistant continuations receive a temporary user continuation message.
 
-The explicit cache adapter consumes this same canonical request. It caches the system and
-history, leaving the latest user request and its current context live. Cache creation failure
+By default, the explicit cache adapter consumes this same canonical request. It caches the
+system and all messages preceding the final live message. Cache creation failure
 falls back to the identical canonical request. Argon remains implicit-cache-only. ATR attaches
 tools without adding its instruction to the system a second time.
+
+For Google Prefix chat only, explicit cache preparation projects conversation memory
+(including summaries and facts) and selected conditional lore into a cached application
+context block after the conversation. A final live block contains the ATR execution
+instruction, or a short continuation instruction when ATR is absent. This preserves the
+existing history/memory/lore order and uses the same common builder and cache adapter.
+The payload debug view records the projected request only when cache creation succeeds.
+Cache-off, ineligible models, creation failures, compatibility retries, and ATR failures
+retain the original core request. Argon keeps automatic caching; summary mode is unchanged.
 
 Prefix-mode user drafts reuse the common context builder and Google cache adapter.
 For explicit cache preparation only, the draft builder puts the selected conditional lore

@@ -329,6 +329,7 @@ describe('loadChatJobExecutionContext', () => {
 
     expect(result).toMatchObject({
       decryptedApiKey: 'sk-test',
+      memoryMode: 'summary_window',
       finalSystemPrompt: 'FINAL',
       staticSystemPrompt: 'STATIC',
       dynamicContext: 'DYNAMIC',

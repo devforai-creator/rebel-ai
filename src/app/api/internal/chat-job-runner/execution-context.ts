@@ -92,6 +92,7 @@ export type LoadedChatJobExecutionContext = {
   staticPromptTokens: number
   debugMetrics: Record<string, DebugMetricValue>
   requestContext: ChatPromptContext | undefined
+  memoryMode: MemoryPlanResult['mode']
 }
 
 function buildPayloadGenerationTranscript(payload: ChatGenerationJobPayload): {
@@ -790,6 +791,7 @@ export async function loadChatJobExecutionContext({
         : apiKeyData,
     decryptedApiKey,
     requestContext,
+    memoryMode: mode,
     generationTranscript,
     finalSystemPrompt,
     staticSystemPrompt,

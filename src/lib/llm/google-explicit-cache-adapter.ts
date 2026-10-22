@@ -3,6 +3,11 @@ import 'server-only'
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import {
+  buildChatContextRequest,
+  type ChatContextRequest,
+  type ChatPromptContext,
+} from '@/lib/chat-memory/prompt-context'
+import {
   buildGoogleCachedProviderOptions,
   buildGoogleExplicitCacheRequestContract,
   createGoogleCache,
@@ -15,6 +20,30 @@ import {
 import type { SerializableFunctionToolContract } from '@/lib/llm/function-tool-contract'
 
 type GoogleCacheDecision = ReturnType<typeof resolveGoogleCacheDecision>
+
+/** Project current memory/lore into a per-request cache without changing the core request. */
+export function buildGooglePrefixCacheContextRequest({
+  context,
+  messages,
+  toolInstruction,
+}: {
+  context: ChatPromptContext
+  messages: SanitizedMessage[]
+  toolInstruction?: string | null
+}): ChatContextRequest {
+  const referenceRequest = buildChatContextRequest({ context, messages })
+  if (referenceRequest.messages.length === messages.length) {
+    return buildChatContextRequest({ context, messages, toolInstruction })
+  }
+
+  // The shared adapter caches all but the last message. Keep memory/lore after
+  // the conversation and leave only live execution guidance in that last block.
+  return buildChatContextRequest({
+    context: { instructions: context.instructions, memory: null, turnContext: null },
+    messages: referenceRequest.messages,
+    toolInstruction: toolInstruction?.trim() ? toolInstruction : 'Continue the conversation.',
+  })
+}
 
 function buildGoogleConversationMessages(
   recentMessages: SanitizedMessage[],

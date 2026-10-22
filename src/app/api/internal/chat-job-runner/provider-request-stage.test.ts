@@ -111,6 +111,7 @@ function buildContext(
 ): LoadedChatJobExecutionContext {
   return {
     requestContext: undefined,
+    memoryMode: 'summary_window',
     apiKeyData: {
       provider: 'openai',
       vault_secret_name: 'vault-key',
@@ -573,6 +574,7 @@ describe('requestProviderStage', () => {
       buildStreamPayloadPlanMock.mockImplementation(actual.buildStreamPayloadPlan)
       isGoogleExplicitCacheEnabledMock.mockReturnValue(false)
       const context = buildContext({
+        memoryMode: 'prefix_live_blocks',
         requestContext: {
           instructions: 'FIXED AND PERMANENT LORE',
           memory: 'MEMORY',
@@ -646,16 +648,28 @@ describe('requestProviderStage', () => {
     },
   )
 
-  it.each(['wrapper', 'stream'] as const)(
-    'removes Google recall instructions when the %s fails',
-    async (failure) => {
+  it.each([
+    { failure: 'wrapper', cached: false },
+    { failure: 'stream', cached: false },
+    { failure: 'wrapper', cached: true },
+    { failure: 'stream', cached: true },
+  ])(
+    'removes Google recall instructions when $failure fails with cached=$cached',
+    async ({ failure, cached }) => {
       const { requestProviderStage } = await import('./provider-request-stage')
       const actual = await vi.importActual<typeof import('./stream-payload-builder')>(
         './stream-payload-builder',
       )
       buildStreamPayloadPlanMock.mockImplementation(actual.buildStreamPayloadPlan)
-      isGoogleExplicitCacheEnabledMock.mockReturnValue(false)
+      isGoogleExplicitCacheEnabledMock.mockReturnValue(cached)
+      resolveGoogleCacheDecisionMock.mockReturnValue({ enabled: true, minTokens: 1024 })
+      createGoogleCacheMock.mockResolvedValue({
+        success: true,
+        cacheName: 'cachedContents/atr-fallback',
+        cachedTokenCount: 5000,
+      })
       const context = buildContext({
+        memoryMode: 'prefix_live_blocks',
         requestContext: { instructions: 'FIXED', memory: 'MEMORY', turnContext: 'LORE' },
       })
       context.agenticTranscriptRecall.enabled = true
@@ -690,7 +704,10 @@ describe('requestProviderStage', () => {
       const result = await requestProviderStage({
         supabase: createChatJobRunnerSupabaseMock() as never,
         jobId: 'fallback-google',
-        payload: buildPayload({ provider: 'google', modelName: 'gemini-4-argon' }),
+        payload: buildPayload({
+          provider: 'google',
+          modelName: cached ? 'gemini-3.8-flash' : 'gemini-4-argon',
+        }),
         context,
         timings: {},
       })
@@ -699,9 +716,107 @@ describe('requestProviderStage', () => {
       expect(call.messages.at(-1).content).toContain('MEMORY\n\nLORE')
       expect(call.messages.at(-1).content).not.toContain('Experimental Transcript Recall')
       expect(call.tools).toBeUndefined()
+      expect(call.providerOptions?.google?.cachedContent).toBeUndefined()
+      expect(createGoogleCacheMock).toHaveBeenCalledTimes(cached ? 1 : 0)
+      expect(result.actualPayload?.cache).toBeUndefined()
       expect(result.actualPayload?.conversationMessages.at(-1)?.content).toBe(
         call.messages.at(-1).content,
       )
+    },
+  )
+
+  it.each(['success', 'off', 'too-short', 'argon', 'create-failure', 'compatibility-retry'])(
+    'preserves Google Prefix memory, lore and ATR with explicit cache %s',
+    async (reason) => {
+      const { requestProviderStage } = await import('./provider-request-stage')
+      const { buildStreamPayloadPlan } = await vi.importActual<
+        typeof import('./stream-payload-builder')
+      >('./stream-payload-builder')
+      const { resolveGoogleCacheDecision } =
+        await vi.importActual<typeof import('@/lib/llm/google-cache')>('@/lib/llm/google-cache')
+      buildStreamPayloadPlanMock.mockImplementation(buildStreamPayloadPlan)
+      resolveGoogleCacheDecisionMock.mockImplementation(resolveGoogleCacheDecision)
+      isGoogleExplicitCacheEnabledMock.mockReturnValue(reason !== 'off')
+      createGoogleCacheMock.mockResolvedValue(
+        reason === 'create-failure'
+          ? { success: false, error: 'unavailable', code: 503 }
+          : { success: true, cacheName: 'cachedContents/prefix', cachedTokenCount: 5000 },
+      )
+      const memory =
+        reason === 'too-short' ? 'SUMMARY AND FACTS' : 'SUMMARY AND FACTS '.repeat(1500)
+      const context = buildContext({
+        memoryMode: 'prefix_live_blocks',
+        requestContext: { instructions: 'FIXED', memory, turnContext: 'CURRENT LORE' },
+        agenticTranscriptRecallSourceMap: {
+          rawContextStartOrdinal: 11,
+          cutoffOrdinal: 10,
+          directFetchRanges: [
+            {
+              kind: 'summary',
+              label: 'summary',
+              rangeId: 'R1',
+              startSeq: 1,
+              endSeq: 10,
+              preview: 'Older memory',
+            },
+          ],
+          navigationParents: [],
+        },
+      })
+      context.agenticTranscriptRecall.enabled = true
+      prepareExperimentalAgenticTranscriptRecallRequestMock.mockImplementation(
+        ({ streamRequest }) => ({
+          streamRequest,
+          streamTextSettings: { tools: { fetch_source_range: {} } },
+        }),
+      )
+      const result = await requestProviderStage({
+        supabase: createChatJobRunnerSupabaseMock() as never,
+        jobId: 'google-prefix',
+        payload: buildPayload({
+          provider: 'google',
+          modelName: reason === 'argon' ? 'gemini-4-argon' : 'gemini-3.8-flash',
+        }),
+        context,
+        timings: {},
+        disableGoogleExplicitCache: reason === 'compatibility-retry',
+      })
+      const cacheCreated = reason === 'success'
+      expect(createGoogleCacheMock).toHaveBeenCalledTimes(
+        cacheCreated || reason === 'create-failure' ? 1 : 0,
+      )
+      const call = streamTextMock.mock.calls[0][0]
+      expect(call.tools).toHaveProperty('fetch_source_range')
+      expect(call.messages.at(-1).content).toContain('Experimental Transcript Recall')
+      if (cacheCreated) {
+        const cached = createGoogleCacheMock.mock.calls[0][0]
+        expect(cached.messagesToCache[0]).toEqual({ role: 'user', content: 'Hello' })
+        expect(cached.messagesToCache.at(-1).content).toContain(`${memory}\n\nCURRENT LORE`)
+        expect(JSON.stringify(cached.messagesToCache)).not.toContain(
+          'Experimental Transcript Recall',
+        )
+        expect(cached.toolContract.tools[0].name).toBe('fetch_source_range')
+        expect(call.system).toBeUndefined()
+        expect(call.messages).toHaveLength(1)
+        expect(call.messages[0].content).not.toContain('SUMMARY AND FACTS')
+        expect(call.messages[0].content).not.toContain('CURRENT LORE')
+        expect(call.providerOptions.google.cachedContent).toBe('cachedContents/prefix')
+        expect(call.providerOptions.google.rebelCachedContentOwnsRequestContract).toBe(true)
+        expect(result.actualPayload?.cache?.messagesToCache?.at(-1)?.content).toContain(memory)
+        expect(result.actualPayload?.conversationMessages.at(-2)?.content).toContain(memory)
+      } else {
+        expect(call.system).toContain('FIXED')
+        expect(call.messages).toHaveLength(2)
+        expect(call.messages.at(-1).content).toContain(`${memory}\n\nCURRENT LORE`)
+        expect(call.providerOptions?.google?.cachedContent).toBeUndefined()
+        expect(result.actualPayload?.cache).toBeUndefined()
+      }
+      expect(context.recentMessages).toEqual([{ role: 'user', content: 'Hello' }])
+      expect(context.requestContext).toEqual({
+        instructions: 'FIXED',
+        memory,
+        turnContext: 'CURRENT LORE',
+      })
     },
   )
 

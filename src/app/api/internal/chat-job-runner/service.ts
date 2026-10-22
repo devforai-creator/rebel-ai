@@ -216,6 +216,7 @@ async function executeJob({
       staticPromptTokens,
       debugMetrics,
       requestContext,
+      memoryMode,
     } = await loadChatJobExecutionContext({
       supabase,
       payload,
@@ -230,6 +231,7 @@ async function executeJob({
 
     const executionContext = {
       requestContext,
+      memoryMode,
       apiKeyData,
       decryptedApiKey,
       generationTranscript,

@@ -89,7 +89,7 @@ export const ChatComposer = memo(function ChatComposer({
   }
 
   return (
-    <div className="max-h-[75dvh] shrink-0 overflow-y-auto border-t border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:p-4">
+    <div className="max-h-[75dvh] min-h-0 overflow-y-auto border-t border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800 sm:p-4">
       <form
         onSubmit={(event) => {
           if (isDrafting) {

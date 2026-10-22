@@ -232,19 +232,27 @@ export function buildStreamPayloadPlan({
       providerOptions,
     })
     if (cacheControl) {
-      // Mark the stable system prefix and the end of canonical conversation.
+      // Preserve earlier OpenAI endpoints so appended turns can read their caches.
       // The final temporary context message receives no cache marker.
+      const cacheMessages = buildConversationCacheMessages(contextRequest, cacheControl, {
+        preserveOpenAIMessageBoundaries: provider === 'openai',
+      })
       defaultPlan.streamRequest = {
-        messages: buildConversationCacheMessages(contextRequest, cacheControl),
+        messages: cacheMessages,
         providerOptions,
       }
       defaultPlan.actualPayload.systemMessages[0].cached = true
       defaultPlan.actualPayload.conversationMessages = contextRequest.messages.map(
-        (message, index) => ({
-          role: message.role,
-          content: message.content,
-          ...(index === contextRequest.cacheableMessageCount - 1 ? { cached: true } : {}),
-        }),
+        (message, index) => {
+          const content = cacheMessages[index + 1].content
+          const cached =
+            Array.isArray(content) && content.some((part) => part.providerOptions === cacheControl)
+          return {
+            role: message.role,
+            content: message.content,
+            ...(cached ? { cached: true } : {}),
+          }
+        },
       )
     }
   }

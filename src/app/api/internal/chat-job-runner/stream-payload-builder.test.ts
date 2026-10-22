@@ -54,12 +54,43 @@ describe('buildStreamPayloadPlan', () => {
       expect(result.actualPayload.conversationMessages.at(-1)?.cached).toBeUndefined()
       if (provider === 'anthropic' || provider === 'openai') {
         expect(result.actualPayload.conversationMessages[2].cached).toBe(true)
+        expect(result.actualPayload.conversationMessages.slice(0, 2).map((m) => m.cached)).toEqual(
+          provider === 'openai' ? [true, true] : [undefined, undefined],
+        )
         const last = result.streamRequest.messages.at(-1)!
         expect(last.content).toBe(contextRequest.messages.at(-1)?.content)
         expect(last).not.toHaveProperty('providerOptions')
       } else {
         expect(result.actualPayload.conversationMessages.every((m) => !m.cached)).toBe(true)
       }
+    },
+  )
+
+  it.each(['gpt-5.4', undefined])(
+    'does not add explicit boundaries without an explicit OpenAI cache policy (%s)',
+    (modelName) => {
+      const contextRequest = buildChatContextRequest({
+        context: { instructions: 'STATIC', memory: 'MEMORY', turnContext: 'LORE' },
+        messages: [{ role: 'user', content: 'question' }],
+      })
+      const result = buildStreamPayloadPlan({
+        ...BASE_ARGS,
+        provider: 'openai',
+        contextRequest,
+        finalSystemPrompt: 'legacy',
+        staticSystemPrompt: 'STATIC',
+        dynamicContext: 'MEMORY',
+        anthropicCache: null,
+        anthropicConversationMessages: [],
+        providerOptions: getProviderOptions('openai', {
+          modelName,
+          ...(modelName ? { promptCacheKey: 'chat:test' } : {}),
+          conversationCache: true,
+        }),
+      })
+      expect(JSON.stringify(result.streamRequest)).not.toContain('promptCacheBreakpoint')
+      expect(result.actualPayload.systemMessages.every((m) => !m.cached)).toBe(true)
+      expect(result.actualPayload.conversationMessages.every((m) => !m.cached)).toBe(true)
     },
   )
 

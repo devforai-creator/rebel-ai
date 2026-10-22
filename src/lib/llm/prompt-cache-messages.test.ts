@@ -49,7 +49,7 @@ describe('conversation cache boundary projection', () => {
     expect(original).toEqual(snapshot)
   })
 
-  it('keeps existing chat callers on their original last-message policy', () => {
+  it('keeps callers without the preservation option on the last-message policy', () => {
     const messages = buildConversationCacheMessages(request(), openai)
     expect(messages[1].content).toBe('Stable setting and sealed memory')
     expect(messages.at(-2)!.content).toEqual([

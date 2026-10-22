@@ -41,7 +41,12 @@ export function UserDraftUsageDetails({ usage }: { usage: UserDraftUsage }) {
       <summary className="w-fit cursor-pointer rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500">
         대필 사용량 · 캐시 적중률 {hitRate}
       </summary>
-      <div className="mt-2 max-w-sm rounded-lg border border-gray-200 p-3 dark:border-gray-600">
+      <div
+        role="region"
+        aria-label="대필 사용량 상세"
+        tabIndex={0}
+        className="mt-2 max-h-[35dvh] max-w-sm overflow-y-auto rounded-lg border border-gray-200 p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-gray-600"
+      >
         <p className="break-all">
           {providerNames[usage.provider]} · {usage.modelName} ·{' '}
           {usage.memoryMode === 'prefix_live_blocks' ? 'Prefix' : 'Summary'}

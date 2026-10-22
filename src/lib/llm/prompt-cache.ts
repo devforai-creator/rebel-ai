@@ -143,11 +143,18 @@ export function resolveConversationCacheControl({
 export function buildConversationCacheMessages(
   contextRequest: ChatContextRequest,
   cacheControl: SharedV2ProviderOptions,
+  { preserveOpenAIMessageBoundaries = false }: { preserveOpenAIMessageBoundaries?: boolean } = {},
 ): CoreMessage[] {
+  // Explicit-only OpenAI lookup needs the old endpoint in each later request.
+  // Keep message boundaries as lookup hints; OpenAI writes only the latest four.
+  // Other providers retain their existing breakpoint policy and limits.
+  const preserveBoundaries =
+    preserveOpenAIMessageBoundaries && Boolean(cacheControl.openai?.promptCacheBreakpoint)
   return [
     { role: 'system', content: contextRequest.system, providerOptions: cacheControl },
     ...contextRequest.messages.map<CoreMessage>((message, index) =>
-      index === contextRequest.cacheableMessageCount - 1
+      index < contextRequest.cacheableMessageCount &&
+      (preserveBoundaries || index === contextRequest.cacheableMessageCount - 1)
         ? {
             role: message.role,
             content: [{ type: 'text', text: message.content, providerOptions: cacheControl }],

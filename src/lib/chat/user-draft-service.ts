@@ -311,7 +311,11 @@ export async function generateUserDraft({
   const generationRequest = googleCache?.streamRequestOverride ?? {
     ...(prefixRequest
       ? cacheControl
-        ? { messages: buildConversationCacheMessages(prefixRequest, cacheControl) }
+        ? {
+            messages: buildConversationCacheMessages(prefixRequest, cacheControl, {
+              preserveOpenAIMessageBoundaries: provider === 'openai',
+            }),
+          }
         : { system: prefixRequest.system, messages: prefixRequest.messages }
       : { system: USER_DRAFT_SYSTEM_PROMPT, prompt: prompt! }),
     providerOptions,

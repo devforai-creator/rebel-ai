@@ -489,7 +489,7 @@ describe('generateUserDraft', () => {
       vi.stubEnv('ANTHROPIC_PROMPT_CACHE_TTL', '1h')
       const { args, client } = setup({
         provider,
-        modelName: provider === 'openai' ? 'gpt-6-luna' : 'claude-opus-4-7',
+        modelName: provider === 'openai' ? 'gpt-6.1-sol' : 'claude-opus-4-7',
         modelConfig: { memory: { mode: 'prefix_live_blocks' } },
       })
       ;(client.state.characters as Record<string, unknown>[])[0].system_prompt =
@@ -565,6 +565,34 @@ describe('generateUserDraft', () => {
       expect(next.messages.slice(0, -1)).toEqual(call.messages.slice(0, -1))
       expect(next.providerOptions).toEqual(call.providerOptions)
       expect(next.messages.at(-1).content).toContain('Accept warmly')
+      if (provider === 'openai') {
+        const referencePrefix = next.messages.slice(0, -1)
+        for (const suffix of [
+          [
+            { id: 'u2', role: 'user', content: 'A new action' },
+            { id: 'a2', role: 'assistant', content: 'A new reply' },
+          ],
+          [
+            { id: 'u2', role: 'user', content: 'A new action' },
+            { id: 'a2', role: 'assistant', content: 'A new reply' },
+            { id: 'u3', role: 'user', content: 'Another action' },
+            { id: 'a3', role: 'assistant', content: 'Another reply' },
+          ],
+        ]) {
+          mocks.tail.mockResolvedValue([...transcript, ...suffix])
+          mocks.count.mockResolvedValue(transcript.length + suffix.length)
+          await generateUserDraft(args)
+          const grown = mocks.generate.mock.calls.at(-1)![0]
+          expect(grown.messages.slice(0, referencePrefix.length)).toEqual(referencePrefix)
+          expect(grown.messages[referencePrefix.length - 1].content[0].providerOptions).toEqual(
+            marker,
+          )
+          expect(grown.messages.at(-2).content[0].providerOptions).toEqual(marker)
+          expect(grown.messages.at(-1).content).toContain('Changed scene')
+          expect(grown.messages.at(-1)).not.toHaveProperty('providerOptions')
+          expect(grown.providerOptions).toEqual(next.providerOptions)
+        }
+      }
       expect(JSON.stringify(client.state)).toBe(before)
       expect(mocks.cacheCreate).not.toHaveBeenCalled()
     },

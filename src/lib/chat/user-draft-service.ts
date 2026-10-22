@@ -18,8 +18,12 @@ import { buildLanguageModel } from '@/lib/llm/model-factory'
 import { prepareGoogleExplicitCache } from '@/lib/llm/google-explicit-cache-adapter'
 import { LLM_OUTPUT_LIMITS } from '@/lib/llm/output-limits'
 import { getProviderOptions } from '@/lib/llm/provider-options'
-import { readDeepSeekUsageStep } from '@/lib/llm/deepseek-usage'
-import { readGoogleUsageStep } from '@/lib/llm/google-usage'
+import {
+  buildConversationCacheMessages,
+  resolveAnthropicCacheDecision,
+  resolveConversationCacheControl,
+  resolvePromptCacheDecision,
+} from '@/lib/llm/prompt-cache'
 import {
   getReasoningModelKey,
   resolveReasoningSnapshot,
@@ -36,6 +40,7 @@ import type { createClient } from '@/lib/supabase/server'
 import type { UserDraftRequest, UserDraftResponse } from './user-draft-contract'
 import { parseUserDraftModelConfig } from './user-draft-model-config'
 import { buildUserDraftPrefixRequest } from './user-draft-prompt'
+import { readUserDraftUsage } from './user-draft-usage'
 
 export const USER_DRAFT_SYSTEM_PROMPT = [
   "You write the user's next roleplay message on their behalf.",
@@ -246,7 +251,29 @@ export async function generateUserDraft({
     legacyTier: config.serviceTier,
   })
   signal.throwIfAborted()
-  const providerOptions = getProviderOptions(provider, { modelName, reasoning, serviceTier })
+  const promptCache = prefixRequest
+    ? resolvePromptCacheDecision({
+        provider,
+        modelName,
+        systemPrompt: prefixRequest.system,
+        messages: prefixRequest.messages,
+        totalInputTokens: inputTokens,
+        cacheKeyOverride: `draft:${chatId}`,
+      })
+    : null
+  const anthropicCache =
+    prefixRequest && provider === 'anthropic' ? resolveAnthropicCacheDecision({ modelName }) : null
+  const providerOptions = getProviderOptions(provider, {
+    modelName,
+    reasoning,
+    serviceTier,
+    promptCacheKey: promptCache?.key,
+    promptCacheRetention: promptCache?.retention,
+    conversationCache: !!prefixRequest,
+  })
+  const cacheControl = prefixRequest
+    ? resolveConversationCacheControl({ provider, anthropicCache, providerOptions })
+    : undefined
   const access = {
     supabase: getAdminClient(),
     requester: userId,
@@ -283,7 +310,9 @@ export async function generateUserDraft({
   signal.throwIfAborted()
   const generationRequest = googleCache?.streamRequestOverride ?? {
     ...(prefixRequest
-      ? { system: prefixRequest.system, messages: prefixRequest.messages }
+      ? cacheControl
+        ? { messages: buildConversationCacheMessages(prefixRequest, cacheControl) }
+        : { system: prefixRequest.system, messages: prefixRequest.messages }
       : { system: USER_DRAFT_SYSTEM_PROMPT, prompt: prompt! }),
     providerOptions,
   }
@@ -299,38 +328,25 @@ export async function generateUserDraft({
     throw new UserDraftError('완성된 초안을 생성하지 못했습니다. 다시 시도해주세요.', 502)
   }
   // Drafting deliberately performs no message, turn, job, or memory writes.
-  if (provider === 'deepseek' || provider === 'google') {
-    const usage =
-      provider === 'deepseek' ? readDeepSeekUsageStep(result) : readGoogleUsageStep(result)
-    const cacheHitTokens =
-      usage.promptTokens !== null &&
-      usage.cachedInputTokens !== null &&
-      usage.cachedInputTokens > usage.promptTokens
-        ? null
-        : usage.cachedInputTokens
-    return {
-      content,
-      usage: {
-        provider,
-        modelName: usage.modelName ?? modelName,
-        memoryMode: memoryConfig.mode,
-        inputTokens: usage.promptTokens,
-        outputTokens: usage.completionTokens,
-        ...(provider === 'google'
-          ? {
-              reasoningTokens: usage.reasoningTokens,
-              cacheMode: googleCache?.streamRequestOverride
-                ? ('explicit' as const)
-                : ('implicit' as const),
-            }
-          : {}),
-        cacheHitTokens,
-        cacheMissTokens:
-          usage.promptTokens !== null && cacheHitTokens !== null
-            ? usage.promptTokens - cacheHitTokens
-            : null,
-      },
-    }
-  }
-  return { content }
+  const usage = readUserDraftUsage({
+    provider,
+    modelName,
+    memoryMode: memoryConfig.mode,
+    step: result,
+    cacheMode:
+      provider === 'google'
+        ? googleCache?.streamRequestOverride
+          ? 'explicit'
+          : 'implicit'
+        : provider === 'openai'
+          ? cacheControl
+            ? 'explicit'
+            : 'implicit'
+          : provider === 'anthropic'
+            ? cacheControl
+              ? 'explicit'
+              : 'off'
+            : undefined,
+  })
+  return { content, ...(usage ? { usage } : {}) }
 }

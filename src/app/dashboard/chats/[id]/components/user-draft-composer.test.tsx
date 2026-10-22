@@ -88,6 +88,61 @@ afterEach(() => {
 })
 
 describe('user draft composer', () => {
+  it.each(['openai', 'anthropic'] as const)(
+    'shows %s cache reads, writes and ordinary input separately',
+    async (provider) => {
+      fetchMock.mockResolvedValue(
+        Response.json({
+          content: 'A draft',
+          usage: {
+            ...usage,
+            provider,
+            modelName: 'draft-model',
+            cacheMode: 'explicit',
+            cacheWriteTokens: 1000,
+            uncachedInputTokens: 1000,
+            reasoningTokens: 50,
+          },
+        }),
+      )
+      render(<Harness provider={provider} />)
+      fireEvent.click(screen.getByRole('button', { name: '대신 작성' }))
+      await waitFor(() => expect(composer().value).toBe('A draft'))
+      expect(screen.getByText(/draft-model · Prefix/).textContent).toContain(
+        provider === 'openai' ? 'OpenAI' : 'Anthropic',
+      )
+      expect(screen.getByText('캐시 읽기 토큰')).toBeTruthy()
+      expect(screen.getByText('캐시 쓰기 토큰')).toBeTruthy()
+      expect(screen.getByText('일반 입력 토큰')).toBeTruthy()
+      expect(screen.getAllByText('1,000')).toHaveLength(2)
+      expect(screen.queryByText('캐시 miss 토큰')).toBeNull()
+      expect(screen.getByText('명시적 캐시 사용')).toBeTruthy()
+      expect(
+        screen.getByText(provider === 'openai' ? '출력 토큰 (추론 포함)' : '출력 토큰'),
+      ).toBeTruthy()
+    },
+  )
+
+  it('shows unknown cache writes as unreported for Anthropic', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({
+        content: 'A draft',
+        usage: {
+          ...usage,
+          provider: 'anthropic',
+          cacheMode: 'off',
+          cacheWriteTokens: null,
+          uncachedInputTokens: 1000,
+        },
+      }),
+    )
+    render(<Harness provider="anthropic" />)
+    fireEvent.click(screen.getByRole('button', { name: '대신 작성' }))
+    await waitFor(() => expect(composer().value).toBe('A draft'))
+    expect(screen.getByText('명시적 캐시 미사용')).toBeTruthy()
+    expect(screen.getByText('미확인')).toBeTruthy()
+  })
+
   it.each(['explicit', 'implicit'] as const)(
     'shows Google %s cache usage with thinking separate from output',
     async (cacheMode) => {

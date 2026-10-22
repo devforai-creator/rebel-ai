@@ -3,7 +3,10 @@ import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { SanitizedMessage } from '@/lib/chat-summaries'
 import type { MemoryPromptBlock } from '@/lib/chat-memory'
 import type { ChatContextRequest } from '@/lib/chat-memory/prompt-context'
-import { resolveConversationCacheControl } from '@/lib/llm/prompt-cache'
+import {
+  buildConversationCacheMessages,
+  resolveConversationCacheControl,
+} from '@/lib/llm/prompt-cache'
 import { buildAnthropicCacheControl } from '@/lib/llm/provider-options'
 import type { AnthropicCacheDecision } from '@/lib/llm/prompt-cache'
 import type { LlmProvider } from '@/types/database.types'
@@ -232,17 +235,7 @@ export function buildStreamPayloadPlan({
       // Mark the stable system prefix and the end of canonical conversation.
       // The final temporary context message receives no cache marker.
       defaultPlan.streamRequest = {
-        messages: [
-          { role: 'system', content: contextRequest.system, providerOptions: cacheControl },
-          ...contextRequest.messages.map<CoreMessage>((message, index) =>
-            index === contextRequest.cacheableMessageCount - 1
-              ? {
-                  role: message.role,
-                  content: [{ type: 'text', text: message.content, providerOptions: cacheControl }],
-                }
-              : { role: message.role, content: message.content },
-          ),
-        ],
+        messages: buildConversationCacheMessages(contextRequest, cacheControl),
         providerOptions,
       }
       defaultPlan.actualPayload.systemMessages[0].cached = true

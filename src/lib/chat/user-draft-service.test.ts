@@ -133,6 +133,8 @@ function setup(
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('GOOGLE_EXPLICIT_CACHE_MODE', 'off')
+  vi.stubEnv('OPENAI_PROMPT_CACHE_MODE', 'off')
+  vi.stubEnv('ANTHROPIC_PROMPT_CACHE_MODE', 'off')
   mocks.generate.mockResolvedValue({
     text: '  *안전한 능선길을 가리킨다.*  ',
     finishReason: 'stop',
@@ -336,7 +338,7 @@ describe('generateUserDraft', () => {
   it('suggests a user reaction using persona, active history, memory and lore without persisting it', async () => {
     const { args, client, getAdminClient } = setup()
     const before = JSON.stringify(client.state)
-    expect(await generateUserDraft(args)).toEqual({ content: '*안전한 능선길을 가리킨다.*' })
+    expect(await generateUserDraft(args)).toMatchObject({ content: '*안전한 능선길을 가리킨다.*' })
     const call = mocks.generate.mock.calls[0][0]
     expect(call.system).toBe(USER_DRAFT_SYSTEM_PROMPT)
     expect(call.system).not.toContain('You control EVERYTHING')
@@ -478,6 +480,137 @@ describe('generateUserDraft', () => {
       expect(mocks.cacheCreate).not.toHaveBeenCalled()
     },
   )
+
+  it.each(['openai', 'anthropic'] as const)(
+    'reuses %s prefix cache policy without caching current lore or writing instructions',
+    async (provider) => {
+      vi.stubEnv('OPENAI_PROMPT_CACHE_MODE', 'auto')
+      vi.stubEnv('ANTHROPIC_PROMPT_CACHE_MODE', 'auto')
+      vi.stubEnv('ANTHROPIC_PROMPT_CACHE_TTL', '1h')
+      const { args, client } = setup({
+        provider,
+        modelName: provider === 'openai' ? 'gpt-6-luna' : 'claude-opus-4-7',
+        modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+      })
+      ;(client.state.characters as Record<string, unknown>[])[0].system_prompt =
+        'Stable setting '.repeat(1000)
+      mocks.renderLore.mockReturnValue({
+        combined: 'Current scene',
+        alwaysActive: 'Permanent setting',
+        conditional: 'Current scene',
+      })
+      mocks.generate.mockResolvedValue({
+        text: 'A complete draft',
+        finishReason: 'stop',
+        usage: {
+          inputTokens: provider === 'openai' ? 10000 : 1000,
+          outputTokens: 200,
+          cachedInputTokens: 8000,
+        },
+        providerMetadata:
+          provider === 'openai'
+            ? { openai: { usage: { cacheWriteTokens: 1000 } } }
+            : { anthropic: { cacheCreationInputTokens: 1000 } },
+      })
+      const before = JSON.stringify(client.state)
+      const result = await generateUserDraft({
+        ...args,
+        request: { ...args.request, instruction: 'Decline politely' },
+      })
+      const call = mocks.generate.mock.calls[0][0]
+      const marker =
+        provider === 'openai'
+          ? { openai: { promptCacheBreakpoint: { mode: 'explicit' } } }
+          : { anthropic: { cacheControl: { type: 'ephemeral', ttl: '1h' } } }
+      expect(call.system).toBeUndefined()
+      expect(call.messages[0]).toMatchObject({ role: 'system', providerOptions: marker })
+      expect(call.messages.at(-2).content[0]).toMatchObject({
+        type: 'text',
+        providerOptions: marker,
+      })
+      expect(JSON.stringify(call.messages.slice(0, -1))).toContain(
+        'Previously agreed to avoid the river.',
+      )
+      expect(JSON.stringify(call.messages.slice(0, -1))).toContain('Permanent setting')
+      expect(JSON.stringify(call.messages.slice(0, -1))).not.toContain('Current scene')
+      expect(JSON.stringify(call.messages.slice(0, -1))).not.toContain('Decline politely')
+      expect(call.messages.at(-1)).not.toHaveProperty('providerOptions')
+      expect(call.messages.at(-1).content).toContain('Decline politely')
+      expect(call.messages.at(-1).content).toContain('Current scene')
+      if (provider === 'openai') {
+        expect(call.providerOptions.openai).toMatchObject({
+          promptCacheKey: 'draft:chat-1',
+          promptCacheOptions: { mode: 'explicit', ttl: '30m' },
+        })
+        expect(call.providerOptions.openai).not.toHaveProperty('promptCacheRetention')
+      }
+      expect(result.usage).toMatchObject({
+        provider,
+        cacheMode: 'explicit',
+        inputTokens: 10000,
+        cacheHitTokens: 8000,
+        cacheWriteTokens: 1000,
+        uncachedInputTokens: 1000,
+      })
+      mocks.renderLore.mockReturnValue({
+        combined: 'Changed scene',
+        alwaysActive: 'Permanent setting',
+        conditional: 'Changed scene',
+      })
+      await generateUserDraft({
+        ...args,
+        request: { ...args.request, instruction: 'Accept warmly' },
+      })
+      const next = mocks.generate.mock.calls[1][0]
+      expect(next.messages.slice(0, -1)).toEqual(call.messages.slice(0, -1))
+      expect(next.providerOptions).toEqual(call.providerOptions)
+      expect(next.messages.at(-1).content).toContain('Accept warmly')
+      expect(JSON.stringify(client.state)).toBe(before)
+      expect(mocks.cacheCreate).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each(['openai', 'anthropic'] as const)(
+    'preserves %s summary and disabled-cache payloads',
+    async (provider) => {
+      const modelName = provider === 'openai' ? 'gpt-6-luna' : 'claude-opus-4-7'
+      const prefix = setup({
+        provider,
+        modelName,
+        modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+      })
+      const result = await generateUserDraft(prefix.args)
+      expect(mocks.generate.mock.calls[0][0].system).toContain(USER_DRAFT_SYSTEM_PROMPT)
+      expect(
+        mocks.generate.mock.calls[0][0].providerOptions?.openai?.promptCacheKey,
+      ).toBeUndefined()
+      expect(result.usage?.cacheMode).toBe(provider === 'openai' ? 'implicit' : 'off')
+      vi.stubEnv('OPENAI_PROMPT_CACHE_MODE', 'auto')
+      vi.stubEnv('ANTHROPIC_PROMPT_CACHE_MODE', 'auto')
+      await generateUserDraft(setup({ provider, modelName }).args)
+      const summary = mocks.generate.mock.calls[1][0]
+      expect(summary.system).toBe(USER_DRAFT_SYSTEM_PROMPT)
+      expect(JSON.parse(summary.prompt).transcript).toHaveLength(2)
+      expect(summary.providerOptions?.openai?.promptCacheKey).toBeUndefined()
+    },
+  )
+
+  it('keeps older OpenAI draft models on their supported implicit cache policy', async () => {
+    vi.stubEnv('OPENAI_PROMPT_CACHE_MODE', 'auto')
+    const { args, client } = setup({
+      modelName: 'gpt-5.1',
+      modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+    })
+    ;(client.state.characters as Record<string, unknown>[])[0].system_prompt =
+      'Stable setting '.repeat(1000)
+    const result = await generateUserDraft(args)
+    const call = mocks.generate.mock.calls[0][0]
+    expect(call.system).toContain(USER_DRAFT_SYSTEM_PROMPT)
+    expect(call.providerOptions.openai).toMatchObject({ promptCacheKey: 'draft:chat-1' })
+    expect(call.providerOptions.openai).not.toHaveProperty('promptCacheOptions')
+    expect(call.providerOptions.openai.promptCacheRetention).toBeDefined()
+    expect(result.usage?.cacheMode).toBe('implicit')
+  })
 
   it('reuses Google explicit caching for the stable draft prefix with one Vault read', async () => {
     vi.stubEnv('GOOGLE_EXPLICIT_CACHE_MODE', 'auto')

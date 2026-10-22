@@ -19,7 +19,7 @@ export type UserDraftRequest = z.infer<typeof userDraftRequestSchema>
 const tokenCount = z.number().int().nonnegative().nullable()
 
 export const userDraftUsageSchema = z.object({
-  provider: z.enum(['deepseek', 'google']),
+  provider: z.enum(['deepseek', 'google', 'openai', 'anthropic']),
   modelName: z.string().min(1),
   memoryMode: z.enum(['summary_window', 'prefix_live_blocks']),
   inputTokens: tokenCount,
@@ -27,7 +27,9 @@ export const userDraftUsageSchema = z.object({
   reasoningTokens: tokenCount.optional(),
   cacheHitTokens: tokenCount,
   cacheMissTokens: tokenCount,
-  cacheMode: z.enum(['implicit', 'explicit']).optional(),
+  cacheWriteTokens: tokenCount.optional(),
+  uncachedInputTokens: tokenCount.optional(),
+  cacheMode: z.enum(['implicit', 'explicit', 'off']).optional(),
 })
 
 export type UserDraftUsage = z.infer<typeof userDraftUsageSchema>

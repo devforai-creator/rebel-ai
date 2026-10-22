@@ -7,6 +7,8 @@ import {
   type AnthropicCacheTTL,
 } from './provider-options'
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
+import type { CoreMessage } from 'ai'
+import type { ChatContextRequest } from '@/lib/chat-memory/prompt-context'
 import { resolveProviderCacheMode } from './cache-mode'
 
 const PROMPT_CACHE_VERSION = 'v1'
@@ -135,6 +137,24 @@ export function resolveConversationCacheControl({
     return { openai: { promptCacheBreakpoint: { mode: 'explicit' } } }
   }
   return undefined
+}
+
+/** Share cache boundaries between chat and draft requests without changing their content. */
+export function buildConversationCacheMessages(
+  contextRequest: ChatContextRequest,
+  cacheControl: SharedV2ProviderOptions,
+): CoreMessage[] {
+  return [
+    { role: 'system', content: contextRequest.system, providerOptions: cacheControl },
+    ...contextRequest.messages.map<CoreMessage>((message, index) =>
+      index === contextRequest.cacheableMessageCount - 1
+        ? {
+            role: message.role,
+            content: [{ type: 'text', text: message.content, providerOptions: cacheControl }],
+          }
+        : { role: message.role, content: message.content },
+    ),
+  ]
 }
 
 function isAnthropicCacheEnabled(): boolean {

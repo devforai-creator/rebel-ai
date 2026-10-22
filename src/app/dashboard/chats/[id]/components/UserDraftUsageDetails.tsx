@@ -1,17 +1,39 @@
 import React from 'react'
 import type { UserDraftUsage } from '@/lib/chat/user-draft-contract'
+import { outputIncludesReasoning } from '@/lib/llm/usage-semantics'
+
+const providerNames = {
+  google: 'Google',
+  deepseek: 'DeepSeek',
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+}
 
 export function UserDraftUsageDetails({ usage }: { usage: UserDraftUsage }) {
   const hitRate =
     usage.inputTokens !== null && usage.inputTokens > 0 && usage.cacheHitTokens !== null
       ? ((usage.cacheHitTokens / usage.inputTokens) * 100).toFixed(1) + '%'
       : '미확인'
+  const separatesCacheWrites = usage.provider === 'openai' || usage.provider === 'anthropic'
   const rows = [
     ['입력 토큰', usage.inputTokens],
-    ['캐시 hit 토큰', usage.cacheHitTokens],
-    ['캐시 miss 토큰', usage.cacheMissTokens],
-    [usage.provider === 'google' ? '출력 토큰' : '출력 토큰 (추론 포함)', usage.outputTokens],
-    ...(usage.provider === 'google' ? [['추론 토큰', usage.reasoningTokens ?? null] as const] : []),
+    ...(separatesCacheWrites
+      ? ([
+          ['캐시 읽기 토큰', usage.cacheHitTokens],
+          ['캐시 쓰기 토큰', usage.cacheWriteTokens ?? null],
+          ['일반 입력 토큰', usage.uncachedInputTokens ?? null],
+        ] as const)
+      : ([
+          ['캐시 hit 토큰', usage.cacheHitTokens],
+          ['캐시 miss 토큰', usage.cacheMissTokens],
+        ] as const)),
+    [
+      outputIncludesReasoning(usage.provider) ? '출력 토큰 (추론 포함)' : '출력 토큰',
+      usage.outputTokens,
+    ],
+    ...(usage.provider === 'google' || usage.provider === 'openai'
+      ? [['추론 토큰', usage.reasoningTokens ?? null] as const]
+      : []),
   ] as const
 
   return (
@@ -21,12 +43,16 @@ export function UserDraftUsageDetails({ usage }: { usage: UserDraftUsage }) {
       </summary>
       <div className="mt-2 max-w-sm rounded-lg border border-gray-200 p-3 dark:border-gray-600">
         <p className="break-all">
-          {usage.provider === 'google' ? 'Google' : 'DeepSeek'} · {usage.modelName} ·{' '}
+          {providerNames[usage.provider]} · {usage.modelName} ·{' '}
           {usage.memoryMode === 'prefix_live_blocks' ? 'Prefix' : 'Summary'}
         </p>
-        {usage.provider === 'google' && usage.cacheMode && (
+        {usage.cacheMode && (
           <p className="mt-1">
-            {usage.cacheMode === 'explicit' ? '명시적 캐시 사용' : '자동 캐싱'}
+            {usage.cacheMode === 'explicit'
+              ? '명시적 캐시 사용'
+              : usage.cacheMode === 'off'
+                ? '명시적 캐시 미사용'
+                : '자동 캐싱'}
           </p>
         )}
         <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">

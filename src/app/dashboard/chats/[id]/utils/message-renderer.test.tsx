@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
@@ -104,11 +106,12 @@ describe('renderMessageContent', () => {
         { [`${assetKey}.webp`]: url },
       )
       const html = renderToStaticMarkup(<>{node}</>)
-      const visibleText = html.replace(/<[^>]*>/g, '')
+      const document = new DOMParser().parseFromString(html, 'text/html')
+      const images = document.querySelectorAll('img')
 
-      expect(html).toContain(`src="${url}"`)
-      expect(html.match(/<img\b/g)).toHaveLength(1)
-      expect(visibleText).toBe('Before () after')
+      expect(images).toHaveLength(1)
+      expect(images[0].getAttribute('src')).toBe(url)
+      expect(document.body.textContent).toBe('Before () after')
     })
 
     it('resolves dot-style asset tags through underscore image command keys', () => {

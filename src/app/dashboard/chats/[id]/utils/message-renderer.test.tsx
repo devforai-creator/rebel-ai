@@ -85,6 +85,32 @@ describe('renderMessageContent', () => {
       expect(html).toContain('alt="hero is happy"')
     })
 
+    it.each([
+      '![Hero mood](asset:hero_coat(cold, rainy)_shy)',
+      '{{img::hero_coat(cold, rainy)_shy}}',
+    ])('renders parenthesized character assets from %s without trailing fragments', (token) => {
+      const assetKey = 'hero_coat(cold, rainy)_shy'
+      const url = 'https://example.com/hero-coat.webp'
+      const node = renderMessageContent(
+        `Before (${token}) after`,
+        [
+          {
+            id: 'asset-parentheses',
+            file_name: `${assetKey}.webp`,
+            storage_path: 'assets/hero-coat.webp',
+            metadata: { aliases: [assetKey] },
+          },
+        ],
+        { [`${assetKey}.webp`]: url },
+      )
+      const html = renderToStaticMarkup(<>{node}</>)
+      const visibleText = html.replace(/<[^>]*>/g, '')
+
+      expect(html).toContain(`src="${url}"`)
+      expect(html.match(/<img\b/g)).toHaveLength(1)
+      expect(visibleText).toBe('Before () after')
+    })
+
     it('resolves dot-style asset tags through underscore image command keys', () => {
       const content = '![Ako](asset:Ako.surprised)'
       const node = renderMessageContent(content, [], undefined, {

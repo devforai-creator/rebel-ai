@@ -54,6 +54,21 @@ describe('normalizeLegacyAssetImageTokens', () => {
     )
   })
 
+  it.each([
+    '<mmg="%s">',
+    '<img="%s">',
+    '<img src="%s">',
+    '[ 🖼 | %s ]',
+    '{{image::%s}}',
+    '{{img::%s}}',
+  ])('preserves parentheses when normalizing %s', (template) => {
+    const assetKey = 'hero_coat(cold, rainy)_shy'
+    const normalized = normalizeLegacyAssetImageTokens(template.replace('%s', assetKey))
+
+    expect(extractCanonicalAssetTokens(normalized)).toEqual([assetKey])
+    expect(unwrapAssetToken(normalized)).toBe(assetKey)
+  })
+
   it('leaves external and data image src values untouched', () => {
     const input = [
       '<img src="https://example.com/already.png">',
@@ -168,6 +183,67 @@ describe('extractAssetTokens', () => {
 })
 
 describe('canonical asset token helpers', () => {
+  it.each([
+    'hero_coat(cold, rainy)_shy',
+    'hero_pose(day(night))_calm',
+    'hero_(coat)_(rain)_shy',
+    'scene(indoor)',
+  ])('reads the entire parenthesized asset key %s', (assetKey) => {
+    const token = buildCanonicalAssetImageToken(assetKey, 'Hero mood')
+
+    expect(collectCanonicalAssetImageTokenMatches(token)).toEqual([
+      { raw: token, altText: 'Hero mood', assetKey, index: 0 },
+    ])
+    expect(extractCanonicalAssetTokens(token)).toEqual([assetKey])
+    expect(extractAssetTokens(`${token} ${token}`)).toEqual([assetKey])
+    expect(unwrapAssetToken(token)).toBe(assetKey)
+  })
+
+  it('preserves whitespace inside parentheses while trimming the asset key', () => {
+    const token = '![Hero](asset:  hero_coat(cold, rainy)_shy  )'
+
+    expect(collectCanonicalAssetImageTokenMatches(token)).toEqual([
+      {
+        raw: token,
+        altText: 'Hero',
+        assetKey: 'hero_coat(cold, rainy)_shy',
+        index: 0,
+      },
+    ])
+    expect(unwrapAssetToken(token)).toBe('hero_coat(cold, rainy)_shy')
+  })
+
+  it('keeps adjacent tokens and surrounding parentheses outside each match', () => {
+    const first = '![First](asset:hero_coat(cold, rainy)_shy)'
+    const second = '![Second](asset:scene(indoor))'
+    const input = `Before (${first}${second}) after`
+
+    expect(collectCanonicalAssetImageTokenMatches(input)).toEqual([
+      { raw: first, altText: 'First', assetKey: 'hero_coat(cold, rainy)_shy', index: 8 },
+      {
+        raw: second,
+        altText: 'Second',
+        assetKey: 'scene(indoor)',
+        index: 8 + first.length,
+      },
+    ])
+  })
+
+  it('does not consume a later image token when an earlier token is incomplete', () => {
+    const incomplete = '![Incomplete](asset:hero_coat(cold '
+    const valid = '![Valid](asset:scene(indoor))'
+
+    expect(collectCanonicalAssetImageTokenMatches(incomplete + valid)).toEqual([
+      {
+        raw: valid,
+        altText: 'Valid',
+        assetKey: 'scene(indoor)',
+        index: incomplete.length,
+      },
+    ])
+    expect(extractCanonicalAssetTokens('![Incomplete](asset:hero_coat(cold)')).toEqual([])
+  })
+
   it('collects canonical asset markdown matches with positions and alt text', () => {
     const input = [
       'Before',

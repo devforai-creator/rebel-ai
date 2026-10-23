@@ -1,5 +1,4 @@
-const MARKDOWN_ASSET_IMAGE_REGEX_SOURCE = String.raw`!\[([^\]]*)\]\(\s*asset:((?:[^)\s]|\s(?!\)))*[^)\s]?)\s*\)`
-const MARKDOWN_ASSET_IMAGE_REGEX = new RegExp(MARKDOWN_ASSET_IMAGE_REGEX_SOURCE, 'gim')
+const MARKDOWN_ASSET_IMAGE_PREFIX_REGEX_SOURCE = String.raw`!\[([^\]]*)\]\(\s*asset:`
 const LEGACY_MMG_REGEX = /<mmg\s*="([^"]+)"\s*>/gi
 const LEGACY_IMG_EQUALS_REGEX = /<img\s*=\s*["']?(.+?)["']?\s*>/gi
 const LEGACY_IMG_SRC_REGEX = /<img\s+src\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))\s*\/?>/gi
@@ -14,8 +13,47 @@ export type CanonicalAssetImageTokenMatch = Readonly<{
   index: number
 }>
 
-export function createCanonicalAssetImageTokenRegex(): RegExp {
-  return new RegExp(MARKDOWN_ASSET_IMAGE_REGEX_SOURCE, 'gim')
+function scanCanonicalAssetImageTokens(text: string): CanonicalAssetImageTokenMatch[] {
+  const matches: CanonicalAssetImageTokenMatch[] = []
+  const regex = new RegExp(MARKDOWN_ASSET_IMAGE_PREFIX_REGEX_SOURCE, 'gi')
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(text)) !== null) {
+    const keyStart = regex.lastIndex
+    let depth = 0
+    let cursor = keyStart
+
+    for (; cursor < text.length; cursor++) {
+      const char = text[cursor]
+      // An incomplete token must not swallow the next image token.
+      if (char === '!' && text[cursor + 1] === '[') {
+        break
+      }
+
+      if (char === '(') {
+        depth++
+      } else if (char === ')') {
+        if (depth > 0) {
+          depth--
+          continue
+        }
+
+        const assetKey = text.slice(keyStart, cursor).trim()
+        cursor++
+        matches.push({
+          raw: text.slice(match.index, cursor),
+          altText: match[1].trim() || assetKey,
+          assetKey,
+          index: match.index,
+        })
+        break
+      }
+    }
+
+    regex.lastIndex = cursor
+  }
+
+  return matches
 }
 
 function sanitizeAltText(value: string): string {
@@ -72,9 +110,9 @@ export function unwrapAssetToken(tag: string): string | null {
     return null
   }
 
-  const markdownMatch = cleaned.match(/^!\[[^\]]*]\(\s*asset:((?:[^)\s]|\s(?!\)))*[^)\s]?)\s*\)$/i)
-  if (markdownMatch) {
-    return markdownMatch[1].trim() || null
+  const markdownMatch = scanCanonicalAssetImageTokens(cleaned)[0]
+  if (markdownMatch?.raw === cleaned) {
+    return markdownMatch.assetKey || null
   }
 
   const imageTemplateMatch = cleaned.match(/^\{\{image::(.+?)\}\}$/i)
@@ -109,9 +147,8 @@ export function unwrapAssetToken(tag: string): string | null {
 export function extractAssetTokens(text: string): string[] {
   const tags = new Set<string>()
 
-  for (const match of text.matchAll(MARKDOWN_ASSET_IMAGE_REGEX)) {
-    const assetKey = match[2]?.trim()
-    if (assetKey) tags.add(assetKey)
+  for (const match of collectCanonicalAssetImageTokenMatches(text)) {
+    tags.add(match.assetKey)
   }
 
   for (const match of text.matchAll(LEGACY_EMOJI_IMAGE_REGEX)) {
@@ -149,24 +186,7 @@ export function collectCanonicalAssetImageTokenMatches(
     return []
   }
 
-  const matches: CanonicalAssetImageTokenMatch[] = []
-  const regex = createCanonicalAssetImageTokenRegex()
-
-  for (const match of text.matchAll(regex)) {
-    const assetKey = match[2]?.trim()
-    if (!assetKey) {
-      continue
-    }
-
-    matches.push({
-      raw: match[0],
-      altText: match[1]?.trim() || assetKey,
-      assetKey,
-      index: match.index ?? 0,
-    })
-  }
-
-  return matches
+  return scanCanonicalAssetImageTokens(text).filter((match) => Boolean(match.assetKey))
 }
 
 export function extractCanonicalAssetTokens(text: string): string[] {

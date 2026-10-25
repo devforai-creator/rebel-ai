@@ -76,10 +76,20 @@ describe('validateSuuImportMetadata', () => {
     })
 
     expect(result.warnings).toEqual([])
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0].code).toBe('SCHEMA_ERROR')
-    expect(formatSuuImportValidationIssue(result.errors[0])).toContain(
-      'character.metadata.ui_cards.timetable.views.Main',
+    expect(result.errors).toHaveLength(2)
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'SCHEMA_ERROR',
+          path: 'character.metadata.ui_cards.timetable.views.Main.style',
+          message: expect.stringContaining('borderStyle'),
+        }),
+        expect.objectContaining({
+          code: 'SCHEMA_ERROR',
+          path: 'character.metadata.ui_cards.timetable.views.Main.children[0].style',
+          message: expect.stringContaining('borderTopStyle'),
+        }),
+      ]),
     )
   })
 

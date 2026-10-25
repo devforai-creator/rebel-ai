@@ -184,6 +184,33 @@ Keep the override until parent requirements naturally resolve to a patched versi
 it, check `npm ls postcss --all`, both audits, and the CSS build. Reopen if PostCSS begins processing
 user-supplied CSS at runtime or a changed dependency tree reintroduces an affected instance.
 
+### 4.3 undici and Zod security refresh — 2026-10-26
+
+This scoped refresh resolves the production audit failure for `undici` and `zod`.
+It supersedes the decision in section 4.1 to retain `undici@6.28.1`.
+
+| Dependency path                              | Previous version | Patched version |
+| -------------------------------------------- | ---------------- | --------------- |
+| `@ai-sdk/provider-utils` → `undici`          | 6.28.1           | 6.29.1          |
+| `jsdom` → `undici` (development only)        | 7.30.0           | 7.30.1          |
+| Direct `zod`, shared by the AI SDK providers | 4.3.6            | 4.6.7           |
+
+The AI SDK's scoped override now pins `undici@6.29.1`, retaining its existing major
+version. The direct Zod range starts at `^4.6.6`, the first patched release, and the
+lockfile resolves 4.6.7. No audit threshold or suppression was changed.
+
+- `undici@6.29.1` and `7.30.1` resolve
+  [GHSA-4qv8-2p9j-2685](https://github.com/advisories/GHSA-4qv8-2p9j-2685) and
+  [GHSA-xjj6-f33q-929c](https://github.com/advisories/GHSA-xjj6-f33q-929c).
+- `zod@4.6.7` resolves
+  [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
+- A clean `npm ci` reproduces the patched dependency tree on Node.js 24.
+- `npm audit --audit-level=high --omit=dev` reports **0 vulnerabilities**.
+- The full audit reports 7 development-only package entries: 1 high and 6 moderate.
+  They concern Vite/Vitest and the previously tracked PostCSS selector-parser path.
+  Those findings remain outside this scoped fix and are not newly accepted here.
+  The counts in section 2 describe its earlier review date.
+
 ## 5. Recording future decisions
 
 For each new exception, record the advisory ID and link, review date, status, severity, exact installed

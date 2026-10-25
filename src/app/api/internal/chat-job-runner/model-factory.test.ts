@@ -50,7 +50,10 @@ describe('buildLanguageModel', () => {
         serviceTier: 'standard',
       })
 
-      expect(createGoogleGenerativeAIMock).toHaveBeenCalledWith({ apiKey: 'g-key' })
+      expect(createGoogleGenerativeAIMock).toHaveBeenCalledWith({
+        apiKey: 'g-key',
+        fetch: expect.any(Function),
+      })
       expect(googleFactory).toHaveBeenCalledWith(modelName)
       expect(model).not.toBe(googleModel)
     },

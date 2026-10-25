@@ -1,5 +1,6 @@
 import { buildLocalModel } from './local'
 import { googleUsageMiddleware } from './google-usage-middleware'
+import { createGoogleSafetySettingsFetch } from './google-safety'
 import { deepSeekUsageMiddleware } from './deepseek-usage-middleware'
 import { openRouterUsageMiddleware } from './openrouter-usage-middleware'
 import { createAnthropic } from '@ai-sdk/anthropic'
@@ -64,7 +65,10 @@ export function buildLanguageModel({
     case 'local':
       return buildLocalModel(apiKey, modelName)
     case 'google': {
-      const googleProvider = createGoogleGenerativeAI({ apiKey })
+      const googleProvider = createGoogleGenerativeAI({
+        apiKey,
+        fetch: createGoogleSafetySettingsFetch(),
+      })
       return wrapGoogleLanguageModel(googleProvider(modelName))
     }
     case 'openai': {

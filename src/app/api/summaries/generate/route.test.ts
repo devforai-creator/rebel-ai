@@ -503,7 +503,10 @@ describe('POST /api/summaries/generate', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(createGoogleGenerativeAIMock).toHaveBeenCalledWith({ apiKey: 'sk-test' })
+    expect(createGoogleGenerativeAIMock).toHaveBeenCalledWith({
+      apiKey: 'sk-test',
+      fetch: expect.any(Function),
+    })
     expect(googleModelFactoryMock).toHaveBeenCalledWith('wrong-model')
     expect(updateMemoryStateMock).toHaveBeenCalledWith(
       expect.objectContaining({

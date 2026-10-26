@@ -2,7 +2,7 @@
 // `database.generated.ts` is the reproducible Supabase output.
 // This wrapper narrows a few columns to the contracts the app already relies on.
 
-import type { Database as GeneratedDatabase } from './database.generated'
+import type { Database as GeneratedDatabase, Json } from './database.generated'
 
 export type { Json } from './database.generated'
 export { Constants } from './database.generated'
@@ -44,6 +44,11 @@ type RawMessageTable = PublicTables['messages']
 type RawChatFactsTable = PublicTables['chat_facts']
 type RawChatSummaryTable = PublicTables['chat_summaries']
 type RawChatTurnTable = PublicTables['chat_turns']
+type RawGlobalVariableTable = PublicTables['global_variables']
+
+// Keep the existing variable API's JSON-null input contract across CLI generators.
+type GlobalVariableInsertRow = Omit<RawGlobalVariableTable['Insert'], 'value'> & { value: Json }
+type GlobalVariableUpdateRow = Omit<RawGlobalVariableTable['Update'], 'value'> & { value?: Json }
 
 type ProfileRow = RawProfileTable['Row']
 type ProfileInsertRow = RawProfileTable['Insert']
@@ -167,6 +172,7 @@ export interface Database extends Omit<GeneratedDatabase, 'public'> {
       | 'chat_facts'
       | 'chat_summaries'
       | 'messages'
+      | 'global_variables'
     > & {
       announcements: OverrideTable<
         RawAnnouncementTable,
@@ -184,6 +190,12 @@ export interface Database extends Omit<GeneratedDatabase, 'public'> {
         ChatSummaryUpdate
       >
       messages: OverrideTable<RawMessageTable, Message, MessageInsert, MessageUpdate>
+      global_variables: OverrideTable<
+        RawGlobalVariableTable,
+        RawGlobalVariableTable['Row'],
+        GlobalVariableInsertRow,
+        GlobalVariableUpdateRow
+      >
     }
     Functions: Omit<
       PublicFunctions,
@@ -286,6 +298,10 @@ export type ChatUpdate = TablesUpdate<'chats'>
 export type ChatUsageEvent = Tables<'chat_usage_events'>
 export type ChatUsageEventInsert = TablesInsert<'chat_usage_events'>
 export type ChatUsageEventUpdate = TablesUpdate<'chat_usage_events'>
+
+export type CharacterSave = Tables<'character_saves'>
+export type CharacterSaveInsert = TablesInsert<'character_saves'>
+export type CharacterSaveUpdate = TablesUpdate<'character_saves'>
 
 export type Persona = Tables<'personas'>
 export type PersonaInsert = TablesInsert<'personas'>

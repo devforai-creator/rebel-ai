@@ -6,6 +6,7 @@ import type { FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { Character, Persona } from '@/types/database.types'
+import { buildSaveManagementHref } from '@/lib/character-saves/navigation'
 import { buildPersonaManagementHref } from '@/lib/navigation/dashboard-return'
 import {
   buildLlmModelOptions,
@@ -21,6 +22,8 @@ interface Props {
   character: CharacterOption
   apiKeys: ChatSelectableApiKeyOption[]
   personas: PersonaOption[]
+  saves?: SaveOption[]
+  initialSaveId?: string
   initialApiKeyId?: string
   initialModelName?: string
   initialPersonaId?: string
@@ -28,6 +31,7 @@ interface Props {
 }
 
 type CharacterOption = Pick<Character, 'id' | 'user_id' | 'name' | 'greeting_message' | 'metadata'>
+type SaveOption = { id: string; title: string; default_persona_id: string | null }
 type PersonaOption = Pick<Persona, 'id' | 'name' | 'description'>
 
 const MODEL_SELECT_ID = 'new-chat-model'
@@ -37,9 +41,11 @@ export default function NewChatForm({
   character,
   apiKeys,
   personas,
+  saves = [],
+  initialSaveId = '',
   initialApiKeyId = '',
   initialModelName = '',
-  initialPersonaId = '',
+  initialPersonaId,
   initialGreetingIndex = 0,
 }: Props) {
   const router = useRouter()
@@ -61,9 +67,12 @@ export default function NewChatForm({
           apiKeyId: apiKeys[0]?.id,
         }),
   )
-  const [personaId, setPersonaId] = useState(() =>
-    personas.some((persona) => persona.id === initialPersonaId) ? initialPersonaId : '',
-  )
+  const initialSave = saves.find((save) => save.id === initialSaveId)
+  const [saveId, setSaveId] = useState(initialSave?.id ?? '')
+  const [personaId, setPersonaId] = useState(() => {
+    const requested = initialPersonaId ?? initialSave?.default_persona_id ?? ''
+    return personas.some((persona) => persona.id === requested) ? requested : ''
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [greetingIndex, setGreetingIndex] = useState(() =>
@@ -89,6 +98,7 @@ export default function NewChatForm({
       const result = await createChat({
         characterId,
         personaId: personaId || null,
+        ...(saveId ? { saveId } : {}),
         greetingIndex,
         modelSelection,
       })
@@ -124,7 +134,8 @@ export default function NewChatForm({
     returnParams.set('apiKey', modelSelection.apiKeyId)
     returnParams.set('model', modelSelection.modelName)
   }
-  if (personaId) {
+  if (saveId) returnParams.set('save', saveId)
+  if (personaId || saveId) {
     returnParams.set('persona', personaId)
   }
   if (greetingIndex > 0) {
@@ -252,6 +263,52 @@ export default function NewChatForm({
               )}
             </div>
           )}
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <label
+              htmlFor="new-chat-save"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              세이브 선택 (선택사항)
+            </label>
+            <Link
+              href={buildSaveManagementHref({
+                characterId,
+                saveId,
+                returnTo: '/dashboard/chats/new?' + returnParams.toString(),
+              })}
+              className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+            >
+              세이브 관리
+            </Link>
+          </div>
+          <select
+            id="new-chat-save"
+            value={saveId}
+            onChange={(event) => {
+              const selected = saves.find((save) => save.id === event.target.value)
+              setSaveId(selected?.id ?? '')
+              if (selected)
+                setPersonaId(
+                  personas.some((persona) => persona.id === selected.default_persona_id)
+                    ? selected.default_persona_id!
+                    : '',
+                )
+            }}
+            className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+          >
+            <option value="">세이브 없이 새로 시작</option>
+            {saves.map((save) => (
+              <option key={save.id} value={save.id}>
+                {save.title}
+              </option>
+            ))}
+          </select>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            이전 세션의 사건과 관계를 이어갑니다. 페르소나는 아래에서 변경할 수 있습니다.
+          </p>
         </div>
 
         {/* 페르소나 선택 (선택사항) */}

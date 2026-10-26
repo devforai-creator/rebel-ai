@@ -1,15 +1,52 @@
 # Character Saves Backlog
 
-Created: 2026-07-03  
-Status: Parked  
-Working mode when promoted: ATD (the learner writes the implementation; the tutor explains, hints,
-and reviews)
+- Created: 2026-07-03
+- Reactivated: 2026-10-26
+- Status: Active (implemented locally; deployment pending)
+- Working mode: standard AI-assisted development (Codex implements and verifies)
 
-## Parking Decision
+## Reactivation (2026-10-26)
+
+- The user chose the save feature as the next implementation work.
+- Work starts on `codex/character-saves` from the clean `main` commit `b556b03`.
+- There was no active backlog at reactivation. The former blocker,
+  `recent-conversation-characters`, was completed and archived on 2026-08-15.
+- The product decisions below remain unchanged. The user explicitly replaced ATD with
+  standard AI-assisted implementation on 2026-10-26.
+- The next available migration version at reactivation is `999002`, following
+  `999001_explicit_data_api_grants.sql`. The July baseline below is historical.
+- First checkpoint: Codex implements the table, foreign-key deletion behavior,
+  ownership and link validation, RLS, and explicit Data API grants before writing UI code.
+- Follow `docs/DB_CHANGE_WORKFLOW.md`, including local migration application, schema and
+  type generation, the grants-test inventory, and relevant DB integration tests.
+
+## Implementation and Verification (2026-10-26)
+
+- Selected defaults: table `character_saves`, management route `/dashboard/saves`, 100-character
+  titles, and 20,000-character bodies. The save remains strictly manual and live across chats.
+- Implemented the schema, explicit grants, RLS/link guards, CRUD and relinking UI, per-character
+  entry points, chat attachment controls, default persona selection, and runner/user-draft reads.
+- Local migration application, generated schema/types, and `npm run typecheck` passed.
+- `npm run lint`, `npm run format:check`, and `npm run build` passed.
+- `npm run test -- --coverage`: 2,737 passed, 84 skipped; coverage thresholds passed
+  (87.51% statements, 80.55% branches, 91.32% functions, 87.95% lines).
+- `npm run test:db`: 82 passed. `npm run test:db:grants`: 6 passed.
+- Browser verification with disposable local fixtures passed: create/edit/reload, starting a chat
+  with the default persona, attachment/detachment/reattachment, and returning to the save editor.
+  The browser reported no warnings or errors during the verified flow.
+- Supabase CLI 2.121.0 was used for migration and type generation. Its stricter generated JSON
+  types required preserving the existing variable API input type in the app-facing wrapper and
+  narrowing the metadata sanitizer's object return type; runtime behavior is unchanged.
+- Remaining: review, linked migration application, Git-based deployment, and post-deployment
+  `npm run ops:smoke:active` plus linked database contract checks.
+- User behavior and deployment notes: [CHARACTER_SAVES.md](../../CHARACTER_SAVES.md).
+
+## Historical Parking Decision
 
 The product design was settled in conversation on 2026-07-03. This backlog is parked only because
 `recent-conversation-characters` is the single active backlog and its migration work is in flight.
-Promote this document to `active/` unchanged when that slot frees.
+The intended pickup was to promote this document to `active/` with its product design unchanged
+when that slot became free.
 
 ## Problem
 

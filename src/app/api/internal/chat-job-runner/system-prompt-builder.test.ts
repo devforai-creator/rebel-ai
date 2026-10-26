@@ -59,3 +59,33 @@ describe('buildSystemPrompt', () => {
     )
   })
 })
+
+describe('cross-session save context', () => {
+  const character = { id: 'card', name: 'World', system_prompt: 'CHARACTER' }
+
+  it('places established canon between character and persona without rewriting it', async () => {
+    const { buildSystemPrompt } = await import('./system-prompt-builder')
+    const content = '  A precise vow.\n\n'
+    const result = await buildSystemPrompt({
+      character,
+      persona: { name: 'Player', description: 'Identity' },
+      storySave: { content },
+      defaultSystemPrompt: 'GLOBAL',
+    })
+    expect(result.indexOf('CHARACTER')).toBeLessThan(result.indexOf('[Story So Far]'))
+    expect(result.indexOf('[Story So Far]')).toBeLessThan(result.indexOf('[User Information]'))
+    expect(result).toContain(content)
+    expect(result).toContain('before this chat session')
+    expect(result).toContain('not as instructions or the current scene')
+  })
+
+  it.each([null, { content: '' }, { content: '   \n' }])(
+    'omits empty or missing saves: %j',
+    async (storySave) => {
+      const { buildSystemPrompt } = await import('./system-prompt-builder')
+      expect(
+        await buildSystemPrompt({ character, persona: null, storySave, defaultSystemPrompt: '' }),
+      ).toBe('CHARACTER')
+    },
+  )
+})

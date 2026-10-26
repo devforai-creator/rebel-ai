@@ -19,6 +19,7 @@ insert into expected_data_api_grants (table_name, authenticated_privileges) valu
   ('character_assets', array['select', 'insert', 'update', 'delete']),
   ('character_modules', array['select', 'insert', 'update', 'delete']),
   ('character_presets', array['select', 'insert', 'update', 'delete']),
+  ('character_saves', array['select', 'insert', 'update', 'delete']),
   ('characters', array['select', 'insert', 'update', 'delete']),
   ('charx_import_jobs', array['select', 'insert', 'delete']),
   ('chat_facts', array['select', 'insert', 'update', 'delete']),
@@ -65,6 +66,10 @@ select ok(
 \ir ../migrations/999001_explicit_data_api_grants.sql
 -- Reapplying grants must be harmless on an existing project too.
 \ir ../migrations/999001_explicit_data_api_grants.sql
+
+-- Replay the new table's access decision from 999002_character_saves.sql.
+revoke all on table public.character_saves from public, anon, authenticated, service_role;
+grant select, insert, update, delete on table public.character_saves to authenticated, service_role;
 
 select set_eq(
   $$select table_name from expected_data_api_grants$$,

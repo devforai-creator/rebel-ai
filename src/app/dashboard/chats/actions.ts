@@ -16,11 +16,13 @@ import { getCharacterGreetingOptions } from './new/greeting-options'
 export async function createChat({
   characterId,
   personaId,
+  saveId,
   greetingIndex,
   modelSelection,
 }: {
   characterId: string
   personaId?: string | null
+  saveId?: string | null
   greetingIndex: number
   modelSelection: LlmModelSelection
 }) {
@@ -47,7 +49,24 @@ export async function createChat({
     return { error: '사용할 모델을 선택해주세요' }
   }
 
-  const normalizedPersonaId = personaId?.trim() || null
+  const normalizedSaveId = saveId?.trim() || null
+  const saveResult = normalizedSaveId
+    ? await supabase
+        .from('character_saves')
+        .select('id, character_id, default_persona_id')
+        .eq('id', normalizedSaveId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+    : { data: null, error: null }
+  if (
+    normalizedSaveId &&
+    (saveResult.error || !saveResult.data || saveResult.data.character_id !== normalizedCharacterId)
+  ) {
+    return { error: '이 캐릭터에 연결된 본인 세이브를 선택해주세요' }
+  }
+  // An omitted persona uses the save default; explicit null means no persona.
+  const normalizedPersonaId =
+    (personaId === undefined ? saveResult.data?.default_persona_id : personaId)?.trim() || null
   const normalizedApiKeyId = modelSelection.apiKeyId.trim()
   const requestedModelName = modelSelection.modelName.trim()
   const safeGreetingIndex =
@@ -61,7 +80,7 @@ export async function createChat({
     await Promise.all([
       supabase
         .from('characters')
-        .select('id, user_id, name, greeting_message, metadata, archived_at')
+        .select('id, user_id, name, greeting_message, metadata, archived_at, visibility')
         .eq('id', normalizedCharacterId)
         .maybeSingle(),
       normalizedPersonaId
@@ -87,7 +106,9 @@ export async function createChat({
   if (
     !character ||
     character.archived_at !== null ||
-    (character.user_id !== user.id && character.user_id !== null)
+    (character.user_id !== user.id &&
+      character.user_id !== null &&
+      character.visibility !== 'public')
   ) {
     return { error: '캐릭터를 찾을 수 없습니다' }
   }
@@ -124,6 +145,7 @@ export async function createChat({
       user_id: user.id,
       character_id: character.id,
       persona_id: persona?.id ?? null,
+      save_id: normalizedSaveId,
       title: `${character.name}와의 대화`,
       model_config: buildOperatorDefaultChatModelConfig({
         alternateModels: {

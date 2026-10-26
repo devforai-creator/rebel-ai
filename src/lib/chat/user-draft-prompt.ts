@@ -5,6 +5,7 @@ import type { MemoryPromptBlock } from '@/lib/chat-memory/types'
 export function buildUserDraftPrefixRequest({
   system,
   userPersona,
+  storySoFar = null,
   characterAndSetting,
   alwaysActiveLore,
   conditionalLore,
@@ -14,6 +15,7 @@ export function buildUserDraftPrefixRequest({
 }: {
   system: string
   userPersona: { name: string; description: string | null } | null
+  storySoFar?: string | null
   characterAndSetting: {
     name: string
     system_prompt: string
@@ -45,7 +47,12 @@ export function buildUserDraftPrefixRequest({
     messages: [
       {
         role: 'user',
-        content: JSON.stringify({ userPersona, characterAndSetting, alwaysActiveLore }),
+        content: JSON.stringify({
+          userPersona,
+          characterAndSetting,
+          alwaysActiveLore,
+          ...(storySoFar ? { storySoFar } : {}),
+        }),
       },
       ...promptBlocks
         .filter((block) => block.stability !== 'static')

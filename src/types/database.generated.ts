@@ -17,6 +17,7 @@ export type Database = {
           starts_at: string
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           author_user_id?: string | null
           created_at?: string
@@ -59,6 +60,7 @@ export type Database = {
           request_count: number
           window_start: string
         }
+        ComputedFields: never
         Insert: {
           identifier: string
           request_count?: number
@@ -87,6 +89,7 @@ export type Database = {
           user_id: string
           vault_secret_name: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           id?: string
@@ -144,6 +147,7 @@ export type Database = {
           updated_at: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           asset_type: string
           canonical_name?: string | null
@@ -196,6 +200,7 @@ export type Database = {
           priority: number
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           character_id: string
           created_at?: string
@@ -238,6 +243,7 @@ export type Database = {
           created_at: string
           preset_id: string
         }
+        ComputedFields: never
         Insert: {
           active?: boolean
           character_id: string
@@ -267,6 +273,55 @@ export type Database = {
           },
         ]
       }
+      character_saves: {
+        Row: {
+          character_id: string | null
+          content: string
+          created_at: string
+          default_persona_id: string | null
+          id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          character_id?: string | null
+          content?: string
+          created_at?: string
+          default_persona_id?: string | null
+          id?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          character_id?: string | null
+          content?: string
+          created_at?: string
+          default_persona_id?: string | null
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'character_saves_character_id_fkey'
+            columns: ['character_id']
+            isOneToOne: false
+            referencedRelation: 'characters'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'character_saves_default_persona_id_fkey'
+            columns: ['default_persona_id']
+            isOneToOne: false
+            referencedRelation: 'personas'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       characters: {
         Row: {
           archived_at: string | null
@@ -275,13 +330,14 @@ export type Database = {
           description: string | null
           greeting_message: string | null
           id: string
-          metadata: Json
+          metadata: NonNullable<Json>
           name: string
           system_prompt: string
           updated_at: string
           user_id: string | null
           visibility: Database['public']['Enums']['character_visibility']
         }
+        ComputedFields: never
         Insert: {
           archived_at?: string | null
           avatar_url?: string | null
@@ -289,7 +345,7 @@ export type Database = {
           description?: string | null
           greeting_message?: string | null
           id?: string
-          metadata?: Json
+          metadata?: NonNullable<Json>
           name: string
           system_prompt: string
           updated_at?: string
@@ -303,7 +359,7 @@ export type Database = {
           description?: string | null
           greeting_message?: string | null
           id?: string
-          metadata?: Json
+          metadata?: NonNullable<Json>
           name?: string
           system_prompt?: string
           updated_at?: string
@@ -344,6 +400,7 @@ export type Database = {
           updated_at: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           completed_at?: string | null
           created_at?: string
@@ -418,6 +475,7 @@ export type Database = {
           start_seq: number
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           chat_id: string
           created_at?: string | null
@@ -463,11 +521,12 @@ export type Database = {
           failure_stage: string | null
           id: string
           lifecycle_stage: string
-          payload: Json
+          payload: NonNullable<Json>
           status: string
           updated_at: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           chat_id: string
           created_at?: string
@@ -482,7 +541,7 @@ export type Database = {
           failure_stage?: string | null
           id?: string
           lifecycle_stage?: string
-          payload: Json
+          payload: NonNullable<Json>
           status: string
           updated_at?: string
           user_id: string
@@ -501,7 +560,7 @@ export type Database = {
           failure_stage?: string | null
           id?: string
           lifecycle_stage?: string
-          payload?: Json
+          payload?: NonNullable<Json>
           status?: string
           updated_at?: string
           user_id?: string
@@ -529,6 +588,7 @@ export type Database = {
           user_id: string
           window_start: string
         }
+        ComputedFields: never
         Insert: {
           request_count?: number
           user_id: string
@@ -562,6 +622,7 @@ export type Database = {
           token_count: number | null
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           chat_id: string
           created_at?: string
@@ -607,6 +668,7 @@ export type Database = {
           user_id: string
           user_message_id: string | null
         }
+        ComputedFields: never
         Insert: {
           active_assistant_message_id?: string | null
           chat_id: string
@@ -665,6 +727,7 @@ export type Database = {
           total_tokens: number | null
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           api_key_id?: string | null
           cached_input_cost_usd?: number
@@ -740,10 +803,12 @@ export type Database = {
           max_context_messages: number
           model_config: Json | null
           persona_id: string | null
+          save_id: string | null
           title: string | null
           updated_at: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           character_id: string
           created_at?: string
@@ -754,6 +819,7 @@ export type Database = {
           max_context_messages?: number
           model_config?: Json | null
           persona_id?: string | null
+          save_id?: string | null
           title?: string | null
           updated_at?: string
           user_id: string
@@ -768,6 +834,7 @@ export type Database = {
           max_context_messages?: number
           model_config?: Json | null
           persona_id?: string | null
+          save_id?: string | null
           title?: string | null
           updated_at?: string
           user_id?: string
@@ -788,6 +855,13 @@ export type Database = {
             referencedColumns: ['id']
           },
           {
+            foreignKeyName: 'chats_save_id_fkey'
+            columns: ['save_id']
+            isOneToOne: false
+            referencedRelation: 'character_saves'
+            referencedColumns: ['id']
+          },
+          {
             foreignKeyName: 'chats_user_id_fkey'
             columns: ['user_id']
             isOneToOne: false
@@ -803,15 +877,16 @@ export type Database = {
           key: string
           updated_at: string
           user_id: string
-          value: Json
+          value: NonNullable<Json>
         }
+        ComputedFields: never
         Insert: {
           chat_id: string
           id?: string
           key: string
           updated_at?: string
           user_id: string
-          value: Json
+          value: NonNullable<Json>
         }
         Update: {
           chat_id?: string
@@ -819,7 +894,7 @@ export type Database = {
           key?: string
           updated_at?: string
           user_id?: string
-          value?: Json
+          value?: NonNullable<Json>
         }
         Relationships: [
           {
@@ -836,6 +911,7 @@ export type Database = {
           seen_at: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           seen_at?: string
           user_id: string
@@ -857,6 +933,7 @@ export type Database = {
           updated_at: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           chat_id: string
           created_at?: string
@@ -900,6 +977,7 @@ export type Database = {
           updated_at: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           chat_id: string
           created_at?: string
@@ -962,6 +1040,7 @@ export type Database = {
           user_id: string
           variant_index: number | null
         }
+        ComputedFields: never
         Insert: {
           chat_id: string
           completion_tokens?: number | null
@@ -1041,6 +1120,7 @@ export type Database = {
           updated_at: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           content_type?: string | null
           created_at?: string
@@ -1095,6 +1175,7 @@ export type Database = {
           updated_at: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           assets?: Json[] | null
           created_at?: string
@@ -1136,6 +1217,7 @@ export type Database = {
           updated_at: string | null
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string | null
           description?: string | null
@@ -1161,20 +1243,21 @@ export type Database = {
           description: string | null
           id: string
           name: string
-          prompt_template: Json
+          prompt_template: NonNullable<Json>
           risup_version: number | null
           source_file: string | null
           toggle_definitions: Json | null
           updated_at: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           config?: Json | null
           created_at?: string
           description?: string | null
           id?: string
           name: string
-          prompt_template?: Json
+          prompt_template?: NonNullable<Json>
           risup_version?: number | null
           source_file?: string | null
           toggle_definitions?: Json | null
@@ -1187,7 +1270,7 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
-          prompt_template?: Json
+          prompt_template?: NonNullable<Json>
           risup_version?: number | null
           source_file?: string | null
           toggle_definitions?: Json | null
@@ -1221,6 +1304,7 @@ export type Database = {
           username: string | null
           voyage_embedding_api_key_id: string | null
         }
+        ComputedFields: never
         Insert: {
           avatar_url?: string | null
           chunk_summary_prompt?: string | null
@@ -1323,6 +1407,7 @@ export type Database = {
           updated_at: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           character_id: string
           completed_at?: string | null
@@ -1397,6 +1482,7 @@ export type Database = {
           total_successes: number
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           consecutive_failures?: number
           created_at?: string
@@ -1431,6 +1517,7 @@ export type Database = {
           source_page: string | null
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           id?: string
@@ -1464,6 +1551,7 @@ export type Database = {
           secret_name: string
           user_id: string | null
         }
+        ComputedFields: never
         Insert: {
           action: string
           created_at?: string
@@ -1488,11 +1576,7 @@ export type Database = {
     }
     Functions: {
       check_anon_rate_limit: {
-        Args: {
-          identifier: string
-          max_requests: number
-          window_seconds: number
-        }
+        Args: { identifier: string; max_requests: number; window_seconds: number }
         Returns: {
           allowed: boolean
           remaining: number
@@ -1500,11 +1584,7 @@ export type Database = {
         }[]
       }
       check_chat_rate_limit: {
-        Args: {
-          max_requests: number
-          target_user_id: string
-          window_seconds: number
-        }
+        Args: { max_requests: number; target_user_id: string; window_seconds: number }
         Returns: {
           allowed: boolean
           remaining: number
@@ -1512,7 +1592,7 @@ export type Database = {
         }[]
       }
       claim_pending_chat_job: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           id: string
           payload: Json
@@ -1526,32 +1606,19 @@ export type Database = {
         }[]
       }
       create_secret:
+        | { Args: { secret_name: string; secret_value: string }; Returns: string }
         | {
-            Args: { secret_name: string; secret_value: string }
+            Args: { requester?: string; secret_name: string; secret_value: string }
             Returns: string
           }
-        | {
-            Args: {
-              requester?: string
-              secret_name: string
-              secret_value: string
-            }
-            Returns: string
-          }
-      delete_api_key: {
-        Args: { api_key_id: string; requester?: string }
-        Returns: undefined
-      }
+      delete_api_key: { Args: { api_key_id: string; requester?: string }; Returns: undefined }
       delete_orphaned_modules: {
         Args: { module_ids: string[]; requester?: string }
         Returns: number
       }
       delete_secret:
         | { Args: { secret_name: string }; Returns: undefined }
-        | {
-            Args: { requester?: string; secret_name: string }
-            Returns: undefined
-          }
+        | { Args: { requester?: string; secret_name: string }; Returns: undefined }
       get_chat_token_totals: {
         Args: { p_chat_id: string; p_requester: string }
         Returns: {
@@ -1573,10 +1640,7 @@ export type Database = {
           total_cost_usd: number
         }[]
       }
-      get_decrypted_secret: {
-        Args: { requester?: string; secret_name: string }
-        Returns: string
-      }
+      get_decrypted_secret: { Args: { requester?: string; secret_name: string }; Returns: string }
       list_character_chats: {
         Args: {
           p_character_id: string
@@ -1614,7 +1678,7 @@ export type Database = {
         }[]
       }
       list_current_user_modules: {
-        Args: never
+        Args: Record<PropertyKey, never>
         Returns: {
           asset_count: number
           created_at: string
@@ -1660,10 +1724,7 @@ export type Database = {
           start_seq: number
         }[]
       }
-      recalculate_chat_last_message_at: {
-        Args: { p_chat_id: string }
-        Returns: undefined
-      }
+      recalculate_chat_last_message_at: { Args: { p_chat_id: string }; Returns: undefined }
       record_service_health_status: {
         Args: {
           p_error_message?: string
@@ -1737,9 +1798,7 @@ export type Tables<
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])[TableName] extends {
       Row: infer R
@@ -1763,9 +1822,7 @@ export type TablesInsert<
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
       Insert: infer I
     }
@@ -1788,9 +1845,7 @@ export type TablesUpdate<
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
       Update: infer U
     }
@@ -1813,9 +1868,7 @@ export type Enums<
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums']
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums'][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema['Enums']
     ? DefaultSchema['Enums'][DefaultSchemaEnumNameOrOptions]
@@ -1830,9 +1883,7 @@ export type CompositeTypes<
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes']
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes'][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema['CompositeTypes']
     ? DefaultSchema['CompositeTypes'][PublicCompositeTypeNameOrOptions]

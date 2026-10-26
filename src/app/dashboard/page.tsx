@@ -121,6 +121,31 @@ export default async function DashboardPage() {
             </p>
           </Link>
 
+          <Link
+            href="/dashboard/saves"
+            className="block rounded-lg border border-gray-200 bg-white p-6 shadow transition-shadow hover:shadow-lg dark:border-gray-700 dark:bg-gray-800"
+          >
+            <div
+              className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+              aria-hidden="true"
+            >
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 3h12l4 4v14H3V3h2zm2 0v6h10V3M7 21v-8h10v8"
+                />
+              </svg>
+            </div>
+            <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+              세이브 관리
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              관계와 사건을 다음 채팅으로 이어가기
+            </p>
+          </Link>
+
           {/* 페르소나 관리 */}
           <Link
             href="/dashboard/personas"

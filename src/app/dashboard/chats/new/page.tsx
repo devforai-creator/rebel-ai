@@ -11,6 +11,7 @@ interface Props {
     apiKey?: string
     model?: string
     persona?: string
+    save?: string
     greeting?: string
   }>
 }
@@ -21,6 +22,7 @@ export default async function NewChatPage({ searchParams }: Props) {
   const initialApiKeyId = params.apiKey?.trim()
   const initialModelName = params.model?.trim()
   const initialPersonaId = params.persona?.trim()
+  const initialSaveId = params.save?.trim()
   const parsedGreetingIndex = Number(params.greeting)
   const initialGreetingIndex =
     Number.isInteger(parsedGreetingIndex) && parsedGreetingIndex >= 0 ? parsedGreetingIndex : 0
@@ -39,12 +41,17 @@ export default async function NewChatPage({ searchParams }: Props) {
     redirect('/dashboard/characters')
   }
 
-  const [{ data: character }, { data: apiKeys }, { data: personas }] = await Promise.all([
+  const [
+    { data: character },
+    { data: apiKeys },
+    { data: personas },
+    { data: saves, error: savesError },
+  ] = await Promise.all([
     supabase
       .from('characters')
       .select('id, user_id, name, greeting_message, metadata')
       .eq('id', characterId)
-      .or(`user_id.eq.${user.id},user_id.is.null`)
+      .or('user_id.eq.' + user.id + ',user_id.is.null,visibility.eq.public')
       .is('archived_at', null)
       .maybeSingle(),
     supabase
@@ -59,7 +66,15 @@ export default async function NewChatPage({ searchParams }: Props) {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .order('name', { ascending: true }),
+    supabase
+      .from('character_saves')
+      .select('id, title, default_persona_id')
+      .eq('user_id', user.id)
+      .eq('character_id', characterId)
+      .order('updated_at', { ascending: false })
+      .order('id'),
   ])
+  if (savesError) throw new Error('세이브 목록을 불러오지 못했습니다')
 
   if (!character) {
     redirect('/dashboard/characters')
@@ -113,6 +128,8 @@ export default async function NewChatPage({ searchParams }: Props) {
           character={character}
           apiKeys={llmApiKeys}
           personas={personas || []}
+          saves={saves || []}
+          initialSaveId={initialSaveId}
           initialApiKeyId={initialApiKeyId}
           initialModelName={initialModelName}
           initialPersonaId={initialPersonaId}

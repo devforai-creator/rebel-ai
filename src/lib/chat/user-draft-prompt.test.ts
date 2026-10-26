@@ -202,3 +202,11 @@ describe('prefix memory adapted for user drafts', () => {
     expect(JSON.stringify(bodies[1].messages.at(-1))).toContain('Accept the offer')
   })
 })
+
+it('includes cross-session canon in the stable draft reference envelope', () => {
+  const result = buildUserDraftPrefixRequest({
+    ...options,
+    storySoFar: 'Established prior relationships',
+  })
+  expect(JSON.parse(result.messages[0].content).storySoFar).toBe('Established prior relationships')
+})

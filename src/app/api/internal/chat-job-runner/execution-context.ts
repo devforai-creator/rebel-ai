@@ -38,6 +38,7 @@ import { LOREBOOK_SCAN_DEPTH } from '@/lib/lorebook-renderer'
 import type { ChatPromptContext } from '@/lib/chat-memory/prompt-context'
 import { countProjectedConversationMessages, loadProjectedConversationTail } from '@/lib/chat/turns'
 import type { ProjectedConversationMessage } from '@/lib/chat/turns'
+import { loadSaveForGeneration } from '@/lib/character-saves/service'
 import { buildSystemPrompt } from './system-prompt-builder'
 import { decryptSecret } from './vault'
 
@@ -50,7 +51,13 @@ type RunnerApiKeyRow = Pick<
 type RunnerProfileRow = Pick<Profile, 'enable_agentic_transcript_recall_default'>
 type RunnerChatRow = Pick<
   Chat,
-  'id' | 'user_id' | 'character_id' | 'persona_id' | 'custom_system_prompt' | 'model_config'
+  | 'id'
+  | 'user_id'
+  | 'character_id'
+  | 'persona_id'
+  | 'save_id'
+  | 'custom_system_prompt'
+  | 'model_config'
 >
 type RunnerPersonaRow = Pick<Persona, 'name' | 'description'>
 type RunnerCharacterRow = Pick<Character, 'id' | 'name' | 'system_prompt'> & {
@@ -309,8 +316,8 @@ export async function loadChatJobExecutionContext({
   const chatQueryStart = performance.now()
   const chatQueryPromise = supabase
     .from('chats')
-    .select<'id, user_id, character_id, persona_id, custom_system_prompt, model_config'>(
-      'id, user_id, character_id, persona_id, custom_system_prompt, model_config',
+    .select<'id, user_id, character_id, persona_id, save_id, custom_system_prompt, model_config'>(
+      'id, user_id, character_id, persona_id, save_id, custom_system_prompt, model_config',
     )
     .eq('id', chatId)
     .eq('user_id', userId)
@@ -383,6 +390,16 @@ export async function loadChatJobExecutionContext({
         return result
       })
 
+  const saveQueryStart = performance.now()
+  const savePromise = loadSaveForGeneration({
+    supabase,
+    userId,
+    saveId: chat.save_id,
+  }).then((save) => {
+    timings['4b_save_query'] = performance.now() - saveQueryStart
+    return save
+  })
+
   const characterQueryStart = performance.now()
   const characterPromise = supabase
     .from('characters')
@@ -401,8 +418,12 @@ export async function loadChatJobExecutionContext({
       return result
     })
 
-  const [decryptedApiKey, { data: persona }, { data: character, error: characterError }] =
-    await Promise.all([apiKeyDecryptPromise, personaPromise, characterPromise])
+  const [
+    decryptedApiKey,
+    { data: persona },
+    storySave,
+    { data: character, error: characterError },
+  ] = await Promise.all([apiKeyDecryptPromise, personaPromise, savePromise, characterPromise])
 
   if (characterError || !character) {
     throw new Error('Character not found')
@@ -628,6 +649,7 @@ export async function loadChatJobExecutionContext({
   const systemPrompt = await buildSystemPrompt({
     character,
     persona,
+    storySave,
     defaultSystemPrompt,
     customSystemPrompt: chat.custom_system_prompt,
   })

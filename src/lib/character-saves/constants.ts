@@ -1,0 +1,2 @@
+export const MAX_SAVE_TITLE_LENGTH = 100
+export const MAX_SAVE_CONTENT_LENGTH = 20_000

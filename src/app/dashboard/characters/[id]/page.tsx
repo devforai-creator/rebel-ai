@@ -43,7 +43,7 @@ export default async function CharacterDetailPage({ params, searchParams }: Prop
     .from('characters')
     .select(CHARACTER_DETAIL_FIELDS)
     .eq('id', id)
-    .or(`user_id.eq.${user.id},user_id.is.null`)
+    .or('user_id.eq.' + user.id + ',user_id.is.null,visibility.eq.public')
     .is('archived_at', null)
     .single()
 
@@ -80,6 +80,20 @@ export default async function CharacterDetailPage({ params, searchParams }: Prop
 
       {/* 메인 콘텐츠 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-5 flex justify-end">
+          <Link
+            href={
+              '/dashboard/saves?' +
+              new URLSearchParams({
+                character: character.id,
+                returnTo: '/dashboard/characters/' + character.id,
+              }).toString()
+            }
+            className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-gray-700"
+          >
+            이 캐릭터의 세이브 관리
+          </Link>
+        </div>
         <Suspense fallback={<CharacterDetailFallback />}>
           <CharacterDetailContent character={characterWithAvatar} userId={user.id} />
         </Suspense>

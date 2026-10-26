@@ -1,6 +1,8 @@
 import 'server-only'
 
 import { generateText } from 'ai'
+import { loadSaveForGeneration } from '@/lib/character-saves/service'
+import { formatStorySave } from '@/lib/character-saves/prompt'
 import { CHAT_CONTEXT_WINDOW } from '@/lib/chat-context-window'
 import { buildMemoryPlan } from '@/lib/chat-memory'
 import { estimateTokenCount } from '@/lib/chat-summaries/formatters'
@@ -87,7 +89,7 @@ export async function generateUserDraft({
   signal.throwIfAborted()
   const { data: chat, error: chatError } = await supabase
     .from('chats')
-    .select('id, character_id, persona_id, model_config')
+    .select('id, character_id, persona_id, save_id, model_config')
     .eq('id', chatId)
     .eq('user_id', userId)
     .single()
@@ -137,22 +139,29 @@ export async function generateUserDraft({
 
   const modelConfig = normalizeChatModelConfig(chat.model_config)
   const memoryConfig = resolveChatMemoryConfig(modelConfig)
-  const [characterResult, personaResult, totalMessages, visibleSummaryEnd, lorebookState] =
-    await Promise.all([
-      supabase
-        .from('characters')
-        .select('name, system_prompt, metadata')
-        .eq('id', chat.character_id)
-        .single(),
-      chat.persona_id
-        ? supabase.from('personas').select('name, description').eq('id', chat.persona_id).single()
-        : Promise.resolve({ data: null, error: null }),
-      countProjectedConversationMessages({ supabase, chatId }),
-      memoryConfig.mode === 'prefix_live_blocks'
-        ? getLastSummaryEnd(supabase, chatId, SUMMARY_LEVEL_META)
-        : Promise.resolve(null),
-      loadChatLorebookState({ supabase, chatId, characterId: chat.character_id }),
-    ])
+  const [
+    characterResult,
+    personaResult,
+    storySave,
+    totalMessages,
+    visibleSummaryEnd,
+    lorebookState,
+  ] = await Promise.all([
+    supabase
+      .from('characters')
+      .select('name, system_prompt, metadata')
+      .eq('id', chat.character_id)
+      .single(),
+    chat.persona_id
+      ? supabase.from('personas').select('name, description').eq('id', chat.persona_id).single()
+      : Promise.resolve({ data: null, error: null }),
+    loadSaveForGeneration({ supabase, userId, saveId: chat.save_id }),
+    countProjectedConversationMessages({ supabase, chatId }),
+    memoryConfig.mode === 'prefix_live_blocks'
+      ? getLastSummaryEnd(supabase, chatId, SUMMARY_LEVEL_META)
+      : Promise.resolve(null),
+    loadChatLorebookState({ supabase, chatId, characterId: chat.character_id }),
+  ])
   if (characterResult.error || !characterResult.data || personaResult.error) {
     throw new UserDraftError('Failed to load roleplay context', 500)
   }
@@ -200,6 +209,7 @@ export async function generateUserDraft({
   const prefixOptions = {
     system: USER_DRAFT_SYSTEM_PROMPT,
     userPersona: personaResult.data,
+    storySoFar: formatStorySave(storySave),
     characterAndSetting,
     alwaysActiveLore: lorebook.alwaysActive,
     conditionalLore: lorebook.conditional,
@@ -213,6 +223,7 @@ export async function generateUserDraft({
     ? null
     : JSON.stringify({
         userPersona: personaResult.data,
+        ...(formatStorySave(storySave) ? { storySoFar: formatStorySave(storySave) } : {}),
         characterAndSetting,
         activeLore: lorebook.combined,
         memory: memory.dynamicContext,

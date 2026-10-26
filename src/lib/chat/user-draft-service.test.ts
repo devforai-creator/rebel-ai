@@ -52,6 +52,8 @@ function setup(
     legacyTier?: 'standard' | 'flex' | 'priority'
     modelConfig?: unknown
     personaId?: string | null
+    saveId?: string | null
+    saveOwner?: string
     missingCharacter?: boolean
     characterMetadata?: unknown
     draftModelConfig?: unknown
@@ -70,8 +72,20 @@ function setup(
             character_id: 'char-1',
             persona_id: options.personaId === undefined ? 'persona-1' : options.personaId,
             model_config: options.modelConfig ?? null,
+            save_id: options.saveId ?? null,
           },
         ],
+      },
+      character_saves: {
+        rows: options.saveId
+          ? [
+              {
+                id: options.saveId,
+                user_id: options.saveOwner ?? 'user-1',
+                content: 'A previous-session promise',
+              },
+            ]
+          : [],
       },
       characters: {
         rows: options.missingCharacter
@@ -928,4 +942,24 @@ describe('generateUserDraft', () => {
     await expect(generateUserDraft(args)).rejects.toThrow('upstream failed')
     expect(JSON.stringify(client.state)).toBe(before)
   })
+})
+
+it.each(['summary_window', 'prefix_live_blocks'])(
+  'includes live save canon in %s drafts',
+  async (mode) => {
+    const { args } = setup({ saveId: 'save-1', modelConfig: { memory: { mode } } })
+    await generateUserDraft(args)
+    const request = mocks.generate.mock.calls[0][0]
+    const references = request.prompt
+      ? JSON.parse(request.prompt)
+      : JSON.parse(request.messages[0].content)
+    expect(references.storySoFar).toContain('A previous-session promise')
+    expect(references.storySoFar).toContain('before this chat session')
+  },
+)
+
+it('fails before provider execution when the attached save is not owned', async () => {
+  const { args } = setup({ saveId: 'save-1', saveOwner: 'other' })
+  await expect(generateUserDraft(args)).rejects.toThrow('Failed to load the attached save')
+  expect(mocks.generate).not.toHaveBeenCalled()
 })

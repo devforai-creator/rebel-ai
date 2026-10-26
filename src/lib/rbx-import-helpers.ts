@@ -19,10 +19,10 @@ export function getContentType(fileName: string): string {
   }
 }
 
-export function sanitizeMetadataForDb(metadata: Record<string, unknown>): Json {
+export function sanitizeMetadataForDb(metadata: Record<string, unknown>): NonNullable<Json> {
   const jsonString = JSON.stringify(metadata)
   const sanitized = jsonString.replace(/\\u0000/g, '')
-  return JSON.parse(sanitized) as Json
+  return JSON.parse(sanitized) as NonNullable<Json>
 }
 
 export function sanitizeJsonArrayForDb(items: Array<Record<string, unknown>>): Json[] {

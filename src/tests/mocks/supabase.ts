@@ -717,6 +717,7 @@ type ChatJobRunnerOptions = {
   chat?: Record<string, unknown>
   character?: Record<string, unknown>
   personas?: Array<Record<string, unknown>>
+  saves?: Array<Record<string, unknown>>
   rpc?: Record<string, (params?: unknown) => unknown>
   initialJobs?: Array<Record<string, unknown>>
   initialMessages?: Array<Record<string, unknown>>
@@ -746,6 +747,7 @@ export function createChatJobRunnerSupabaseMock(
     chat: providedChat,
     character: providedCharacter,
     personas: providedPersonas,
+    saves = [],
     rpc = {},
     initialJobs = [],
     initialMessages = [],
@@ -759,6 +761,7 @@ export function createChatJobRunnerSupabaseMock(
     user_id: 'user-1',
     character_id: 'char-1',
     persona_id: null,
+    save_id: null,
     max_context_messages: 20,
     custom_system_prompt: null,
   }
@@ -803,6 +806,7 @@ export function createChatJobRunnerSupabaseMock(
         rows: [chat],
         primaryKeys: ['id'],
       },
+      character_saves: { rows: saves, primaryKeys: ['id'] },
       profiles: {
         rows: [profile],
         primaryKeys: ['id'],

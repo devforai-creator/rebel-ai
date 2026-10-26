@@ -315,6 +315,35 @@ describe('loadChatJobExecutionContext', () => {
     },
   )
 
+  it('reloads the live save for each queued generation and fails closed on foreign saves', async () => {
+    const { loadChatJobExecutionContext } = await import('./execution-context')
+    const row = { id: 'save-1', user_id: 'user-1', content: 'Old promise' }
+    const supabase = createChatJobRunnerSupabaseMock({
+      chat: {
+        id: 'chat-1',
+        user_id: 'user-1',
+        character_id: 'char-1',
+        save_id: row.id,
+        persona_id: null,
+      },
+      saves: [row],
+    })
+    const args = { supabase: supabase as never, payload: buildValidPayload(), timings: {} }
+    await loadChatJobExecutionContext(args)
+    expect(buildSystemPromptMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ storySave: { content: 'Old promise' } }),
+    )
+    await supabase.from('character_saves').update({ content: 'New promise' }).eq('id', row.id)
+    await loadChatJobExecutionContext(args)
+    expect(buildSystemPromptMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ storySave: { content: 'New promise' } }),
+    )
+    await supabase.from('character_saves').update({ user_id: 'other' }).eq('id', row.id)
+    await expect(loadChatJobExecutionContext(args)).rejects.toThrow(
+      'Failed to load the attached save',
+    )
+  })
+
   it('loads the current execution context before requesting the provider', async () => {
     const { loadChatJobExecutionContext } = await import('./execution-context')
     const supabase = createChatJobRunnerSupabaseMock()

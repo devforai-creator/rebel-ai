@@ -127,3 +127,49 @@ describe('NewChatForm', () => {
     })
   })
 })
+
+describe('new chats from saves', () => {
+  const saves = [{ id: 'save-1', title: '로고스', default_persona_id: 'persona-2' }]
+  it('preselects the save default but permits an explicit persona opt-out', () => {
+    const { rerender } = render(
+      <NewChatForm
+        character={character}
+        apiKeys={apiKeys}
+        personas={personas}
+        saves={saves}
+        initialSaveId="save-1"
+      />,
+    )
+    expect((screen.getByLabelText(/페르소나 선택/) as HTMLSelectElement).value).toBe('persona-2')
+    rerender(
+      <NewChatForm
+        key="explicit"
+        character={character}
+        apiKeys={apiKeys}
+        personas={personas}
+        saves={saves}
+        initialSaveId="save-1"
+        initialPersonaId=""
+      />,
+    )
+    expect((screen.getByLabelText(/페르소나 선택/) as HTMLSelectElement).value).toBe('')
+  })
+  it('submits the chosen save and retains it in the management return URL', async () => {
+    createChatMock.mockResolvedValue({ chatId: 'new' })
+    render(
+      <NewChatForm character={character} apiKeys={apiKeys} personas={personas} saves={saves} />,
+    )
+    fireEvent.change(screen.getByLabelText(/세이브 선택/), { target: { value: 'save-1' } })
+    expect((screen.getByLabelText(/페르소나 선택/) as HTMLSelectElement).value).toBe('persona-2')
+    const href = screen.getByRole('link', { name: '세이브 관리' }).getAttribute('href')!
+    expect(new URL(href, 'https://example.test').searchParams.get('returnTo')).toContain(
+      'save=save-1',
+    )
+    fireEvent.click(screen.getByRole('button', { name: '채팅 시작' }))
+    await waitFor(() =>
+      expect(createChatMock).toHaveBeenCalledWith(
+        expect.objectContaining({ saveId: 'save-1', personaId: 'persona-2' }),
+      ),
+    )
+  })
+})

@@ -7,6 +7,7 @@ interface ChatHeaderProps {
   characterId: string
   characterName: string
   chatTitle: string | null
+  saveTitle?: string | null
   children: ReactNode // Action buttons
 }
 
@@ -16,6 +17,7 @@ export default function ChatHeader({
   characterId,
   characterName,
   chatTitle,
+  saveTitle,
   children,
 }: ChatHeaderProps) {
   const [isOpen, setIsOpen] = useState(false)
@@ -52,6 +54,15 @@ export default function ChatHeader({
             <span className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
               {chatTitle}
             </span>
+            {saveTitle ? (
+              <span
+                aria-label={'연결된 세이브: ' + saveTitle}
+                title={'세이브: ' + saveTitle}
+                className="max-w-[140px] truncate rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+              >
+                세이브 · {saveTitle}
+              </span>
+            ) : null}
           </div>
           <button
             onClick={() => setIsOpen(true)}
@@ -91,7 +102,7 @@ export default function ChatHeader({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {children}
             <button
               onClick={() => setIsOpen(false)}

@@ -47,6 +47,7 @@ function buildSupabase({
   characters,
   apiKeys,
   personas,
+  saves,
   turns,
   messages,
   summaries,
@@ -56,6 +57,7 @@ function buildSupabase({
   characters?: Array<Record<string, unknown>>
   apiKeys?: Array<Record<string, unknown>>
   personas?: Array<Record<string, unknown>>
+  saves?: Array<Record<string, unknown>>
   turns?: Array<Record<string, unknown>>
   messages?: Array<Record<string, unknown>>
   summaries?: Array<Record<string, unknown>>
@@ -82,6 +84,7 @@ function buildSupabase({
         rows: personas ?? [],
         primaryKeys: ['id'],
       },
+      character_saves: { rows: saves ?? [], primaryKeys: ['id'] },
       chat_turns: {
         rows: turns ?? [],
         primaryKeys: ['id'],
@@ -648,5 +651,79 @@ describe('dashboard chats actions', () => {
         token_count: 42,
       }),
     ])
+  })
+})
+
+describe('save-backed chat creation', () => {
+  const selection = { apiKeyId: 'key-1', modelName: 'gpt-5.4' }
+  function setupSave(owner = 'user-1', saveCharacter = 'char-1') {
+    const client = buildSupabase({
+      user: { id: 'user-1' },
+      characters: [
+        {
+          id: 'char-1',
+          user_id: 'user-1',
+          name: 'World',
+          greeting_message: null,
+          metadata: {},
+          archived_at: null,
+        },
+      ],
+      apiKeys: [{ id: 'key-1', user_id: 'user-1', provider: 'openai', is_active: true }],
+      personas: [{ id: 'persona-1', user_id: 'user-1', name: 'Player' }],
+      saves: [
+        {
+          id: 'save-1',
+          user_id: owner,
+          character_id: saveCharacter,
+          default_persona_id: 'persona-1',
+        },
+      ],
+    })
+    createClientMock.mockResolvedValue(client)
+    return client
+  }
+  it('attaches an owned save and uses its default persona when omitted', async () => {
+    const client = setupSave()
+    const { createChat } = await import('./actions')
+    expect(
+      await createChat({
+        characterId: 'char-1',
+        saveId: 'save-1',
+        greetingIndex: 0,
+        modelSelection: selection,
+      }),
+    ).toHaveProperty('chatId')
+    expect(getChatRows(client)).toEqual([
+      expect.objectContaining({ save_id: 'save-1', persona_id: 'persona-1' }),
+    ])
+  })
+  it('respects an explicit persona opt-out', async () => {
+    const client = setupSave()
+    const { createChat } = await import('./actions')
+    await createChat({
+      characterId: 'char-1',
+      saveId: 'save-1',
+      personaId: null,
+      greetingIndex: 0,
+      modelSelection: selection,
+    })
+    expect(getChatRows(client)).toEqual([expect.objectContaining({ persona_id: null })])
+  })
+  it.each([
+    ['other', 'char-1'],
+    ['user-1', 'other-card'],
+  ])('rejects foreign or mismatched saves (%s, %s)', async (owner, card) => {
+    const client = setupSave(owner, card)
+    const { createChat } = await import('./actions')
+    expect(
+      await createChat({
+        characterId: 'char-1',
+        saveId: 'save-1',
+        greetingIndex: 0,
+        modelSelection: selection,
+      }),
+    ).toHaveProperty('error')
+    expect(getChatRows(client)).toEqual([])
   })
 })

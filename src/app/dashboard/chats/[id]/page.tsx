@@ -14,6 +14,7 @@ import ChatSettingsButton from './ChatSettingsButton'
 import { CHAT_MESSAGE_PAGE_SIZE } from '@/lib/chat/constants'
 import SystemPromptEditorButton from './SystemPromptEditorButton'
 import ChatPersonaWidget from './ChatPersonaWidget'
+import ChatSaveWidget from './ChatSaveWidget'
 import { BASE_GLOBAL_SYSTEM_PROMPT } from '@/lib/chat/global-system-prompt'
 import { normalizeChatModelConfig } from '@/lib/chat/model-config'
 import { parseUserDraftModelConfig } from '@/lib/chat/user-draft-model-config'
@@ -60,6 +61,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
       title,
       character_id,
       persona_id,
+      save_id,
       model_config,
       custom_system_prompt,
       characters (
@@ -144,11 +146,22 @@ export default async function ChatPage({ params, searchParams }: Props) {
     .order('created_at', { ascending: false })
     .order('name', { ascending: true })
 
+  const saveOptionsQuery = supabase
+    .from('character_saves')
+    .select('id, title, character_id')
+    .eq('user_id', user.id)
+    .order('updated_at', { ascending: false })
+    .order('id')
+  const availableSavesPromise = chat.save_id
+    ? saveOptionsQuery.or('character_id.eq.' + chat.character_id + ',id.eq.' + chat.save_id)
+    : saveOptionsQuery.eq('character_id', chat.character_id)
+
   const [
     { data: apiKeys },
     persona,
     { data: profileSettings },
     { data: availablePersonas },
+    { data: availableSaves, error: savesError },
     initialWindow,
   ] = await Promise.all([
     supabase
@@ -160,12 +173,15 @@ export default async function ChatPage({ params, searchParams }: Props) {
     personaPromise,
     profileSettingsPromise,
     availablePersonasPromise,
+    availableSavesPromise,
     loadProjectedChatWindow({
       supabase,
       chatId: id,
       limitTurns: CHAT_MESSAGE_PAGE_SIZE,
     }),
   ])
+
+  if (savesError) throw new Error('세이브 목록을 불러오지 못했습니다')
 
   const initialMessages = stripInitialMessageDebugInfo(initialWindow.messages)
   const initialActiveJob = buildInitialActiveChatJob(activeJob)
@@ -200,6 +216,7 @@ export default async function ChatPage({ params, searchParams }: Props) {
         characterId={chat.character_id}
         characterName={character?.name || 'AI'}
         chatTitle={chat.title}
+        saveTitle={availableSaves?.find((save) => save.id === chat.save_id)?.title ?? null}
       >
         <ChatSettingsButton
           chatId={id}
@@ -214,6 +231,12 @@ export default async function ChatPage({ params, searchParams }: Props) {
           initialName={persona?.name || null}
           initialDescription={persona?.description || null}
           availablePersonas={availablePersonas || []}
+        />
+        <ChatSaveWidget
+          chatId={id}
+          characterId={chat.character_id}
+          currentSaveId={chat.save_id}
+          availableSaves={availableSaves || []}
         />
         <SystemPromptEditorButton
           chatId={id}

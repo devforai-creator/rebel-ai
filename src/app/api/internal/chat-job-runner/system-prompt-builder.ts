@@ -1,3 +1,5 @@
+import { formatStorySave, type StorySave } from '@/lib/character-saves/prompt'
+
 export type RunnerCharacter = {
   id: string
   name: string
@@ -10,6 +12,7 @@ type PersonaInfo = { name: string; description: string | null } | null
 type BuildSystemPromptArgs = {
   character: RunnerCharacter
   persona: PersonaInfo
+  storySave?: StorySave | null
   defaultSystemPrompt: string
   customSystemPrompt?: string | null
 }
@@ -24,6 +27,7 @@ function formatPersonaInfo(persona: { name: string; description: string | null }
 export async function buildSystemPrompt({
   character,
   persona,
+  storySave,
   defaultSystemPrompt,
   customSystemPrompt,
 }: BuildSystemPromptArgs): Promise<string> {
@@ -53,6 +57,9 @@ export async function buildSystemPrompt({
   if (characterPrompt) {
     parts.push(characterPrompt)
   }
+
+  const storySoFar = formatStorySave(storySave)
+  if (storySoFar) parts.push(storySoFar)
 
   if (persona) {
     parts.push(`[User Information]\n${formatPersonaInfo(persona)}`)

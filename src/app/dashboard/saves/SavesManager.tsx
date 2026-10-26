@@ -256,7 +256,7 @@ function SaveEditor({
             required
             disabled={pending}
             className={fieldClass}
-            placeholder="예: 로고스 · 첫 번째 이야기"
+            placeholder="예: 첫 번째 모험"
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">

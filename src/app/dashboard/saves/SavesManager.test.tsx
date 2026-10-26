@@ -20,8 +20,8 @@ vi.mock('./actions', () => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
 }))
-const characters = [{ id: 'card', name: '로고스' }]
-const personas = [{ id: 'persona', name: '승엽' }]
+const characters = [{ id: 'card', name: '테스트 캐릭터' }]
+const personas = [{ id: 'persona', name: '테스트 페르소나' }]
 const save: CharacterSave = {
   id: 'save',
   user_id: 'me',

@@ -129,7 +129,7 @@ describe('NewChatForm', () => {
 })
 
 describe('new chats from saves', () => {
-  const saves = [{ id: 'save-1', title: '로고스', default_persona_id: 'persona-2' }]
+  const saves = [{ id: 'save-1', title: '첫 번째 모험', default_persona_id: 'persona-2' }]
   it('preselects the save default but permits an explicit persona opt-out', () => {
     const { rerender } = render(
       <NewChatForm

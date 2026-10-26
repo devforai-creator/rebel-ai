@@ -2,7 +2,8 @@
 
 - Created: 2026-07-03
 - Reactivated: 2026-10-26
-- Status: Active (implemented locally; deployment pending)
+- Status: Archived
+- Completed: 2026-10-26
 - Working mode: standard AI-assisted development (Codex implements and verifies)
 
 ## Reactivation (2026-10-26)
@@ -37,9 +38,31 @@
 - Supabase CLI 2.121.0 was used for migration and type generation. Its stricter generated JSON
   types required preserving the existing variable API input type in the app-facing wrapper and
   narrowing the metadata sanitizer's object return type; runtime behavior is unchanged.
-- Remaining: review, linked migration application, Git-based deployment, and post-deployment
-  `npm run ops:smoke:active` plus linked database contract checks.
-- User behavior and deployment notes: [CHARACTER_SAVES.md](../../CHARACTER_SAVES.md).
+- Production rollout and required post-deployment checks completed; see the rollout record below.
+- User behavior and deployment notes: [CHARACTER_SAVES.md](../../../CHARACTER_SAVES.md).
+
+## Production Rollout (2026-10-26)
+
+- Released source commit: `2581aec95d97abd050166b78f909a6dcecdcf6bd`, fast-forwarded and pushed
+  to `origin/main` through the configured Git deployment path.
+- Migration `999002_character_saves.sql` applied to the linked Seoul project
+  `ceatljsosxyulebubcng` after the local tests, generated schema/types, and typechecks passed.
+- Linked schema comparison returned **No schema changes found**. The linked contract check
+  passed with 10 Storage policies, 3 private buckets, and sensitive ACLs locked.
+- Feature deployment: `dpl_9m2jq7GPnEZ3CrUPfpwmaH3Bv3j9`, **READY**,
+  [immutable deployment](https://rebel-dip5ha14e-sydebs-projects.vercel.app);
+  the verified production alias is [rebel-chat.vercel.app](https://rebel-chat.vercel.app).
+- [CI](https://github.com/devforai-creator/rebel-ai/actions/runs/40320615412) and
+  [CodeQL](https://github.com/devforai-creator/rebel-ai/actions/runs/40320614505) succeeded.
+- `npm run ops:smoke:active`: all six checks passed, including both active runner probes
+  (`processedCount: 0`). Triage retained existing, non-blocking failed-job history.
+- Read-only Data API probes (`limit=0`) returned 200 for the new save table and chat save
+  column, and denied anonymous save access with 401.
+- The unauthenticated save page correctly emits Next.js's streaming redirect to `/auth/login`
+  without rendering the save editor. An HTTP 200 here is the streaming transport status.
+- The deployment-scoped runtime error/fatal log query returned no groups at verification time.
+  The optional drains inventory API returned 404, so drain configuration was not verified.
+- No new environment variables or production test accounts/data were introduced.
 
 ## Historical Parking Decision
 

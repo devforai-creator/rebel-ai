@@ -17,12 +17,10 @@ Use it to answer two questions quickly:
 
 ## Current Entry Point
 
-- Active backlog:
-  [character-saves-backlog-2026-07-03.md](./active/character-saves-backlog-2026-07-03.md)
-  (reactivated 2026-10-26; AI-assisted implementation, starting with schema and access-control design)
+- Active backlog: none
 - Most recently parked backlog: none
 - Most recently archived backlog:
-  [recent-conversation-characters-backlog-2026-06-30.md](./archive/2026/recent-conversation-characters-backlog-2026-06-30.md)
+  [character-saves-backlog-2026-07-03.md](./archive/2026/character-saves-backlog-2026-07-03.md)
 
 ## Working Rules
 

@@ -16,6 +16,8 @@ describe('model reasoning policy', () => {
     })
     expect(supportsReasoningPreference('google', 'gemini-4-argon', 'none')).toBe(false)
     expect(supportsReasoningPreference('openai', 'gpt-6.1-sol', 'none')).toBe(false)
+    expect(supportsReasoningPreference('openai', 'gpt-6.1-terra', 'none')).toBe(false)
+    expect(supportsReasoningPreference('openai', 'gpt-6.1-terra', 'minimal')).toBe(false)
     expect(supportsReasoningPreference('openai', 'gpt-6-sol', 'none')).toBe(true)
     expect(supportsReasoningPreference('google', 'gemini-2.5-flash', 'low')).toBe(false)
     for (const model of MODEL_REGISTRY) {
@@ -59,6 +61,13 @@ describe('model reasoning policy', () => {
     expect(
       resolveReasoningSnapshot({ provider: 'openai', modelName: 'gpt-5.6', legacyEffort: 'none' }),
     ).toEqual({ effort: 'none', source: 'legacy-key' })
+    expect(
+      resolveReasoningSnapshot({
+        provider: 'openai',
+        modelName: 'gpt-6.1-terra',
+        legacyEffort: 'none',
+      }),
+    ).toEqual({ effort: 'low', source: 'legacy-key' })
     expect(
       resolveReasoningSnapshot({
         provider: 'google',

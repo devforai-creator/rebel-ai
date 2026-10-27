@@ -11,7 +11,7 @@ import {
 } from './provider-options'
 
 describe('getProviderOptions', () => {
-  it.each(['gpt-5.6', 'gpt-6-sol', 'gpt-6.1-sol'])(
+  it.each(['gpt-5.6', 'gpt-6-sol', 'gpt-6.1-sol', 'gpt-6.1-terra'])(
     'uses explicit cache mode only for marked chat requests on %s',
     (modelName) => {
       const chat = getProviderOptions('openai', {
@@ -23,6 +23,7 @@ describe('getProviderOptions', () => {
       expect(chat?.openai).not.toHaveProperty('promptCacheRetention')
       const other = getProviderOptions('openai', { modelName, promptCacheKey: 'summary:test' })
       expect(other?.openai).not.toHaveProperty('promptCacheOptions')
+      expect(other?.openai).not.toHaveProperty('promptCacheRetention')
     },
   )
 
@@ -135,9 +136,9 @@ describe('getProviderOptions', () => {
   })
 
   it.each(['none', 'minimal'])(
-    'uses low instead of unsupported %s reasoning for GPT-6.1 Sol',
+    'uses low instead of %s reasoning for models requiring SDK-compatible effort',
     (reasoningEffort) => {
-      for (const modelName of ['gpt-6.1-sol', 'gpt-6.1-sol-2026-09-29']) {
+      for (const modelName of ['gpt-6.1-sol', 'gpt-6.1-sol-2026-09-29', 'gpt-6.1-terra']) {
         expect(
           getProviderOptions('openai', {
             modelName,

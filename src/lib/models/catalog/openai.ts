@@ -33,6 +33,11 @@ const OPENAI_GPT61_SOL_PRICING = longContextPricing(
   { input: 2, output: 10, cachedInput: 0.1, cacheWrite: 2.5, reasoning: 10 },
   true,
 )
+// https://developers.openai.com/api/docs/models/gpt-6.1-terra
+const OPENAI_GPT61_TERRA_PRICING = longContextPricing(
+  { input: 1, output: 5, cachedInput: 0.05, cacheWrite: 1.25, reasoning: 5 },
+  true,
+)
 // https://developers.openai.com/api/docs/models/gpt-6-sol
 const OPENAI_GPT6_SOL_PRICING = longContextPricing(
   { input: 2, output: 10, cachedInput: 0.2, cacheWrite: 2.5, reasoning: 10 },
@@ -66,6 +71,27 @@ export const openAIModelCatalog = defineProviderCatalog({
         promptCaching: 'standard',
         reasoning: true,
         reasoningControl: {
+          levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          defaultLevel: 'medium',
+        },
+        openai: {
+          promptCacheMode: 'explicit',
+          promptCacheRetention: 'omit',
+          minimumReasoningEffort: 'low',
+        },
+      },
+    },
+    {
+      id: 'gpt-6.1-terra',
+      displayName: 'GPT-6.1 Terra',
+      matches: { prefixes: ['gpt-6.1-terra-'] },
+      pricing: OPENAI_GPT61_TERRA_PRICING,
+      features: {
+        flex: true,
+        promptCaching: 'standard',
+        reasoning: true,
+        reasoningControl: {
+          // The installed OpenAI SDK drops GPT-6 `none`; only expose forwarded levels.
           levels: ['low', 'medium', 'high', 'xhigh', 'max'],
           defaultLevel: 'medium',
         },

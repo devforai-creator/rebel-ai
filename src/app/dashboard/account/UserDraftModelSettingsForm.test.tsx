@@ -94,24 +94,38 @@ describe('UserDraftModelSettingsForm', () => {
     expect(new FormData(form).get('user_draft_api_key_id')).toBe('')
   })
 
-  it('offers Luna and keeps legacy OpenAI defaults until an explicit tier is saved', () => {
-    const { container } = render(
-      <UserDraftModelSettingsForm
-        initialConfig={{ apiKeyId: 'openai-key', modelName: 'gpt-6-luna', reasoningEffort: 'low' }}
-        apiKeys={[{ ...keys[1], service_tier: 'flex' }]}
-      />,
-    )
-    expect(screen.getByRole('option', { name: /GPT-6 Luna/ })).toBeTruthy()
-    const tier = screen.getByLabelText('대필 서비스 티어') as HTMLSelectElement
-    expect(tier.value).toBe('')
-    expect(screen.getByRole('option', { name: /기존 키 설정.*flex/ })).toBeTruthy()
-    fireEvent.change(tier, { target: { value: 'standard' } })
-    expect(new FormData(container.querySelector('form')!).get('user_draft_service_tier')).toBe(
-      'standard',
-    )
-    fireEvent.change(tier, { target: { value: '' } })
-    expect(new FormData(container.querySelector('form')!).get('user_draft_service_tier')).toBe('')
-  })
+  it.each(['gpt-6-luna', 'gpt-6.1-terra'])(
+    'offers %s and keeps legacy OpenAI defaults until an explicit tier is saved',
+    (modelName) => {
+      const { container } = render(
+        <UserDraftModelSettingsForm
+          initialConfig={{ apiKeyId: 'openai-key', modelName, reasoningEffort: 'low' }}
+          apiKeys={[{ ...keys[1], service_tier: 'flex' }]}
+        />,
+      )
+      expect((screen.getByLabelText('대필 모델') as HTMLSelectElement).value).toBe(
+        JSON.stringify(['openai-key', modelName]),
+      )
+      const reasoning = screen.getByLabelText('대필 추론 강도') as HTMLSelectElement
+      const effort = modelName === 'gpt-6.1-terra' ? 'low' : 'none'
+      if (modelName === 'gpt-6.1-terra') {
+        expect(Array.from(reasoning.options, (option) => option.value)).not.toContain('none')
+      }
+      fireEvent.change(reasoning, { target: { value: effort } })
+      expect(
+        new FormData(container.querySelector('form')!).get('user_draft_reasoning_effort'),
+      ).toBe(effort)
+      const tier = screen.getByLabelText('대필 서비스 티어') as HTMLSelectElement
+      expect(tier.value).toBe('')
+      expect(screen.getByRole('option', { name: /기존 키 설정.*flex/ })).toBeTruthy()
+      fireEvent.change(tier, { target: { value: 'standard' } })
+      expect(new FormData(container.querySelector('form')!).get('user_draft_service_tier')).toBe(
+        'standard',
+      )
+      fireEvent.change(tier, { target: { value: '' } })
+      expect(new FormData(container.querySelector('form')!).get('user_draft_service_tier')).toBe('')
+    },
+  )
 
   it('loads saved preferences and keeps unavailable saved selections visible', () => {
     const view = render(

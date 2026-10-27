@@ -7,48 +7,50 @@ afterEach(() => {
 })
 
 describe('OpenAI SDK request contract', () => {
-  it.each(['standard', 'flex'] as const)(
-    'sends Luna reasoning and the explicit %s tier in Responses',
-    async (serviceTier) => {
-      const fetchMock = vi.fn().mockResolvedValue(
-        Response.json({
-          id: 'resp_luna',
-          created_at: 0,
-          model: 'gpt-6-luna',
-          status: 'completed',
-          output: [],
-          usage: { input_tokens: 10, output_tokens: 0, total_tokens: 10 },
-        }),
-      )
-      vi.stubGlobal('fetch', fetchMock)
-      vi.resetModules()
-      const { buildLanguageModel } = await import('./model-factory')
-      const model = buildLanguageModel({
-        provider: 'openai',
-        modelName: 'gpt-6-luna',
-        apiKey: 'test-key',
-        serviceTier,
-      }) as LanguageModelV2
-      await model.doGenerate({
-        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
-        providerOptions: getProviderOptions('openai', {
-          modelName: 'gpt-6-luna',
+  describe.each(['gpt-6-luna', 'gpt-6.1-terra'])('%s requests', (modelName) => {
+    it.each(['standard', 'flex'] as const)(
+      'sends reasoning and the explicit %s tier in Responses',
+      async (serviceTier) => {
+        const fetchMock = vi.fn().mockResolvedValue(
+          Response.json({
+            id: 'resp_luna',
+            created_at: 0,
+            model: modelName,
+            status: 'completed',
+            output: [],
+            usage: { input_tokens: 10, output_tokens: 0, total_tokens: 10 },
+          }),
+        )
+        vi.stubGlobal('fetch', fetchMock)
+        vi.resetModules()
+        const { buildLanguageModel } = await import('./model-factory')
+        const model = buildLanguageModel({
+          provider: 'openai',
+          modelName,
+          apiKey: 'test-key',
           serviceTier,
-          reasoning: { effort: 'low', source: 'chat' },
-          promptCacheKey: 'luna-cache',
-        }),
-      })
-      const [url, init] = fetchMock.mock.calls[0]
-      expect(url).toBe('https://api.openai.com/v1/responses')
-      expect(JSON.parse(init.body)).toMatchObject({
-        model: 'gpt-6-luna',
-        service_tier: serviceTier === 'standard' ? 'default' : 'flex',
-        reasoning: { effort: 'low' },
-        prompt_cache_key: 'luna-cache',
-      })
-      expect(JSON.parse(init.body)).not.toHaveProperty('prompt_cache_retention')
-    },
-  )
+        }) as LanguageModelV2
+        await model.doGenerate({
+          prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+          providerOptions: getProviderOptions('openai', {
+            modelName,
+            serviceTier,
+            reasoning: { effort: 'low', source: 'chat' },
+            promptCacheKey: 'luna-cache',
+          }),
+        })
+        const [url, init] = fetchMock.mock.calls[0]
+        expect(url).toBe('https://api.openai.com/v1/responses')
+        expect(JSON.parse(init.body)).toMatchObject({
+          model: modelName,
+          service_tier: serviceTier === 'standard' ? 'default' : 'flex',
+          reasoning: { effort: 'low' },
+          prompt_cache_key: 'luna-cache',
+        })
+        expect(JSON.parse(init.body)).not.toHaveProperty('prompt_cache_retention')
+      },
+    )
+  })
   it.each([null, 'none', 'low', 'xhigh', 'max'] as const)(
     'preserves a chat effort snapshot (%s) in Responses',
     async (effort) => {
@@ -83,80 +85,83 @@ describe('OpenAI SDK request contract', () => {
       else expect(body.reasoning.effort).toBe(effort)
     },
   )
-  it('uses Responses with supported reasoning, tool calling, and cache-write metadata', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      Response.json({
-        id: 'resp_test',
-        created_at: 0,
-        model: 'gpt-6.1-sol',
-        status: 'completed',
-        output: [
+  it.each(['gpt-6.1-sol', 'gpt-6.1-terra'])(
+    'uses Responses with supported reasoning, tools, and cache writes for %s',
+    async (modelName) => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        Response.json({
+          id: 'resp_test',
+          created_at: 0,
+          model: modelName,
+          status: 'completed',
+          output: [
+            {
+              id: 'msg_test',
+              type: 'message',
+              role: 'assistant',
+              status: 'completed',
+              content: [{ type: 'output_text', text: 'Hello', annotations: [] }],
+            },
+          ],
+          usage: {
+            input_tokens: 10000,
+            input_tokens_details: { cached_tokens: 8000, cache_write_tokens: 1000 },
+            output_tokens: 1500,
+            output_tokens_details: { reasoning_tokens: 500 },
+            total_tokens: 11500,
+          },
+        }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      vi.resetModules()
+      const { buildLanguageModel } = await import('./model-factory')
+
+      const model = buildLanguageModel({
+        provider: 'openai',
+        modelName,
+        apiKey: 'test-key',
+        serviceTier: 'flex',
+      }) as LanguageModelV2
+      const result = await model.doGenerate({
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+        temperature: 0.8,
+        topP: 0.9,
+        tools: [
           {
-            id: 'msg_test',
-            type: 'message',
-            role: 'assistant',
-            status: 'completed',
-            content: [{ type: 'output_text', text: 'Hello', annotations: [] }],
+            type: 'function',
+            name: 'fetch_source_range',
+            description: 'Fetch prior conversation messages.',
+            inputSchema: { type: 'object', properties: {} },
           },
         ],
-        usage: {
-          input_tokens: 10000,
-          input_tokens_details: { cached_tokens: 8000, cache_write_tokens: 1000 },
-          output_tokens: 1500,
-          output_tokens_details: { reasoning_tokens: 500 },
-          total_tokens: 11500,
-        },
-      }),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-    vi.resetModules()
-    const { buildLanguageModel } = await import('./model-factory')
+        providerOptions: getProviderOptions('openai', {
+          modelName,
+          promptCacheKey: 'cache-key',
+          reasoningEffort: 'none',
+        }),
+      })
 
-    const model = buildLanguageModel({
-      provider: 'openai',
-      modelName: 'gpt-6.1-sol',
-      apiKey: 'test-key',
-      serviceTier: 'flex',
-    }) as LanguageModelV2
-    const result = await model.doGenerate({
-      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
-      temperature: 0.8,
-      topP: 0.9,
-      tools: [
-        {
-          type: 'function',
-          name: 'fetch_source_range',
-          description: 'Fetch prior conversation messages.',
-          inputSchema: { type: 'object', properties: {} },
-        },
-      ],
-      providerOptions: getProviderOptions('openai', {
-        modelName: 'gpt-6.1-sol',
-        promptCacheKey: 'cache-key',
-        reasoningEffort: 'none',
-      }),
-    })
-
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe('https://api.openai.com/v1/responses')
-    const body = JSON.parse(init.body as string)
-    expect(body).toMatchObject({
-      model: 'gpt-6.1-sol',
-      reasoning: { effort: 'low' },
-      service_tier: 'flex',
-      prompt_cache_key: 'cache-key',
-      tools: [{ type: 'function', name: 'fetch_source_range' }],
-    })
-    expect(body).not.toHaveProperty('temperature')
-    expect(body).not.toHaveProperty('top_p')
-    expect(body).not.toHaveProperty('prompt_cache_retention')
-    expect(result.providerMetadata?.openai?.usage).toMatchObject({ cacheWriteTokens: 1000 })
-    expect(result.usage).toMatchObject({
-      inputTokens: 10000,
-      outputTokens: 1500,
-      reasoningTokens: 500,
-      cachedInputTokens: 8000,
-    })
-  })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+      expect(url).toBe('https://api.openai.com/v1/responses')
+      const body = JSON.parse(init.body as string)
+      expect(body).toMatchObject({
+        model: modelName,
+        reasoning: { effort: 'low' },
+        service_tier: 'flex',
+        prompt_cache_key: 'cache-key',
+        tools: [{ type: 'function', name: 'fetch_source_range' }],
+      })
+      expect(body).not.toHaveProperty('temperature')
+      expect(body).not.toHaveProperty('top_p')
+      expect(body).not.toHaveProperty('prompt_cache_retention')
+      expect(result.providerMetadata?.openai?.usage).toMatchObject({ cacheWriteTokens: 1000 })
+      expect(result.usage).toMatchObject({
+        inputTokens: 10000,
+        outputTokens: 1500,
+        reasoningTokens: 500,
+        cachedInputTokens: 8000,
+      })
+    },
+  )
 })

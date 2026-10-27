@@ -608,7 +608,7 @@ describe('estimateUsageCost', () => {
         })?.totalCost,
       ).toBeCloseTo(Number(total), 12)
     })
-    it.each(['gpt-6.1-sol', 'gpt-6-sol', 'gpt-5.6', 'gpt-5.6-sol'])(
+    it.each(['gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-sol', 'gpt-5.6', 'gpt-5.6-sol'])(
       'applies verified %s Fast rates including long context, writes, and reasoning',
       (modelName) => {
         for (const promptTokens of [272000, 272001]) {
@@ -716,6 +716,28 @@ describe('estimateUsageCost', () => {
       expect(estimate?.cachedInputCost).toBeCloseTo(0.1 * rates.cachedInput, 8)
       expect(estimate?.completionCost).toBeCloseTo(0.007 * rates.output, 8)
       expect(estimate?.reasoningCost).toBeCloseTo(0.003 * rates.output, 8)
+    })
+
+    it.each([
+      { promptTokens: 272000, promptCost: 0.1745, cacheWriteCost: 0.0125, total: 0.2295 },
+      { promptTokens: 272001, promptCost: 0.349002, cacheWriteCost: 0.025, total: 0.434002 },
+    ])('prices the entire Terra request at the $promptTokens-token boundary', (expected) => {
+      for (const serviceTier of ['standard', 'flex', 'priority'] as const) {
+        const cost = estimateUsageCost({
+          provider: 'openai',
+          modelName: 'gpt-6.1-terra',
+          promptTokens: expected.promptTokens,
+          completionTokens: 10000,
+          cachedInputTokens: 100000,
+          cacheWriteTokens: 10000,
+          reasoningTokens: 3000,
+          serviceTier,
+        })
+        const multiplier = serviceTier === 'flex' ? 0.5 : serviceTier === 'priority' ? 2 : 1
+        expect(cost?.promptCost).toBeCloseTo(expected.promptCost * multiplier, 12)
+        expect(cost?.cacheWriteCost).toBeCloseTo(expected.cacheWriteCost * multiplier, 12)
+        expect(cost?.totalCost).toBeCloseTo(expected.total * multiplier, 12)
+      }
     })
 
     it('applies GPT-6 Sol long-context rates to the entire request above 272K input tokens', () => {

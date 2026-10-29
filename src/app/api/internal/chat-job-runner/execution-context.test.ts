@@ -485,6 +485,7 @@ describe('loadChatJobExecutionContext', () => {
       { id: 'db-user-1', role: 'user', content: 'From transcript' },
     ])
     const expectedTranscript = [{ ...transcript[0], messageId: 'db-user-1' }]
+    countProjectedConversationMessagesMock.mockResolvedValueOnce(1)
 
     const result = await loadChatJobExecutionContext({
       supabase: supabase as never,
@@ -1111,7 +1112,7 @@ describe('loadChatJobExecutionContext', () => {
         model_config: { memory: { mode: 'prefix_live_blocks' } },
       },
     })
-    countProjectedConversationMessagesMock.mockResolvedValueOnce(54)
+    countProjectedConversationMessagesMock.mockResolvedValueOnce(53)
     const tail = Array.from({ length: 53 }, (_, index) => ({
       id: `msg-${index + 1}`,
       role: index % 2 === 0 ? 'user' : 'assistant',
@@ -1165,7 +1166,7 @@ describe('loadChatJobExecutionContext', () => {
       },
     })
 
-    countProjectedConversationMessagesMock.mockResolvedValueOnce(55)
+    countProjectedConversationMessagesMock.mockResolvedValueOnce(54)
     loadProjectedConversationTailMock.mockResolvedValueOnce(projectedTail)
     loadChatLorebookStateMock.mockResolvedValueOnce({
       entries: [],

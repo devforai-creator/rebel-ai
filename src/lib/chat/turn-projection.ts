@@ -588,9 +588,11 @@ export async function countProjectedChatMessages({
 export async function countProjectedConversationMessages({
   supabase,
   chatId,
+  excludeAssistantForTurnId,
 }: {
   supabase: TurnClient
   chatId: string
+  excludeAssistantForTurnId?: string | null
 }): Promise<number> {
   let userMessageCount: number
   let activeAssistantCount: number
@@ -604,6 +606,7 @@ export async function countProjectedConversationMessages({
       countTurnsWithActiveAssistantMessage({
         supabase,
         chatId,
+        excludeTurnId: excludeAssistantForTurnId,
       }),
     ])
   } catch (error) {

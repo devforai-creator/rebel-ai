@@ -1,5 +1,4 @@
 import { SUMMARY_LEVEL_CHUNK, SUMMARY_LEVEL_META } from '@/lib/chat-summaries/config'
-import type { ServerSupabaseClient } from '@/lib/chat-summaries/types'
 import {
   selectPrefixPromptSummaries,
   type PrefixSummarySelectionRow,
@@ -54,31 +53,5 @@ export function resolvePrefixSummaryState<T extends PrefixSummarySelectionRow>(
     lastChunkEnd,
     visibleSummaryEnd,
     summaries: selectPrefixPromptSummaries(eligibleRows, visibleSummaryEnd),
-  }
-}
-
-export async function loadPrefixSummaryRows(
-  supabase: ServerSupabaseClient,
-  chatId: string,
-): Promise<PrefixSummarySelectionRow[]> {
-  const rows: PrefixSummarySelectionRow[] = []
-  const pageSize = 1000
-
-  for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await supabase
-      .from('chat_summaries')
-      .select<'level, start_seq, end_seq, summary'>('level, start_seq, end_seq, summary')
-      .eq('chat_id', chatId)
-      .order('start_seq', { ascending: true })
-      .order('level', { ascending: false })
-      .range(offset, offset + pageSize - 1)
-
-    if (error) {
-      console.error('[chat-memory] Failed to load prefix summaries:', error.message)
-      return []
-    }
-
-    rows.push(...(data ?? []))
-    if (!data || data.length < pageSize) return rows
   }
 }

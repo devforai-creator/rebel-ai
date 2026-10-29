@@ -2630,7 +2630,7 @@ describe('processChatJobs', () => {
     createAdminClientMock.mockReturnValue(supabase)
 
     decryptSecretMock.mockResolvedValue('sk-test')
-    countProjectedConversationMessagesMock.mockResolvedValue(2)
+    countProjectedConversationMessagesMock.mockResolvedValue(1)
     loadProjectedConversationTailMock.mockResolvedValue([
       { id: 'user-1', role: 'user', content: 'latest user message' },
     ])

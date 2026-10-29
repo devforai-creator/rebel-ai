@@ -1,6 +1,7 @@
+import React from 'react'
 import { createClient } from '@/lib/supabase/server'
-import { MESSAGE_STATUS_GENERATING, MESSAGE_STATUS_SUPERSEDED } from '@/lib/chat/message-status'
 import { resolveChatMemoryConfig } from '@/lib/chat/model-config'
+import { loadMemoryState } from '@/lib/chat-memory/load-memory-state'
 import { loadLatestProjectedAssistantMessage } from '@/lib/chat/turns'
 import ChatSummariesPanel from './ChatSummariesPanel'
 import { parseSummaryWarningInfo } from './summary-warning'
@@ -11,56 +12,27 @@ interface Props {
 
 export default async function ChatSummariesPanelLoader({ chatId }: Props) {
   const supabase = await createClient()
+  const { data: chat } = await supabase
+    .from('chats')
+    .select('model_config')
+    .eq('id', chatId)
+    .single<{ model_config: unknown }>()
+  const memoryConfig = resolveChatMemoryConfig(chat?.model_config ?? null)
 
-  const [
-    { data: summaries },
-    { data: facts },
-    { count: totalMessagesCount },
-    { data: latestSequenceRow },
-    { data: chat },
-    latestAssistant,
-  ] = await Promise.all([
-    supabase
-      .from('chat_summaries')
-      .select('id, level, start_seq, end_seq, summary, summary_status, created_at')
-      .eq('chat_id', chatId)
-      .order('level', { ascending: false })
-      .order('start_seq', { ascending: true }),
+  const [memoryState, { data: facts }, latestAssistant] = await Promise.all([
+    loadMemoryState({ supabase, chatId, memoryConfig }),
     supabase
       .from('chat_facts')
       .select('id, start_seq, end_seq, facts, created_at')
       .eq('chat_id', chatId)
       .order('start_seq', { ascending: true }),
-    supabase
-      .from('messages')
-      .select('id', { head: true, count: 'exact' })
-      .eq('chat_id', chatId)
-      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-      .neq('message_status', MESSAGE_STATUS_GENERATING),
-    supabase
-      .from('messages')
-      .select('sequence')
-      .eq('chat_id', chatId)
-      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-      .neq('message_status', MESSAGE_STATUS_GENERATING)
-      .order('sequence', { ascending: false })
-      .limit(1)
-      .maybeSingle<{ sequence: number }>(),
-    supabase
-      .from('chats')
-      .select('model_config')
-      .eq('id', chatId)
-      .single<{ model_config: unknown }>(),
     loadLatestProjectedAssistantMessage({
       supabase,
       chatId,
     }),
   ])
 
-  const totalMessages = typeof totalMessagesCount === 'number' ? totalMessagesCount : 0
-  const latestSequence =
-    typeof latestSequenceRow?.sequence === 'number' ? latestSequenceRow.sequence : totalMessages
-  const memoryConfig = resolveChatMemoryConfig(chat?.model_config ?? null)
+  const { messageCount: totalMessages, summaries } = memoryState
   const summaryWarning = parseSummaryWarningInfo(latestAssistant?.debug_info ?? null)
 
   return (
@@ -69,7 +41,7 @@ export default async function ChatSummariesPanelLoader({ chatId }: Props) {
       summaries={summaries || []}
       facts={facts || []}
       totalMessages={totalMessages}
-      latestSequence={latestSequence}
+      latestSequence={totalMessages}
       memoryConfig={memoryConfig}
       summaryWarning={summaryWarning}
     />

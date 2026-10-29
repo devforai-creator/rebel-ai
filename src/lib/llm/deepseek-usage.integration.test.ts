@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.client }))
 vi.mock('@/lib/chat/turns', () => ({
   loadLatestProjectedAssistantMessage: mocks.latest,
-  countProjectedChatMessages: mocks.count,
+  countProjectedConversationMessages: mocks.count,
 }))
 vi.mock('@/app/api/internal/chat-job-runner/post-generation-pipeline', () => ({
   runPostGenerationPipeline: mocks.pipeline,

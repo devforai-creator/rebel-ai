@@ -23,7 +23,8 @@ import type {
   MemoryPromptBlock,
   UpdateMemoryStateOptions,
 } from './types'
-import { loadPrefixSummaryRows, resolvePrefixSummaryState } from './prefix-summary-state'
+import { resolvePrefixSummaryState } from './prefix-summary-state'
+import { loadPrefixSummaryRows } from './load-memory-state'
 
 type SummaryRow = Pick<ChatSummary, 'level' | 'start_seq' | 'end_seq' | 'summary'>
 type FactRow = {

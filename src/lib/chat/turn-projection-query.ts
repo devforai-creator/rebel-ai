@@ -210,11 +210,13 @@ async function countTurnsWithMessageField({
   chatId,
   field,
   maxTurnIndex,
+  excludeTurnId,
 }: {
   supabase: TurnClient
   chatId: string
   field: 'user_message_id' | 'active_assistant_message_id'
   maxTurnIndex?: number
+  excludeTurnId?: string | null
 }): Promise<number> {
   let query = supabase
     .from('chat_turns')
@@ -224,6 +226,10 @@ async function countTurnsWithMessageField({
 
   if (typeof maxTurnIndex === 'number') {
     query = query.lte('turn_index', maxTurnIndex)
+  }
+
+  if (excludeTurnId) {
+    query = query.neq('id', excludeTurnId)
   }
 
   const { count, error } = await query
@@ -256,16 +262,19 @@ export async function countTurnsWithActiveAssistantMessage({
   supabase,
   chatId,
   maxTurnIndex,
+  excludeTurnId,
 }: {
   supabase: TurnClient
   chatId: string
   maxTurnIndex?: number
+  excludeTurnId?: string | null
 }): Promise<number> {
   return countTurnsWithMessageField({
     supabase,
     chatId,
     field: 'active_assistant_message_id',
     maxTurnIndex,
+    excludeTurnId,
   })
 }
 

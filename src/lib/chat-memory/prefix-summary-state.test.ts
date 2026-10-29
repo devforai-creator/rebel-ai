@@ -9,7 +9,8 @@ import {
 import type { ChatSummariesSupabaseClient } from '@/lib/chat-summaries/types'
 import { createSupabaseMock } from '@/tests/mocks/supabase'
 import type { PrefixSummarySelectionRow } from './prefix-summary-selection'
-import { loadPrefixSummaryRows, resolvePrefixSummaryState } from './prefix-summary-state'
+import { resolvePrefixSummaryState } from './prefix-summary-state'
+import { loadPrefixSummaryRows } from './load-memory-state'
 
 function chunks(count: number): PrefixSummarySelectionRow[] {
   return Array.from({ length: count }, (_, index) => ({

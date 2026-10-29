@@ -1,7 +1,9 @@
 import { outputIncludesReasoning } from '@/lib/llm/usage-semantics'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { countProjectedChatMessages, loadLatestProjectedAssistantMessage } from '@/lib/chat/turns'
+import { loadLatestProjectedAssistantMessage } from '@/lib/chat/turns'
+import { resolveChatMemoryConfig } from '@/lib/chat/model-config'
+import { loadMemoryState } from '@/lib/chat-memory/load-memory-state'
 import { readUsageReceipt, readUsageRequestId } from '@/lib/chat/usage-receipt'
 
 type LatestAssistantUsage = {
@@ -55,7 +57,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
 
   const { data: chat } = await supabase
     .from('chats')
-    .select('id, user_id')
+    .select('id, user_id, model_config')
     .eq('id', chatId)
     .single()
 
@@ -64,23 +66,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
   }
 
   // Fetch counts in parallel with other queries
-  const [messageCountResult, summaryCountResult, latestAssistantUsageResult] = await Promise.all([
-    countProjectedChatMessages({
+  const [memoryState, latestAssistantUsageResult] = await Promise.all([
+    loadMemoryState({
       supabase,
       chatId,
+      memoryConfig: resolveChatMemoryConfig(chat.model_config),
     }),
-    supabase
-      .from('chat_summaries')
-      .select('*', { count: 'exact', head: true })
-      .eq('chat_id', chatId),
     loadLatestProjectedAssistantMessage({
       supabase,
       chatId,
     }),
   ])
 
-  const messageCount = messageCountResult
-  const summaryCount = summaryCountResult.count ?? 0
+  const messageCount = memoryState.messageCount
+  const summaryCount = memoryState.summaries.length
 
   const latestAssistantUsage = latestAssistantUsageResult as LatestAssistantUsage | null
   const receipt = readUsageReceipt(latestAssistantUsage?.debug_info)

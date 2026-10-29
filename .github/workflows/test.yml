@@ -79,6 +79,9 @@ jobs:
       - name: Run runtime boundary verification suite
         run: npm run test:runtime-boundaries
 
+      - name: Verify server and UI memory contract
+        run: npm run test:memory-contract
+
       - name: Run unit and integration tests with coverage
         shell: bash
         run: |

@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({ client: vi.fn(), latest: vi.fn(), count: vi.fn
 vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.client }))
 vi.mock('@/lib/chat/turns', () => ({
   loadLatestProjectedAssistantMessage: mocks.latest,
-  countProjectedChatMessages: mocks.count,
+  countProjectedConversationMessages: mocks.count,
 }))
 const usage = {
   promptTokens: 32691,

@@ -2,11 +2,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { ApiKey, Chat, Character, Persona, Profile } from '@/types/database.types'
 import { ensureUserFirstForAnthropic } from '@/lib/chat/anthropic-user-first'
 import { buildMemoryPlan } from '@/lib/chat-memory'
-import {
-  loadPrefixSummaryRows,
-  resolvePrefixSummaryState,
-  type PrefixSummaryState,
-} from '@/lib/chat-memory/prefix-summary-state'
+import type { PrefixSummaryState } from '@/lib/chat-memory/prefix-summary-state'
+import { loadMemoryState } from '@/lib/chat-memory/load-memory-state'
 import { resolveChatInputTokenLimit } from '@/lib/chat/runtime-limits'
 import { getGlobalSystemPrompt } from '@/lib/chat/global-system-prompt'
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
@@ -36,7 +33,7 @@ import {
 } from '@/lib/lorebook/runtime'
 import { LOREBOOK_SCAN_DEPTH } from '@/lib/lorebook-renderer'
 import type { ChatPromptContext } from '@/lib/chat-memory/prompt-context'
-import { countProjectedConversationMessages, loadProjectedConversationTail } from '@/lib/chat/turns'
+import { loadProjectedConversationTail } from '@/lib/chat/turns'
 import type { ProjectedConversationMessage } from '@/lib/chat/turns'
 import { loadSaveForGeneration } from '@/lib/character-saves/service'
 import { buildSystemPrompt } from './system-prompt-builder'
@@ -478,15 +475,13 @@ export async function loadChatJobExecutionContext({
   let prefixSummaryState: PrefixSummaryState | undefined
 
   if (payload.turnId) {
-    const totalConversationMessageCount = await countProjectedConversationMessages({
+    const memoryState = await loadMemoryState({
       supabase,
       chatId,
+      memoryConfig,
+      excludeAssistantForTurnId,
     })
-
-    effectiveConversationMessageCount = Math.max(
-      0,
-      totalConversationMessageCount - (excludeAssistantFromTranscript ? 1 : 0),
-    )
+    effectiveConversationMessageCount = memoryState.messageCount
 
     const lorebookState = await loadChatLorebookState({
       supabase,
@@ -504,11 +499,8 @@ export async function loadChatJobExecutionContext({
     debugMetrics['lorebook_override_count'] = lorebookState.overrideMap.size
     debugMetrics['lorebook_requires_history'] = lorebookRequiresHistory
 
-    if (memoryConfig.mode === 'prefix_live_blocks') {
-      prefixSummaryState = resolvePrefixSummaryState(
-        await loadPrefixSummaryRows(supabase, chatId),
-        effectiveConversationMessageCount - memoryConfig.retainTailMessages,
-      )
+    if (memoryState.prefixSummaryState) {
+      prefixSummaryState = memoryState.prefixSummaryState
       visibleSummaryEnd = prefixSummaryState.visibleSummaryEnd
       debugMetrics['memory_last_chunk_end'] = prefixSummaryState.lastChunkEnd
       debugMetrics['memory_visible_summary_end'] = visibleSummaryEnd

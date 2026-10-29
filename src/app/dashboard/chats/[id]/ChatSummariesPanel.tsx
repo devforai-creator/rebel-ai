@@ -9,8 +9,11 @@ import { runConfirmedAction } from '@/app/dashboard/components/confirm-action'
 import SurfaceCard from '@/app/dashboard/components/SurfaceCard'
 import { CHAT_CONTEXT_WINDOW } from '@/lib/chat-context-window'
 import type { ChatMemoryConfig } from '@/lib/chat/model-config'
-import { CHUNK_SIZE, SUMMARY_LEVEL_META } from '@/lib/chat-summaries/config'
-import { selectPrefixPromptSummaries } from '@/lib/chat-memory/prefix-summary-selection'
+import { CHUNK_SIZE, SUMMARY_GROUP_SIZE } from '@/lib/chat-summaries/config'
+import {
+  PREFIX_ROLLOVER_MESSAGES,
+  resolvePrefixSummaryState,
+} from '@/lib/chat-memory/prefix-summary-state'
 import { FactMemorySection, SummaryMemoryTreeSection } from './components'
 import { useChatSummariesState } from './hooks'
 import type { FactEntry, SummaryEntry } from './hooks/useChatSummariesState'
@@ -40,7 +43,7 @@ export function getMemoryDescription(memoryConfig: Required<ChatMemoryConfig>): 
     return `Summary Window mode keeps the most recent ${CHAT_CONTEXT_WINDOW} messages raw and summarizes older conversation in ${CHUNK_SIZE}-message chunks. Updates are generated automatically and may appear with a short delay.`
   }
 
-  return `Prefix mode keeps the latest ${formatMessageCountLabel(memoryConfig.retainTailMessages)} raw while generating canonical ${CHUNK_SIZE}-message memory chunks from the sealed prefix. Higher-level ${CHUNK_SIZE * 10}-message recaps appear after enough canonical chunks accumulate. Updates are generated automatically and may appear with a short delay.`
+  return `Prefix mode replaces completed ${PREFIX_ROLLOVER_MESSAGES}-message blocks with summaries while keeping at least the latest ${formatMessageCountLabel(memoryConfig.retainTailMessages)} raw. It generates canonical ${CHUNK_SIZE}-message memory chunks and higher-level ${CHUNK_SIZE * SUMMARY_GROUP_SIZE}-message recaps. Updates are generated automatically and may appear with a short delay.`
 }
 
 function getArtifactRawTail(memoryConfig: Required<ChatMemoryConfig>): number {
@@ -155,18 +158,14 @@ export default function ChatSummariesPanel({
       return undefined
     }
 
-    const visibleSummaryEnd = summaries.reduce(
-      (latestEnd, summary) =>
-        summary.level === SUMMARY_LEVEL_META ? Math.max(latestEnd, summary.end_seq) : latestEnd,
-      0,
+    const { summaries: promptSummaries } = resolvePrefixSummaryState(
+      summaries,
+      messageCount - memoryConfig.retainTailMessages,
     )
-
-    const promptSummaryIds = new Set(
-      selectPrefixPromptSummaries(summaries, visibleSummaryEnd).map((summary) => summary.id),
-    )
+    const promptSummaryIds = new Set(promptSummaries.map((summary) => summary.id))
 
     return buildSummaryPromptStatuses(summaries, promptSummaryIds)
-  }, [memoryConfig.mode, summaries])
+  }, [memoryConfig.mode, memoryConfig.retainTailMessages, messageCount, summaries])
 
   const hasSummaries =
     summaryStructure.metaNodes.length > 0 || summaryStructure.looseChunks.length > 0

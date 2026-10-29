@@ -8,16 +8,16 @@ import {
 // Prompt rollover is independent of the shared 10-message chunks and 100-message metas.
 export const PREFIX_ROLLOVER_MESSAGES = 50
 
-export type PrefixSummaryState = {
+export type PrefixSummaryState<T extends PrefixSummarySelectionRow = PrefixSummarySelectionRow> = {
   lastChunkEnd: number
   visibleSummaryEnd: number
-  summaries: PrefixSummarySelectionRow[]
+  summaries: T[]
 }
 
-export function resolvePrefixSummaryState(
-  rows: PrefixSummarySelectionRow[],
+export function resolvePrefixSummaryState<T extends PrefixSummarySelectionRow>(
+  rows: T[],
   sealedThroughSeq = Infinity,
-): PrefixSummaryState {
+): PrefixSummaryState<T> {
   const eligibleRows = rows.filter(
     (row) =>
       (row.level === SUMMARY_LEVEL_CHUNK || row.level === SUMMARY_LEVEL_META) &&

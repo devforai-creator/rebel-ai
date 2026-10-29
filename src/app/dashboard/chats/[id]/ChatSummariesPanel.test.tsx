@@ -104,6 +104,8 @@ describe('ChatSummariesPanel memory stats copy', () => {
 
     expect(getMemoryDescription(memoryConfig)).toContain('latest 4 messages raw')
     expect(getMemoryDescription(memoryConfig)).toContain('canonical 10-message memory chunks')
+    expect(getMemoryDescription(memoryConfig)).toContain('completed 50-message blocks')
+    expect(getMemoryDescription(memoryConfig)).toContain('100-message recaps')
     expect(getMemoryDescription(memoryConfig)).not.toContain(
       'live conversation raw until 100 messages',
     )

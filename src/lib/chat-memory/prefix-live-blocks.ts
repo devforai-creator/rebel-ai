@@ -23,7 +23,7 @@ import type {
   MemoryPromptBlock,
   UpdateMemoryStateOptions,
 } from './types'
-import { selectPrefixPromptSummaries } from './prefix-summary-selection'
+import { loadPrefixSummaryRows, resolvePrefixSummaryState } from './prefix-summary-state'
 
 type SummaryRow = Pick<ChatSummary, 'level' | 'start_seq' | 'end_seq' | 'summary'>
 type FactRow = {
@@ -60,6 +60,9 @@ export async function buildPrefixLiveBlocksMemoryPlan({
   sanitizedMessages,
   transcriptCoverage = 'full',
   transcriptStartOrdinal = 1,
+  totalConversationMessages,
+  modelConfig,
+  prefixSummaryState,
 }: Pick<
   BuildMemoryPlanOptions,
   | 'supabase'
@@ -69,8 +72,19 @@ export async function buildPrefixLiveBlocksMemoryPlan({
   | 'sanitizedMessages'
   | 'transcriptCoverage'
   | 'transcriptStartOrdinal'
+  | 'totalConversationMessages'
+  | 'modelConfig'
+  | 'prefixSummaryState'
 >): Promise<MemoryPlan> {
-  const visibleSummaryEnd = (await getLastSummaryEnd(supabase, chatId, SUMMARY_LEVEL_META)) ?? 0
+  const summaryState =
+    prefixSummaryState ??
+    resolvePrefixSummaryState(
+      await loadPrefixSummaryRows(supabase, chatId),
+      totalConversationMessages === undefined
+        ? Infinity
+        : totalConversationMessages - resolveChatMemoryConfig(modelConfig).retainTailMessages,
+    )
+  const { visibleSummaryEnd, summaries } = summaryState
   const staticSystemPrompt = baseSystemPrompt.trim()
   const promptBlocks: MemoryPromptBlock[] = []
   const dynamicBlocks: string[] = []
@@ -90,31 +104,17 @@ export async function buildPrefixLiveBlocksMemoryPlan({
   )
 
   if (visibleSummaryEnd > 0) {
-    const { data: summaries, error: summaryError } = await supabase
-      .from('chat_summaries')
-      .select<'level, start_seq, end_seq, summary'>('level, start_seq, end_seq, summary')
-      .eq('chat_id', chatId)
-      .lte('end_seq', visibleSummaryEnd)
-      .order('level', { ascending: false })
-      .order('start_seq', { ascending: true })
+    const summarySegments = formatSummarySegments(summaries)
 
-    if (summaryError) {
-      console.error('[chat-memory] Failed to load prefix summaries:', summaryError.message)
-    } else {
-      const summaryRows = (summaries ?? []) as SummaryRow[]
-      const filtered = selectPrefixPromptSummaries(summaryRows, visibleSummaryEnd)
-      const summarySegments = filtered.length > 0 ? formatSummarySegments(filtered) : []
-
-      if (summarySegments.length > 0) {
-        const summaryBlock = `=== Previous Conversation Summary ===\n${summarySegments.join('\n\n')}`
-        dynamicBlocks.push(summaryBlock)
-        promptBlocks.push({
-          role: 'system',
-          content: summaryBlock,
-          cachePreference: 'prefer-cache',
-          stability: 'sealed',
-        })
-      }
+    if (summarySegments.length > 0) {
+      const summaryBlock = `=== Previous Conversation Summary ===\n${summarySegments.join('\n\n')}`
+      dynamicBlocks.push(summaryBlock)
+      promptBlocks.push({
+        role: 'system',
+        content: summaryBlock,
+        cachePreference: 'prefer-cache',
+        stability: 'sealed',
+      })
     }
 
     const episodicMemorySettings = await loadChatEpisodicMemorySettings({

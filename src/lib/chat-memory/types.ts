@@ -1,5 +1,6 @@
 import type { ChatModelConfig } from '@/lib/chat/model-config'
 import type { ChatPromptContext } from './prompt-context'
+import type { PrefixSummaryState } from './prefix-summary-state'
 import type {
   BuildContextOptions,
   RagResultInfo,
@@ -35,6 +36,7 @@ export type BuildMemoryPlanOptions = BuildContextOptions & {
   modelConfig?: ChatModelConfig | null
   transcriptCoverage?: MemoryTranscriptCoverage
   transcriptStartOrdinal?: number
+  prefixSummaryState?: PrefixSummaryState
 }
 
 export type UpdateMemoryStateOptions = UpdateSummariesOptions & {

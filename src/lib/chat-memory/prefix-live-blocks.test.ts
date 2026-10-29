@@ -1,8 +1,59 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SUMMARY_LEVEL_CHUNK, SUMMARY_LEVEL_META } from '@/lib/chat-summaries/config'
 import type { ChatSummariesSupabaseClient } from '@/lib/chat-summaries/types'
 import { createSupabaseMock } from '@/tests/mocks/supabase'
 import { buildPrefixLiveBlocksMemoryPlan } from './prefix-live-blocks'
+import { buildMemoryPlan } from './index'
+import { resolvePrefixSummaryState } from './prefix-summary-state'
+
+function createConversation(total: number) {
+  const messages = Array.from({ length: total }, (_, index) => ({
+    id: `msg-${index + 1}`,
+    chat_id: 'chat-1',
+    role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+    content: `message ${index + 1}`,
+    sequence: index + 1,
+  }))
+  const chunkCount = Math.floor((total - 4) / 10)
+  const summaries = [
+    ...Array.from({ length: chunkCount }, (_, index) => ({
+      chat_id: 'chat-1',
+      level: SUMMARY_LEVEL_CHUNK,
+      start_seq: index * 10 + 1,
+      end_seq: index * 10 + 10,
+      summary: `chunk ${index + 1}`,
+    })),
+    ...Array.from({ length: Math.floor(chunkCount / 10) }, (_, index) => ({
+      chat_id: 'chat-1',
+      level: SUMMARY_LEVEL_META,
+      start_seq: index * 100 + 1,
+      end_seq: index * 100 + 100,
+      summary: `meta ${index + 1}`,
+    })),
+  ]
+  const supabase = createSupabaseMock({
+    tables: {
+      chats: { rows: [{ id: 'chat-1', user_id: 'user-1' }] },
+      profiles: { rows: [{ id: 'user-1', enable_episodic_rag: false }] },
+      chat_summaries: { rows: summaries },
+      chat_turns: {
+        rows: Array.from({ length: Math.ceil(total / 2) }, (_, index) => ({
+          id: `turn-${index + 1}`,
+          chat_id: 'chat-1',
+          turn_index: index + 1,
+          user_message_id: messages[index * 2]?.id ?? null,
+          active_assistant_message_id: messages[index * 2 + 1]?.id ?? null,
+        })),
+      },
+      messages: { rows: messages },
+    },
+  }) as unknown as ChatSummariesSupabaseClient
+  return {
+    supabase,
+    summaries,
+    messages: messages.map(({ id, role, content }) => ({ role, content, messageId: id })),
+  }
+}
 
 function createPrefixModeSupabaseWithFacts(options: {
   profileEnableRag: boolean
@@ -48,6 +99,118 @@ function createPrefixModeSupabaseWithFacts(options: {
 }
 
 describe('buildPrefixLiveBlocksMemoryPlan', () => {
+  it.each([
+    [53, 0],
+    [54, 50],
+    [103, 50],
+    [104, 100],
+    [154, 150],
+    [204, 200],
+  ])('uses the completed 50-message boundary at %i messages', async (total, boundary) => {
+    const { supabase, messages, summaries } = createConversation(total)
+    const result = await buildMemoryPlan({
+      supabase,
+      chatId: 'chat-1',
+      sanitizedMessages: messages,
+      totalConversationMessages: total,
+      baseSystemPrompt: 'STATIC',
+      modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+    })
+
+    expect(result.fallbackMessages).toEqual(messages.slice(boundary))
+    expect(result.promptBlocks.filter((block) => block.stability === 'live')).toHaveLength(
+      total - boundary,
+    )
+    if (boundary > 0) {
+      expect(result.dynamicContext).toContain(`[Summary ${boundary - 9}-${boundary}]`)
+      expect(result.dynamicContext).not.toContain(`[Summary ${boundary + 1}-${boundary + 10}]`)
+    } else {
+      expect(result.dynamicContext).toBeNull()
+    }
+    expect(result.dynamicContext?.includes('[Meta Summary 1-100]') ?? false).toBe(total >= 204)
+    expect(
+      summaries.filter((row) => row.level === SUMMARY_LEVEL_META).map((row) => row.end_seq),
+    ).toEqual(
+      Array.from({ length: Math.floor((total - 4) / 100) }, (_, index) => (index + 1) * 100),
+    )
+  })
+
+  it('retains the complete raw transcript when the first 50-message block has a missing summary', async () => {
+    const { supabase, messages } = createConversation(54)
+    await supabase.from('chat_summaries').delete().eq('start_seq', 21)
+    const result = await buildMemoryPlan({
+      supabase,
+      chatId: 'chat-1',
+      sanitizedMessages: messages,
+      totalConversationMessages: 54,
+      baseSystemPrompt: 'STATIC',
+      modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+    })
+
+    expect(result.fallbackMessages).toEqual(messages)
+    expect(result.dynamicContext).toBeNull()
+  })
+
+  it('shares the same stored 10-message chunks and 100-message metas across mode switches', async () => {
+    const { supabase, messages, summaries } = createConversation(154)
+    const options = {
+      supabase,
+      chatId: 'chat-1',
+      sanitizedMessages: messages,
+      totalConversationMessages: 154,
+      baseSystemPrompt: 'STATIC',
+    }
+    const before = JSON.stringify(summaries)
+    const prefix = await buildMemoryPlan({
+      ...options,
+      modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+    })
+    const summary = await buildMemoryPlan({
+      ...options,
+      modelConfig: { memory: { mode: 'summary_window' } },
+    })
+    const prefixAgain = await buildMemoryPlan({
+      ...options,
+      modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+    })
+
+    expect(prefix.fallbackMessages).toEqual(messages.slice(150))
+    expect(summary.fallbackMessages).toEqual(messages.slice(-20))
+    expect(summary.dynamicContext).toContain('[Meta Summary 1-100]')
+    expect(summary.dynamicContext).toContain('[Summary 101-110]')
+    expect(prefixAgain).toEqual(prefix)
+    expect(JSON.stringify(summaries)).toBe(before)
+  })
+
+  it('reuses the summary snapshot used to load the transcript instead of moving the boundary mid-request', async () => {
+    const { supabase, messages } = createConversation(104)
+    const state = resolvePrefixSummaryState(
+      Array.from({ length: 5 }, (_, index) => ({
+        level: SUMMARY_LEVEL_CHUNK,
+        start_seq: index * 10 + 1,
+        end_seq: index * 10 + 10,
+        summary: `snapshot chunk ${index + 1}`,
+      })),
+    )
+    const fromSpy = vi.spyOn(supabase, 'from')
+    const result = await buildMemoryPlan({
+      supabase,
+      chatId: 'chat-1',
+      sanitizedMessages: messages.slice(50),
+      transcriptCoverage: 'window',
+      transcriptStartOrdinal: 51,
+      totalConversationMessages: 104,
+      baseSystemPrompt: 'STATIC',
+      modelConfig: { memory: { mode: 'prefix_live_blocks' } },
+      prefixSummaryState: state,
+    })
+
+    expect(result.fallbackMessages).toEqual(messages.slice(50))
+    expect(result.dynamicContext).toContain('snapshot chunk 5')
+    expect(result.dynamicContext).not.toContain('[Summary 51-60]')
+    expect(fromSpy.mock.calls.some(([table]) => table === 'chat_summaries')).toBe(false)
+  })
+
   it('keeps stored facts out of prefix context when episodic memory RAG is disabled', async () => {
     const supabase = createPrefixModeSupabaseWithFacts({
       profileEnableRag: false,

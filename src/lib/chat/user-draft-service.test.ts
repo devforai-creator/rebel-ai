@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
   memory: vi.fn(),
   count: vi.fn(),
   tail: vi.fn(),
-  summaryEnd: vi.fn(),
   lore: vi.fn(),
   renderLore: vi.fn(),
 }))
@@ -32,7 +31,6 @@ vi.mock('@/lib/chat/turns', () => ({
   countProjectedConversationMessages: mocks.count,
   loadProjectedConversationTail: mocks.tail,
 }))
-vi.mock('@/lib/chat-summaries/db-helpers', () => ({ getLastSummaryEnd: mocks.summaryEnd }))
 vi.mock('@/lib/lorebook/runtime', () => ({
   loadChatLorebookState: mocks.lore,
   renderLorebookContext: mocks.renderLore,
@@ -125,6 +123,7 @@ function setup(
         ],
       },
       messages: { rows: transcript.map((message) => ({ ...message })) },
+      chat_summaries: { rows: [] },
       chat_generation_jobs: { rows: [] },
     },
   })
@@ -164,7 +163,6 @@ beforeEach(() => {
   })
   mocks.count.mockResolvedValue(2)
   mocks.tail.mockResolvedValue(transcript)
-  mocks.summaryEnd.mockResolvedValue(0)
   mocks.lore.mockResolvedValue({ entries: [], overrideMap: new Map() })
   mocks.renderLore.mockReturnValue({
     combined: 'Mountain terrain',
@@ -390,23 +388,32 @@ describe('generateUserDraft', () => {
   })
 
   it('reads the entire unsummarized tail for prefix memory', async () => {
-    const { args } = setup({ modelConfig: { memory: { mode: 'prefix_live_blocks' } } })
+    const { args, client } = setup({ modelConfig: { memory: { mode: 'prefix_live_blocks' } } })
+    await client.from('chat_summaries').insert(
+      Array.from({ length: 7 }, (_, index) => ({
+        chat_id: 'chat-1',
+        level: 0,
+        start_seq: index * 10 + 1,
+        end_seq: index * 10 + 10,
+        summary: `chunk ${index + 1}`,
+      })),
+    )
     mocks.count.mockResolvedValue(80)
-    mocks.summaryEnd.mockResolvedValue(30)
     mocks.tail.mockResolvedValue(
-      Array.from({ length: 50 }, (_, index) => ({
+      Array.from({ length: 30 }, (_, index) => ({
         id: 'm' + index,
         role: 'user',
         content: 'message ' + index,
       })),
     )
     await generateUserDraft(args)
-    expect(mocks.tail).toHaveBeenCalledWith(expect.objectContaining({ limitMessages: 50 }))
+    expect(mocks.tail).toHaveBeenCalledWith(expect.objectContaining({ limitMessages: 30 }))
     expect(mocks.memory).toHaveBeenCalledWith(
       expect.objectContaining({
         transcriptCoverage: 'window',
-        transcriptStartOrdinal: 31,
+        transcriptStartOrdinal: 51,
         totalConversationMessages: 80,
+        prefixSummaryState: expect.objectContaining({ visibleSummaryEnd: 50 }),
       }),
     )
   })

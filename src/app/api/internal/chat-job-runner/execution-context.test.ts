@@ -9,7 +9,6 @@ const buildMemoryPlanMock = vi.fn()
 const loadGenerationTranscriptMock = vi.fn()
 const countProjectedConversationMessagesMock = vi.fn()
 const loadProjectedConversationTailMock = vi.fn()
-const getLastSummaryEndMock = vi.fn()
 const applyBilingualContextMock = vi.fn()
 const isBilingualEnabledMock = vi.fn()
 const ensureUserFirstForAnthropicMock = vi.fn()
@@ -73,10 +72,6 @@ vi.mock('@/lib/lorebook/runtime', () => ({
   }),
 }))
 
-vi.mock('@/lib/chat-summaries/db-helpers', () => ({
-  getLastSummaryEnd: (...args: unknown[]) => getLastSummaryEndMock(...args),
-}))
-
 vi.mock('@/lib/chat/turns', () => ({
   countProjectedConversationMessages: (...args: unknown[]) =>
     countProjectedConversationMessagesMock(...args),
@@ -110,6 +105,16 @@ function buildValidPayload(
     regenerateAssistantMessageId: null,
     ...overrides,
   }
+}
+
+function makeChunkSummaries(count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    chat_id: 'chat-1',
+    level: 0,
+    start_seq: index * 10 + 1,
+    end_seq: index * 10 + 10,
+    summary: `chunk ${index + 1}`,
+  }))
 }
 
 describe('resolveTranscriptSourcePlan', () => {
@@ -233,7 +238,6 @@ describe('loadChatJobExecutionContext', () => {
     loadGenerationTranscriptMock.mockReset()
     countProjectedConversationMessagesMock.mockReset()
     loadProjectedConversationTailMock.mockReset()
-    getLastSummaryEndMock.mockReset()
     applyBilingualContextMock.mockReset()
     isBilingualEnabledMock.mockReset()
     ensureUserFirstForAnthropicMock.mockReset()
@@ -271,7 +275,6 @@ describe('loadChatJobExecutionContext', () => {
     loadGenerationTranscriptMock.mockResolvedValue([{ role: 'user', content: 'From transcript' }])
     countProjectedConversationMessagesMock.mockResolvedValue(2)
     loadProjectedConversationTailMock.mockResolvedValue([])
-    getLastSummaryEndMock.mockResolvedValue(0)
     applyBilingualContextMock.mockImplementation(async ({ messages }) => messages)
     isBilingualEnabledMock.mockResolvedValue(false)
     ensureUserFirstForAnthropicMock.mockImplementation((messages) => ({
@@ -851,6 +854,7 @@ describe('loadChatJobExecutionContext', () => {
         messageId: `message-${index}`,
       }))
       const supabase = createChatJobRunnerSupabaseMock({
+        initialChatSummaries: makeChunkSummaries(5),
         chat: {
           id: 'chat-1',
           user_id: 'user-1',
@@ -860,8 +864,7 @@ describe('loadChatJobExecutionContext', () => {
           model_config: { memory: { mode } },
         },
       })
-      countProjectedConversationMessagesMock.mockResolvedValueOnce(100)
-      getLastSummaryEndMock.mockResolvedValueOnce(98).mockResolvedValueOnce(96)
+      countProjectedConversationMessagesMock.mockResolvedValueOnce(54)
 
       const result = await loadChatJobExecutionContext({
         supabase: supabase as never,
@@ -886,7 +889,7 @@ describe('loadChatJobExecutionContext', () => {
 
   it.each([
     ['summary_window', 20, 20],
-    ['prefix_live_blocks', 10, 2],
+    ['prefix_live_blocks', 10, 4],
   ] as const)(
     'fetches one bounded tail for lorebook and %s generation',
     async (mode, queryCount, generationCount) => {
@@ -896,12 +899,13 @@ describe('loadChatJobExecutionContext', () => {
         role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
         content: `db-message-${index}`,
       }))
-      const payloadMessages = Array.from({ length: 3 }, (_, index) => ({
+      const payloadMessages = Array.from({ length: 5 }, (_, index) => ({
         role: 'user' as const,
         content: `payload-${index}`,
       }))
       const transcript = messages.map(({ id, ...message }) => ({ ...message, messageId: id }))
       const supabase = createChatJobRunnerSupabaseMock({
+        initialChatSummaries: makeChunkSummaries(5),
         chat: {
           id: 'chat-1',
           user_id: 'user-1',
@@ -911,8 +915,7 @@ describe('loadChatJobExecutionContext', () => {
           model_config: { memory: { mode } },
         },
       })
-      countProjectedConversationMessagesMock.mockResolvedValueOnce(100)
-      getLastSummaryEndMock.mockResolvedValueOnce(98).mockResolvedValueOnce(98)
+      countProjectedConversationMessagesMock.mockResolvedValueOnce(54)
       loadProjectedConversationTailMock.mockResolvedValueOnce(messages)
 
       const result = await loadChatJobExecutionContext({
@@ -1014,12 +1017,13 @@ describe('loadChatJobExecutionContext', () => {
 
   it('uses the visible summary cutoff for prefix-live chats when the payload is too short', async () => {
     const { loadChatJobExecutionContext } = await import('./execution-context')
-    const projectedTail = Array.from({ length: 20 }, (_, index) => ({
+    const projectedTail = Array.from({ length: 60 }, (_, index) => ({
       id: `db-msg-${index + 1}`,
       role: (index + 1) % 2 === 0 ? 'assistant' : 'user',
       content: `db-message-${index + 1}`,
     }))
     const supabase = createChatJobRunnerSupabaseMock({
+      initialChatSummaries: makeChunkSummaries(9),
       chat: {
         id: 'chat-1',
         user_id: 'user-1',
@@ -1036,7 +1040,6 @@ describe('loadChatJobExecutionContext', () => {
     })
 
     countProjectedConversationMessagesMock.mockResolvedValueOnce(110)
-    getLastSummaryEndMock.mockResolvedValueOnce(96).mockResolvedValueOnce(90)
     loadProjectedConversationTailMock.mockResolvedValueOnce(projectedTail)
     loadChatLorebookStateMock.mockResolvedValueOnce({
       entries: [],
@@ -1063,7 +1066,7 @@ describe('loadChatJobExecutionContext', () => {
     expect(loadProjectedConversationTailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         chatId: 'chat-1',
-        limitMessages: 20,
+        limitMessages: 60,
         excludeAssistantForTurnId: null,
       }),
     )
@@ -1076,22 +1079,64 @@ describe('loadChatJobExecutionContext', () => {
         })),
         totalConversationMessages: 110,
         transcriptCoverage: 'window',
-        transcriptStartOrdinal: 91,
+        transcriptStartOrdinal: 51,
+        prefixSummaryState: expect.objectContaining({ visibleSummaryEnd: 50 }),
       }),
     )
     expect(result.debugMetrics).toEqual(
       expect.objectContaining({
         transcript_source: 'db_tail',
         transcript_source_reason: 'payload_shorter_than_required_window',
-        transcript_required_message_count: 20,
+        transcript_required_message_count: 60,
         lorebook_history_source: 'not_needed',
         lorebook_history_source_reason: 'history_not_needed',
         lorebook_history_message_count: 0,
-        transcript_message_count: 20,
+        transcript_message_count: 60,
         transcript_total_message_count: 110,
-        transcript_start_ordinal: 91,
-        memory_last_chunk_end: 96,
-        memory_visible_summary_end: 90,
+        transcript_start_ordinal: 51,
+        memory_last_chunk_end: 90,
+        memory_visible_summary_end: 50,
+      }),
+    )
+  })
+
+  it('keeps the protected tail raw when regeneration moves back across a rollover boundary', async () => {
+    const { loadChatJobExecutionContext } = await import('./execution-context')
+    const supabase = createChatJobRunnerSupabaseMock({
+      initialChatSummaries: makeChunkSummaries(5),
+      chat: {
+        id: 'chat-1',
+        user_id: 'user-1',
+        character_id: 'char-1',
+        model_config: { memory: { mode: 'prefix_live_blocks' } },
+      },
+    })
+    countProjectedConversationMessagesMock.mockResolvedValueOnce(54)
+    const tail = Array.from({ length: 53 }, (_, index) => ({
+      id: `msg-${index + 1}`,
+      role: index % 2 === 0 ? 'user' : 'assistant',
+      content: `message ${index + 1}`,
+    }))
+    loadProjectedConversationTailMock.mockResolvedValueOnce(tail)
+
+    const result = await loadChatJobExecutionContext({
+      supabase: supabase as never,
+      payload: buildValidPayload({
+        turnId: 'turn-27',
+        isRegeneration: true,
+        regenerateAssistantMessageId: 'msg-54',
+      }),
+      timings: {},
+    })
+
+    expect(loadProjectedConversationTailMock).toHaveBeenCalledWith(
+      expect.objectContaining({ limitMessages: 53, excludeAssistantForTurnId: 'turn-27' }),
+    )
+    expect(result.generationTranscript).toHaveLength(53)
+    expect(buildMemoryPlanMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transcriptStartOrdinal: 1,
+        prefixSummaryState: expect.objectContaining({ visibleSummaryEnd: 0, summaries: [] }),
       }),
     )
   })
@@ -1101,8 +1146,11 @@ describe('loadChatJobExecutionContext', () => {
     const projectedTail = [
       { id: 'db-msg-1', role: 'user', content: 'db-message-1' },
       { id: 'db-msg-2', role: 'assistant', content: 'db-message-2' },
+      { id: 'db-msg-3', role: 'user', content: 'db-message-3' },
+      { id: 'db-msg-4', role: 'assistant', content: 'db-message-4' },
     ]
     const supabase = createChatJobRunnerSupabaseMock({
+      initialChatSummaries: makeChunkSummaries(5),
       chat: {
         id: 'chat-1',
         user_id: 'user-1',
@@ -1117,8 +1165,7 @@ describe('loadChatJobExecutionContext', () => {
       },
     })
 
-    countProjectedConversationMessagesMock.mockResolvedValueOnce(7)
-    getLastSummaryEndMock.mockResolvedValueOnce(4).mockResolvedValueOnce(4)
+    countProjectedConversationMessagesMock.mockResolvedValueOnce(55)
     loadProjectedConversationTailMock.mockResolvedValueOnce(projectedTail)
     loadChatLorebookStateMock.mockResolvedValueOnce({
       entries: [],
@@ -1146,19 +1193,21 @@ describe('loadChatJobExecutionContext', () => {
     expect(loadProjectedConversationTailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         chatId: 'chat-1',
-        limitMessages: 2,
+        limitMessages: 4,
         excludeAssistantForTurnId: 'turn-3',
       }),
     )
     expect(result.generationTranscript).toEqual([
       { role: 'user', content: 'db-message-1', messageId: 'db-msg-1' },
       { role: 'assistant', content: 'db-message-2', messageId: 'db-msg-2' },
+      { role: 'user', content: 'db-message-3', messageId: 'db-msg-3' },
+      { role: 'assistant', content: 'db-message-4', messageId: 'db-msg-4' },
     ])
     expect(result.debugMetrics).toEqual(
       expect.objectContaining({
         transcript_source: 'db_tail',
         transcript_source_reason: 'payload_missing_regeneration_exclusion',
-        transcript_required_message_count: 2,
+        transcript_required_message_count: 4,
         lorebook_history_source: 'not_needed',
         lorebook_history_source_reason: 'history_not_needed',
         lorebook_history_message_count: 0,

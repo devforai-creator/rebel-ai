@@ -5,9 +5,11 @@ import { loadSaveForGeneration } from '@/lib/character-saves/service'
 import { formatStorySave } from '@/lib/character-saves/prompt'
 import { CHAT_CONTEXT_WINDOW } from '@/lib/chat-context-window'
 import { buildMemoryPlan } from '@/lib/chat-memory'
+import {
+  loadPrefixSummaryRows,
+  resolvePrefixSummaryState,
+} from '@/lib/chat-memory/prefix-summary-state'
 import { estimateTokenCount } from '@/lib/chat-summaries/formatters'
-import { getLastSummaryEnd } from '@/lib/chat-summaries/db-helpers'
-import { SUMMARY_LEVEL_META } from '@/lib/chat-summaries/config'
 import { resolveActiveLlmConfigForUser } from './llm-config-resolver'
 import { normalizeChatModelConfig, resolveChatMemoryConfig } from './model-config'
 import { countProjectedConversationMessages, loadProjectedConversationTail } from './turns'
@@ -144,7 +146,7 @@ export async function generateUserDraft({
     personaResult,
     storySave,
     totalMessages,
-    visibleSummaryEnd,
+    prefixSummaryRows,
     lorebookState,
   ] = await Promise.all([
     supabase
@@ -158,8 +160,8 @@ export async function generateUserDraft({
     loadSaveForGeneration({ supabase, userId, saveId: chat.save_id }),
     countProjectedConversationMessages({ supabase, chatId }),
     memoryConfig.mode === 'prefix_live_blocks'
-      ? getLastSummaryEnd(supabase, chatId, SUMMARY_LEVEL_META)
-      : Promise.resolve(null),
+      ? loadPrefixSummaryRows(supabase, chatId)
+      : Promise.resolve([]),
     loadChatLorebookState({ supabase, chatId, characterId: chat.character_id }),
   ])
   if (characterResult.error || !characterResult.data || personaResult.error) {
@@ -174,9 +176,16 @@ export async function generateUserDraft({
     typeof metadata.post_history_instructions === 'string'
       ? metadata.post_history_instructions
       : null
+  const prefixSummaryState =
+    memoryConfig.mode === 'prefix_live_blocks'
+      ? resolvePrefixSummaryState(
+          prefixSummaryRows,
+          totalMessages - memoryConfig.retainTailMessages,
+        )
+      : undefined
   const limitMessages =
     memoryConfig.mode === 'prefix_live_blocks'
-      ? Math.max(CHAT_CONTEXT_WINDOW, totalMessages - (visibleSummaryEnd ?? 0))
+      ? Math.max(CHAT_CONTEXT_WINDOW, totalMessages - (prefixSummaryState?.visibleSummaryEnd ?? 0))
       : CHAT_CONTEXT_WINDOW
   const transcript = await loadProjectedConversationTail({ supabase, chatId, limitMessages })
   const messages = transcript.map((message) => ({
@@ -198,6 +207,7 @@ export async function generateUserDraft({
     modelConfig,
     transcriptCoverage: messages.length >= totalMessages ? 'full' : 'window',
     transcriptStartOrdinal: Math.max(1, totalMessages - messages.length + 1),
+    prefixSummaryState,
   })
 
   const characterAndSetting = {

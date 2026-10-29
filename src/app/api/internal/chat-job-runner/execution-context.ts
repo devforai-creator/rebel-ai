@@ -2,6 +2,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { ApiKey, Chat, Character, Persona, Profile } from '@/types/database.types'
 import { ensureUserFirstForAnthropic } from '@/lib/chat/anthropic-user-first'
 import { buildMemoryPlan } from '@/lib/chat-memory'
+import {
+  loadPrefixSummaryRows,
+  resolvePrefixSummaryState,
+  type PrefixSummaryState,
+} from '@/lib/chat-memory/prefix-summary-state'
 import { resolveChatInputTokenLimit } from '@/lib/chat/runtime-limits'
 import { getGlobalSystemPrompt } from '@/lib/chat/global-system-prompt'
 import type { ChatGenerationJobPayload } from '@/lib/chat/job-payload'
@@ -23,12 +28,7 @@ import {
   loadAgenticTranscriptRecallSourceMap,
   type AgenticTranscriptRecallSourceMap,
 } from '@/lib/experimental/agentic-transcript-recall/source-map'
-import { getLastSummaryEnd } from '@/lib/chat-summaries/db-helpers'
-import {
-  CONTEXT_WINDOW,
-  SUMMARY_LEVEL_CHUNK,
-  SUMMARY_LEVEL_META,
-} from '@/lib/chat-summaries/config'
+import { CONTEXT_WINDOW } from '@/lib/chat-summaries/config'
 import {
   loadChatLorebookState,
   lorebookNeedsChatHistory,
@@ -474,8 +474,8 @@ export async function loadChatJobExecutionContext({
   let lorebookHistory = payloadTranscript
   let lorebookEntries: Awaited<ReturnType<typeof loadChatLorebookState>>['entries'] = []
   let lorebookOverrideMap = new Map<string, boolean>()
-  let lastChunkEnd: number | null = null
   let visibleSummaryEnd: number | null = null
+  let prefixSummaryState: PrefixSummaryState | undefined
 
   if (payload.turnId) {
     const totalConversationMessageCount = await countProjectedConversationMessages({
@@ -505,15 +505,12 @@ export async function loadChatJobExecutionContext({
     debugMetrics['lorebook_requires_history'] = lorebookRequiresHistory
 
     if (memoryConfig.mode === 'prefix_live_blocks') {
-      const resolvedSummaryEnds = await Promise.all([
-        getLastSummaryEnd(supabase as never, chatId, SUMMARY_LEVEL_CHUNK),
-        getLastSummaryEnd(supabase as never, chatId, SUMMARY_LEVEL_META),
-      ])
-      lastChunkEnd = resolvedSummaryEnds[0]
-      visibleSummaryEnd = resolvedSummaryEnds[1]
-      lastChunkEnd ??= 0
-      visibleSummaryEnd ??= 0
-      debugMetrics['memory_last_chunk_end'] = lastChunkEnd
+      prefixSummaryState = resolvePrefixSummaryState(
+        await loadPrefixSummaryRows(supabase, chatId),
+        effectiveConversationMessageCount - memoryConfig.retainTailMessages,
+      )
+      visibleSummaryEnd = prefixSummaryState.visibleSummaryEnd
+      debugMetrics['memory_last_chunk_end'] = prefixSummaryState.lastChunkEnd
       debugMetrics['memory_visible_summary_end'] = visibleSummaryEnd
     }
 
@@ -689,6 +686,7 @@ export async function loadChatJobExecutionContext({
     transcriptCoverage:
       generationTranscript.length >= effectiveConversationMessageCount ? 'full' : 'window',
     transcriptStartOrdinal,
+    prefixSummaryState,
   })
   const finalSystemPrompt = fallbackSystemPrompt
   timings['7_build_context'] = performance.now() - stepStart

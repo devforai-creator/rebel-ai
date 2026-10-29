@@ -31,6 +31,7 @@ export async function buildMemoryPlan({
   transcriptStartOrdinal,
   stableContext,
   turnContext,
+  prefixSummaryState,
 }: BuildMemoryPlanOptions): Promise<MemoryPlan> {
   const memory = resolveChatMemoryConfig(modelConfig)
 
@@ -52,6 +53,9 @@ export async function buildMemoryPlan({
           sanitizedMessages,
           transcriptCoverage,
           transcriptStartOrdinal,
+          totalConversationMessages,
+          modelConfig,
+          prefixSummaryState,
         })
 
   const extras = (extraDynamicContext ?? []).filter((part) => part.trim())

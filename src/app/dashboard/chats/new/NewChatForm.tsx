@@ -17,6 +17,8 @@ import {
 import { formatChatModelOptionLabel, type ChatSelectableApiKeyOption } from '../api-key-options'
 import { createChat } from '../actions'
 import { getCharacterGreetingOptions } from './greeting-options'
+import GreetingPreview from './GreetingPreview'
+import type { ChatAssetData } from '../[id]/utils/types'
 
 interface Props {
   character: CharacterOption
@@ -28,6 +30,7 @@ interface Props {
   initialModelName?: string
   initialPersonaId?: string
   initialGreetingIndex?: number
+  greetingPreviewData?: ChatAssetData | null
 }
 
 type CharacterOption = Pick<Character, 'id' | 'user_id' | 'name' | 'greeting_message' | 'metadata'>
@@ -47,6 +50,7 @@ export default function NewChatForm({
   initialModelName = '',
   initialPersonaId,
   initialGreetingIndex = 0,
+  greetingPreviewData,
 }: Props) {
   const router = useRouter()
   const allGreetings = getCharacterGreetingOptions(character)
@@ -127,7 +131,6 @@ export default function NewChatForm({
 
   const currentGreeting =
     allGreetings[greetingIndex] !== undefined ? allGreetings[greetingIndex] : null
-  const hasMultipleOptions = allGreetings.length > 1
   const returnParams = new URLSearchParams({ character: characterId })
 
   if (modelSelection) {
@@ -155,10 +158,7 @@ export default function NewChatForm({
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-8"
-    >
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
       {error && (
         <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
           {error}
@@ -183,191 +183,172 @@ export default function NewChatForm({
             <p className="text-xl font-semibold text-gray-800 dark:text-gray-100">
               {character.user_id ? character.name : `🌟 ${character.name} (추천)`}
             </p>
-            {allGreetings.length > 0 && (
-              <div className="mt-3">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    첫 인사 {hasMultipleOptions && `(${greetingIndex + 1}/${allGreetings.length})`}
-                  </p>
-                  {hasMultipleOptions && (
-                    <div className="flex gap-1">
-                      <button
-                        type="button"
-                        onClick={handlePreviousGreeting}
-                        className="px-2 py-1 text-xs bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded hover:bg-gray-100 dark:hover:bg-gray-500 transition-colors"
-                        title="이전 인사말"
-                      >
-                        ◀
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleNextGreeting}
-                        className="px-2 py-1 text-xs bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded hover:bg-gray-100 dark:hover:bg-gray-500 transition-colors"
-                        title="다음 인사말"
-                      >
-                        ▶
-                      </button>
-                    </div>
-                  )}
-                </div>
-                {currentGreeting ? (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 italic">
-                    <span>&quot;</span>
-                    {currentGreeting}
-                    <span>&quot;</span>
-                  </p>
-                ) : (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 italic">
-                    (인사말 없이 시작)
+          </div>
+        </div>
+
+        {allGreetings.length > 0 ? (
+          <GreetingPreview
+            content={
+              currentGreeting?.replace(
+                /\{\{user\}\}/g,
+                personas.find((persona) => persona.id === personaId)?.name || 'User',
+              ) ?? null
+            }
+            characterName={character.name}
+            metadata={character.metadata}
+            assetData={greetingPreviewData}
+            previewKey={character.id + ':' + greetingIndex + ':' + personaId}
+            index={greetingIndex}
+            count={allGreetings.length}
+            onPrevious={handlePreviousGreeting}
+            onNext={handleNextGreeting}
+          />
+        ) : null}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* 모델 및 provider credential 선택 */}
+          <div>
+            <label
+              htmlFor={MODEL_SELECT_ID}
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            >
+              모델 선택 <span className="text-red-500">*</span>
+            </label>
+            <select
+              id={MODEL_SELECT_ID}
+              value={modelSelection ? serializeLlmModelSelection(modelSelection) : ''}
+              onChange={(event) => {
+                setModelSelection(parseLlmModelSelection(event.target.value))
+              }}
+              required
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">모델을 선택하세요</option>
+              {modelOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {formatChatModelOptionLabel(option)}
+                </option>
+              ))}
+            </select>
+
+            {selectedApiKey && (
+              <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-sm text-blue-800 dark:text-blue-300">
+                  <strong>{selectedApiKey.provider}</strong> credential을 사용합니다
+                </p>
+                {modelSelection && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    모델: {modelSelection.modelName}
                   </p>
                 )}
               </div>
             )}
           </div>
-        </div>
 
-        {/* 모델 및 provider credential 선택 */}
-        <div>
-          <label
-            htmlFor={MODEL_SELECT_ID}
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-          >
-            모델 선택 <span className="text-red-500">*</span>
-          </label>
-          <select
-            id={MODEL_SELECT_ID}
-            value={modelSelection ? serializeLlmModelSelection(modelSelection) : ''}
-            onChange={(event) => {
-              setModelSelection(parseLlmModelSelection(event.target.value))
-            }}
-            required
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-          >
-            <option value="">모델을 선택하세요</option>
-            {modelOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {formatChatModelOptionLabel(option)}
-              </option>
-            ))}
-          </select>
-
-          {selectedApiKey && (
-            <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-              <p className="text-sm text-blue-800 dark:text-blue-300">
-                <strong>{selectedApiKey.provider}</strong> credential을 사용합니다
-              </p>
-              {modelSelection && (
-                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                  모델: {modelSelection.modelName}
-                </p>
-              )}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <label
+                htmlFor="new-chat-save"
+                className="text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                세이브 선택 (선택사항)
+              </label>
+              <Link
+                href={buildSaveManagementHref({
+                  characterId,
+                  saveId,
+                  returnTo: '/dashboard/chats/new?' + returnParams.toString(),
+                })}
+                className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+              >
+                세이브 관리
+              </Link>
             </div>
-          )}
-        </div>
-
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <label
-              htmlFor="new-chat-save"
-              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            <select
+              id="new-chat-save"
+              value={saveId}
+              onChange={(event) => {
+                const selected = saves.find((save) => save.id === event.target.value)
+                setSaveId(selected?.id ?? '')
+                if (selected)
+                  setPersonaId(
+                    personas.some((persona) => persona.id === selected.default_persona_id)
+                      ? selected.default_persona_id!
+                      : '',
+                  )
+              }}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             >
-              세이브 선택 (선택사항)
-            </label>
-            <Link
-              href={buildSaveManagementHref({
-                characterId,
-                saveId,
-                returnTo: '/dashboard/chats/new?' + returnParams.toString(),
-              })}
-              className="text-xs text-blue-600 hover:underline dark:text-blue-400"
-            >
-              세이브 관리
-            </Link>
-          </div>
-          <select
-            id="new-chat-save"
-            value={saveId}
-            onChange={(event) => {
-              const selected = saves.find((save) => save.id === event.target.value)
-              setSaveId(selected?.id ?? '')
-              if (selected)
-                setPersonaId(
-                  personas.some((persona) => persona.id === selected.default_persona_id)
-                    ? selected.default_persona_id!
-                    : '',
-                )
-            }}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-          >
-            <option value="">세이브 없이 새로 시작</option>
-            {saves.map((save) => (
-              <option key={save.id} value={save.id}>
-                {save.title}
-              </option>
-            ))}
-          </select>
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            이전 세션의 사건과 관계를 이어갑니다. 페르소나는 아래에서 변경할 수 있습니다.
-          </p>
-        </div>
-
-        {/* 페르소나 선택 (선택사항) */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label
-              htmlFor={PERSONA_SELECT_ID}
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              페르소나 선택 (선택사항)
-            </label>
-            <Link
-              href={personaManagementHref}
-              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              페르소나 관리
-            </Link>
-          </div>
-          <select
-            id={PERSONA_SELECT_ID}
-            value={personaId}
-            onChange={(e) => setPersonaId(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-          >
-            <option value="">페르소나 없음 (기본)</option>
-            {personas.map((persona) => (
-              <option key={persona.id} value={persona.id}>
-                {persona.name}
-              </option>
-            ))}
-          </select>
-
-          {personas.length === 0 && (
+              <option value="">세이브 없이 새로 시작</option>
+              {saves.map((save) => (
+                <option key={save.id} value={save.id}>
+                  {save.title}
+                </option>
+              ))}
+            </select>
             <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              페르소나를 생성하여 AI와 대화할 때 당신의 캐릭터를 설정할 수 있습니다.
+              이전 세션의 사건과 관계를 이어갑니다. 페르소나는 아래에서 변경할 수 있습니다.
             </p>
-          )}
+          </div>
 
-          {personaId && (
-            <div className="mt-3 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-              <p className="text-sm text-purple-800 dark:text-purple-300 font-medium mb-1">
-                {personas.find((p) => p.id === personaId)?.name}
-              </p>
-              <p className="text-xs text-purple-600 dark:text-purple-400 line-clamp-3">
-                {personas.find((p) => p.id === personaId)?.description || '(이름만 설정됨)'}
-              </p>
+          {/* 페르소나 선택 (선택사항) */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label
+                htmlFor={PERSONA_SELECT_ID}
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                페르소나 선택 (선택사항)
+              </label>
+              <Link
+                href={personaManagementHref}
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                페르소나 관리
+              </Link>
             </div>
-          )}
-        </div>
+            <select
+              id={PERSONA_SELECT_ID}
+              value={personaId}
+              onChange={(e) => setPersonaId(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">페르소나 없음 (기본)</option>
+              {personas.map((persona) => (
+                <option key={persona.id} value={persona.id}>
+                  {persona.name}
+                </option>
+              ))}
+            </select>
 
-        {/* 제출 버튼 */}
-        <button
-          type="submit"
-          disabled={loading || !modelSelection}
-          className="w-full py-3 px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {loading ? '생성 중...' : '채팅 시작'}
-        </button>
+            {personas.length === 0 && (
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                페르소나를 생성하여 AI와 대화할 때 당신의 캐릭터를 설정할 수 있습니다.
+              </p>
+            )}
+
+            {personaId && (
+              <div className="mt-3 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                <p className="text-sm text-purple-800 dark:text-purple-300 font-medium mb-1">
+                  {personas.find((p) => p.id === personaId)?.name}
+                </p>
+                <p className="text-xs text-purple-600 dark:text-purple-400 line-clamp-3">
+                  {personas.find((p) => p.id === personaId)?.description || '(이름만 설정됨)'}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* 제출 버튼 */}
+          <button
+            type="submit"
+            disabled={loading || !modelSelection}
+            className="w-full py-3 px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? '생성 중...' : '채팅 시작'}
+          </button>
+        </form>
       </div>
-    </form>
+    </div>
   )
 }

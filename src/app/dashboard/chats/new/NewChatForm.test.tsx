@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from 'react'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatSelectableApiKeyOption } from '../api-key-options'
 import NewChatForm from './NewChatForm'
@@ -171,5 +171,154 @@ describe('new chats from saves', () => {
         expect.objectContaining({ saveId: 'save-1', personaId: 'persona-2' }),
       ),
     )
+  })
+})
+
+describe('first greeting preview', () => {
+  beforeEach(() => {
+    createChatMock.mockReset()
+    pushMock.mockReset()
+  })
+  const previewData = {
+    characterAssets: [],
+    assetUrlMap: { 'hero.webp': 'https://example.com/signed-hero.webp' },
+    imageCommandUrlMap: { happy: 'https://example.com/signed-happy.webp' },
+    moduleRegex: [
+      {
+        type: 'extract',
+        comment: 'location panel',
+        in: '\\[Loc:([^\\]]+)\\]',
+        out: '',
+        ableFlag: true,
+        card_ref: 'status',
+        bindings: { location: '$1' },
+      },
+    ],
+    moduleAssetSummary: [],
+  }
+  const cardCharacter = {
+    ...character,
+    greeting_message:
+      '**안녕, {{user}}**\n다음 줄의 이야기\n\n[Loc:Forest]\n\n![기쁜 표정](asset:happy)',
+    metadata: {
+      alternate_greetings: ['두 번째 시작'],
+      default_variables: { opened: false },
+      ui_cards: {
+        status: {
+          meta: { name: 'Location', version: '1.0.0' },
+          state: { location: 'Start', opened: false },
+          assets: { portrait: '@assets/hero.webp' },
+          views: {
+            Main: {
+              type: 'Column',
+              children: [
+                { type: 'Text', content: { $ref: '$location' } },
+                { type: 'Image', src: '@assets/hero.webp', alt: '카드 초상화' },
+                { type: 'Button', label: '카드에서 확인', action: 'opened' },
+                { type: 'Text', content: { $ref: '$opened' } },
+              ],
+            },
+          },
+        },
+      },
+    },
+  }
+
+  it('renders real SUU cards, bound state, markdown and signed images before chat creation', () => {
+    render(
+      <NewChatForm
+        character={cardCharacter}
+        apiKeys={apiKeys}
+        personas={personas}
+        greetingPreviewData={previewData}
+      />,
+    )
+
+    const preview = screen.getByRole('region', { name: '첫 인사 미리보기' })
+    expect(screen.getByText('안녕, User').tagName).toBe('STRONG')
+    expect(preview.querySelector('br')).toBeTruthy()
+    expect(screen.getByText('Forest')).toBeTruthy()
+    expect(preview.textContent).not.toContain('[Loc:Forest]')
+    expect(screen.getByAltText('카드 초상화').getAttribute('src')).toBe(
+      'https://example.com/signed-hero.webp',
+    )
+    expect(screen.getByAltText('기쁜 표정').getAttribute('src')).toBe(
+      'https://example.com/signed-happy.webp',
+    )
+    expect(createChatMock).not.toHaveBeenCalled()
+  })
+
+  it('updates persona names and keeps card actions local without submitting the form', () => {
+    render(
+      <NewChatForm
+        character={cardCharacter}
+        apiKeys={apiKeys}
+        personas={personas}
+        greetingPreviewData={previewData}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText(/페르소나 선택/), { target: { value: 'persona-2' } })
+    expect(screen.getByText('안녕, Scholar')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '카드에서 확인' }))
+    expect(screen.getByText('true')).toBeTruthy()
+    expect(createChatMock).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByTitle('다음 인사말'))
+    expect(screen.getByText('두 번째 시작')).toBeTruthy()
+    fireEvent.click(screen.getByTitle('이전 인사말'))
+    expect(screen.getByText('false')).toBeTruthy()
+  })
+
+  it('cycles through the no-greeting option and submits that selection', async () => {
+    createChatMock.mockResolvedValue({ chatId: 'chat-no-greeting' })
+    render(<NewChatForm character={character} apiKeys={apiKeys} personas={personas} />)
+
+    fireEvent.click(screen.getByTitle('이전 인사말'))
+    expect(screen.getByText('(인사말 없이 시작)')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '크게 보기' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '채팅 시작' }))
+    await waitFor(() =>
+      expect(createChatMock).toHaveBeenCalledWith(expect.objectContaining({ greetingIndex: 2 })),
+    )
+  })
+
+  it('opens a larger preview, switches greetings there, and closes without starting a chat', () => {
+    const showModal = vi.fn(function (this: HTMLDialogElement) {
+      this.setAttribute('open', '')
+    })
+    const close = vi.fn(function (this: HTMLDialogElement) {
+      this.removeAttribute('open')
+    })
+    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
+      configurable: true,
+      value: showModal,
+    })
+    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+      configurable: true,
+      value: close,
+    })
+
+    const { unmount } = render(
+      <NewChatForm character={character} apiKeys={apiKeys} personas={personas} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '크게 보기' }))
+
+    const dialog = screen.getByRole('dialog')
+    expect(showModal).toHaveBeenCalled()
+    expect(document.body.style.overflow).toBe('hidden')
+    expect(within(dialog).getByText('Hello')).toBeTruthy()
+    fireEvent.click(within(dialog).getByTitle('다음 인사말'))
+    expect(within(dialog).getByText('Welcome')).toBeTruthy()
+
+    // Native Escape closes the dialog and dispatches a close event.
+    dialog.removeAttribute('open')
+    fireEvent(dialog, new Event('close'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.body.style.overflow).toBe('')
+    expect(screen.getByRole('region', { name: '첫 인사 미리보기' }).textContent).toBe('Welcome')
+    expect(createChatMock).not.toHaveBeenCalled()
+    unmount()
+    vi.restoreAllMocks()
   })
 })

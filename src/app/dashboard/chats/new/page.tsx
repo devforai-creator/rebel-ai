@@ -1,9 +1,12 @@
+import React from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { CHAT_SELECTABLE_API_KEY_OPTION_COLUMNS } from '../api-key-options'
 import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import NewChatForm from './NewChatForm'
+import { getCharacterGreetingOptions } from './greeting-options'
+import { loadGreetingPreviewData } from './greeting-preview-data'
 
 interface Props {
   searchParams: Promise<{
@@ -107,6 +110,10 @@ export default async function NewChatPage({ searchParams }: Props) {
     )
   }
 
+  const greetingPreviewData = getCharacterGreetingOptions(character).some(Boolean)
+    ? await loadGreetingPreviewData(character)
+    : undefined
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <header className="bg-white dark:bg-gray-800 shadow">
@@ -123,9 +130,10 @@ export default async function NewChatPage({ searchParams }: Props) {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <NewChatForm
           character={character}
+          greetingPreviewData={greetingPreviewData}
           apiKeys={llmApiKeys}
           personas={personas || []}
           saves={saves || []}

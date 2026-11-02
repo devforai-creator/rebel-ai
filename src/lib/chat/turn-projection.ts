@@ -84,20 +84,12 @@ export async function loadGenerationTranscript({
     throw new Error('Chat turn not found')
   }
 
-  const turnsResult = await readRowsQuery<PersistedTurnRow>(
-    supabase
-      .from('chat_turns')
-      .select('id, turn_index, user_message_id, active_assistant_message_id')
-      .eq('chat_id', chatId)
-      .lte('turn_index', targetTurn.data.turn_index)
-      .order('turn_index', { ascending: true }),
-  )
-
-  if (turnsResult.error) {
-    throw new Error(`Failed to load chat turns: ${turnsResult.error.message}`)
-  }
-
-  const turns = turnsResult.data ?? []
+  const turns = await loadTurnsForChat({
+    supabase,
+    chatId,
+    ascending: true,
+    maxTurnIndex: targetTurn.data.turn_index,
+  })
   const messageIds = turns.flatMap((turn) => {
     const ids: string[] = []
     if (turn.user_message_id) {

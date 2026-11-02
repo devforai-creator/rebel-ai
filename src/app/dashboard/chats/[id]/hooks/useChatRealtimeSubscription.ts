@@ -95,6 +95,7 @@ export function useChatRealtimeSubscription({
         channel = supabase
           .channel(getChatAssistantStreamChannelName(chatId), {
             config: {
+              private: true,
               broadcast: { self: true },
               presence: { key: `token-stats-${chatId}` },
             },

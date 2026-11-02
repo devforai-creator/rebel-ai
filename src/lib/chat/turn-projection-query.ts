@@ -10,6 +10,7 @@ import type {
 import { PROJECTED_CHAT_MESSAGE_COLUMNS } from './turn-types'
 
 const MESSAGE_ID_QUERY_CHUNK_SIZE = 100
+const PROJECTION_PAGE_SIZE = 1000
 
 export async function loadMessageRowsByIds<Row extends { id: string }>({
   supabase,
@@ -138,29 +139,28 @@ export async function loadStandaloneSystemMessages({
   lowerSequenceBound?: number | null
   upperSequenceBound?: number | null
 }): Promise<ProjectedTurnMessage[]> {
-  let query = supabase
-    .from('messages')
-    .select(PROJECTED_CHAT_MESSAGE_COLUMNS)
-    .eq('chat_id', chatId)
-    .eq('role', 'system')
-    .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
-    .neq('message_status', MESSAGE_STATUS_GENERATING)
-
-  if (typeof lowerSequenceBound === 'number') {
-    query = query.gte('sequence', lowerSequenceBound)
+  const messages: ProjectedTurnMessage[] = []
+  let cursor: number | null = null
+  while (true) {
+    let query = supabase
+      .from('messages')
+      .select(PROJECTED_CHAT_MESSAGE_COLUMNS)
+      .eq('chat_id', chatId)
+      .eq('role', 'system')
+      .neq('message_status', MESSAGE_STATUS_SUPERSEDED)
+      .neq('message_status', MESSAGE_STATUS_GENERATING)
+      .order('sequence', { ascending: true })
+      .limit(PROJECTION_PAGE_SIZE)
+    if (typeof lowerSequenceBound === 'number') query = query.gte('sequence', lowerSequenceBound)
+    if (typeof upperSequenceBound === 'number') query = query.lt('sequence', upperSequenceBound)
+    if (cursor !== null) query = query.gt('sequence', cursor)
+    const { data, error } = await query
+    if (error) throw new Error('Failed to load standalone system messages: ' + error.message)
+    const page = (data ?? []) as ProjectedTurnMessage[]
+    messages.push(...page)
+    if (page.length < PROJECTION_PAGE_SIZE) return messages
+    cursor = page[page.length - 1].sequence
   }
-
-  if (typeof upperSequenceBound === 'number') {
-    query = query.lt('sequence', upperSequenceBound)
-  }
-
-  const { data, error } = await query.order('sequence', { ascending: true })
-
-  if (error) {
-    throw new Error(`Failed to load standalone system messages: ${error.message}`)
-  }
-
-  return (data ?? []) as ProjectedTurnMessage[]
 }
 
 export async function loadTurnsForChat({
@@ -178,31 +178,33 @@ export async function loadTurnsForChat({
   minTurnIndex?: number
   maxTurnIndex?: number
 }): Promise<PersistedTurnRow[]> {
-  let turnsQuery = supabase
-    .from('chat_turns')
-    .select('id, turn_index, user_message_id, active_assistant_message_id')
-    .eq('chat_id', chatId)
-    .order('turn_index', { ascending })
+  const turns: PersistedTurnRow[] = []
+  let cursor: number | null = null
 
-  if (typeof minTurnIndex === 'number') {
-    turnsQuery = turnsQuery.gte('turn_index', minTurnIndex)
+  while (limit === undefined || turns.length < limit) {
+    const pageSize = Math.min(PROJECTION_PAGE_SIZE, (limit ?? Infinity) - turns.length)
+    let query = supabase
+      .from('chat_turns')
+      .select('id, turn_index, user_message_id, active_assistant_message_id')
+      .eq('chat_id', chatId)
+      .order('turn_index', { ascending })
+      .limit(pageSize)
+
+    if (typeof minTurnIndex === 'number') query = query.gte('turn_index', minTurnIndex)
+    if (typeof maxTurnIndex === 'number') query = query.lte('turn_index', maxTurnIndex)
+    if (cursor !== null) {
+      query = ascending ? query.gt('turn_index', cursor) : query.lt('turn_index', cursor)
+    }
+
+    const result = await readRowsQuery<PersistedTurnRow>(query)
+    if (result.error) throw new Error('Failed to load chat turns: ' + result.error.message)
+    const page = result.data ?? []
+    turns.push(...page)
+    if (page.length < pageSize) break
+    cursor = page[page.length - 1].turn_index
   }
 
-  if (typeof maxTurnIndex === 'number') {
-    turnsQuery = turnsQuery.lte('turn_index', maxTurnIndex)
-  }
-
-  if (typeof limit === 'number') {
-    turnsQuery = turnsQuery.limit(limit)
-  }
-
-  const turnsResult = await readRowsQuery<PersistedTurnRow>(turnsQuery)
-
-  if (turnsResult.error) {
-    throw new Error(`Failed to load chat turns: ${turnsResult.error.message}`)
-  }
-
-  return turnsResult.data ?? []
+  return turns
 }
 
 async function countTurnsWithMessageField({

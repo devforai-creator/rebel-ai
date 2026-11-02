@@ -542,6 +542,9 @@ describe('chunk-summarizer', () => {
             select: () => ({
               eq: () => ({
                 order: () => ({
+                  limit() {
+                    return this
+                  },
                   data: [
                     {
                       id: 'turn-1',
@@ -759,6 +762,9 @@ describe('chunk-summarizer', () => {
             select: () => ({
               eq: () => ({
                 order: () => ({
+                  limit() {
+                    return this
+                  },
                   data: null,
                   error: { message: 'messages table error', code: 'XX001' },
                 }),
@@ -840,6 +846,9 @@ describe('chunk-summarizer', () => {
             select: () => ({
               eq: () => ({
                 order: () => ({
+                  limit() {
+                    return this
+                  },
                   data: [
                     {
                       id: 'turn-1',
@@ -1077,6 +1086,9 @@ describe('chunk-summarizer', () => {
             select: () => ({
               eq: () => ({
                 order: () => ({
+                  limit() {
+                    return this
+                  },
                   data: Array.from({ length: 30 }, (_, idx) => ({
                     id: `turn-${idx + 1}`,
                     turn_index: idx + 1,
@@ -1170,6 +1182,9 @@ describe('chunk-summarizer', () => {
             select: () => ({
               eq: () => ({
                 order: () => ({
+                  limit() {
+                    return this
+                  },
                   data: Array.from({ length: 30 }, (_, idx) => ({
                     id: `turn-${idx + 1}`,
                     turn_index: idx + 1,

@@ -68,7 +68,9 @@ describe('assistant stream broadcaster', () => {
       regenerateAssistantMessageId: 'assistant-1',
     })
 
-    expect(channel).toHaveBeenCalledWith(getChatAssistantStreamChannelName('chat-1'))
+    expect(channel).toHaveBeenCalledWith(getChatAssistantStreamChannelName('chat-1'), {
+      config: { private: true },
+    })
     expect(httpSend).toHaveBeenCalledWith(CHAT_ASSISTANT_STREAM_EVENT, {
       kind: 'snapshot',
       jobId: 'job-1',

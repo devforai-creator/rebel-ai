@@ -52,9 +52,9 @@ async function broadcastAssistantStreamEvent({
   }
 
   try {
-    const channel = supabase.channel(
-      getChatAssistantStreamChannelName(chatId),
-    ) as AssistantStreamChannel
+    const channel = supabase.channel(getChatAssistantStreamChannelName(chatId), {
+      config: { private: true },
+    }) as AssistantStreamChannel
 
     if (typeof channel.httpSend === 'function') {
       const result = await channel.httpSend(CHAT_ASSISTANT_STREAM_EVENT, payload)

@@ -167,6 +167,9 @@ jobs:
       - name: Run DB integration tests
         run: npm run test:db
 
+      - name: Verify chat reference and private stream authorization
+        run: npm run test:db:chat-access
+
       - name: Verify explicit Data API grants without automatic privileges
         run: npm run test:db:grants
 

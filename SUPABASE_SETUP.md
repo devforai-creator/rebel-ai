@@ -14,6 +14,12 @@ If you only want the shortest possible local boot flow, start with [docs/GETTING
 Repository default note: public signup is currently blocked. For a fresh personal deployment, create the first user from Supabase Dashboard instead of relying on the app signup form.
 Storage default note: `character-assets` and `module-assets` are private by default. The app serves them through signed or authenticated URLs at runtime.
 
+Assistant streams use private Realtime channels named `chat-<chat UUID>`. The schema grants
+only the chat owner permission to receive broadcasts; sending remains service-role only.
+When upgrading an existing deployment, apply `999003_harden_chat_access_and_streams.sql`
+before deploying the matching app code. Without its Realtime policy, private subscriptions
+are denied.
+
 ## 1. Create a Supabase Project
 
 1. Go to [supabase.com](https://supabase.com) and create a project.

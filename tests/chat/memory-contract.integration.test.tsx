@@ -123,6 +123,7 @@ afterEach(() => {
 describe('server and UI memory contract', () => {
   it.each([
     { count: 53, chunkCount: 5, boundary: 0 },
+    { count: 2406, chunkCount: 0, boundary: 0, maxRows: 1000 },
     { count: 54, boundary: 50 },
     { count: 103, boundary: 50 },
     { count: 104, boundary: 100 },

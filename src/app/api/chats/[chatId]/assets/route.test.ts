@@ -254,6 +254,9 @@ function buildSupabase(fixture: Partial<AssetRouteFixture> & { user: { id: strin
         character_id: characterId,
         characters: {
           id: characterId,
+          user_id: userId,
+          visibility: 'private',
+          archived_at: null,
           metadata: {
             image_commands: {
               happy: 'asset-1',
@@ -385,6 +388,46 @@ describe('GET /api/chats/[chatId]/assets', () => {
     expect(await response.json()).toEqual({ error: 'Not found' })
   })
 
+  it.each([
+    null,
+    { id: 'char-1', user_id: 'other', visibility: 'private', archived_at: null },
+    { id: 'char-1', user_id: 'other', visibility: 'public', archived_at: '2026-01-01' },
+  ])('does not sign assets for an inaccessible character: %j', async (character) => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      chatsRows: [
+        {
+          id: 'chat-1',
+          user_id: 'user-1',
+          character_id: 'char-1',
+          characters: character,
+        },
+      ],
+    })
+    const { GET } = await loadRoute()
+    const response = await GET(buildRequest(), buildContext('chat-1'))
+    expect(response.status).toBe(404)
+    expect(supabase.storage.from).not.toHaveBeenCalled()
+    expect(supabase.queryCalls.character_assets).toBeUndefined()
+    expect(supabase.queryCalls.character_modules).toBeUndefined()
+  })
+
+  it("signs assets for another user's visible public character", async () => {
+    buildSupabase({
+      user: { id: 'user-1' },
+      chatsRows: [
+        {
+          id: 'chat-1',
+          user_id: 'user-1',
+          character_id: 'char-1',
+          characters: { id: 'char-1', user_id: 'other', visibility: 'public', archived_at: null },
+        },
+      ],
+    })
+    const { GET } = await loadRoute()
+    expect((await GET(buildRequest(), buildContext('chat-1'))).status).toBe(200)
+  })
+
   it('builds alias and stem keys, normalizes metadata, and uses character_list fallback mapping', async () => {
     buildSupabase({
       user: { id: 'user-1' },
@@ -396,6 +439,9 @@ describe('GET /api/chats/[chatId]/assets', () => {
           characters: [
             {
               id: 'char-1',
+              user_id: 'user-1',
+              visibility: 'private',
+              archived_at: null,
               metadata: {
                 image_commands: {
                   'Happy Face': 'asset-2',
@@ -535,6 +581,9 @@ describe('GET /api/chats/[chatId]/assets', () => {
           character_id: 'char-1',
           characters: {
             id: 'char-1',
+            user_id: 'user-1',
+            visibility: 'private',
+            archived_at: null,
             metadata: {
               image_commands: {
                 'Ako.giggling': 'asset-1',

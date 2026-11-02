@@ -8,12 +8,14 @@ export function createMemoryConversation({
   missingChunkStart,
   mode = 'prefix_live_blocks',
   clearLastAssistant = false,
+  maxRows,
 }: {
   count: number
   chunkCount?: number
   missingChunkStart?: number
   mode?: ChatMemoryMode
   clearLastAssistant?: boolean
+  maxRows?: number
 }) {
   const messages = Array.from({ length: count }, (_, index) => ({
     id: `msg-${index + 1}`,
@@ -58,6 +60,7 @@ export function createMemoryConversation({
     })),
   ]
   const db = createChatJobRunnerSupabaseMock({
+    maxRows,
     chat: {
       id: 'chat-1',
       user_id: 'user-1',

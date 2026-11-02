@@ -15,6 +15,7 @@ type Filter<Row> = {
 }
 
 type TableOptions<Row> = {
+  maxRows?: number
   rows?: Row[]
   primaryKeys?: Array<keyof Row & string>
   project?: (row: Row, columns?: string) => Record<string, unknown>
@@ -255,6 +256,7 @@ function createQueryBuilder<Row extends Record<string, unknown>>(
     columns?: string
     project?: (row: Row, columns?: string) => Record<string, unknown>
     count?: boolean
+    maxRows?: number
   },
 ) {
   const filters: Filter<Row>[] = []
@@ -290,7 +292,7 @@ function createQueryBuilder<Row extends Record<string, unknown>>(
     const projected = result.map((row) => project(row, options.columns))
 
     return {
-      data: projected,
+      data: projected.slice(0, options.maxRows ?? projected.length),
       error: null,
       count: options.count ? projected.length : undefined,
     }
@@ -531,6 +533,7 @@ function createTable<Row extends Record<string, unknown>>(
       return createQueryBuilder(rows, {
         columns,
         project: options.project,
+        maxRows: options.maxRows,
         count: opts?.count === 'exact',
       })
     },
@@ -708,6 +711,7 @@ export function createChatSummariesSupabaseMock(
 // Chat job runner helper
 type GlobalVariableRow = { chat_id: string; key: string; value: unknown; user_id?: string | null }
 type ChatJobRunnerOptions = {
+  maxRows?: number
   presetLink?: Record<string, unknown> | null
   modules?: Array<Record<string, unknown>>
   globalVariables?: GlobalVariableRow[]
@@ -730,6 +734,7 @@ export function createChatJobRunnerSupabaseMock(
   options: ChatJobRunnerOptions = {},
 ): ChatJobRunnerSupabaseMock {
   const {
+    maxRows,
     presetLink = null,
     modules = [],
     globalVariables = [],
@@ -772,6 +777,9 @@ export function createChatJobRunnerSupabaseMock(
   const character = providedCharacter ?? {
     id: 'char-1',
     name: 'Hero',
+    user_id: (chat as Record<string, unknown>).user_id ?? 'user-1',
+    visibility: 'private',
+    archived_at: null,
     system_prompt: 'CHAR PROMPT',
     metadata,
   }
@@ -816,6 +824,7 @@ export function createChatJobRunnerSupabaseMock(
         primaryKeys: ['id'],
       },
       messages: {
+        maxRows,
         rows: [...initialMessages],
         primaryKeys: ['id'],
         transformInsert: (row, current) => ({
@@ -824,14 +833,17 @@ export function createChatJobRunnerSupabaseMock(
         }),
       },
       chat_turns: {
+        maxRows,
         rows: [...initialTurns],
         primaryKeys: ['id'],
       },
       chat_summaries: {
+        maxRows,
         rows: [...initialChatSummaries],
         primaryKeys: ['chat_id', 'level', 'start_seq', 'end_seq'],
       },
       chat_facts: {
+        maxRows,
         rows: [...initialChatFacts],
       },
       chat_usage_events: {

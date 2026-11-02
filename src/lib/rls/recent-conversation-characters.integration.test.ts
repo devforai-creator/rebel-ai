@@ -63,7 +63,7 @@ async function createTestUser(label: string): Promise<TestUser> {
 async function createCharacter(
   userId: string,
   label: string,
-  options: { archived?: boolean; id?: string } = {},
+  options: { archived?: boolean; id?: string; public?: boolean } = {},
 ): Promise<string> {
   const { data, error } = await adminClient
     .from('characters')
@@ -72,7 +72,7 @@ async function createCharacter(
       user_id: userId,
       name: `Recent Character ${label}`,
       avatar_url: `avatars/${label}.png`,
-      visibility: 'private',
+      visibility: options.public ? 'public' : 'private',
       system_prompt: 'Test prompt',
       archived_at: options.archived ? '2026-01-01T00:00:00.000Z' : null,
     })
@@ -489,7 +489,7 @@ describe.skipIf(shouldSkip)('recent and character chat list RPC integration', ()
   })
 
   it('protects bookmarks and titles with room ownership and requires a complete bookmark cursor', async () => {
-    const characterId = await createCharacter(userA.id, 'Private Bookmark')
+    const characterId = await createCharacter(userA.id, 'Shared Bookmark', { public: true })
     const ownId = await createChat(userA.id, characterId, 'Own')
     const otherId = await createChat(userB.id, characterId, 'Other')
     const forbidden = await userA.client
@@ -522,7 +522,7 @@ describe.skipIf(shouldSkip)('recent and character chat list RPC integration', ()
   })
 
   it('scopes character chat pages to the caller and rejects invalid direct calls', async () => {
-    const characterId = await createCharacter(userA.id, 'Owned Chat List')
+    const characterId = await createCharacter(userA.id, 'Shared Chat List', { public: true })
     const userAChatId = await createChat(userA.id, characterId, 'User A')
     const userBChatId = await createChat(userB.id, characterId, 'User B')
     await createMessage(userA, userAChatId, 'user A message', {

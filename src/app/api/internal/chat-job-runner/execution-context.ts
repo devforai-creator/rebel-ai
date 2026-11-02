@@ -1,3 +1,4 @@
+import { canAccessChatCharacter } from '@/lib/character-access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { ApiKey, Chat, Character, Persona, Profile } from '@/types/database.types'
 import { ensureUserFirstForAnthropic } from '@/lib/chat/anthropic-user-first'
@@ -57,7 +58,10 @@ type RunnerChatRow = Pick<
   | 'model_config'
 >
 type RunnerPersonaRow = Pick<Persona, 'name' | 'description'>
-type RunnerCharacterRow = Pick<Character, 'id' | 'name' | 'system_prompt'> & {
+type RunnerCharacterRow = Pick<
+  Character,
+  'id' | 'name' | 'system_prompt' | 'user_id' | 'visibility' | 'archived_at'
+> & {
   post_history_instructions: string | null
 }
 type MemoryPlanResult = Awaited<ReturnType<typeof buildMemoryPlan>>
@@ -405,6 +409,9 @@ export async function loadChatJobExecutionContext({
       id,
       name,
       system_prompt,
+      user_id,
+      visibility,
+      archived_at,
       post_history_instructions:metadata->>post_history_instructions
     `,
     )
@@ -422,7 +429,7 @@ export async function loadChatJobExecutionContext({
     { data: character, error: characterError },
   ] = await Promise.all([apiKeyDecryptPromise, personaPromise, savePromise, characterPromise])
 
-  if (characterError || !character) {
+  if (characterError || !character || !canAccessChatCharacter(character, userId)) {
     throw new Error('Character not found')
   }
 

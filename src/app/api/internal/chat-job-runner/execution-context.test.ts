@@ -305,6 +305,44 @@ describe('loadChatJobExecutionContext', () => {
     })
   })
 
+  it.each([
+    { user_id: 'other', visibility: 'private', archived_at: null },
+    { user_id: 'other', visibility: 'public', archived_at: '2026-01-01' },
+  ])('rejects inaccessible linked characters before building a prompt: %j', async (access) => {
+    const { loadChatJobExecutionContext } = await import('./execution-context')
+    await expect(
+      loadChatJobExecutionContext({
+        supabase: createChatJobRunnerSupabaseMock({
+          character: { id: 'char-1', name: 'Private', system_prompt: 'SECRET', ...access },
+        }) as never,
+        payload: buildValidPayload(),
+        timings: {},
+      }),
+    ).rejects.toThrow('Character not found')
+    expect(buildMemoryPlanMock).not.toHaveBeenCalled()
+    expect(buildSystemPromptMock).not.toHaveBeenCalled()
+  })
+
+  it('allows another user’s visible public character', async () => {
+    const { loadChatJobExecutionContext } = await import('./execution-context')
+    await expect(
+      loadChatJobExecutionContext({
+        supabase: createChatJobRunnerSupabaseMock({
+          character: {
+            id: 'char-1',
+            user_id: 'other',
+            visibility: 'public',
+            archived_at: null,
+            name: 'Public',
+            system_prompt: 'PUBLIC',
+          },
+        }) as never,
+        payload: buildValidPayload(),
+        timings: {},
+      }),
+    ).resolves.toMatchObject({ finalSystemPrompt: 'FINAL' })
+  })
+
   it.each(['standard', 'flex', undefined] as const)(
     'carries OpenAI queued tier %s into provider and cost stages',
     async (serviceTier) => {

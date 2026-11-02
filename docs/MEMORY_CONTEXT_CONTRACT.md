@@ -37,7 +37,8 @@ suite, or supply a precomputed cutoff in place of the entry points.
 
 Coverage includes the 53/54 and 103/104 boundaries, later rollovers, delayed/missing chunks,
 inactive variants, system messages, non-contiguous sequences, regeneration, mode switches,
-stats refresh, and summary pagination beyond 1,000 rows. It checks both server/UI agreement
+stats refresh, summary pagination beyond 1,000 rows, and unsealed history beyond 1,000 turns
+under the Data API response cap. It checks both server/UI agreement
 and independent expected raw-message coverage, so making both sides wrong together still
 fails the gate.
 
@@ -56,3 +57,7 @@ the change report.
 The panel describes the selection for its current loaded state. A completed response can
 have used an earlier state if background summarization has since advanced; comparison of
 separate requests at different times is not a same-snapshot contract violation.
+
+The pagination gate also covers a 2,406-message unsealed conversation with a 1,000-row
+transport cap. Temporarily disabling pagination must fail `npm run build` before Next.js
+starts; restore the paginated source and rerun the build after this negative check.

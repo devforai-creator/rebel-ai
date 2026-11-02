@@ -1,3 +1,4 @@
+import { canAccessChatCharacter } from '@/lib/character-access'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -31,6 +32,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
       character_id,
       characters (
         id,
+        user_id,
+        visibility,
+        archived_at,
         metadata
       )
     `,
@@ -39,6 +43,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
     .single()
 
   if (!chat || chat.user_id !== user.id) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  const characterData = Array.isArray(chat.characters) ? chat.characters[0] : chat.characters
+  if (!characterData || !canAccessChatCharacter(characterData, user.id)) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
@@ -59,7 +68,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
   }
 
   const { allRegex: moduleRegex, moduleAssetUrls, moduleAssetSummary } = moduleData
-  const characterData = Array.isArray(chat.characters) ? chat.characters[0] : chat.characters
   const globalVariables = reduceGlobalVariables(globalVars as GlobalVariableRecord[] | null)
 
   const characterAssetUrlMapByPath = await createSignedAssetUrlMap(

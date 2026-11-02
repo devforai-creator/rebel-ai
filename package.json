@@ -88,7 +88,7 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "autoprefixer": "^10.4.27",
     "dotenv": "^17.2.3",
     "eslint": "^9",
@@ -102,7 +102,7 @@
     "server-only": "^0.0.1",
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,cjs,mjs}": [
@@ -116,9 +116,9 @@
       "undici": "6.29.1"
     },
     "parse5": "7.1.2",
-    "qs": "6.16.0",
+    "qs": "6.16.1",
     "form-data": "4.0.6",
-    "vite": "7.3.5",
+    "vite": "7.3.7",
     "esbuild": "0.28.1",
     "ws": "7.5.11",
     "postcss": "8.5.23",

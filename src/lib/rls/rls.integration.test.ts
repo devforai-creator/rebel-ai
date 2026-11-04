@@ -208,7 +208,7 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
         user_id: userA.id,
         provider: 'google',
         key_name: 'Test API Key A',
-        vault_secret_name: 'test-secret',
+        vault_secret_name: `apikey_${userA.id}_fixture`,
         is_active: true,
       })
       .select('id')
@@ -605,7 +605,7 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
           user_id: testData.userB.id,
           provider: 'openai',
           key_name: 'Test API Key B',
-          vault_secret_name: 'test-secret-b',
+          vault_secret_name: `apikey_${testData.userB.id}_fixture`,
           is_active: true,
         })
         .select('id')
@@ -631,7 +631,7 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
           user_id: testData.userB.id,
           provider: 'openai',
           key_name: 'Test API Key B Update',
-          vault_secret_name: 'test-secret-b-upd',
+          vault_secret_name: `apikey_${testData.userB.id}_fixture_update`,
           is_active: true,
         })
         .select('id')
@@ -664,7 +664,7 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
           user_id: testData.userB.id,
           provider: 'openai',
           key_name: 'Test API Key B Delete',
-          vault_secret_name: 'test-secret-b-del',
+          vault_secret_name: `apikey_${testData.userB.id}_fixture_delete`,
           is_active: true,
         })
         .select('id')
@@ -693,7 +693,7 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
           user_id: testData.userA.id,
           provider: 'openai',
           key_name: 'User A New Key',
-          vault_secret_name: 'test-new-secret-a',
+          vault_secret_name: `apikey_${testData.userA.id}_fixture_new`,
           is_active: true,
         })
         .select('id')
@@ -735,7 +735,7 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
           user_id: testData.userA.id,
           provider: 'anthropic',
           key_name: 'Key To Delete',
-          vault_secret_name: 'test-delete-secret',
+          vault_secret_name: `apikey_${testData.userA.id}_fixture_delete`,
           is_active: true,
         })
         .select('id')

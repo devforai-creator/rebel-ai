@@ -60,7 +60,7 @@ describe.skipIf(!enabled)('local worker DB boundary (synthetic local DB only)', 
           user_id: user,
           provider,
           key_name: 'Synthetic-' + provider,
-          vault_secret_name: 'synthetic-no-secret-' + randomUUID(),
+          vault_secret_name: `apikey_${user}_synthetic_${randomUUID().replaceAll('-', '')}`,
         })
         .select('id')
         .single()

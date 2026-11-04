@@ -151,4 +151,118 @@ describe.skipIf(shouldSkip)('Vault helper RPC boundary', () => {
 
     expect(deleteResult.error).toBeNull()
   })
+
+  it('keeps an unbound Vault secret in its owner namespace through registration and deletion', async () => {
+    const secretA = `apikey_${userA.id}_own_openai`
+    const secretB = `apikey_${userB.id}_own_openai`
+    const dummyA = 'local-dummy-a'
+    const dummyB = 'local-dummy-b'
+
+    async function createSecretFor(user: TestUser, name: string, value: string) {
+      const result = await adminClient.rpc('create_secret', {
+        secret_name: name,
+        secret_value: value,
+        requester: user.id,
+      } as never)
+      expect(result.error).toBeNull()
+    }
+
+    async function register(user: TestUser, name: string) {
+      return await user.client
+        .from('api_keys')
+        .insert({
+          user_id: user.id,
+          key_name: 'Vault ownership fixture',
+          provider: 'openai',
+          vault_secret_name: name,
+        })
+        .select('id')
+        .single()
+    }
+
+    async function decrypt(user: TestUser, name: string) {
+      return await adminClient.rpc('get_decrypted_secret', {
+        secret_name: name,
+        requester: user.id,
+      })
+    }
+
+    try {
+      await createSecretFor(userA, secretA, dummyA)
+      await createSecretFor(userB, secretB, dummyB)
+
+      const keyA = await register(userA, secretA)
+      expect(keyA.error).toBeNull()
+      expect((await decrypt(userA, secretA)).data).toBe(dummyA)
+
+      // B's secret has no api_keys row yet. A cannot claim it through either write path.
+      const foreignInsert = await register(userA, secretB)
+      expect(foreignInsert.status).toBe(403)
+      expect(foreignInsert.error?.code).toBe('42501')
+
+      const foreignUpdate = await userA.client
+        .from('api_keys')
+        .update({ vault_secret_name: secretB })
+        .eq('id', keyA.data!.id)
+      expect(foreignUpdate.status).toBe(403)
+      expect(foreignUpdate.error?.code).toBe('42501')
+      expect((await decrypt(userA, secretB)).error?.code).toBe('42501')
+
+      const legacyName = `apikey_${userA.id.replaceAll('-', '').slice(0, 12)}_new_openai`
+      const newLegacyBinding = await userA.client
+        .from('api_keys')
+        .update({ vault_secret_name: legacyName })
+        .eq('id', keyA.data!.id)
+      expect(newLegacyBinding.error?.code).toBe('42501')
+
+      const keyB = await register(userB, secretB)
+      expect(keyB.error).toBeNull()
+      expect((await decrypt(userB, secretB)).data).toBe(dummyB)
+
+      const unauthorizedDecrypt = await userA.client.rpc('get_decrypted_secret', {
+        secret_name: secretB,
+        requester: userB.id,
+      })
+      expect(unauthorizedDecrypt.status).toBe(403)
+
+      const unauthorizedDelete = await userA.client.rpc('delete_api_key', {
+        api_key_id: keyB.data!.id,
+      })
+      expect(unauthorizedDelete.error?.code).toBe('P0002')
+
+      const spoofedRequester = await userA.client.rpc('delete_api_key', {
+        api_key_id: keyB.data!.id,
+        requester: userB.id,
+      })
+      expect(spoofedRequester.status).toBe(403)
+      expect((await decrypt(userB, secretB)).data).toBe(dummyB)
+
+      const ownerDelete = await userA.client.rpc('delete_api_key', {
+        api_key_id: keyA.data!.id,
+      })
+      expect(ownerDelete.error).toBeNull()
+      expect(
+        (await userA.client.from('api_keys').select('id').eq('id', keyA.data!.id)).data,
+      ).toEqual([])
+      const deletedSecret = await adminClient.rpc('delete_secret', {
+        secret_name: secretA,
+        requester: userA.id,
+      } as never)
+      expect(deletedSecret.error?.code).toBe('P0002')
+
+      const serverDelete = await adminClient.rpc('delete_api_key', {
+        api_key_id: keyB.data!.id,
+        requester: userB.id,
+      })
+      expect(serverDelete.error).toBeNull()
+      const deletedBSecret = await adminClient.rpc('delete_secret', {
+        secret_name: secretB,
+        requester: userB.id,
+      } as never)
+      expect(deletedBSecret.error?.code).toBe('P0002')
+    } finally {
+      await adminClient.rpc('delete_secret', { secret_name: secretA, requester: userA.id } as never)
+      await adminClient.rpc('delete_secret', { secret_name: secretB, requester: userB.id } as never)
+    }
+  })
 })

@@ -5,7 +5,11 @@ export function buildImportUploadPrefix(userId: string) {
 }
 
 export function isImportUploadPath(path: string, userId: string) {
-  return path.startsWith(buildImportUploadPrefix(userId))
+  const prefix = buildImportUploadPrefix(userId)
+  if (!path.startsWith(prefix)) return false
+
+  const fileName = path.slice(prefix.length)
+  return fileName.length > 4 && fileName.endsWith('.rbx') && !/[^a-z0-9._-]/.test(fileName)
 }
 
 export function buildImportUploadPath(

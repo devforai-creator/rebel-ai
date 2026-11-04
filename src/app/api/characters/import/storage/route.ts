@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { after } from 'next/server'
 import { buildInternalApiUrl } from '@/lib/internal-api-origin'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import {
   createApiErrorResponse,
@@ -279,7 +280,7 @@ async function enqueueImportUpload({
     )
   }
 
-  const { data: job, error: jobError } = await supabase
+  const { data: job, error: jobError } = await createAdminClient()
     .from('charx_import_jobs')
     .insert({
       user_id: userId,

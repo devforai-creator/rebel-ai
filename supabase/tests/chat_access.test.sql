@@ -1,13 +1,14 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(16);
+select plan(24);
 
 create temporary table review_access_ids as
 select gen_random_uuid() as owner_a, gen_random_uuid() as owner_b,
        gen_random_uuid() as card_a, gen_random_uuid() as card_b,
        gen_random_uuid() as public_card, gen_random_uuid() as chat_a,
-       gen_random_uuid() as chat_b;
+       gen_random_uuid() as chat_b, gen_random_uuid() as module_a,
+       gen_random_uuid() as module_b;
 grant select on review_access_ids to authenticated, anon, service_role;
 
 insert into auth.users (id, aud, role, email)
@@ -27,6 +28,9 @@ select public_card, owner_b, 'Public', 'Public', 'public'::public.character_visi
 insert into public.chats (id, user_id, character_id)
 select chat_a, owner_a, card_a from review_access_ids union all
 select chat_b, owner_b, card_b from review_access_ids;
+insert into public.modules (id, user_id, name)
+select module_a, owner_a, 'Own' from review_access_ids union all
+select module_b, owner_b, 'Foreign' from review_access_ids;
 
 select set_config('request.jwt.claim.sub', owner_a::text, true),
        set_config('request.jwt.claim.role', 'authenticated', true)
@@ -75,11 +79,61 @@ select throws_ok(
   '42501', null, 'cannot create a chat linked to a foreign private card'
 );
 
+select lives_ok(
+  $$insert into public.character_modules (character_id, module_id)
+    select card_a, module_a from review_access_ids$$,
+  'owner can link their own module'
+);
+select throws_ok(
+  $$insert into public.character_modules (character_id, module_id)
+    select card_a, module_b from review_access_ids$$,
+  '42501', null, 'cannot link another owner''s module'
+);
+select throws_ok(
+  $$update public.character_modules set module_id = (select module_b from review_access_ids)
+    where character_id = (select card_a from review_access_ids)$$,
+  '42501', null, 'cannot replace an owned link with another owner''s module'
+);
+select throws_ok(
+  $$insert into public.chat_generation_jobs (chat_id, user_id, status, payload)
+    select chat_a, owner_a, 'pending', jsonb_build_object('chatId', chat_a, 'userId', owner_a)
+    from review_access_ids$$,
+  '42501', null, 'chat owners cannot bypass server queue admission'
+);
+select throws_ok(
+  $$insert into public.charx_import_jobs (user_id, storage_path, original_filename)
+    select owner_a, owner_a::text || '/imports/test.rbx', 'test.rbx' from review_access_ids$$,
+  '42501', null, 'upload owners cannot bypass ticket verification by inserting a job'
+);
+
+reset role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+set local role service_role;
+select throws_ok(
+  $$insert into public.chat_generation_jobs (chat_id, user_id, status, payload)
+    select chat_a, owner_a, 'pending', jsonb_build_object('chatId', chat_b, 'userId', owner_b)
+    from review_access_ids$$,
+  '23514', null, 'even a privileged insert cannot queue a job with another owner in its payload'
+);
+select lives_ok(
+  $$insert into public.chat_generation_jobs (chat_id, user_id, status, payload)
+    select chat_a, owner_a, 'pending', jsonb_build_object('chatId', chat_a, 'userId', owner_a)
+    from review_access_ids$$,
+  'server can queue a job with matching chat and owner'
+);
+select lives_ok(
+  $$insert into public.charx_import_jobs (user_id, storage_path, original_filename)
+    select owner_a, owner_a::text || '/imports/test.rbx', 'test.rbx' from review_access_ids$$,
+  'server can queue verified imports'
+);
+
 reset role;
 insert into realtime.messages (topic, extension, event, payload, private, skip_broadcast)
 select 'chat-' || chat_a::text, 'broadcast', 'assistant-stream', '{"synthetic":true}'::jsonb, true, true
 from review_access_ids;
-select set_config('realtime.topic', 'chat-' || chat_a::text, true) from review_access_ids;
+select set_config('realtime.topic', 'chat-' || chat_a::text, true),
+       set_config('request.jwt.claim.role', 'authenticated', true)
+from review_access_ids;
 set local role authenticated;
 select is((select count(*)::int from realtime.messages where event = 'assistant-stream'
            and topic = (select 'chat-' || chat_a::text from review_access_ids)),

@@ -26,6 +26,12 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: () => createClientMock(),
 }))
 
+const createAdminClientMock = vi.fn()
+
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: () => createAdminClientMock(),
+}))
+
 vi.mock('@/lib/internal-api-origin', () => ({
   buildInternalApiUrl: (path: string) => new URL(`http://localhost${path}`),
 }))
@@ -222,6 +228,7 @@ class RouteSupabaseMock {
 function createSupabaseMock(fixture: Fixture) {
   const mock = new RouteSupabaseMock(fixture)
   createClientMock.mockReturnValue(mock)
+  createAdminClientMock.mockReturnValue(mock)
   return mock
 }
 
@@ -289,6 +296,7 @@ describe('POST /api/characters/import/storage', () => {
     restoreEnv()
     vi.useFakeTimers()
     createClientMock.mockReset()
+    createAdminClientMock.mockReset()
     consoleErrorSpy.mockClear()
     consoleWarnSpy.mockClear()
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-secret'
@@ -713,6 +721,7 @@ describe('POST /api/characters/import/storage', () => {
 
     expect(response.status).toBe(200)
     expect(body).toEqual({ jobId: 'job-123', status: 'pending' })
+    expect(createAdminClientMock).toHaveBeenCalledOnce()
     expect(supabase.insertPayloads).toEqual([
       {
         user_id: 'user-1',

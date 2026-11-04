@@ -334,7 +334,7 @@ async function pollAnthropicBatchJob({
   origin: string
 }): Promise<{ jobId: string; status: string; error?: string }> {
   const payload = parseChatJobPayload(job.payload)
-  if (!payload) {
+  if (!payload || payload.chatId !== job.chat_id || payload.userId !== job.user_id) {
     await markBatchJobError({
       supabase,
       jobId: job.id,

@@ -15,4 +15,15 @@ describe('upload-path', () => {
     expect(isImportUploadPath('user-1/character-assets/file.png', 'user-1')).toBe(false)
     expect(isImportUploadPath('other-user/imports/file.rbx', 'user-1')).toBe(false)
   })
+
+  it.each([
+    '../../other-user/imports/private.rbx',
+    '%2e%2e/%2e%2e/other-user/imports/private.rbx',
+    '..\\private.rbx',
+    'file.rbx?download=1',
+    'file.rbx#fragment',
+    'file.rbx\n',
+  ])('rejects an unsafe staged filename (%j)', (fileName) => {
+    expect(isImportUploadPath(`user-1/imports/${fileName}`, 'user-1')).toBe(false)
+  })
 })

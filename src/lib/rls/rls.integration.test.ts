@@ -1218,6 +1218,97 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
     })
   })
 
+  describe('anonymous request boundaries', () => {
+    it('counts concurrent requests and only removes expired rows for the same identifier', async () => {
+      const identifier = `anon-fixture-${randomUUID()}`
+      const otherIdentifier = `anon-other-${randomUUID()}`
+      const expiredAt = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+      try {
+        const fixtures = await adminClient.from('anon_rate_limits').insert(
+          [identifier, otherIdentifier].map((value) => ({
+            identifier: value,
+            window_start: expiredAt,
+            request_count: 1,
+          })),
+        )
+        expect(fixtures.error).toBeNull()
+
+        const responses = await Promise.all(
+          Array.from({ length: 5 }, () =>
+            adminClient.rpc('check_anon_rate_limit', {
+              identifier,
+              window_seconds: 3600,
+              max_requests: 2,
+            }),
+          ),
+        )
+        expect(responses.every((response) => response.error === null)).toBe(true)
+        const results = responses.flatMap((response) => response.data ?? [])
+        expect(results.filter((result) => result.allowed)).toHaveLength(2)
+        expect(results.filter((result) => !result.allowed)).toHaveLength(3)
+        expect(
+          results.filter((result) => !result.allowed).every((result) => result.retry_after > 0),
+        ).toBe(true)
+
+        const ownRows = await adminClient
+          .from('anon_rate_limits')
+          .select('request_count')
+          .eq('identifier', identifier)
+        expect(ownRows.data).toEqual([{ request_count: 5 }])
+        const otherRows = await adminClient
+          .from('anon_rate_limits')
+          .select('request_count')
+          .eq('identifier', otherIdentifier)
+        expect(otherRows.data).toEqual([{ request_count: 1 }])
+      } finally {
+        await adminClient
+          .from('anon_rate_limits')
+          .delete()
+          .in('identifier', [identifier, otherIdentifier])
+      }
+    })
+
+    it('returns the same denial for private and nonexistent message UUIDs through the pointer RPC', async () => {
+      const anonymous = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      })
+      const { data: message, error } = await testData.userB.client
+        .from('messages')
+        .insert({
+          chat_id: testData.chatB.id,
+          user_id: testData.userB.id,
+          role: 'user',
+          content: 'Private anonymous-boundary fixture',
+        })
+        .select('id')
+        .single()
+      expect(error).toBeNull()
+
+      const baseArgs = {
+        p_turn_id: randomUUID(),
+        p_chat_id: randomUUID(),
+        p_expected_role: 'user',
+        p_pointer_name: 'user_message_id',
+      }
+      for (const [client, status] of [
+        [anonymous, 401],
+        [testData.userA.client, 403],
+      ] as const) {
+        const results = await Promise.all(
+          [message!.id, randomUUID()].map((messageId) =>
+            client.rpc('validate_chat_turn_message_pointer', {
+              ...baseArgs,
+              p_message_id: messageId,
+            }),
+          ),
+        )
+        expect(results.map((result) => result.status)).toEqual([status, status])
+        expect(results[0].error?.code).toBe('42501')
+        expect(results[1].error).toEqual(results[0].error)
+      }
+    })
+  })
+
   describe('job state integrity', () => {
     it('requires successful CharX jobs to persist a result payload', async () => {
       const { data: job, error: insertError } = await adminClient

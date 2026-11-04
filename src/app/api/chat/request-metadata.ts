@@ -1,7 +1,10 @@
-import { buildClientIdentifier } from '@/lib/chat/rate-limiter'
+import { isIP } from 'node:net'
 
 export async function extractClientIdentifier(req: Request): Promise<string> {
-  const candidates = [req.headers.get('x-vercel-ip'), req.headers.get('cf-connecting-ip')]
+  const candidates: Array<string | null> = []
+  if (process.env.VERCEL === '1') {
+    candidates.push(...getForwardedForClientIps(req.headers.get('x-vercel-forwarded-for')))
+  }
 
   if (shouldTrustProxyIpHeaders()) {
     const forwardedFor = req.headers.get('x-forwarded-for')
@@ -29,7 +32,9 @@ export async function extractClientIdentifier(req: Request): Promise<string> {
     return firstValidIp
   }
 
-  return buildHashedUserAgentIdentifier(req)
+  // Anonymous requests cannot authenticate. Share a bucket when no trusted
+  // network identity is available so client-controlled headers cannot reset it.
+  return 'anonymous-unknown'
 }
 
 export function parseDeclaredContentLength(headerValue: string | null): number | null {
@@ -66,7 +71,7 @@ function normalizePotentialIp(candidate: string | null): string | null {
     return null
   }
 
-  return trimmed
+  return isIP(trimmed) ? trimmed.toLowerCase() : null
 }
 
 function shouldTrustProxyIpHeaders(): boolean {
@@ -85,11 +90,4 @@ function isPrivateIp(ip: string): boolean {
   ]
 
   return privateRanges.some((range) => range.test(ip))
-}
-
-function buildHashedUserAgentIdentifier(req: Request): string {
-  const ua = req.headers.get('user-agent') ?? 'unknown'
-  const acceptLanguage = req.headers.get('accept-language') ?? 'unknown'
-  const rawIdentifier = `${ua}|${acceptLanguage}`
-  return buildClientIdentifier(rawIdentifier)
 }

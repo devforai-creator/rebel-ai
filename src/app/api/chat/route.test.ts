@@ -1440,7 +1440,8 @@ describe('POST /api/chat', () => {
     await expectJsonError(response, 401, 'Unauthorized')
   })
 
-  it('prefers trusted deployment headers for anonymous rate limiting by default', async () => {
+  it('uses the platform-forwarded IP on Vercel and ignores caller-supplied alternatives', async () => {
+    process.env.VERCEL = '1'
     const supabase = createSupabaseMock({
       user: null,
       apiKeys: [],
@@ -1459,7 +1460,8 @@ describe('POST /api/chat', () => {
         userMessage: 'hello',
       }),
       headers: {
-        'x-vercel-ip': '203.0.113.10',
+        'x-vercel-forwarded-for': '203.0.113.10',
+        'x-vercel-ip': '203.0.113.99',
         'cf-connecting-ip': '203.0.113.11',
         'x-real-ip': '10.0.0.8',
         'x-forwarded-for': '198.51.100.5, 10.0.0.2',
@@ -1496,6 +1498,9 @@ describe('POST /api/chat', () => {
       headers: {
         'x-real-ip': '10.0.0.8',
         'x-forwarded-for': '198.51.100.5, 10.0.0.2',
+        'x-vercel-forwarded-for': '203.0.113.10',
+        'x-vercel-ip': '203.0.113.11',
+        'cf-connecting-ip': '203.0.113.12',
         'user-agent': 'VitestAgent/1.0',
         'accept-language': 'ko-KR',
       },
@@ -1507,9 +1512,7 @@ describe('POST /api/chat', () => {
       (call) => call.name === 'check_anon_rate_limit',
     )
 
-    expect(rateLimitCall?.params.identifier).toBe(
-      buildClientIdentifier(buildClientIdentifier('VitestAgent/1.0|ko-KR')),
-    )
+    expect(rateLimitCall?.params.identifier).toBe(buildClientIdentifier('anonymous-unknown'))
   })
 
   it('uses trusted proxy headers when TRUST_PROXY_IP_HEADERS=true', async () => {
@@ -1547,7 +1550,7 @@ describe('POST /api/chat', () => {
     expect(rateLimitCall?.params.identifier).toBe(buildClientIdentifier('198.51.100.5'))
   })
 
-  it('falls back to hashed user-agent fingerprint when no valid IP headers exist', async () => {
+  it('uses a shared anonymous bucket when no trusted IP is available', async () => {
     const supabase = createSupabaseMock({
       user: null,
       apiKeys: [],
@@ -1579,9 +1582,7 @@ describe('POST /api/chat', () => {
       (call) => call.name === 'check_anon_rate_limit',
     )
 
-    expect(rateLimitCall?.params.identifier).toBe(
-      buildClientIdentifier(buildClientIdentifier('VitestAgent/1.0|ko-KR')),
-    )
+    expect(rateLimitCall?.params.identifier).toBe(buildClientIdentifier('anonymous-unknown'))
   })
 
   it('returns 429 when anonymous rate limit is exceeded', async () => {

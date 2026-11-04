@@ -49,6 +49,9 @@ const EXPECTED_STORAGE_POLICIES = [
 ]
 
 const FORBIDDEN_FUNCTION_GRANTS = [
+  ['public.validate_chat_turn_message_pointer(uuid,uuid,uuid,text,text)', 'anon'],
+  ['public.validate_chat_turn_message_pointer(uuid,uuid,uuid,text,text)', 'authenticated'],
+  ['public.validate_chat_turn_message_pointer(uuid,uuid,uuid,text,text)', 'service_role'],
   ['public.check_anon_rate_limit(text,integer,integer)', 'anon'],
   ['public.check_anon_rate_limit(text,integer,integer)', 'authenticated'],
   ['public.check_chat_rate_limit(uuid,integer,integer)', 'anon'],

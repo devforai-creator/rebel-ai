@@ -10,12 +10,14 @@ import {
 import type { Character } from '@/types/database.types'
 
 // Call only after the page has verified access to the character.
-export async function loadGreetingPreviewData(character: Pick<Character, 'id' | 'metadata'>) {
+export async function loadGreetingPreviewData(
+  character: Pick<Character, 'id' | 'user_id' | 'metadata'>,
+) {
   try {
     const admin = createAdminClient()
     const [characterAssets, moduleData] = await Promise.all([
-      fetchCharacterAssetsWithRetry(admin, character.id),
-      fetchModuleData(admin, character.id),
+      fetchCharacterAssetsWithRetry(admin, character.id, character.user_id),
+      fetchModuleData(admin, character.id, character.user_id),
     ])
     const characterAssetUrlMapByPath = await createSignedAssetUrlMap(
       admin,

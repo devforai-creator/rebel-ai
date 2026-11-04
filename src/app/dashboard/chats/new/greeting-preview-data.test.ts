@@ -40,11 +40,12 @@ describe('loadGreetingPreviewData', () => {
   it('uses the chat asset pipeline for signed images, module extraction and image commands', async () => {
     const data = await loadGreetingPreviewData({
       id: 'character-1',
+      user_id: 'user-1',
       metadata: { image_commands: { happy: 'hero' } },
     })
 
-    expect(fetchAssets).toHaveBeenCalledWith(admin, 'character-1')
-    expect(fetchModules).toHaveBeenCalledWith(admin, 'character-1')
+    expect(fetchAssets).toHaveBeenCalledWith(admin, 'character-1', 'user-1')
+    expect(fetchModules).toHaveBeenCalledWith(admin, 'character-1', 'user-1')
     expect(signAssets).toHaveBeenCalledWith(admin, 'character-assets', ['private/hero.webp'])
     expect(data?.assetUrlMap['hero.webp']).toBe('https://example.com/signed-hero.webp')
     expect(data?.assetUrlMap['scene.webp']).toBe('https://example.com/signed-scene.webp')
@@ -57,7 +58,9 @@ describe('loadGreetingPreviewData', () => {
     fetchModules.mockRejectedValueOnce(new Error('Unavailable'))
     const log = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
-      expect(await loadGreetingPreviewData({ id: 'character-1', metadata: {} })).toBeNull()
+      expect(
+        await loadGreetingPreviewData({ id: 'character-1', user_id: 'user-1', metadata: {} }),
+      ).toBeNull()
     } finally {
       log.mockRestore()
     }

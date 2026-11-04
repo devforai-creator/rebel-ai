@@ -1,4 +1,5 @@
 import type { createAdminClient } from '@/lib/supabase/admin'
+import { isOwnedAssetPath } from './owned-asset-path'
 import { createSignedAssetUrlMap } from './signed-asset-url'
 
 type CharacterAvatarSupabase = Pick<ReturnType<typeof createAdminClient>, 'from' | 'storage'>
@@ -11,7 +12,8 @@ type CharacterAvatarInput = {
 type CharacterAvatarRow = {
   character_id: string
   storage_path: string
-  display_order: number | null
+  user_id: string
+  characters: { user_id: string | null }
 }
 
 export async function resolveCharacterAvatarUrlMap(
@@ -37,7 +39,7 @@ export async function resolveCharacterAvatarUrlMap(
 
   const { data, error } = await supabase
     .from('character_assets')
-    .select('character_id, storage_path, display_order')
+    .select('character_id, storage_path, user_id, characters!inner(user_id)')
     .in('character_id', characterIds)
     .eq('asset_type', 'icon')
     .order('character_id', { ascending: true })
@@ -54,8 +56,8 @@ export async function resolveCharacterAvatarUrlMap(
   const firstIconPathByCharacterId = new Map<string, string>()
   for (const row of (data ?? []) as CharacterAvatarRow[]) {
     if (
-      !row.character_id ||
-      !row.storage_path ||
+      row.user_id !== row.characters.user_id ||
+      !isOwnedAssetPath(row.storage_path, row.characters.user_id, row.character_id) ||
       firstIconPathByCharacterId.has(row.character_id)
     ) {
       continue

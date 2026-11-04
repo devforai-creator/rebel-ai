@@ -1,4 +1,5 @@
 import { buildAssetUrlMap } from '@/lib/asset-resolver'
+import { isOwnedAssetPath } from '@/lib/assets/owned-asset-path'
 import { createSignedAssetUrlMap } from '@/lib/assets/signed-asset-url'
 import type { Database } from '@/types/database.types'
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
@@ -68,7 +69,10 @@ function normalizeAssetMetadata(metadata: unknown): { aliases?: string[] } | nul
 export async function fetchCharacterAssetsWithRetry(
   supabase: RouteAssetSupabaseClient,
   characterId: string,
+  ownerId: string | null,
 ): Promise<CharacterAssetRecord[]> {
+  if (!ownerId) return []
+
   let lastError: PostgrestError | null = null
 
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt += 1) {
@@ -85,6 +89,7 @@ export async function fetchCharacterAssetsWithRetry(
             'id, file_name, storage_path, display_name, canonical_name, metadata, display_order',
           )
           .eq('character_id', characterId)
+          .eq('user_id', ownerId)
           .order('display_order', { ascending: true })
           .range(offset, offset + pageSize - 1)
 
@@ -95,10 +100,12 @@ export async function fetchCharacterAssetsWithRetry(
 
         if (data && data.length > 0) {
           allAssets.push(
-            ...data.map((asset) => ({
-              ...asset,
-              metadata: normalizeAssetMetadata(asset.metadata),
-            })),
+            ...data
+              .filter((asset) => isOwnedAssetPath(asset.storage_path, ownerId, characterId))
+              .map((asset) => ({
+                ...asset,
+                metadata: normalizeAssetMetadata(asset.metadata),
+              })),
           )
           offset += pageSize
           hasMore = data.length === pageSize
@@ -128,14 +135,16 @@ export async function fetchCharacterAssetsWithRetry(
 export async function fetchModuleData(
   supabase: RouteAssetSupabaseClient,
   characterId: string,
+  ownerId: string | null,
 ): Promise<ModuleRuntimeData> {
-  const { data: characterModules } = await supabase
+  const { data: moduleLinks } = await supabase
     .from('character_modules')
     .select(
       `
       module_id,
       modules (
         id,
+        user_id,
         name,
         regex,
         assets
@@ -146,7 +155,8 @@ export async function fetchModuleData(
     .eq('enabled', true)
     .order('priority', { ascending: false })
 
-  if (!characterModules || characterModules.length === 0) {
+  const characterModules = (moduleLinks ?? []).filter((link) => link.modules?.user_id === ownerId)
+  if (!ownerId || characterModules.length === 0) {
     return { allRegex: [], moduleAssetUrls: {}, moduleAssetSummary: [] }
   }
 
@@ -162,7 +172,7 @@ export async function fetchModuleData(
   )
 
   const moduleAssets =
-    moduleIds.length > 0 ? await fetchModuleAssetsWithRetry(supabase, moduleIds) : []
+    moduleIds.length > 0 ? await fetchModuleAssetsWithRetry(supabase, moduleIds, ownerId) : []
 
   const moduleAssetsByModuleId = new Map<string, string[]>()
   for (const asset of moduleAssets) {
@@ -259,6 +269,7 @@ export async function fetchModuleData(
 async function fetchModuleAssetsWithRetry(
   supabase: RouteAssetSupabaseClient,
   moduleIds: string[],
+  ownerId: string,
 ): Promise<ModuleAssetRecord[]> {
   let lastError: PostgrestError | null = null
 
@@ -274,6 +285,7 @@ async function fetchModuleAssetsWithRetry(
           .from('module_assets')
           .select('id, module_id, file_name, storage_path, display_name, metadata, display_order')
           .in('module_id', moduleIds)
+          .eq('user_id', ownerId)
           .order('module_id', { ascending: true })
           .order('display_order', { ascending: true })
           .range(offset, offset + pageSize - 1)
@@ -284,7 +296,11 @@ async function fetchModuleAssetsWithRetry(
         }
 
         if (data && data.length > 0) {
-          allAssets.push(...(data as ModuleAssetRecord[]))
+          allAssets.push(
+            ...data
+              .filter((asset) => isOwnedAssetPath(asset.storage_path, ownerId, asset.module_id))
+              .map((asset) => ({ ...asset, metadata: normalizeAssetMetadata(asset.metadata) })),
+          )
           offset += pageSize
           hasMore = data.length === pageSize
         } else {

@@ -367,6 +367,72 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
     })
   })
 
+  describe('private asset ownership', () => {
+    it('only lets a character owner attach or move an asset to that character', async () => {
+      const { userA, userB, characterA, characterB, publicCharacter } = testData
+      const fileName = `${randomUUID()}.png`
+      const asset = { user_id: userA.id, asset_type: 'icon', file_name: fileName }
+
+      for (const character of [characterB, publicCharacter]) {
+        const { error } = await userA.client.from('character_assets').insert({
+          ...asset,
+          character_id: character.id,
+          storage_path: `${userA.id}/${character.id}/${fileName}`,
+        })
+        expect(error?.code).toBe('42501')
+      }
+
+      const { data, error } = await userA.client
+        .from('character_assets')
+        .insert({
+          ...asset,
+          character_id: characterA.id,
+          storage_path: `${userA.id}/${characterA.id}/${fileName}`,
+        })
+        .select('id')
+        .single()
+      expect(error).toBeNull()
+
+      const move = await userA.client
+        .from('character_assets')
+        .update({
+          character_id: characterB.id,
+          storage_path: `${userA.id}/${characterB.id}/${fileName}`,
+        })
+        .eq('id', data!.id)
+      expect(move.error?.code).toBe('42501')
+
+      const foreignPath = await userA.client
+        .from('character_assets')
+        .update({ storage_path: `${userB.id}/${characterB.id}/${fileName}` })
+        .eq('id', data!.id)
+      expect(foreignPath.error?.code).toBe('23514')
+    })
+
+    it('rejects a module asset path outside the owner and module directory', async () => {
+      const { userA, userB } = testData
+      const { data: module, error } = await userA.client
+        .from('modules')
+        .insert({ user_id: userA.id, name: 'Asset ownership test' })
+        .select('id')
+        .single()
+      expect(error).toBeNull()
+
+      const asset = { user_id: userA.id, module_id: module!.id, file_name: 'asset.png' }
+      const foreignPath = await userA.client.from('module_assets').insert({
+        ...asset,
+        storage_path: `${userB.id}/${randomUUID()}/asset.png`,
+      })
+      expect(foreignPath.error?.code).toBe('23514')
+
+      const ownedPath = await userA.client.from('module_assets').insert({
+        ...asset,
+        storage_path: `${userA.id}/${module!.id}/asset.png`,
+      })
+      expect(ownedPath.error).toBeNull()
+    })
+  })
+
   describe('chats table RLS', () => {
     it('user can see their own chats', async () => {
       const { data, error } = await testData.userA.client

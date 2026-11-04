@@ -265,18 +265,20 @@ function buildSupabase(fixture: Partial<AssetRouteFixture> & { user: { id: strin
         },
       },
     ],
-    characterAssetsRows: fixture.characterAssetsRows ?? [
-      {
-        id: 'asset-1',
-        character_id: characterId,
-        file_name: 'hero_happy.png',
-        storage_path: `${characterId}/hero_happy.png`,
-        display_name: 'Hero Happy',
-        canonical_name: 'Hero Happy',
-        metadata: null,
-        display_order: 0,
-      },
-    ],
+    characterAssetsRows: (
+      fixture.characterAssetsRows ?? [
+        {
+          id: 'asset-1',
+          character_id: characterId,
+          file_name: 'hero_happy.png',
+          storage_path: `${userId}/${characterId}/hero_happy.png`,
+          display_name: 'Hero Happy',
+          canonical_name: 'Hero Happy',
+          metadata: null,
+          display_order: 0,
+        },
+      ]
+    ).map((row) => ({ user_id: userId, ...row })),
     characterModulesRows: fixture.characterModulesRows ?? [
       {
         character_id: characterId,
@@ -285,6 +287,7 @@ function buildSupabase(fixture: Partial<AssetRouteFixture> & { user: { id: strin
         priority: 0,
         modules: {
           id: 'module-1',
+          user_id: 'user-1',
           name: 'Legacy Module',
           regex: [
             {
@@ -306,7 +309,7 @@ function buildSupabase(fixture: Partial<AssetRouteFixture> & { user: { id: strin
         module_id: 'module-1',
         user_id: userId,
         file_name: 'module_pose.png',
-        storage_path: 'module-1/module_pose.png',
+        storage_path: 'user-1/module-1/module_pose.png',
         display_name: null,
         metadata: null,
         display_order: 0,
@@ -415,6 +418,15 @@ describe('GET /api/chats/[chatId]/assets', () => {
   it("signs assets for another user's visible public character", async () => {
     buildSupabase({
       user: { id: 'user-1' },
+      characterAssetsRows: [
+        {
+          id: 'public-asset',
+          character_id: 'char-1',
+          user_id: 'other',
+          file_name: 'public.png',
+          storage_path: 'other/char-1/public.png',
+        },
+      ],
       chatsRows: [
         {
           id: 'chat-1',
@@ -425,7 +437,13 @@ describe('GET /api/chats/[chatId]/assets', () => {
       ],
     })
     const { GET } = await loadRoute()
-    expect((await GET(buildRequest(), buildContext('chat-1'))).status).toBe(200)
+    const response = await GET(buildRequest(), buildContext('chat-1'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.assetUrlMap['public.png']).toBe(
+      'https://cdn.test/character-assets/other/char-1/public.png',
+    )
   })
 
   it('builds alias and stem keys, normalizes metadata, and uses character_list fallback mapping', async () => {
@@ -461,7 +479,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
           id: 'asset-cover',
           character_id: 'char-1',
           file_name: '1.cover.png',
-          storage_path: 'char-1/1.cover.png',
+          storage_path: 'user-1/char-1/1.cover.png',
           display_name: 'Cover',
           canonical_name: 'Cover.png',
           metadata: null,
@@ -471,7 +489,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
           id: 'asset-2',
           character_id: 'char-1',
           file_name: '2.hero-relaxed.webp',
-          storage_path: 'char-1/2.hero-relaxed.webp',
+          storage_path: 'user-1/char-1/2.hero-relaxed.webp',
           display_name: 'Hero Relaxed',
           canonical_name: 'Hero Relaxed.webp',
           metadata: { aliases: ['Joy Pose', 7] },
@@ -481,7 +499,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
           id: 'asset-3',
           character_id: 'char-1',
           file_name: '3.hero-smile.png',
-          storage_path: 'char-1/3.hero-smile.png',
+          storage_path: 'user-1/char-1/3.hero-smile.png',
           display_name: 'Hero Smile',
           canonical_name: 'Hero Smile.png',
           metadata: { aliases: 'invalid' },
@@ -502,16 +520,16 @@ describe('GET /api/chats/[chatId]/assets', () => {
     expect(response.headers.get('Cache-Control')).toBe('private, no-store')
     expect(body.globalVariables).toEqual({ scene: 2 })
     expect(body.assetUrlMap['joy_pose']).toBe(
-      'https://cdn.test/character-assets/char-1/2.hero-relaxed.webp',
+      'https://cdn.test/character-assets/user-1/char-1/2.hero-relaxed.webp',
     )
     expect(body.assetUrlMap['hero_relax.webp']).toBe(
-      'https://cdn.test/character-assets/char-1/2.hero-relaxed.webp',
+      'https://cdn.test/character-assets/user-1/char-1/2.hero-relaxed.webp',
     )
     expect(body.imageCommandUrlMap).toMatchObject({
-      'Happy Face': 'https://cdn.test/character-assets/char-1/2.hero-relaxed.webp',
-      happy_face: 'https://cdn.test/character-assets/char-1/2.hero-relaxed.webp',
-      'Soft Smile': 'https://cdn.test/character-assets/char-1/3.hero-smile.png',
-      soft_smile: 'https://cdn.test/character-assets/char-1/3.hero-smile.png',
+      'Happy Face': 'https://cdn.test/character-assets/user-1/char-1/2.hero-relaxed.webp',
+      happy_face: 'https://cdn.test/character-assets/user-1/char-1/2.hero-relaxed.webp',
+      'Soft Smile': 'https://cdn.test/character-assets/user-1/char-1/3.hero-smile.png',
+      soft_smile: 'https://cdn.test/character-assets/user-1/char-1/3.hero-smile.png',
     })
     expect(body.imageCommandUrlMap).not.toHaveProperty('Ignored Cover')
     expect(body.characterAssets).toEqual(
@@ -539,7 +557,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
           id: 'asset-lower',
           character_id: 'char-1',
           file_name: 'hero-very-happy-lower.webp',
-          storage_path: 'char-1/hero-very-happy-lower.webp',
+          storage_path: 'user-1/char-1/hero-very-happy-lower.webp',
           display_name: null,
           canonical_name: 'hero very happy.webp',
           metadata: null,
@@ -549,7 +567,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
           id: 'asset-upper',
           character_id: 'char-1',
           file_name: 'hero-very-happy-upper.webp',
-          storage_path: 'char-1/hero-very-happy-upper.webp',
+          storage_path: 'user-1/char-1/hero-very-happy-upper.webp',
           display_name: null,
           canonical_name: 'Hero Very Happy.webp',
           metadata: null,
@@ -564,10 +582,10 @@ describe('GET /api/chats/[chatId]/assets', () => {
 
     expect(response.status).toBe(200)
     expect(body.assetUrlMap['hero_very.webp']).toBe(
-      'https://cdn.test/character-assets/char-1/hero-very-happy-lower.webp',
+      'https://cdn.test/character-assets/user-1/char-1/hero-very-happy-lower.webp',
     )
     expect(body.assetUrlMap['hero_happy.webp']).toBe(
-      'https://cdn.test/character-assets/char-1/hero-very-happy-lower.webp',
+      'https://cdn.test/character-assets/user-1/char-1/hero-very-happy-lower.webp',
     )
   })
 
@@ -600,7 +618,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
           id: 'asset-1',
           character_id: 'char-1',
           file_name: '2.ako-giggling.webp',
-          storage_path: 'char-1/2.ako-giggling.webp',
+          storage_path: 'user-1/char-1/2.ako-giggling.webp',
           display_name: 'Ako Giggling',
           canonical_name: null,
           metadata: null,
@@ -615,8 +633,8 @@ describe('GET /api/chats/[chatId]/assets', () => {
 
     expect(response.status).toBe(200)
     expect(body.imageCommandUrlMap).toMatchObject({
-      'Ako.giggling': 'https://cdn.test/character-assets/char-1/2.ako-giggling.webp',
-      'ako.giggling': 'https://cdn.test/character-assets/char-1/2.ako-giggling.webp',
+      'Ako.giggling': 'https://cdn.test/character-assets/user-1/char-1/2.ako-giggling.webp',
+      'ako.giggling': 'https://cdn.test/character-assets/user-1/char-1/2.ako-giggling.webp',
     })
   })
 
@@ -634,6 +652,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
           priority: 1,
           modules: {
             id: 'module-1',
+            user_id: 'user-1',
             name: 'Legacy Module',
             regex: [
               {
@@ -731,10 +750,10 @@ describe('GET /api/chats/[chatId]/assets', () => {
       },
     ])
     expect(body.assetUrlMap['module_pose.png']).toBe(
-      'https://cdn.test/module-assets/module-1/module_pose.png',
+      'https://cdn.test/module-assets/user-1/module-1/module_pose.png',
     )
     expect(body.imageCommandUrlMap).toEqual({
-      happy: 'https://cdn.test/character-assets/char-1/hero_happy.png',
+      happy: 'https://cdn.test/character-assets/user-1/char-1/hero_happy.png',
     })
   })
 
@@ -750,6 +769,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
           priority: 1,
           modules: {
             id: 'module-low',
+            user_id: 'user-1',
             name: 'Low Priority Module',
             regex: [{ in: 'low', out: 'LOW', comment: 'low', ableFlag: true }],
             assets: ['low.webp'],
@@ -762,6 +782,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
           priority: 5,
           modules: {
             id: 'module-high',
+            user_id: 'user-1',
             name: 'High Priority Module',
             regex: [{ in: 'high', out: 'HIGH', comment: 'high', ableFlag: true }],
             assets: ['high.webp'],
@@ -874,6 +895,47 @@ describe('GET /api/chats/[chatId]/assets', () => {
     )
   })
 
+  it('skips mismatched legacy records before signing private assets', async () => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      characterAssetsRows: [
+        {
+          id: 'planted-row',
+          character_id: 'char-1',
+          user_id: 'user-2',
+          storage_path: 'user-2/char-1/planted.png',
+        },
+        {
+          id: 'foreign-path',
+          character_id: 'char-1',
+          storage_path: 'user-2/char-2/private.png',
+        },
+        {
+          id: 'encoded-traversal',
+          character_id: 'char-1',
+          storage_path: 'user-1/char-1/%2e%2e/private.png',
+        },
+      ],
+      moduleAssetsRows: [
+        {
+          id: 'foreign-module-path',
+          user_id: 'user-1',
+          module_id: 'module-1',
+          storage_path: 'user-2/module-2/private.png',
+        },
+      ],
+    })
+    const { GET } = await loadRoute()
+
+    const response = await GET(buildRequest(), buildContext('chat-1'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.characterAssets).toEqual([])
+    expect(body.assetUrlMap).toEqual({})
+    expect(supabase.storage.from).not.toHaveBeenCalled()
+  })
+
   it('logs module asset retry exhaustion without serving unsafe legacy fallback data', async () => {
     vi.useFakeTimers()
     buildSupabase({
@@ -887,6 +949,7 @@ describe('GET /api/chats/[chatId]/assets', () => {
           priority: 1,
           modules: {
             id: 'module-1',
+            user_id: 'user-1',
             name: 'Retry Module',
             regex: [],
             assets: [['retry-fallback.webp', 'data:image/webp;base64,abc']],

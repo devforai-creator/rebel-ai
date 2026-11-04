@@ -6,7 +6,12 @@ import {
 } from './character-avatar'
 
 function createSupabaseMock(options?: {
-  rows?: Array<{ character_id: string; storage_path: string; display_order: number | null }>
+  rows?: Array<{
+    character_id: string
+    storage_path: string
+    user_id: string
+    characters: { user_id: string | null }
+  }>
   selectError?: { message: string }
   signedUrlError?: { message: string }
 }) {
@@ -58,7 +63,8 @@ describe('resolveCharacterAvatarUrlMap', () => {
         {
           character_id: 'char-1',
           storage_path: 'user/char-1/icon.webp',
-          display_order: 0,
+          user_id: 'user',
+          characters: { user_id: 'user' },
         },
       ],
     })
@@ -75,13 +81,38 @@ describe('resolveCharacterAvatarUrlMap', () => {
     })
   })
 
+  it('skips foreign icon rows and storage paths before signing', async () => {
+    const { supabase, createSignedUrls } = createSupabaseMock({
+      rows: [
+        {
+          character_id: 'char-1',
+          storage_path: 'other/char-1/planted.webp',
+          user_id: 'other',
+          characters: { user_id: 'user' },
+        },
+        {
+          character_id: 'char-1',
+          storage_path: 'other/char-2/private.webp',
+          user_id: 'user',
+          characters: { user_id: 'user' },
+        },
+      ],
+    })
+
+    await expect(
+      resolveCharacterAvatarUrlMap(supabase as never, [{ id: 'char-1', avatar_url: null }]),
+    ).resolves.toEqual({ 'char-1': null })
+    expect(createSignedUrls).not.toHaveBeenCalled()
+  })
+
   it('falls back to stored avatar_url when signing fails', async () => {
     const { supabase } = createSupabaseMock({
       rows: [
         {
           character_id: 'char-1',
           storage_path: 'user/char-1/icon.webp',
-          display_order: 0,
+          user_id: 'user',
+          characters: { user_id: 'user' },
         },
       ],
       signedUrlError: { message: 'sign failed' },
@@ -104,7 +135,8 @@ describe('resolveSingleCharacterAvatarUrl', () => {
         {
           character_id: 'char-1',
           storage_path: 'user/char-1/icon.webp',
-          display_order: 0,
+          user_id: 'user',
+          characters: { user_id: 'user' },
         },
       ],
     })

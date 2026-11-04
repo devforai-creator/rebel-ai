@@ -54,8 +54,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ chatId:
   // Fetch character assets, module data, and global variables in parallel
   const [characterAssets, moduleData, { data: globalVars, error: globalVarsError }] =
     await Promise.all([
-      fetchCharacterAssetsWithRetry(adminSupabase, chat.character_id),
-      fetchModuleData(adminSupabase, chat.character_id),
+      fetchCharacterAssetsWithRetry(adminSupabase, chat.character_id, characterData.user_id),
+      fetchModuleData(adminSupabase, chat.character_id, characterData.user_id),
       supabase
         .from('global_variables')
         .select('key, value')

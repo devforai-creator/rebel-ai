@@ -37,16 +37,6 @@ const EXPECTED_STORAGE_POLICIES = [
     bucket: 'module-assets',
   },
   {
-    name: 'Users can upload their CharX archives',
-    command: 'INSERT',
-    bucket: 'charx-uploads',
-  },
-  {
-    name: 'Users can update their CharX archives',
-    command: 'UPDATE',
-    bucket: 'charx-uploads',
-  },
-  {
     name: 'Users can delete their CharX archives',
     command: 'DELETE',
     bucket: 'charx-uploads',

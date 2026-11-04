@@ -83,7 +83,7 @@ describe('check-linked-supabase-contract', () => {
 
     expect(evaluateSnapshot(snapshot)).toEqual(
       expect.arrayContaining([
-        expect.stringContaining('expected 10 storage policies'),
+        expect.stringContaining('expected 8 storage policies'),
         expect.stringContaining('missing storage policy'),
         expect.stringContaining('forbidden table privilege'),
         expect.stringContaining('forbidden function grant'),

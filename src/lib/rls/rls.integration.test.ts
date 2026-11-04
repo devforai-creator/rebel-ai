@@ -1174,6 +1174,50 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
     })
   })
 
+  describe('staged import storage', () => {
+    it('requires a server-signed upload and denies direct writes in the owner folder', async () => {
+      const { userA, userB } = testData
+      const bucket = 'charx-uploads'
+      const path = `${userA.id}/imports/${randomUUID()}.rbx`
+      const bytes = new Uint8Array([1, 2, 3])
+      const fileOptions = { contentType: 'application/octet-stream' }
+      const userStorage = userA.client.storage.from(bucket)
+      const serverStorage = adminClient.storage.from(bucket)
+
+      try {
+        const direct = await userStorage.upload(path, bytes, fileOptions)
+        expect(direct.error).not.toBeNull()
+
+        const selfSigned = await userStorage.createSignedUploadUrl(path)
+        expect(selfSigned.error).not.toBeNull()
+
+        const { data: signed, error } = await serverStorage.createSignedUploadUrl(path, {
+          upsert: false,
+        })
+        expect(error).toBeNull()
+        const upload = await userStorage.uploadToSignedUrl(path, signed!.token, bytes, fileOptions)
+        expect(upload.error).toBeNull()
+
+        const replace = await userStorage.update(path, new Uint8Array([4, 5, 6]), fileOptions)
+        expect(replace.error).not.toBeNull()
+        const info = await userStorage.info(path)
+        expect(info.error).toBeNull()
+        expect(info.data?.size).toBe(bytes.length)
+        const read = await userStorage.download(path)
+        expect(new Uint8Array(await read.data!.arrayBuffer())).toEqual(bytes)
+
+        const foreignRead = await userB.client.storage.from(bucket).info(path)
+        expect(foreignRead.error).not.toBeNull()
+
+        const remove = await userStorage.remove([path])
+        expect(remove.error).toBeNull()
+        expect((await serverStorage.info(path)).error).not.toBeNull()
+      } finally {
+        await serverStorage.remove([path])
+      }
+    })
+  })
+
   describe('job state integrity', () => {
     it('requires successful CharX jobs to persist a result payload', async () => {
       const { data: job, error: insertError } = await adminClient

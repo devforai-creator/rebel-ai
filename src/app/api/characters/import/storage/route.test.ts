@@ -432,12 +432,14 @@ describe('POST /api/characters/import/storage', () => {
     )
   })
 
-  it('issues a signed upload contract for an authenticated user', async () => {
-    const supabase = createSupabaseMock({
-      user: { id: 'user-1' },
+  it('issues a signed upload contract through the server signer after authenticating', async () => {
+    const supabase = createSupabaseMock({ user: { id: 'user-1' } })
+    const signer = new RouteSupabaseMock({
+      user: null,
       signedUploadUrl: 'https://storage.test/upload?token=signed-upload-token',
       signedUploadToken: 'signed-upload-token',
     })
+    createAdminClientMock.mockReturnValue(signer)
 
     const response = await POST(buildRequest(buildPrepareRequestBody()) as never)
     const body = await response.json()
@@ -449,7 +451,8 @@ describe('POST /api/characters/import/storage', () => {
       token: 'signed-upload-token',
       uploadTicket: expect.any(String),
     })
-    expect(supabase.signedUploadRequests).toEqual([
+    expect(supabase.signedUploadRequests).toEqual([])
+    expect(signer.signedUploadRequests).toEqual([
       {
         bucket: IMPORT_UPLOAD_BUCKET,
         path: expect.stringMatching(/^user-1\/imports\/.+new-file\.rbx$/),

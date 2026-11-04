@@ -84,7 +84,6 @@ export async function POST(request: Request) {
     }
 
     return issueImportUploadContract({
-      supabase,
       userId: user.id,
       fileName: parsed.data.fileName,
       fileType: parsed.data.fileType ?? null,
@@ -128,13 +127,11 @@ async function inspectActiveImportJobs(supabase: RouteSupabaseClient, userId: st
 }
 
 async function issueImportUploadContract({
-  supabase,
   userId,
   fileName,
   fileType,
   fileSize,
 }: {
-  supabase: RouteSupabaseClient
   userId: string
   fileName: string
   fileType: string | null
@@ -150,8 +147,8 @@ async function issueImportUploadContract({
   }
 
   const path = buildImportUploadPath(userId, { name: fileName })
-  const { data: signedUpload, error: signedUploadError } = await supabase.storage
-    .from(IMPORT_UPLOAD_BUCKET)
+  const { data: signedUpload, error: signedUploadError } = await createAdminClient()
+    .storage.from(IMPORT_UPLOAD_BUCKET)
     .createSignedUploadUrl(path, {
       upsert: false,
     })

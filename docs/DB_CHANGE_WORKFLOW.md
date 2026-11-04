@@ -141,9 +141,9 @@ No schema changes found
 
 The linked contract check covers the boundary that `db diff --schema public`
 does not: the CLI project ref must match `NEXT_PUBLIC_SUPABASE_URL`, the three
-Storage buckets must remain private, all ten `storage.objects` policies must be
+Storage buckets must remain private, the eight expected `storage.objects` policies must be
 present with their ownership guards, and sensitive table/RPC grants must remain
-restricted.
+restricted. The staging bucket must have no client INSERT or UPDATE policy.
 
 ## Automated Production Contract Check
 

@@ -48,6 +48,16 @@ export function getProviderOptions(
     }
   }
 
+  if (provider === 'deepseek' && overrides?.reasoning?.effort) {
+    options.deepseek =
+      overrides.reasoning.effort === 'none'
+        ? { thinking: { type: 'disabled' } }
+        : {
+            thinking: { type: 'enabled' },
+            reasoningEffort: overrides.reasoning.effort,
+          }
+  }
+
   if (provider === 'openai') {
     const openAIModelPolicy = getModelFeatures({
       provider: 'openai',

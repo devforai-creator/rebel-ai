@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LanguageModel } from 'ai'
+import { generateText, type LanguageModel } from 'ai'
+import { buildLanguageModel } from '@/lib/llm/model-factory'
 import type { SupabaseClientType } from '@/tests/mocks/supabase'
 
 const mockModel = {} as LanguageModel
@@ -44,6 +45,7 @@ describe('updateCanonicalSealedMemoryArtifacts', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('runs regeneration with canonical chunk size and creates canonical chunks through sealedThroughSeq', async () => {
@@ -92,6 +94,55 @@ describe('updateCanonicalSealedMemoryArtifacts', () => {
         metaPrompt: 'meta-prompt',
       }),
     )
+  })
+
+  it('applies the saved summary preference to regeneration, chunks, facts, and meta summaries', async () => {
+    getLastSummaryEndMock.mockResolvedValue(0)
+    const supabase = createSupabaseMock({
+      profilePrompts: { summary_reasoning_effort: 'max' },
+      enableRag: true,
+    })
+    const { updateCanonicalSealedMemoryArtifacts } = await import('./sealed-memory-writer')
+    await updateCanonicalSealedMemoryArtifacts({
+      supabase: supabase as unknown as SupabaseClientType,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      model: buildLanguageModel({
+        provider: 'deepseek',
+        modelName: 'deepseek-v4-pro',
+        apiKey: 'test-key',
+      }),
+      provider: 'deepseek',
+      modelName: 'deepseek-v4-pro',
+      regenerate: { chunkRanges: [{ startSeq: 1, endSeq: 10 }] },
+      sealedThroughSeq: 100,
+    })
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      Response.json({
+        id: 'summary-test',
+        created: 1,
+        model: 'deepseek-v4-pro',
+        choices: [
+          { index: 0, message: { role: 'assistant', content: 'summary' }, finish_reason: 'stop' },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    for (const invocation of [
+      processRegenerationRequestsMock.mock.calls[0][0],
+      processChunkSummariesMock.mock.calls[0][0],
+      processMetaSummariesMock.mock.calls[0][0],
+    ]) {
+      await generateText({ model: invocation.model, prompt: 'Summarize' })
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(JSON.parse(init.body)).toMatchObject({
+        thinking: { type: 'enabled' },
+        reasoning_effort: 'max',
+      })
+    }
   })
 
   it('returns after regeneration when there is not yet a full canonical chunk to seal', async () => {

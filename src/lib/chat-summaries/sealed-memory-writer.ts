@@ -5,6 +5,7 @@ import {
   DEFAULT_META_SUMMARY_PROMPT,
   SUMMARY_LEVEL_CHUNK,
 } from './config'
+import { withSummaryReasoning } from './summary-reasoning'
 import { getLastSummaryEnd } from './db-helpers'
 import { loadUserEpisodicMemorySettings } from './episodic-memory'
 import { processChunkSummaries } from './chunk-summarizer'
@@ -16,6 +17,7 @@ export type SummaryPromptConfig = {
   chunkPrompt: string
   metaPrompt: string
   factPrompt: string
+  reasoningEffort: string
 }
 
 export async function loadSummaryPromptConfig(
@@ -24,7 +26,9 @@ export async function loadSummaryPromptConfig(
 ): Promise<SummaryPromptConfig> {
   const { data: profile } = await supabase
     .from('profiles')
-    .select('chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt')
+    .select(
+      'chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt, summary_reasoning_effort',
+    )
     .eq('id', userId)
     .single()
 
@@ -32,6 +36,7 @@ export async function loadSummaryPromptConfig(
     chunkPrompt: profile?.chunk_summary_prompt || DEFAULT_CHUNK_SUMMARY_PROMPT,
     metaPrompt: profile?.meta_summary_prompt || DEFAULT_META_SUMMARY_PROMPT,
     factPrompt: profile?.fact_extraction_prompt || DEFAULT_FACT_EXTRACTION_PROMPT,
+    reasoningEffort: profile?.summary_reasoning_effort ?? 'default',
   }
 }
 
@@ -51,6 +56,12 @@ export async function updateCanonicalSealedMemoryArtifacts({
 }: UpdateCanonicalSealedMemoryArtifactsOptions): Promise<void> {
   const normalizedSealedThroughSeq = Math.max(0, Math.trunc(sealedThroughSeq))
   const prompts = await loadSummaryPromptConfig(supabase, userId)
+  const summaryModel = withSummaryReasoning({
+    model,
+    provider,
+    modelName,
+    preference: prompts.reasoningEffort,
+  })
   const episodicMemorySettings = await loadUserEpisodicMemorySettings({
     supabase,
     userId,
@@ -61,7 +72,7 @@ export async function updateCanonicalSealedMemoryArtifacts({
       supabase,
       chatId,
       userId,
-      model,
+      model: summaryModel,
       provider,
       modelName,
       chunkPrompt: prompts.chunkPrompt,
@@ -83,7 +94,7 @@ export async function updateCanonicalSealedMemoryArtifacts({
     supabase,
     chatId,
     userId,
-    model,
+    model: summaryModel,
     provider,
     modelName,
     totalMessages: normalizedSealedThroughSeq + CHUNK_SIZE,
@@ -97,7 +108,7 @@ export async function updateCanonicalSealedMemoryArtifacts({
     supabase,
     chatId,
     userId,
-    model,
+    model: summaryModel,
     provider,
     modelName,
     metaPrompt: prompts.metaPrompt,

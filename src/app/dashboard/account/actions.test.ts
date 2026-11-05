@@ -486,6 +486,7 @@ describe('account actions', () => {
         payload: {
           summary_api_key_id: null,
           summary_model_name: null,
+          summary_reasoning_effort: 'default',
         },
         filters: [['id', 'user-1']],
       },
@@ -534,9 +535,87 @@ describe('account actions', () => {
     )
 
     expect(result).toEqual({
-      error: 'The selected model is not available for this provider.',
+      error: 'The selected model or reasoning level is not available for this provider.',
       success: false,
     })
+    expect(supabase.state.profileUpdateCalls).toHaveLength(0)
+  })
+
+  it.each(['default', 'none', 'low', 'high', 'max'])(
+    'saves independent DeepSeek summary reasoning %s',
+    async (reasoning) => {
+      const supabase = buildSupabase({
+        apiKeys: [{ id: 'deepseek-key', provider: 'deepseek', is_active: true }],
+      })
+      createClientMock.mockResolvedValue(supabase)
+      const { updateSummaryModelPreference } = await import('./actions')
+      const result = await updateSummaryModelPreference(
+        { error: null, success: false },
+        buildFormData({
+          summary_key_id: 'deepseek-key',
+          summary_model_name: 'deepseek-v4-flash',
+          summary_reasoning_effort: reasoning,
+        }),
+      )
+      expect(result).toEqual({ error: null, success: true })
+      expect(supabase.state.profileUpdateCalls[0].payload).toEqual({
+        summary_api_key_id: 'deepseek-key',
+        summary_model_name: 'deepseek-v4-flash',
+        summary_reasoning_effort: reasoning,
+      })
+    },
+  )
+
+  it.each(['medium', 'xhigh', 'invalid'])(
+    'rejects unsupported summary reasoning %s',
+    async (reasoning) => {
+      const supabase = buildSupabase({
+        apiKeys: [{ id: 'deepseek-key', provider: 'deepseek', is_active: true }],
+      })
+      createClientMock.mockResolvedValue(supabase)
+      const { updateSummaryModelPreference } = await import('./actions')
+      const result = await updateSummaryModelPreference(
+        { error: null, success: false },
+        buildFormData({
+          summary_key_id: 'deepseek-key',
+          summary_model_name: 'deepseek-v4-pro',
+          summary_reasoning_effort: reasoning,
+        }),
+      )
+      expect(result.success).toBe(false)
+      expect(supabase.state.profileUpdateCalls).toHaveLength(0)
+    },
+  )
+
+  it('clears custom summary reasoning when returning to the chat model', async () => {
+    const supabase = buildSupabase()
+    createClientMock.mockResolvedValue(supabase)
+    const { updateSummaryModelPreference } = await import('./actions')
+    const result = await updateSummaryModelPreference(
+      { error: null, success: false },
+      buildFormData({ summary_reasoning_effort: 'max' }),
+    )
+    expect(result.success).toBe(true)
+    expect(supabase.state.profileUpdateCalls[0].payload).toEqual({
+      summary_api_key_id: null,
+      summary_model_name: null,
+      summary_reasoning_effort: 'default',
+    })
+  })
+
+  it('rejects custom reasoning for a summary model without reasoning controls', async () => {
+    const supabase = buildSupabase()
+    createClientMock.mockResolvedValue(supabase)
+    const { updateSummaryModelPreference } = await import('./actions')
+    const result = await updateSummaryModelPreference(
+      { error: null, success: false },
+      buildFormData({
+        summary_key_id: 'llm-key',
+        summary_model_name: 'gpt-4o-mini',
+        summary_reasoning_effort: 'high',
+      }),
+    )
+    expect(result.success).toBe(false)
     expect(supabase.state.profileUpdateCalls).toHaveLength(0)
   })
 

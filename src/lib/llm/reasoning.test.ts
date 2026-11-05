@@ -26,6 +26,21 @@ describe('model reasoning policy', () => {
     }
   })
 
+  it.each(['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-flash'])(
+    'offers only canonical reasoning levels for %s',
+    (modelName) => {
+      expect(getReasoningControl('deepseek', modelName)).toEqual({
+        levels: ['none', 'low', 'high', 'max'],
+        defaultLevel: 'high',
+      })
+      expect(supportsReasoningPreference('deepseek', modelName, 'medium')).toBe(false)
+      expect(supportsReasoningPreference('deepseek', modelName, 'xhigh')).toBe(false)
+      expect(
+        resolveReasoningSnapshot({ provider: 'deepseek', modelName, preference: 'default' }),
+      ).toEqual({ effort: null, source: 'chat' })
+    },
+  )
+
   it('distinguishes model default from explicitly turning reasoning off', () => {
     expect(
       resolveReasoningSnapshot({

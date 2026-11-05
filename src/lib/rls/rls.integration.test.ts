@@ -287,6 +287,50 @@ describe.skipIf(shouldSkip)('RLS Policy Tests', () => {
       expect(result.error?.code).toBe('23514')
     })
 
+    it('saves independent summary reasoning only for the profile owner', async () => {
+      const initial = await testData.userA.client
+        .from('profiles')
+        .select('summary_reasoning_effort')
+        .eq('id', testData.userA.id)
+        .single()
+      expect(initial.error).toBeNull()
+      expect(initial.data?.summary_reasoning_effort).toBe('default')
+      const saved = await testData.userA.client
+        .from('profiles')
+        .update({ summary_reasoning_effort: 'max' })
+        .eq('id', testData.userA.id)
+        .select('summary_reasoning_effort')
+        .single()
+      expect(saved.error).toBeNull()
+      expect(saved.data?.summary_reasoning_effort).toBe('max')
+      const otherUpdate = await testData.userB.client
+        .from('profiles')
+        .update({ summary_reasoning_effort: 'none' })
+        .eq('id', testData.userA.id)
+        .select('id')
+      expect(otherUpdate.error).toBeNull()
+      expect(otherUpdate.data).toEqual([])
+      const after = await testData.userA.client
+        .from('profiles')
+        .select('summary_reasoning_effort')
+        .eq('id', testData.userA.id)
+        .single()
+      expect(after.data?.summary_reasoning_effort).toBe('max')
+      const cleared = await testData.userA.client
+        .from('profiles')
+        .update({ summary_reasoning_effort: 'default' })
+        .eq('id', testData.userA.id)
+      expect(cleared.error).toBeNull()
+    })
+
+    it('rejects an invalid summary reasoning level at the database boundary', async () => {
+      const result = await testData.userA.client
+        .from('profiles')
+        .update({ summary_reasoning_effort: 'invalid' })
+        .eq('id', testData.userA.id)
+      expect(result.error?.code).toBe('23514')
+    })
+
     it('does not allow users to grant themselves admin privileges', async () => {
       const attempt = await testData.userA.client
         .from('profiles')

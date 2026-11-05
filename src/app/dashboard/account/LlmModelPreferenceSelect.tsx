@@ -19,7 +19,7 @@ type Props = {
   initialModelName: string | null
   apiKeys: SelectableLlmApiKey[]
   emptyLabel: string
-  onSelectionChange?: () => void
+  onSelectionChange?: (selection: LlmModelSelection | null) => void
 }
 
 export default function LlmModelPreferenceSelect({
@@ -52,8 +52,11 @@ export default function LlmModelPreferenceSelect({
         className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50"
         value={selection ? serializeLlmModelSelection(selection) : ''}
         onChange={(event) => {
-          setSelection(event.target.value ? parseLlmModelSelection(event.target.value) : null)
-          onSelectionChange?.()
+          const nextSelection = event.target.value
+            ? parseLlmModelSelection(event.target.value)
+            : null
+          setSelection(nextSelection)
+          onSelectionChange?.(nextSelection)
         }}
         disabled={options.length === 0}
       >

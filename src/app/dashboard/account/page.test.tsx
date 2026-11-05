@@ -61,6 +61,7 @@ type ProfileRow = {
   voyage_embedding_api_key_id: string | null
   summary_api_key_id: string | null
   summary_model_name: string | null
+  summary_reasoning_effort: string
   reprocess_prompt: string | null
   reprocess_api_key_id: string | null
   reprocess_model_name: string | null
@@ -199,6 +200,7 @@ describe('account page', () => {
           voyage_embedding_api_key_id: 'voyage-key',
           summary_api_key_id: 'summary-key',
           summary_model_name: 'gpt-5.5',
+          summary_reasoning_effort: 'low',
           reprocess_prompt: 'Translate to Korean and keep the tone.',
           reprocess_api_key_id: 'reprocess-key',
           reprocess_model_name: 'gpt-5.4',
@@ -283,6 +285,7 @@ describe('account page', () => {
     expect((screen.getByLabelText('Summary-dedicated Model') as HTMLSelectElement).value).toBe(
       JSON.stringify(['summary-key', 'gpt-5.5']),
     )
+    expect((screen.getByLabelText('요약 추론 강도') as HTMLSelectElement).value).toBe('low')
     expect((screen.getByLabelText('Reprocess Prompt') as HTMLTextAreaElement).value).toBe(
       'Translate to Korean and keep the tone.',
     )

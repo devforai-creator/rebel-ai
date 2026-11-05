@@ -17,7 +17,7 @@ import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
 import type { SelectableLlmApiKey, VoyageEmbeddingsKeyOption } from './options'
 
 const ACCOUNT_PROFILE_SELECT_COLUMNS =
-  'display_name, chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt, enable_episodic_rag, enable_agentic_transcript_recall_default, enable_chat_usage_stats, voyage_embedding_api_key_id, summary_api_key_id, summary_model_name, reprocess_prompt, reprocess_api_key_id, reprocess_model_name, translation_api_key_id, translation_model_name, user_draft_model_config'
+  'display_name, chunk_summary_prompt, meta_summary_prompt, fact_extraction_prompt, enable_episodic_rag, enable_agentic_transcript_recall_default, enable_chat_usage_stats, voyage_embedding_api_key_id, summary_api_key_id, summary_model_name, summary_reasoning_effort, reprocess_prompt, reprocess_api_key_id, reprocess_model_name, translation_api_key_id, translation_model_name, user_draft_model_config'
 
 export default async function AccountPage() {
   const supabase = await createClient()
@@ -203,6 +203,7 @@ export default async function AccountPage() {
                 <SummaryModelSettingsForm
                   initialKeyId={profile?.summary_api_key_id ?? null}
                   initialModelName={profile?.summary_model_name ?? null}
+                  initialReasoningEffort={profile?.summary_reasoning_effort}
                   apiKeys={selectableLlmApiKeys}
                 />
               </div>

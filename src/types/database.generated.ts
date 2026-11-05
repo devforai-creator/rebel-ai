@@ -1297,6 +1297,7 @@ export type Database = {
           reprocess_prompt: string | null
           summary_api_key_id: string | null
           summary_model_name: string | null
+          summary_reasoning_effort: string
           translation_api_key_id: string | null
           translation_model_name: string | null
           updated_at: string
@@ -1322,6 +1323,7 @@ export type Database = {
           reprocess_prompt?: string | null
           summary_api_key_id?: string | null
           summary_model_name?: string | null
+          summary_reasoning_effort?: string
           translation_api_key_id?: string | null
           translation_model_name?: string | null
           updated_at?: string
@@ -1346,6 +1348,7 @@ export type Database = {
           reprocess_prompt?: string | null
           summary_api_key_id?: string | null
           summary_model_name?: string | null
+          summary_reasoning_effort?: string
           translation_api_key_id?: string | null
           translation_model_name?: string | null
           updated_at?: string
@@ -1575,6 +1578,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      api_key_secret_name_matches_owner: {
+        Args: { allow_legacy: boolean; owner_id: string; secret_name: string }
+        Returns: boolean
+      }
       check_anon_rate_limit: {
         Args: { identifier: string; max_requests: number; window_seconds: number }
         Returns: {

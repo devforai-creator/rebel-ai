@@ -2,6 +2,11 @@
 
 import { z } from 'zod'
 import { isKnownLLMProvider } from '@/lib/api-keys/provider-utils'
+import {
+  isReasoningPreference,
+  supportsReasoningPreference,
+  type ReasoningPreference,
+} from '@/lib/llm/reasoning'
 import { listModelsByProvider } from '@/lib/models'
 import {
   createAuthenticatedAccountContext,
@@ -42,6 +47,10 @@ const agenticTranscriptRecallDefaultSettingsFormSchema = z.object({
 const summaryModelPreferenceFormSchema = z.object({
   summary_key_id: optionalTrimmedStringSchema,
   summary_model_name: optionalTrimmedStringSchema,
+  summary_reasoning_effort: z
+    .custom<ReasoningPreference>(isReasoningPreference)
+    .optional()
+    .default('default'),
 })
 
 const reprocessSettingsFormSchema = z.object({
@@ -309,6 +318,10 @@ export async function updateSummaryModelPreference(
     return pairValidation
   }
 
+  const reasoningEffort = parsedForm.data.summary_key_id
+    ? parsedForm.data.summary_reasoning_effort
+    : 'default'
+
   const keyValidation = await validateSelectedApiKey({
     supabase,
     userId,
@@ -318,8 +331,15 @@ export async function updateSummaryModelPreference(
     inactiveMessage: 'Inactive API keys cannot be used.',
     isProviderAllowed: isKnownLLMProvider,
     isSelectionAllowed: (provider) =>
-      isSelectableProviderModel(provider, parsedForm.data.summary_model_name),
-    selectionMismatchMessage: 'The selected model is not available for this provider.',
+      isSelectableProviderModel(provider, parsedForm.data.summary_model_name) &&
+      isKnownLLMProvider(provider) &&
+      supportsReasoningPreference(
+        provider,
+        parsedForm.data.summary_model_name ?? '',
+        reasoningEffort,
+      ),
+    selectionMismatchMessage:
+      'The selected model or reasoning level is not available for this provider.',
   })
 
   if (keyValidation) {
@@ -332,6 +352,7 @@ export async function updateSummaryModelPreference(
     updates: {
       summary_api_key_id: parsedForm.data.summary_key_id,
       summary_model_name: parsedForm.data.summary_model_name,
+      summary_reasoning_effort: reasoningEffort,
     },
     logLabel: '[Account] Failed to update summary model preference:',
   })

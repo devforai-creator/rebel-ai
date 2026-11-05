@@ -6,7 +6,7 @@ export type ReasoningPreference = 'default' | ModelReasoningLevel
 export type ChatReasoningPreferences = Record<string, ReasoningPreference>
 export type ReasoningSnapshot = {
   effort: ModelReasoningLevel | null
-  source: 'chat' | 'legacy-key' | 'model-default'
+  source: 'chat' | 'summary' | 'legacy-key' | 'model-default'
 }
 
 export const REASONING_LABELS: Record<ReasoningPreference, string> = {

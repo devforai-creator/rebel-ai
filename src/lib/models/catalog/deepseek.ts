@@ -10,6 +10,10 @@ export const deepSeekModelCatalog = defineProviderCatalog({
       id: 'deepseek-v4-flash',
       displayName: 'DeepSeek V4.1 Flash',
       aliases: ['deepseek-flash', 'deepseek-v4-flash-vision-exp'],
+      features: {
+        reasoning: true,
+        reasoningControl: { levels: ['none', 'low', 'high', 'max'], defaultLevel: 'high' },
+      },
       // https://api-docs.deepseek.com/quick_start/pricing/
       pricing: [
         {
@@ -21,6 +25,10 @@ export const deepSeekModelCatalog = defineProviderCatalog({
     {
       id: 'deepseek-v4-pro',
       displayName: 'DeepSeek V4 Pro',
+      features: {
+        reasoning: true,
+        reasoningControl: { levels: ['none', 'low', 'high', 'max'], defaultLevel: 'high' },
+      },
       // The runner uses the returned model ID if Pro is routed to Flash.
       pricing: [
         {

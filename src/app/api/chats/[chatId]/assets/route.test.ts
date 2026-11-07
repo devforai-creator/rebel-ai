@@ -752,9 +752,45 @@ describe('GET /api/chats/[chatId]/assets', () => {
     expect(body.assetUrlMap['module_pose.png']).toBe(
       'https://cdn.test/module-assets/user-1/module-1/module_pose.png',
     )
-    expect(body.imageCommandUrlMap).toEqual({
+    expect(body.imageCommandUrlMap).toMatchObject({
       happy: 'https://cdn.test/character-assets/user-1/char-1/hero_happy.png',
+      'module_pose.png': 'https://cdn.test/module-assets/user-1/module-1/module_pose.png',
     })
+  })
+
+  it.each([
+    { enabled: false, moduleOwner: 'user-1' },
+    { enabled: true, moduleOwner: 'user-2' },
+  ])('excludes disabled or foreign module images: %j', async ({ enabled, moduleOwner }) => {
+    const supabase = buildSupabase({
+      user: { id: 'user-1' },
+      characterModulesRows: [
+        {
+          character_id: 'char-1',
+          module_id: 'module-1',
+          enabled,
+          priority: 1,
+          modules: {
+            id: 'module-1',
+            user_id: moduleOwner,
+            name: 'Excluded Module',
+            regex: [],
+            assets: [],
+          },
+        },
+      ],
+    })
+    const { GET } = await loadRoute()
+    const response = await GET(buildRequest(), buildContext('chat-1'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.imageCommandUrlMap.happy).toBe(
+      'https://cdn.test/character-assets/user-1/char-1/hero_happy.png',
+    )
+    expect(body.imageCommandUrlMap).not.toHaveProperty('module_pose.png')
+    expect(body.assetUrlMap).not.toHaveProperty('module_pose.png')
+    expect(supabase.queryCalls.module_assets).toBeUndefined()
   })
 
   it('orders module regex and summaries by descending character-module priority', async () => {

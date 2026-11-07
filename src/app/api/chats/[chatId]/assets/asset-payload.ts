@@ -1,4 +1,10 @@
-import { buildAssetUrlMap, normalizeAssetKey } from '@/lib/asset-resolver'
+import {
+  buildAssetUrlMap,
+  normalizeAssetKey,
+  resolveAssetTag,
+  resolveAssetUrl,
+} from '@/lib/asset-resolver'
+import { unwrapAssetToken } from '@/lib/asset-token'
 import type { CharacterAssetRecord, ModuleAssetSummary, ModuleRegexEntry } from './asset-queries'
 
 export type GlobalVariableRecord = {
@@ -44,9 +50,10 @@ export function buildChatAssetPayload({
   moduleAssetSummary,
   globalVariables,
 }: BuildChatAssetPayloadOptions) {
-  const assetUrlMap = buildAssetUrlMap(characterAssets, {
+  const characterAssetUrlMap = buildAssetUrlMap(characterAssets, {
     getAssetUrl: (storagePath: string) => characterAssetUrlMapByPath[storagePath],
   })
+  const assetUrlMap = { ...characterAssetUrlMap }
 
   for (const [name, url] of Object.entries(moduleAssetUrls)) {
     if (!assetUrlMap[name]) {
@@ -118,11 +125,44 @@ export function buildChatAssetPayload({
     }
   }
 
-  const imageCommandUrlMap = buildImageCommandUrlMap({
+  const characterImageCommandUrlMap = buildImageCommandUrlMap({
     characterAssets,
     characterMetadata,
     assetIdToUrl,
   })
+  const imageCommandUrlMap = { ...characterImageCommandUrlMap }
+  const characterPrefixCandidates = characterAssets.flatMap((asset) =>
+    [asset.file_name, asset.canonical_name, ...(asset.metadata?.aliases ?? [])].filter(
+      (name): name is string => Boolean(name),
+    ),
+  )
+
+  // Module URLs already come from owned, enabled module assets with signed delivery.
+  // Register them explicitly without changing the renderer's generic-map boundary.
+  for (const [key, url] of Object.entries(moduleAssetUrls)) {
+    if (!key || !url || resolveAssetUrl(key, characterImageCommandUrlMap)) {
+      continue
+    }
+
+    // Avoid rescanning every character asset for unrelated module aliases.
+    const cleanKey = unwrapAssetToken(key)
+    const mayMatchCharacter =
+      cleanKey &&
+      (resolveAssetUrl(cleanKey, characterAssetUrlMap) ||
+        characterPrefixCandidates.some((candidate) => candidate.startsWith(cleanKey)))
+
+    // Preserve native character resolution, including seeded prefix variants.
+    if (
+      mayMatchCharacter &&
+      resolveAssetTag(key, {
+        assets: characterAssets,
+        getAssetUrl: (asset) => characterAssetUrlMapByPath[asset.storage_path],
+      })
+    ) {
+      continue
+    }
+    imageCommandUrlMap[key] = url
+  }
 
   return {
     characterAssets,

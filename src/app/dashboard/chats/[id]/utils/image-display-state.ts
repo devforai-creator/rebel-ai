@@ -42,7 +42,7 @@ function resolveCharacterAssetUrl(
   if (assetUrlMap) {
     for (const candidate of getAssetCandidateKeys(asset)) {
       const mappedUrl = resolveAssetUrl(candidate, assetUrlMap)
-      if (mappedUrl) {
+      if (typeof mappedUrl === 'string' && mappedUrl) {
         return mappedUrl
       }
     }
@@ -161,7 +161,7 @@ export function resolveEmotionRenderTarget(options: {
     ? resolveAssetUrl(rawTag, options.imageCommandUrlMap)
     : undefined
 
-  if (resolvedFromCommand) {
+  if (typeof resolvedFromCommand === 'string' && resolvedFromCommand) {
     const asset =
       resolveAssetTag(rawTag, {
         assets: options.characterAssets,

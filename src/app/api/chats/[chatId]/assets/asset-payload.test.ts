@@ -73,8 +73,33 @@ describe('buildChatAssetPayload', () => {
       happy: 'https://cdn.test/character-assets/char-1/hero_happy.webp',
       happy_face: 'https://cdn.test/character-assets/char-1/hero_happy.webp',
       relaxed_face: 'https://cdn.test/character-assets/char-1/hero_relaxed.webp',
+      module_badge: 'https://cdn.test/module-assets/module_badge.webp',
     })
     expect(body.globalVariables).toEqual({ scene: 'beach' })
+  })
+
+  it('keeps character commands and asset aliases ahead of colliding module keys', () => {
+    const hostUrl = 'https://cdn.test/character-assets/host.webp'
+    const body = buildChatAssetPayload({
+      characterAssets: [createAsset({ metadata: { aliases: ['host_pose'] } })],
+      characterAssetUrlMapByPath: { 'char-1/hero_happy.webp': hostUrl },
+      characterMetadata: { image_commands: { happy: 'asset-1' } },
+      moduleAssetUrls: {
+        happy: 'https://cdn.test/module-assets/happy.webp',
+        host_pose: 'https://cdn.test/module-assets/host-pose.webp',
+        'HOST POSE': 'https://cdn.test/module-assets/normalized-host-pose.webp',
+        companion: 'https://cdn.test/module-assets/companion.webp',
+      },
+      moduleRegex: [],
+      moduleAssetSummary: [],
+      globalVariables: {},
+    })
+
+    expect(body.imageCommandUrlMap.happy).toBe(hostUrl)
+    expect(body.imageCommandUrlMap).not.toHaveProperty('host_pose')
+    expect(body.imageCommandUrlMap).not.toHaveProperty('HOST POSE')
+    expect(body.assetUrlMap.host_pose).toBe(hostUrl)
+    expect(body.imageCommandUrlMap.companion).toBe('https://cdn.test/module-assets/companion.webp')
   })
 
   it('prefers an uppercase canonical name when normalized duplicates collide', () => {

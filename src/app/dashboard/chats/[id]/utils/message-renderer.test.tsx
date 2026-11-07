@@ -22,6 +22,8 @@ vi.mock('@safe-ugc-ui/react', () => ({
   },
 }))
 
+import { buildChatAssetPayload } from '@/app/api/chats/[chatId]/assets/asset-payload'
+import type { CharacterAssetRecord } from '@/app/api/chats/[chatId]/assets/asset-queries'
 import { renderMessageContent } from './message-renderer'
 
 describe('renderMessageContent', () => {
@@ -320,6 +322,102 @@ describe('renderMessageContent', () => {
       expect(html).not.toContain('<img')
     })
   })
+})
+
+describe('module asset rendering', () => {
+  const moduleKey = 'amara_companion_uniform_shocked'
+  const moduleUrl = 'https://cdn.test/module-assets/owner/module/amara.png?token=signed'
+  const hostUrl = 'https://cdn.test/character-assets/owner/host/choi.png?token=signed'
+  const hostAsset: CharacterAssetRecord = {
+    id: 'host-image',
+    file_name: 'choi.png',
+    storage_path: 'owner/host/choi.png',
+    canonical_name: 'Choi Yoo-jin default',
+    display_name: 'Choi Yoo-jin default',
+    display_order: 1,
+    metadata: null,
+  }
+
+  function buildPayload(
+    characterAssets: CharacterAssetRecord[] = [],
+    moduleAssetUrls: Record<string, string> = { [moduleKey]: moduleUrl },
+  ) {
+    return buildChatAssetPayload({
+      characterAssets,
+      characterAssetUrlMapByPath: Object.fromEntries(
+        characterAssets.map((asset) => [asset.storage_path, hostUrl]),
+      ),
+      characterMetadata: null,
+      moduleAssetUrls,
+      moduleRegex: [],
+      moduleAssetSummary: [],
+      globalVariables: {},
+    })
+  }
+
+  function renderImages(content: string, payload = buildPayload()) {
+    const node = renderMessageContent(
+      content,
+      payload.characterAssets,
+      payload.assetUrlMap,
+      payload.imageCommandUrlMap,
+    )
+    const document = new DOMParser().parseFromString(renderToStaticMarkup(<>{node}</>), 'text/html')
+    return Array.from(document.querySelectorAll('img')).map((image) => ({
+      src: image.getAttribute('src'),
+      alt: image.getAttribute('alt'),
+    }))
+  }
+
+  it('renders a module-only image through the actual asset payload and final renderer', () => {
+    expect(renderImages(`![아마라](asset:${moduleKey})`)).toEqual([
+      { src: moduleUrl, alt: '아마라' },
+    ])
+  })
+
+  it('renders companion and existing host images together', () => {
+    const payload = buildPayload([hostAsset])
+    expect(
+      renderImages(`![아마라](asset:${moduleKey})\n![최유진](asset:Choi Yoo-jin default)`, payload),
+    ).toEqual([
+      { src: moduleUrl, alt: '아마라' },
+      { src: hostUrl, alt: '최유진' },
+    ])
+  })
+
+  it('preserves native host prefix variants when a module uses the same image key', () => {
+    const payload = buildPayload(
+      [{ ...hostAsset, file_name: 'hero_thinking.1.webp', canonical_name: 'hero_thinking.1' }],
+      { hero_thinking: moduleUrl },
+    )
+    expect(renderImages('![Host](asset:hero_thinking)', payload)).toEqual([
+      { src: hostUrl, alt: 'Host' },
+    ])
+  })
+
+  it('stops rendering a companion image when its module is absent from the payload', () => {
+    const payload = buildPayload([hostAsset], {})
+    expect(
+      renderImages(`![아마라](asset:${moduleKey})\n![최유진](asset:Choi Yoo-jin default)`, payload),
+    ).toEqual([{ src: hostUrl, alt: '최유진' }])
+  })
+
+  it('keeps arbitrary remote images and script markup out of the rendered images', () => {
+    const content = [
+      `![아마라](asset:${moduleKey})`,
+      '![remote](https://attacker.invalid/remote.png)',
+      '<img src="https://attacker.invalid/remote.png" onerror="alert(1)">',
+      '<script>alert(1)</script>',
+    ].join('\n')
+    expect(renderImages(content)).toEqual([{ src: moduleUrl, alt: '아마라' }])
+  })
+
+  it.each(['constructor', 'toString', '__proto__'])(
+    'does not interpret inherited map property %s as an image URL',
+    (key) => {
+      expect(renderImages(`![unknown](asset:${key})`)).toEqual([])
+    },
+  )
 })
 
 // ============================================================================

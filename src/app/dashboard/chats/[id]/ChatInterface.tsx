@@ -15,6 +15,8 @@ import {
 } from './hooks'
 import { ChatComposer, MessageList, TokenStatsPanel, DebugModal } from './components'
 import { useUserDraft } from './hooks/useUserDraft'
+import { useUserDraftModelPreference } from './hooks/useUserDraftModelPreference'
+import { UserDraftModelPicker } from './components/UserDraftModelPicker'
 
 export default function ChatInterface({
   chatId,
@@ -110,7 +112,9 @@ export default function ChatInterface({
     onMessageChangeSideEffect: handleUsageRealtime,
   })
 
-  const draftSelection = userDraftModelConfig ?? {
+  const draftPreference = useUserDraftModelPreference(userDraftModelConfig ?? null)
+  const draftConfig = draftPreference.config
+  const draftSelection = draftConfig ?? {
     apiKeyId: selectedApiKeyId,
     modelName: selectedModelName,
   }
@@ -127,8 +131,8 @@ export default function ChatInterface({
     modelName: selectedModelName,
     provider: draftCredential?.provider,
     configurationError:
-      userDraftModelConfig && !draftCredential
-        ? '대필 API 키를 사용할 수 없습니다. 대시보드 설정에서 다시 선택해주세요.'
+      draftConfig && !draftCredential
+        ? '대필 API 키를 사용할 수 없습니다. 대필 모델을 다시 선택해주세요.'
         : null,
     reasoningEffort: resolveModelReasoning({
       apiKeyId: selectedApiKeyId,
@@ -138,7 +142,7 @@ export default function ChatInterface({
       apiKeyId: selectedApiKeyId,
       modelName: selectedModelName,
     }),
-    contextKey: JSON.stringify([draftContextKey, userDraftModelConfig ?? null]),
+    contextKey: JSON.stringify([draftContextKey, draftConfig ?? null]),
     input: composer.input,
     isChatLoading:
       messageState.isLoading ||
@@ -244,11 +248,20 @@ export default function ChatInterface({
         onSubmit={composer.handleSubmit}
         isDrafting={draft.isDrafting}
         draftDisabledReason={draft.disabledReason}
-        draftError={draft.error}
+        draftError={draft.error ?? draftPreference.error}
         draftUsage={draft.usage}
         onGenerateDraft={draft.generateDraft}
         onCancelDraft={draft.cancelDraft}
         onRestoreDraftInput={draft.canRestore ? draft.restoreInput : undefined}
+        draftModelPicker={
+          <UserDraftModelPicker
+            apiKeys={apiKeys}
+            config={draftConfig}
+            disabled={draft.isDrafting || messageState.isLoading}
+            saving={draftPreference.saving}
+            onSelect={draftPreference.selectModel}
+          />
+        }
       />
 
       {/* Debug modal */}

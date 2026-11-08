@@ -1,6 +1,13 @@
 'use client'
 
-import React, { memo, useId, type ChangeEvent, type FormEvent, type RefObject } from 'react'
+import React, {
+  memo,
+  useId,
+  type ChangeEvent,
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react'
 import { ArrowUp, Loader2, Undo2, WandSparkles, X } from 'lucide-react'
 import type { UserDraftUsage } from '@/lib/chat/user-draft-contract'
 import { UserDraftUsageDetails } from './UserDraftUsageDetails'
@@ -29,6 +36,8 @@ export interface ChatComposerProps {
   onGenerateDraft?: () => void
   onCancelDraft?: () => void
   onRestoreDraftInput?: () => void
+  /** Rendered beside the draft button as the second half of a split button. */
+  draftModelPicker?: ReactNode
 }
 
 export function shouldSubmitChatComposerOnEnter({
@@ -67,6 +76,7 @@ export const ChatComposer = memo(function ChatComposer({
   onGenerateDraft,
   onCancelDraft,
   onRestoreDraftInput,
+  draftModelPicker,
 }: ChatComposerProps) {
   const draftHintId = useId()
   const submitLabel = isLoading ? 'Sending message' : 'Send message'
@@ -122,6 +132,7 @@ export const ChatComposer = memo(function ChatComposer({
                   )}
                   <span className="sm:sr-only">{isDrafting ? '작성 중...' : '대신 작성'}</span>
                 </button>
+                {draftModelPicker}
                 {isDrafting && (
                   <button
                     type="button"
@@ -187,7 +198,7 @@ export const ChatComposer = memo(function ChatComposer({
                 }}
                 placeholder="Type a message..."
                 rows={1}
-                className={`max-h-[60vh] w-full resize-none overflow-y-auto rounded-2xl border border-gray-300 px-4 pt-3.5 pb-12 text-base leading-6 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:block sm:pb-3.5${onGenerateDraft ? ' sm:pr-24' : ''}`}
+                className={`max-h-[60vh] w-full resize-none overflow-y-auto rounded-2xl border border-gray-300 px-4 pt-3.5 pb-12 text-base leading-6 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:block sm:pb-3.5${onGenerateDraft ? (draftModelPicker ? ' sm:pr-28' : ' sm:pr-24') : ''}`}
                 disabled={isLoading}
               />
               <div

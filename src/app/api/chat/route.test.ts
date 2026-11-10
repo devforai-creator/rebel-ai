@@ -1134,6 +1134,65 @@ describe('POST /api/chat', () => {
     },
   )
 
+  it.each(['low', 'medium', 'high', 'default'] as const)(
+    'enqueues a selected Carbon model with Flex and %s reasoning',
+    async (reasoningEffort) => {
+      const fixture = buildDefaultAuthenticatedFixture()
+      fixture.apiKeys[0].model_preference = 'gemini-4-argon'
+      const supabase = createSupabaseMock(fixture)
+      const response = await POST(
+        new Request('http://localhost/api/chat', {
+          method: 'POST',
+          body: JSON.stringify({
+            chatId: 'chat-1',
+            apiKeyId: 'api-key-1',
+            modelName: 'gemini-4-carbon',
+            userMessage: 'Hello',
+            serviceTier: 'flex',
+            reasoningEffort,
+          }),
+        }),
+      )
+
+      expect(response.status).toBe(202)
+      expect(supabase.chatJobs).toHaveLength(1)
+      expect(supabase.chatJobs[0].payload).toMatchObject({
+        provider: 'google',
+        modelName: 'gemini-4-carbon',
+        serviceTier: 'flex',
+        reasoning: {
+          effort: reasoningEffort === 'default' ? null : reasoningEffort,
+          source: 'chat',
+        },
+      })
+      expect(fixture.apiKeys[0].model_preference).toBe('gemini-4-argon')
+    },
+  )
+
+  it.each(['none', 'minimal'])(
+    'rejects unsupported Carbon reasoning %s before persisting messages or jobs',
+    async (reasoningEffort) => {
+      const fixture = buildDefaultAuthenticatedFixture()
+      fixture.apiKeys[0].model_preference = 'gemini-4-carbon'
+      const supabase = createSupabaseMock(fixture)
+      const response = await POST(
+        new Request('http://localhost/api/chat', {
+          method: 'POST',
+          body: JSON.stringify({
+            chatId: 'chat-1',
+            apiKeyId: 'api-key-1',
+            userMessage: 'Hello',
+            reasoningEffort,
+          }),
+        }),
+      )
+
+      expect(response.status).toBe(400)
+      expect(supabase.chatJobs).toHaveLength(0)
+      expect(supabase.messages).toHaveLength(0)
+    },
+  )
+
   it('rejects Flex on an unsupported Google model', async () => {
     const fixture = buildDefaultAuthenticatedFixture()
     fixture.apiKeys[0].model_preference = 'gemini-3.7-flash'

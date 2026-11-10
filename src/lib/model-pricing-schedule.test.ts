@@ -10,6 +10,7 @@ const usage = {
   totalTokens: 11500,
 }
 it.each([
+  ['gemini-4-carbon', '2026-12-01T00:00:00Z', 0.0198],
   ['gemini-4-argon', '2026-12-01T00:00:00Z', 0.0198],
   ['gemini-3.8-flash', '2027-01-01T00:00:00Z', 0.007725],
   ['gemini-3.7-flash', '2027-01-01T00:00:00Z', 0.007725],

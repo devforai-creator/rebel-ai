@@ -360,22 +360,27 @@ describe('Model Registry', () => {
     })
   })
 
-  describe('Gemini 4 Argon registration', () => {
-    it('is the first Google option with introductory pricing and implicit caching only', () => {
-      const model = findModelDefinition({ provider: 'google', modelName: 'gemini-4-argon' })
+  describe.each([
+    ['gemini-4-carbon', 'Gemini 4 Carbon'],
+    ['gemini-4-argon', 'Gemini 4 Argon'],
+  ])('%s registration', (modelName, displayName) => {
+    it('offers introductory pricing and implicit caching only', () => {
+      const model = findModelDefinition({ provider: 'google', modelName })
 
       expect(model).toMatchObject({
-        id: 'gemini-4-argon',
-        displayName: 'Gemini 4 Argon',
+        id: modelName,
+        displayName,
         features: {
+          flex: true,
           promptCaching: 'implicit-only',
           promptCacheMinTokens: 4096,
           reasoning: true,
+          reasoningControl: { levels: ['low', 'medium', 'high'], defaultLevel: 'medium' },
         },
       })
       expect(
         getModelPricingTiers({
-          pricingTimestamp: '2026-10-16T00:00:00Z',
+          pricingTimestamp: '2026-11-11T00:00:00Z',
           provider: 'google',
           modelName: model?.id,
         }),
@@ -385,7 +390,10 @@ describe('Model Registry', () => {
           flexRates: { input: 1, output: 5, cachedInput: 0.05 },
         },
       ])
-      expect(listUiModelIdsByProvider('google')[0]).toBe('gemini-4-argon')
+      expect(listUiModelIdsByProvider('google').slice(0, 2)).toEqual([
+        'gemini-4-carbon',
+        'gemini-4-argon',
+      ])
       expect(getDefaultModelForProvider('google')).toBe('gemini-2.5-flash')
     })
   })
@@ -420,7 +428,7 @@ describe('Model Registry', () => {
     it('appears after Gemini 4 Argon without changing the default model', () => {
       const ids = listUiModelIdsByProvider('google')
 
-      expect(ids[1]).toBe('gemini-3.8-flash')
+      expect(ids[2]).toBe('gemini-3.8-flash')
       expect(getDefaultModelForProvider('google')).toBe('gemini-2.5-flash')
     })
   })
@@ -455,8 +463,8 @@ describe('Model Registry', () => {
     it('appears after Gemini 3.8 Flash without changing the default model', () => {
       const ids = listUiModelIdsByProvider('google')
 
-      expect(ids[1]).toBe('gemini-3.8-flash')
-      expect(ids[2]).toBe('gemini-3.7-flash')
+      expect(ids[2]).toBe('gemini-3.8-flash')
+      expect(ids[3]).toBe('gemini-3.7-flash')
       expect(getDefaultModelForProvider('google')).toBe('gemini-2.5-flash')
     })
   })
@@ -487,9 +495,9 @@ describe('Model Registry', () => {
     it('appears after Gemini 3.7 Flash without changing the default model', () => {
       const ids = listUiModelIdsByProvider('google')
 
-      expect(ids[1]).toBe('gemini-3.8-flash')
-      expect(ids[2]).toBe('gemini-3.7-flash')
-      expect(ids[3]).toBe('gemini-3.6-flash')
+      expect(ids[2]).toBe('gemini-3.8-flash')
+      expect(ids[3]).toBe('gemini-3.7-flash')
+      expect(ids[4]).toBe('gemini-3.6-flash')
       expect(getDefaultModelForProvider('google')).toBe('gemini-2.5-flash')
     })
   })
@@ -520,8 +528,8 @@ describe('Model Registry', () => {
     it('appears after Gemini 3.6 Flash in the Google UI model list', () => {
       const ids = listUiModelIdsByProvider('google')
 
-      expect(ids[3]).toBe('gemini-3.6-flash')
-      expect(ids[4]).toBe('gemini-3.5-flash')
+      expect(ids[4]).toBe('gemini-3.6-flash')
+      expect(ids[5]).toBe('gemini-3.5-flash')
     })
   })
 
@@ -551,11 +559,11 @@ describe('Model Registry', () => {
     it('appears near the top of the Google UI model list and backs lightweight defaults', () => {
       const ids = listUiModelIdsByProvider('google')
 
-      expect(ids[1]).toBe('gemini-3.8-flash')
-      expect(ids[2]).toBe('gemini-3.7-flash')
-      expect(ids[3]).toBe('gemini-3.6-flash')
-      expect(ids[4]).toBe('gemini-3.5-flash')
-      expect(ids[5]).toBe('gemini-3.5-flash-lite')
+      expect(ids[2]).toBe('gemini-3.8-flash')
+      expect(ids[3]).toBe('gemini-3.7-flash')
+      expect(ids[4]).toBe('gemini-3.6-flash')
+      expect(ids[5]).toBe('gemini-3.5-flash')
+      expect(ids[6]).toBe('gemini-3.5-flash-lite')
       expect(getDefaultModelForProvider('google', { lightweight: true })).toBe(
         'gemini-3.5-flash-lite',
       )
@@ -588,7 +596,7 @@ describe('Model Registry', () => {
     it('remains available after the newer Flash models', () => {
       const ids = listUiModelIdsByProvider('google')
 
-      expect(ids[6]).toBe('gemini-3.1-flash-lite')
+      expect(ids[7]).toBe('gemini-3.1-flash-lite')
     })
   })
 

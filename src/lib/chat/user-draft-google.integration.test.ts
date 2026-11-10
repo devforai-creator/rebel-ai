@@ -45,6 +45,7 @@ const draftRequest = () =>
 describe('Google draft prefix through the native SDKs', () => {
   it.each([
     ['gemini-2.5-flash', true],
+    ['gemini-4-carbon', false],
     ['gemini-4-argon', false],
   ] as const)('uses the correct cache transport for %s', async (modelName, explicit) => {
     const bodies: Array<{ cache: boolean; body: Record<string, unknown> }> = []

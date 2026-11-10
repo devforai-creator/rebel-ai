@@ -72,6 +72,34 @@ export const googleModelCatalog = defineProviderCatalog({
   },
   models: [
     {
+      id: 'gemini-4-carbon',
+      displayName: 'Gemini 4 Carbon',
+      // Gemini API GA and pricing verified 2026-11-11:
+      // https://aistudio.google.com/docs/changelog#11-10-2026
+      // https://aistudio.google.com/docs/pricing#gemini-4-carbon
+      // Introductory rates through 2026-11-30, then Standard and Flex rates double.
+      pricing: flatPricing(
+        { input: 2, output: 10, cachedInput: 0.1 },
+        { input: 1, output: 5, cachedInput: 0.05 },
+      ),
+      pricingChanges: [
+        {
+          effectiveFrom: '2026-12-01T00:00:00Z',
+          pricing: flatPricing(
+            { input: 4, output: 20, cachedInput: 0.2 },
+            { input: 2, output: 10, cachedInput: 0.1 },
+          ),
+        },
+      ],
+      features: {
+        flex: true,
+        promptCaching: 'implicit-only',
+        promptCacheMinTokens: 4096,
+        reasoning: true,
+        reasoningControl: { levels: ['low', 'medium', 'high'], defaultLevel: 'medium' },
+      },
+    },
+    {
       id: 'gemini-4-argon',
       displayName: 'Gemini 4 Argon',
       // Introductory rates through 2026-11-30. From 2026-12-01:

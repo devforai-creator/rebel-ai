@@ -8,7 +8,7 @@ import { estimateUsageCost } from '@/lib/model-pricing'
 afterEach(() => vi.unstubAllGlobals())
 const prompt = [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'Hello' }] }]
 
-describe('Google Flex SDK contract', () => {
+describe.each(['gemini-4-carbon', 'gemini-4-argon'])('%s Flex SDK contract', (modelName) => {
   it.each(['standard', 'flex'] as const)(
     'sends %s at the request root and reads the returned tier',
     async (serviceTier) => {
@@ -30,12 +30,13 @@ describe('Google Flex SDK contract', () => {
       vi.stubGlobal('fetch', fetchMock)
       const model = buildLanguageModel({
         provider: 'google',
-        modelName: 'gemini-4-argon',
+        modelName,
         apiKey: 'test-key',
       }) as LanguageModelV2
       const result = await model.doGenerate({
         prompt,
         providerOptions: getProviderOptions('google', {
+          modelName,
           serviceTier,
           reasoning: { effort: 'low', source: 'chat' },
         }),
@@ -80,7 +81,7 @@ describe('Google Flex SDK contract', () => {
       const result = streamText({
         model: buildLanguageModel({
           provider: 'google',
-          modelName: 'gemini-4-argon',
+          modelName,
           apiKey: 'test-key',
         }),
         prompt: 'Hello',
@@ -104,7 +105,7 @@ describe('Google Flex SDK contract', () => {
     vi.stubGlobal('fetch', fetchMock)
     const model = buildLanguageModel({
       provider: 'google',
-      modelName: 'gemini-4-argon',
+      modelName,
       apiKey: 'test-key',
     }) as LanguageModelV2
     await expect(
@@ -120,8 +121,8 @@ describe('Google Flex SDK contract', () => {
   it('halves uncached input, cached input, visible output, and reasoning charges', () => {
     const params = {
       provider: 'google' as const,
-      pricingTimestamp: '2026-10-16T00:00:00Z',
-      modelName: 'gemini-4-argon',
+      pricingTimestamp: '2026-11-11T00:00:00Z',
+      modelName,
       promptTokens: 10000,
       cachedInputTokens: 8000,
       completionTokens: 1500,

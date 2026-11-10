@@ -7,7 +7,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('Google safety settings SDK request contract', () => {
   it.each(['generate', 'stream'] as const)('sends explicit OFF filters for %s', async (mode) => {
-    for (const modelName of ['gemini-2.5-flash', 'gemini-4-argon']) {
+    for (const modelName of ['gemini-2.5-flash', 'gemini-4-carbon', 'gemini-4-argon']) {
       const cached = modelName === 'gemini-2.5-flash'
       const response = {
         candidates: [{ content: { role: 'model', parts: [{ text: 'ok' }] }, finishReason: 'STOP' }],

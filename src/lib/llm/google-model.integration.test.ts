@@ -10,7 +10,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('Gemini 4 Argon SDK request contract', () => {
+describe.each(['gemini-4-carbon', 'gemini-4-argon'])('%s SDK request contract', (modelName) => {
   it.each(['low', 'medium', 'high'] as const)(
     'sends %s thinking through the installed SDK',
     async (effort) => {
@@ -26,12 +26,12 @@ describe('Gemini 4 Argon SDK request contract', () => {
       await generateText({
         model: buildLanguageModel({
           provider: 'google',
-          modelName: 'gemini-4-argon',
+          modelName,
           apiKey: 'test-key',
         }),
         prompt: 'ok',
         providerOptions: getProviderOptions('google', {
-          modelName: 'gemini-4-argon',
+          modelName,
           reasoning: { effort, source: 'chat' },
         }),
       })
@@ -51,7 +51,7 @@ describe('Gemini 4 Argon SDK request contract', () => {
                 parts: [
                   {
                     functionCall: { name: 'fetch_source_range', args: {} },
-                    thoughtSignature: 'argon-thought-signature',
+                    thoughtSignature: `${modelName}-thought-signature`,
                   },
                 ],
               },
@@ -85,7 +85,6 @@ describe('Gemini 4 Argon SDK request contract', () => {
         }),
       )
     vi.stubGlobal('fetch', fetchMock)
-    const modelName = 'gemini-4-argon'
     const execute = vi.fn(async () => ({ messages: ['Earlier context'] }))
     const result = await generateText({
       model: buildLanguageModel({ provider: 'google', modelName, apiKey: 'test-key' }),
@@ -109,7 +108,7 @@ describe('Gemini 4 Argon SDK request contract', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
     for (const [url, init] of fetchMock.mock.calls as [string, RequestInit][]) {
       expect(url).toBe(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:generateContent',
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`,
       )
       const body = JSON.parse(init.body as string)
       expect(body.generationConfig.maxOutputTokens).toBeGreaterThanOrEqual(32_768)
@@ -126,7 +125,7 @@ describe('Gemini 4 Argon SDK request contract', () => {
         expect.objectContaining({
           role: 'model',
           parts: expect.arrayContaining([
-            expect.objectContaining({ thoughtSignature: 'argon-thought-signature' }),
+            expect.objectContaining({ thoughtSignature: `${modelName}-thought-signature` }),
           ]),
         }),
       ]),
@@ -139,7 +138,7 @@ describe('Gemini 4 Argon SDK request contract', () => {
     })
     const cost = estimateUsageCost({
       provider: 'google',
-      pricingTimestamp: '2026-10-16T00:00:00Z',
+      pricingTimestamp: '2026-11-11T00:00:00Z',
       modelName,
       promptTokens: result.totalUsage.inputTokens,
       completionTokens: result.totalUsage.outputTokens,

@@ -127,6 +127,23 @@ export const googleModelCatalog = defineProviderCatalog({
       },
     },
     {
+      id: 'gemini-4-hydrogen',
+      displayName: 'Gemini 4 Hydrogen',
+      // https://aistudio.google.com/docs/pricing#gemini-4-hydrogen
+      pricing: flatPricing(
+        { input: 1.5, output: 7.5, cachedInput: 0.075 },
+        { input: 0.75, output: 3.75, cachedInput: 0.0375 },
+      ),
+      features: {
+        flex: true,
+        promptCaching: 'implicit-only',
+        promptCacheMinTokens: 4096,
+        reasoning: true,
+        // @ai-sdk/google 2.x validates thinkingLevel and rejects xhigh.
+        reasoningControl: { levels: ['low', 'medium', 'high'], defaultLevel: 'high' },
+      },
+    },
+    {
       id: 'gemini-3.8-flash',
       displayName: 'Gemini 3.8 Flash',
       pricing: GEMINI_36_38_FLASH_PRICING,
